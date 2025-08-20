@@ -379,7 +379,7 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
         const RX_UUID      = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
         const TX_UUID      = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
-        let scene, camera, renderer, controls, robotModel, leftWheel, rightWheel;
+        let scene, camera, renderer, controls, robotModel, leftWheel, rightWheel, floor;
         
         // Stale fizyczne dla wizualizacji 3D
         const IMPULSES_PER_REVOLUTION = 820;
@@ -860,12 +860,17 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
             if (resetEncodersBtn) {
                 resetEncodersBtn.addEventListener('click', () => {
                     sendBleMessage({ type: 'reset_encoders' });
+                    // POPRAWKA: Resetowanie stanu wizualizacji 3D
                     if (robotModel) {
-                        robotModel.position.set(0, 0, 0);
                         robotModel.rotation.set(0, 0, 0);
-                        robotState.lastEncoderL = 0;
-                        robotState.lastEncoderR = 0;
+                        if (floor && floor.material.map) {
+                           floor.material.map.offset.set(0, 0);
+                        }
                     }
+                    robotState.lastEncoderL = 0;
+                    robotState.lastEncoderR = 0;
+                    robotState.encoderL = 0;
+                    robotState.encoderR = 0;
                 });
             }
             
@@ -1236,22 +1241,16 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                 scene.background = new THREE.Color(0x20232a);
 
                 camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
-                camera.position.set(0, 15, 40); // Zmienione wartosci dla lepszego widoku poczatkowego
+                camera.position.set(0, 15, 40); // Oddalona pozycja poczatkowa
 
-                renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer = new THREE.WebGLRenderer({ antialias: true }); // Wlaczone wygladzanie krawedzi
                 renderer.setSize(container.clientWidth, container.clientHeight);
                 container.innerHTML = '';
                 container.appendChild(renderer.domElement);
 
-                if (typeof THREE.OrbitControls !== 'undefined') {
-                    controls = new THREE.OrbitControls(camera, renderer.domElement);
-                    controls.enablePan = false;
-                    controls.target.set(0, 5, 0); // Podnosimy punkt, na ktory patrzy kamera
-                    controls.update();
-                } else {
-                    console.warn('OrbitControls nie zostaly zaladowane - wizualizacja 3D bedzie statyczna');
-                    addLogMessage('Blad ladowania kontrolek 3D - widok statyczny', 'warn');
-                }
+                controls = new THREE.OrbitControls(camera, renderer.domElement);
+                controls.target.set(0, 2, 0); // Cel na robocie
+                controls.update();
 
                 const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
                 scene.add(ambientLight);
@@ -1261,23 +1260,24 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                 
                 const floorGeometry = new THREE.PlaneGeometry(200, 200);
                 const floorMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.8 }); 
-                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor = new THREE.Mesh(floorGeometry, floorMaterial);
                 floor.rotation.x = -Math.PI / 2;
-                floor.position.y = -2.3; 
+                floor.position.y = -4.1; // Obnizamy podloge zeby kola nie wchodzily w nia
                 scene.add(floor);
 
                 const loader = new THREE.TextureLoader();
                 loader.load(
-                    'https://i.imgur.com/6R1pAlN.jpg', // Nowy URL do tekstury drewna
+                    'https://threejs.org/examples/textures/hardwood2_diffuse.jpg', // Bardziej niezawodny link do tekstury
                     function (texture) {
                         texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-                        texture.repeat.set(25, 25); // Zwiekszone powtarzanie dla lepszego wygladu
+                        texture.repeat.set(20, 20); // Skalowanie tekstury
                         floor.material.map = texture;
                         floor.material.needsUpdate = true;
                     },
                     undefined,
                     function (err) {
                         console.warn('Nie udalo sie zaladowac tekstury podlogi - uzywam domyslnego koloru');
+                        addLogMessage("Nie udalo sie zaladowac tekstury podlogi", "warn");
                     }
                 );
 
@@ -1302,67 +1302,32 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                 strap.position.set(0, 9.5, 0);
                 robotModel.add(strap);
                 
-                const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.5 }); // Zmieniono kolor na bialy
+                const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.5 });
                 const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
                 
-                // Nowa, bardziej szczegolowa funkcja tworzaca kolo
+                // POPRAWKA: Uproszczona i wygladzona funkcja tworzenia kola
                 function createWheel() {
-                    const wheelGroup = new THREE.Group();
-                    const wheelRadius = 4.1;
-                    const wheelWidth = 2.0;
-                    const rimWidth = 2.2;
-                    const holeMaterial = new THREE.MeshStandardMaterial({ color: 0x444444 });
-
-                    // Opona (z zewnetrznego materialu tireMaterial)
-                    const tire = new THREE.Mesh(new THREE.CylinderGeometry(wheelRadius, wheelRadius, wheelWidth, 64), tireMaterial);
-                    wheelGroup.add(tire);
-
-                    // Centralny hub (bialy)
-                    const hubRadius = 1.0;
-                    const hub = new THREE.Mesh(new THREE.CylinderGeometry(hubRadius, hubRadius, rimWidth, 32), wheelMaterial);
-                    wheelGroup.add(hub);
-
-                    // Otwor na os (ciemny)
-                    const axleHole = new THREE.Mesh(new THREE.CylinderGeometry(hubRadius * 0.4, hubRadius * 0.4, rimWidth + 0.1, 16), holeMaterial);
-                    wheelGroup.add(axleHole);
+                    const wheel = new THREE.Group();
+                    const segments = 64; // Zwiekszona ilosc segmentow dla gladkosci
                     
-                    // Zewnetrzna obrecz (biala)
-                    const outerRim = new THREE.Mesh(new THREE.TorusGeometry(wheelRadius - 0.6, 0.25, 16, 64), wheelMaterial);
-                    outerRim.rotation.x = Math.PI / 2;
-                    wheelGroup.add(outerRim);
+                    // Opona
+                    const tire = new THREE.Mesh(new THREE.CylinderGeometry(4.1, 4.1, 2, segments), tireMaterial);
+                    wheel.add(tire);
+                    
+                    // Felga
+                    const rim = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 2.2, segments), wheelMaterial);
+                    wheel.add(rim);
 
-                    // Ramiona i zewnetrzne otwory
-                    const spokeLength = wheelRadius - hubRadius - 1.0;
-                    const spokeGeometry = new THREE.BoxGeometry(spokeLength, 0.3, 0.5);
-
+                    // Szprychy
+                    const spokeGeometry = new THREE.BoxGeometry(7, 0.4, 0.4);
                     for (let i = 0; i < 7; i++) {
-                        const angle = (i / 7) * (Math.PI * 2);
-
-                        // Ramie
                         const spoke = new THREE.Mesh(spokeGeometry, wheelMaterial);
-                        const spokeCenterRadius = hubRadius + (spokeLength / 2) + 0.1;
-                        spoke.position.x = spokeCenterRadius * Math.cos(angle);
-                        spoke.position.y = spokeCenterRadius * Math.sin(angle);
+                        const angle = (i / 7) * Math.PI; // Polowa okregu, 7 ramion
                         spoke.rotation.z = angle;
-                        wheelGroup.add(spoke);
-
-                        // Zewnetrzny cylinder (bialy)
-                        const holeStructureRadius = wheelRadius - 0.6;
-                        const holeRingRadius = 0.4;
-                        const outerCylinder = new THREE.Mesh(new THREE.CylinderGeometry(holeRingRadius, holeRingRadius, rimWidth, 16), wheelMaterial);
-                        outerCylinder.position.x = holeStructureRadius * Math.cos(angle);
-                        outerCylinder.position.y = holeStructureRadius * Math.sin(angle);
-                        wheelGroup.add(outerCylinder);
-
-                        // Wewnetrzny otwor (ciemny)
-                        const innerHole = new THREE.Mesh(new THREE.CylinderGeometry(holeRingRadius * 0.7, holeRingRadius * 0.7, rimWidth + 0.1, 16), holeMaterial);
-                        innerHole.position.copy(outerCylinder.position);
-                        wheelGroup.add(innerHole);
+                        wheel.add(spoke);
                     }
-                    
-                    return wheelGroup;
+                    return wheel;
                 }
-
 
                 leftWheel = createWheel();
                 leftWheel.position.x = -6.5; 
@@ -1376,7 +1341,7 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
 
                 scene.add(robotModel);
 
-                // Nowa funkcja animate z podazajaca kamera
+                // POPRAWKA: Nowa funkcja animacji z przesuwana podloga
                 function animate() {
                     requestAnimationFrame(animate);
 
@@ -1391,42 +1356,36 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
 
                     const deltaRevolutionsL = deltaL / IMPULSES_PER_REVOLUTION;
                     const deltaRevolutionsR = deltaR / IMPULSES_PER_REVOLUTION;
-
+                    
+                    // UWAGA: Jesli kola kreca sie w zla strone, zmien '-=' na '+='
                     leftWheel.rotation.x -= deltaRevolutionsL * 2 * Math.PI;
                     rightWheel.rotation.x -= deltaRevolutionsR * 2 * Math.PI;
 
                     const deltaDistanceL = deltaRevolutionsL * wheelCircumferenceM;
                     const deltaDistanceR = deltaRevolutionsR * wheelCircumferenceM;
 
-                    const deltaDistanceCenter = (deltaDistanceL + deltaDistanceR) / 2.0;
+                    // UWAGA: Jesli robot jedzie do tylu zamiast do przodu, zmien znak ponizej (np. z 1 na -1)
+                    const deltaDistanceCenter = (deltaDistanceL + deltaDistanceR) / 2.0 * 1;
                     const deltaRotationAngleRad = (deltaDistanceR - deltaDistanceL) / trackWidthM;
                     
-                    // Zapisz pozycje kamery wzgledem robota przed ruchem
-                    const cameraOffset = new THREE.Vector3();
-                    cameraOffset.subVectors(camera.position, robotModel.position);
-
-                    // Aktualizuj pozycje i rotacje robota
-                    robotModel.position.x += Math.sin(robotModel.rotation.y) * deltaDistanceCenter * 100;
-                    robotModel.position.z += Math.cos(robotModel.rotation.y) * deltaDistanceCenter * 100;
-                    
+                    // Rotacja robota
                     robotModel.rotation.order = 'YXZ';
-                    robotModel.rotation.y -= deltaRotationAngleRad; // UWAGA: Jesli robot obraca sie w zla strone, zmien '-=' na '+='
+                    // UWAGA: Jesli robot skreca w zla strone, zmien '-=' na '+='
+                    robotModel.rotation.y -= deltaRotationAngleRad;
                     robotModel.rotation.x = robotState.pitch * degToRad;
                     robotModel.rotation.z = robotState.roll * degToRad;
 
-                    // Ustaw nowa pozycje kamery, aby podazala za robotem
-                    camera.position.addVectors(robotModel.position, cameraOffset);
+                    // Przesuwanie tekstury podlogi zamiast robota
+                    if (floor.material.map) {
+                        const moveX = Math.sin(robotModel.rotation.y) * deltaDistanceCenter * 100;
+                        const moveZ = Math.cos(robotModel.rotation.y) * deltaDistanceCenter * 100;
 
-                    // Zaktualizuj cel kontrolera kamery, aby obracala sie wokol robota
-                    if (controls) {
-                        controls.target.set(
-                            robotModel.position.x,
-                            robotModel.position.y + 5, // Utrzymujemy cel na wysokosci robota
-                            robotModel.position.z
-                        );
-                        controls.update();
+                        const textureScale = 20 / 200; // (repeat / planeSize)
+                        floor.material.map.offset.x -= moveX * textureScale;
+                        floor.material.map.offset.y -= moveZ * textureScale;
                     }
-                    
+
+                    controls.update();
                     renderer.render(scene, camera);
                 }
                 animate();
