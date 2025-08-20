@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot Samo Balansujacy - Wersja 17.1-ENGINEERING-PLATFORM</title>
+    <title>Robot Samo Balansujacy - Wersja 17.2-STABLE-TUNING</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -50,7 +50,16 @@
         .setting-container label { font-size: 1em; font-weight: bold; color: #a2f279; text-align: left; flex-grow: 1; }
         .numeric-input-wrapper { display: flex; align-items: center; flex-shrink: 0; }
         .numeric-input-wrapper button { background-color: #4a4f58; color: #61dafb; padding: 4px 8px; font-size: 1em; line-height: 1; min-width: 30px; }
-        .numeric-input-wrapper input[type=number] { width: 75px; text-align: center; font-size: 1em; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 5px; margin: 0 4px; padding: 4px; -moz-appearance: textfield; }
+        .numeric-input-wrapper input[type=number] { 
+            width: 75px; text-align: center; font-size: 1em; background-color: #20232a; color: #fff; 
+            border: 1px solid #61dafb; border-radius: 5px; margin: 0 4px; padding: 4px; 
+            -moz-appearance: textfield; transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        /* NOWE STYLE DLA WALIDACJI I SPRZEZENIA ZWROTNEGO */
+        .numeric-input-wrapper input[type=number].input-pending { border-color: #f7b731; box-shadow: 0 0 5px #f7b731; }
+        .numeric-input-wrapper input[type=number].input-success { border-color: #a2f279; box-shadow: 0 0 5px #a2f279; }
+        .numeric-input-wrapper input[type=number].input-error { border-color: #ff6347; box-shadow: 0 0 5px #ff6347; }
+        
         input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         .manual-tune-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; margin-bottom: 8px; }
         .manual-tune-row label { text-align: left; font-weight: bold; color: #a2f279; }
@@ -333,9 +342,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // KONFIGURACJA I STAN
         // ---------------------------------------------------------------------
         config: {
-            PROFILE_PREFIX: 'robot_profile_v17.1_eng_',
+            PROFILE_PREFIX: 'robot_profile_v17.2_stable_',
             INTERACTION_TIMEOUT: 500, // ms
-            DEBOUNCE_DELAY: 250, // ms
+            DEBOUNCE_DELAY: 350, // ms, lekko zwiekszony dla pewnosci
             SERVICE_UUID: "4fafc201-1fb5-459e-8fcc-c5c9c331914b",
             RX_UUID:      "beb5483e-36e1-4688-b7f5-ea07361b26a9",
             TX_UUID:      "beb5483e-36e1-4688-b7f5-ea07361b26a8",
@@ -395,7 +404,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     App.dom.connectBleBtn.disabled = true;
                     App.ble.sendMessage({ type: 'request_state' });
                     
-                    // Ponowna subskrypcja zmiennych na wykresie po polaczeniu
                     App.dom.chartControls.querySelectorAll('input:checked').forEach(cb => cb.dispatchEvent(new Event('change')));
 
                 } catch(error) {
@@ -447,7 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             App.ui.updateManualTuneReadout(data); 
                             break;
                         case 'action_confirm':
-                            App.ui.handleActionConfirmation(data.action);
+                            App.ui.handleActionConfirmation(data);
                             break;
                     }
                 } catch (e) {
@@ -610,16 +618,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 button.disabled = disabled;
             },
 
-            handleActionConfirmation(action) {
-                switch(action) {
-                    case 'save_tunings':
-                        App.ui.setButtonState(App.dom.saveBtn, 'Zapisz Ustawienia', false);
-                        App.ui.addLogMessage('Ustawienia zapisane w EEPROM robota.', 'info');
-                        break;
-                    case 'load_from_eeprom':
-                        App.ui.setButtonState(App.dom.loadBtn, 'Wczytaj z EEPROM', false);
-                        App.ui.addLogMessage('Ustawienia wczytane z EEPROM robota.', 'info');
-                        break;
+            handleActionConfirmation(data) {
+                const { action, status } = data;
+                if (action === 'save_tunings') {
+                    App.ui.setButtonState(App.dom.saveBtn, 'Zapisz Ustawienia', false);
+                    App.ui.addLogMessage('Ustawienia zapisane w EEPROM robota.', 'info');
+                } else if (action === 'load_from_eeprom') {
+                    App.ui.setButtonState(App.dom.loadBtn, 'Wczytaj z EEPROM', false);
+                    App.ui.addLogMessage('Ustawienia wczytane z EEPROM robota.', 'info');
+                } else {
+                    // Potwierdzenie dla grup parametrow
+                    const group = App.controls.tuningGroups[action];
+                    if (group && status === 'ok') {
+                        group.forEach(id => {
+                            const input = document.getElementById(id + 'Input');
+                            if (input) App.ui.setInputVisualState(input, 'success');
+                        });
+                    }
+                }
+            },
+
+            setInputVisualState(input, state) { // state: 'pending', 'success', 'error', or null
+                input.classList.remove('input-pending', 'input-success', 'input-error');
+                if (state) {
+                    input.classList.add(`input-${state}`);
+                    if (state === 'success' || state === 'error') {
+                        setTimeout(() => input.classList.remove(`input-${state}`), 1000);
+                    }
                 }
             }
         },
@@ -739,7 +764,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const rect = s.canvas.getBoundingClientRect(); 
                 let clientX, clientY;
-                // POPRAWKA KRYTYCZNEGO BLEDU: Prawidlowy dostep do wspolrzednych dotyku
                 if (e.touches && e.touches.length > 0) {
                     clientX = e.touches[0].clientX;
                     clientY = e.touches[0].clientY;
@@ -843,6 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // MODUL OBSLUGI KONTROLEK I ZDARZEN
         // ---------------------------------------------------------------------
         controls: {
+            tuningGroups: {}, // Przechowuje grupy parametrow dla potwierdzen
             setupAll() {
                 // Przyciski glowne
                 App.dom.connectBleBtn.addEventListener('click', App.ble.connect);
@@ -900,22 +925,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
             setupTuningControls() {
                 const setupGroupedInput = (ids, msgType) => { 
-                    // Stworzenie debounced funkcji dla kazdej grupy
+                    this.tuningGroups[msgType] = ids; // Rejestracja grupy
+                    
                     const debouncedSend = App.util.debounce(() => {
                         let msg = { type: msgType }; 
                         let payload = {}; 
-                        ids.forEach(i => { 
-                            const inputElement = document.getElementById(i + 'Input'); 
-                            if(inputElement) { 
-                                let key;
-                                if (i === 'joystickSensitivity') key = 'sensitivity';
-                                else if (i === 'expoJoystick') key = 'expo';
-                                else if (i === 'maxSpeedJoystick') key = 'maxSpeed';
-                                else key = i.replace(/([A-Z])/g, "_$1").toLowerCase();
-                                payload[key] = parseFloat(inputElement.value);
-                            } 
-                        }); 
-                        
+                        let isValid = true;
+
+                        ids.forEach(id => {
+                            const inputElement = document.getElementById(id + 'Input');
+                            if (!inputElement) return;
+
+                            const value = parseFloat(inputElement.value);
+                            if (!isFinite(value)) {
+                                isValid = false;
+                                App.ui.setInputVisualState(inputElement, 'error');
+                                App.ui.addLogMessage(`Nieprawidlowa wartosc w polu ${id}: '${inputElement.value}'`, 'error');
+                                return;
+                            }
+                            
+                            let key;
+                            if (i === 'joystickSensitivity') key = 'sensitivity';
+                            else if (i === 'expoJoystick') key = 'expo';
+                            else if (i === 'maxSpeedJoystick') key = 'maxSpeed';
+                            else key = id.replace(/([A-Z])/g, "_$1").toLowerCase();
+                            payload[key] = value;
+                        });
+
+                        if (!isValid) return; // Przerwij, jesli walidacja sie nie powiodla
+
                         if (payload.joystick_deadzone !== undefined) payload.joystick_deadzone /= 100.0; 
                         if (payload.turn_factor !== undefined) payload.turn_factor /= 100.0; 
                         if (payload.expo !== undefined) payload.expo /= 100.0; 
@@ -936,18 +974,26 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         const updateValue = (amount) => { 
                             let current = parseFloat(input.value);
+                            if (!isFinite(current)) current = 0; // Ochrona przed NaN
                             let newValue = current + amount; 
                             if (isFloat) { 
                                 const dp = (step.toString().split('.')[1] || '').length; 
                                 newValue = parseFloat(newValue.toFixed(dp)); 
                             } 
                             input.value = Math.max(parseFloat(input.min), Math.min(parseFloat(input.max), newValue)); 
-                            debouncedSend(); // Wywolanie debounced funkcji
+                            
+                            ids.forEach(i => App.ui.setInputVisualState(document.getElementById(i + 'Input'), 'pending'));
+                            debouncedSend();
                         }; 
                         
+                        const handleChange = () => {
+                            ids.forEach(i => App.ui.setInputVisualState(document.getElementById(i + 'Input'), 'pending'));
+                            debouncedSend();
+                        };
+
                         minusBtn.addEventListener('click', () => updateValue(-step)); 
                         plusBtn.addEventListener('click', () => updateValue(step)); 
-                        input.addEventListener('change', debouncedSend); 
+                        input.addEventListener('input', handleChange); // Zmienione z 'change' na 'input' dla lepszej reakcji
                     }); 
                 };
             
