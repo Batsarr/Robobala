@@ -97,7 +97,6 @@
             
             <fieldset style="padding: 10px 10px 5px 10px;"><legend>Strojenie Joysticka</legend>
                 <div class="setting-block"><div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)</label><div class="numeric-input-wrapper"><button id="expoJoystickMinus">-</button><input type="number" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button id="expoJoystickPlus">+</button></div></div></div>
-                <!-- POPRAWKA: Nowy suwak do zmiany czulosci joysticka -->
                 <div class="setting-block"><div class="setting-container"><label for="joystickSensitivityInput">Czulosc Joysticka (%)</label><div class="numeric-input-wrapper"><button id="joystickSensitivityMinus">-</button><input type="number" id="joystickSensitivityInput" min="10" max="100" step="1" value="100"><button id="joystickSensitivityPlus">+</button></div></div></div>
                 <div class="setting-block"><div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button id="maxSpeedJoystickMinus">-</button><input type="number" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button id="maxSpeedJoystickPlus">+</button></div></div></div>
             </fieldset>
@@ -145,14 +144,14 @@
         </div>
 
         <div class="card">
-            <button class="accordion-header active" onclick="toggleAccordion(this)">Wizualizacja 3D</button>
+            <button class="accordion-header active">Wizualizacja 3D</button>
             <div class="accordion-content active" style="padding: 0;">
                  <div id="canvas-3d-container"></div>
             </div>
         </div>
 
         <div class="card">
-             <button class="accordion-header" onclick="toggleAccordion(this)">Sterowanie Precyzyjne</button>
+             <button class="accordion-header">Sterowanie Precyzyjne</button>
              <div class="accordion-content">
                 <fieldset>
                     <legend>Sterowanie Precyzyjne</legend>
@@ -178,7 +177,7 @@
         </div>
         
         <div class="card">
-            <button class="accordion-header" onclick="toggleAccordion(this)">Wykres Telemetryczny</button>
+            <button class="accordion-header">Wykres Telemetryczny</button>
             <div class="accordion-content">
                 <div id="chart-wrapper"><canvas id="telemetryChart"></canvas></div>
                 <div class="chart-controls" id="chartControls"></div>
@@ -200,7 +199,7 @@
             </fieldset>
             
             <div id="allSettings">
-                <button class="accordion-header" onclick="toggleAccordion(this)">0. Konfiguracja Fizyczna i Dynamika</button>
+                <button class="accordion-header">0. Konfiguracja Fizyczna i Dynamika</button>
                 <div class="accordion-content">
                     <div class="setting-container"><label for="encoderPPRInput">Impulsy na obrot (PPR)</label><div class="numeric-input-wrapper"><button id="encoderPPRMinus">-</button><input type="number" id="encoderPPRInput" min="100" max="5000" step="1" value="820"><button id="encoderPPRPlus">+</button></div></div>
                     <div class="setting-container"><label for="wheelDiameterCmInput">Srednica kola (cm)</label><div class="numeric-input-wrapper"><button id="wheelDiameterCmMinus">-</button><input type="number" id="wheelDiameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameterCmPlus">+</button></div></div>
@@ -212,7 +211,7 @@
                     <div class="setting-container"><label for="balanceDeadbandAngleInput">Martwa Strefa Balansu (st.)</label><div class="numeric-input-wrapper"><button id="balanceDeadbandAngleMinus">-</button><input type="number" id="balanceDeadbandAngleInput" min="0" max="5" step="0.1" value="0.5"><button id="balanceDeadbandAnglePlus">+</button></div></div>
                 </div>
 
-                <button class="accordion-header" onclick="toggleAccordion(this)">1. Strojenie Min. PWM (10-bit)</button>
+                <button class="accordion-header">1. Strojenie Min. PWM (10-bit)</button>
                 <div class="accordion-content">
                      <div class="pwm-info">
                          <strong>ZAKRES:</strong> 0-1023 (10-bit)<br>
@@ -228,7 +227,7 @@
                      <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKO</button>
                 </div>
 
-                <button class="accordion-header" onclick="toggleAccordion(this)">2. Ustawienia Min. PWM (10-bit)</button>
+                <button class="accordion-header">2. Ustawienia Min. PWM (10-bit)</button>
                 <div class="accordion-content">
                     <div class="pwm-info">
                         <strong>ZAKRES:</strong> 0-1023 (10-bit)<br>
@@ -240,7 +239,7 @@
                     <div class="setting-block"><div class="setting-container"><label for="minPwmRightBwdInput">Min. PWM P (Tyl)</label><div class="numeric-input-wrapper"><button id="minPwmRightBwdMinus">-</button><input type="number" id="minPwmRightBwdInput" min="0" max="1023" step="1" value="640"><button id="minPwmRightBwdPlus">+</button></div></div></div>
                 </div>
                 
-                <button class="accordion-header" onclick="toggleAccordion(this)">3. Strojenie PID (Balans)</button>
+                <button class="accordion-header">3. Strojenie PID (Balans)</button>
                 <div class="accordion-content">
                     <div class="setting-block"><div class="setting-container"><label for="joystickAngleSensitivityInput">Maksymalny Kat (Tryb Kata)</label><div class="numeric-input-wrapper"><button id="joystickAngleSensitivityMinus">-</button><input type="number" id="joystickAngleSensitivityInput" min="1" max="25" step="1" value="10"><button id="joystickAngleSensitivityPlus">+</button></div></div></div>
                     <div class="setting-block"><div class="setting-container"><label for="kpBalanceInput">Kp (Sztywnosc)</label><div class="numeric-input-wrapper"><button id="kpBalanceMinus">-</button><input type="number" id="kpBalanceInput" min="0" max="200" step="1" value="95"><button id="kpBalancePlus">+</button></div></div></div>
@@ -251,7 +250,7 @@
                     <div class="setting-block"><div class="setting-container"><label for="balancePidDerivativeFilterAlphaInput">Filtr pochodnej (Alfa)</label><div class="numeric-input-wrapper"><button id="balancePidDerivativeFilterAlphaMinus">-</button><input type="number" id="balancePidDerivativeFilterAlphaInput" min="0.01" max="1.0" step="0.01" value="1"><button id="balancePidDerivativeFilterAlphaPlus">+</button></div></div></div>
                 </div>
                 
-                <button class="accordion-header" onclick="toggleAccordion(this)">4. Strojenie PID (Predkosc)</button>
+                <button class="accordion-header">4. Strojenie PID (Predkosc)</button>
                 <div class="accordion-content">
                     <div class="setting-block"><div class="setting-container"><label for="maxTargetAngleFromSpeedPIDInput">Maksymalny Kat (Tryb Predkosci)</label><div class="numeric-input-wrapper"><button id="maxTargetAngleFromSpeedPIDMinus">-</button><input type="number" id="maxTargetAngleFromSpeedPIDInput" min="1" max="25" step="1" value="15"><button id="maxTargetAngleFromSpeedPIDPlus">+</button></div></div></div>
                     <div class="setting-block"><div class="setting-container"><label for="kpSpeedInput">Kp Predkosci</label><div class="numeric-input-wrapper"><button id="kpSpeedMinus">-</button><input type="number" id="kpSpeedInput" min="0" max="5.0" step="0.01" value="0.05"><button id="kpSpeedPlus">+</button></div></div></div>
@@ -260,7 +259,7 @@
                     <div class="setting-block"><div class="setting-container"><label for="speedPidDeadbandInput">Margines bledu (imp/s)</label><div class="numeric-input-wrapper"><button id="speedPidDeadbandMinus">-</button><input type="number" id="speedPidDeadbandInput" min="0" max="100" step="1" value="5"><button id="speedPidDeadbandPlus">+</button></div></div></div>
                 </div>
 
-                <button class="accordion-header" onclick="toggleAccordion(this)">5. Strojenie PID (Pozycja)</button>
+                <button class="accordion-header">5. Strojenie PID (Pozycja)</button>
                 <div class="accordion-content">
                     <div class="setting-block"><div class="setting-container"><label for="maxTargetSpeedFromPosPIDInput">Max predkosc z PID Pozycji (imp/s)</label><div class="numeric-input-wrapper"><button id="maxTargetSpeedFromPosPIDMinus">-</button><input type="number" id="maxTargetSpeedFromPosPIDInput" min="200" max="4000" step="100" value="1000"><button id="maxTargetSpeedFromPosPIDPlus">+</button></div></div></div>
                     <div class="setting-block"><div class="setting-container"><label for="kpPositionInput">Kp Pozycji</label><div class="numeric-input-wrapper"><button id="kpPositionMinus">-</button><input type="number" id="kpPositionInput" min="0" max="5.0" step="0.05" value="2.5"><button id="kpPositionPlus">+</button></div></div></div>
@@ -269,13 +268,13 @@
                     <div class="setting-block"><div class="setting-container"><label for="positionPidDeadbandInput">Margines bledu (impulsy)</label><div class="numeric-input-wrapper"><button id="positionPidDeadbandMinus">-</button><input type="number" id="positionPidDeadbandInput" min="0" max="100" step="1" value="15"><button id="positionPidDeadbandPlus">+</button></div></div></div>
                 </div>
                 
-                <button class="accordion-header" onclick="toggleAccordion(this)">6. Strojenie PID (Obrot)</button>
+                <button class="accordion-header">6. Strojenie PID (Obrot)</button>
                 <div class="accordion-content">
                     <div class="setting-block"><div class="setting-container"><label for="kpRotationInput">Kp Obrotu</label><div class="numeric-input-wrapper"><button id="kpRotationMinus">-</button><input type="number" id="kpRotationInput" min="0" max="10.0" step="0.1" value="1"><button id="kpRotationPlus">+</button></div></div></div>
                     <div class="setting-block"><div class="setting-container"><label for="kdRotationInput">Kd Obrotu</label><div class="numeric-input-wrapper"><button id="kdRotationMinus">-</button><input type="number" id="kdRotationInput" min="0" max="10.0" step="0.1" value="1"><button id="kdRotationPlus">+</button></div></div></div>
                 </div>
 
-                <button class="accordion-header" onclick="toggleAccordion(this)">7. Strojenie PID (Utrzymanie Kierunku)</button>
+                <button class="accordion-header">7. Strojenie PID (Utrzymanie Kierunku)</button>
                 <div class="accordion-content">
                     <div class="pwm-info">
                          <strong>INFO:</strong> Ten regulator jest aktywny tylko, gdy nie skrecasz joystickiem.<br>
@@ -286,7 +285,7 @@
                     <div class="setting-block"><div class="setting-container"><label for="kdHeadingInput">Kd Kierunku</label><div class="numeric-input-wrapper"><button id="kdHeadingMinus">-</button><input type="number" id="kdHeadingInput" min="0" max="5.0" step="0.05" value="0.1"><button id="kdHeadingPlus">+</button></div></div></div>
                 </div>
 
-                <button class="accordion-header" onclick="toggleAccordion(this)">8. Strojenie PID (Przechyl w Skrecie)</button>
+                <button class="accordion-header">8. Strojenie PID (Przechyl w Skrecie)</button>
                 <div class="accordion-content">
                     <div class="pwm-info">
                          <strong>INFO:</strong> Ten regulator stabilizuje robota na boki podczas skrecania.
@@ -296,7 +295,7 @@
                     <div class="setting-block"><div class="setting-container"><label for="kdRollInput">Kd Przechylu</label><div class="numeric-input-wrapper"><button id="kdRollMinus">-</button><input type="number" id="kdRollInput" min="0" max="5.0" step="0.05" value="0.5"><button id="kdRollPlus">+</button></div></div></div>
                 </div>
 
-                <button class="accordion-header" onclick="toggleAccordion(this)">9. Ustawienia Dodatkowe</button>
+                <button class="accordion-header">9. Ustawienia Dodatkowe</button>
                 <div class="accordion-content">
                     <div class="setting-block"><div class="setting-container"><label for="joystickDeadzoneInput">Martwa Strefa (%)</label><div class="numeric-input-wrapper"><button id="joystickDeadzoneMinus">-</button><input type="number" id="joystickDeadzoneInput" min="0" max="50" step="1" value="0"><button id="joystickDeadzonePlus">+</button></div></div></div>
                     <div class="setting-block"><div class="setting-container"><label for="turnFactorInput">Moc Skretu (%)</label><div class="numeric-input-wrapper"><button id="turnFactorMinus">-</button><input type="number" id="turnFactorInput" min="0" max="100" step="1" value="25"><button id="turnFactorPlus">+</button></div></div></div>
@@ -314,17 +313,6 @@
     </div>
 
 <script>
-    // POPRAWKA: Przeniesienie funkcji toggleAccordion do zasiegu globalnego, aby dzialala z onclick
-    function toggleAccordion(header) {
-        const content = header.nextElementSibling;
-        const isActive = header.classList.toggle('active');
-        if (isActive) {
-            content.style.maxHeight = content.scrollHeight + "px";
-        } else {
-            content.style.maxHeight = null;
-        }
-    }
-
     document.addEventListener('DOMContentLoaded', () => {
         const PROFILE_PREFIX = 'robot_profile_v16.7_final_';
         const availableTelemetry = {
@@ -352,6 +340,8 @@
         let joystickCenter, joystickRadius, knobRadius, isDragging = false; 
 
         let scene, camera, renderer, controls, robotModel, leftWheel, rightWheel;
+        
+        // POPRAWKA: Dodanie brakujacych stalych fizycznych dla wizualizacji 3D
         const IMPULSES_PER_REVOLUTION = 820;
         const WHEEL_DIAMETER_CM = 8.2;
         const TRACK_WIDTH_CM = 13.0;
@@ -419,17 +409,15 @@
             try {
                 const data = JSON.parse(event.data);
                 switch (data.type) {
-                    // POPRAWKA: Nowy case do obslugi lekkiej telemetrii dla modelu 3D
                     case '3d_telemetry':
                         if (data.p !== undefined) robotState.pitch = data.p;
                         if (data.r !== undefined) robotState.roll = data.r;
                         if (data.el !== undefined) robotState.encoderL = data.el;
                         if (data.er !== undefined) robotState.encoderR = data.er;
-                        break;
+                        break; 
                     case 'telemetry': 
                         updateUI(data); 
                         updateChart(data); 
-                        // Zapasowe uaktualnienie stanu (glowne zrodlo to '3d_telemetry')
                         if(data.pitch !== undefined) robotState.pitch = data.pitch;
                         if(data.roll !== undefined) robotState.roll = data.roll;
                         if(data.encoder_left !== undefined) robotState.encoderL = data.encoder_left;
@@ -491,7 +479,7 @@
             
             const params = { 
                 expoJoystick: data.expo_joystick, 
-                joystickSensitivity: data.joystick_sensitivity, // POPRAWKA: Obsluga nowego parametru
+                joystickSensitivity: data.joystick_sensitivity,
                 maxSpeedJoystick: data.max_speed_joystick,
                 minPwmLeftFwd: data.min_pwm_left_fwd, 
                 minPwmLeftBwd: data.min_pwm_left_bwd, 
@@ -733,7 +721,6 @@
                         ids.forEach(i => { 
                             const inputElement = document.getElementById(i + 'Input'); 
                             if(inputElement) { 
-                                // POPRAWKA: Nowa, solidna logika mapowania ID na klucze JSON
                                 let key;
                                 if (i === 'joystickSensitivity') key = 'sensitivity';
                                 else if (i === 'expoJoystick') key = 'expo';
@@ -743,7 +730,6 @@
                             } 
                         }); 
                         
-                        // POPRAWKA: Dodana obsluga skalowania dla nowego parametru
                         if (payload.joystick_deadzone !== undefined) payload.joystick_deadzone /= 100.0; 
                         if (payload.turn_factor !== undefined) payload.turn_factor /= 100.0; 
                         if (payload.expo !== undefined) payload.expo /= 100.0; 
@@ -770,7 +756,6 @@
             };
             
             setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm_group');
-            // POPRAWKA: Dodanie nowego ID 'joystickSensitivity' do grupy
             setupGroupedInput(['joystickDeadzone', 'turnFactor', 'expoJoystick', 'maxSpeedJoystick', 'joystickSensitivity'], 'set_joystick_tuning');
             setupGroupedInput(['kpBalance', 'kiBalance', 'kdBalance', 'joystickAngleSensitivity', 'balancePidDerivativeFilterAlpha'], 'balance_pid_update');
             setupGroupedInput(['kpSpeed', 'kiSpeed', 'kdSpeed', 'maxTargetAngleFromSpeedPID', 'speedPidDeadband'], 'speed_pid_update');
@@ -1027,150 +1012,152 @@
             }); 
         }
         
+        // POPRAWKA: Calkowicie nowa, niezawodna funkcja inicjalizacji 3D
         function setup3DVisualization() {
             const container = document.getElementById('canvas-3d-container');
             if (!container) return;
 
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x20232a);
+
+            camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(0, 8, 25); 
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.innerHTML = '';
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enablePan = false;
+            controls.target.set(0, 2, 0); 
+            controls.update();
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            directionalLight.position.set(10, 20, 15);
+            scene.add(directionalLight);
+            
+            const floorGeometry = new THREE.PlaneGeometry(200, 200);
+            const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x4a4f58, roughness: 0.8 }); 
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = -2.3; 
+            scene.add(floor);
+
             const loader = new THREE.TextureLoader();
-            loader.load('https://i.imgur.com/gA3t1d3.jpg', 
+            loader.load(
+                'https://i.imgur.com/gA3t1d3.jpg',
                 function (texture) {
-                    
-                    scene = new THREE.Scene();
-                    scene.background = new THREE.Color(0x20232a);
-
-                    camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
-                    camera.position.set(0, 8, 25); 
-
-                    renderer = new THREE.WebGLRenderer({ antialias: true });
-                    renderer.setSize(container.clientWidth, container.clientHeight);
-                    container.appendChild(renderer.domElement);
-
-                    controls = new THREE.OrbitControls(camera, renderer.domElement);
-                    controls.enablePan = false;
-                    controls.target.set(0, 2, 0); 
-                    controls.update();
-
-                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-                    scene.add(ambientLight);
-                    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
-                    directionalLight.position.set(10, 20, 15);
-                    scene.add(directionalLight);
-                    
                     texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
                     texture.repeat.set(10, 10);
-                    const floorMaterial = new THREE.MeshStandardMaterial({ map: texture });
-                    const floorGeometry = new THREE.PlaneGeometry(200, 200);
-                    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-                    floor.rotation.x = -Math.PI / 2;
-                    floor.position.y = -2.3; 
-                    scene.add(floor);
-
-                    robotModel = new THREE.Group();
-                    robotModel.userData.lastEncoderL = 0;
-                    robotModel.userData.lastEncoderR = 0;
-                    
-                    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1A1A1A, roughness: 0.6 });
-                    const body = new THREE.Mesh(new THREE.BoxGeometry(7, 3, 5), bodyMaterial);
-                    body.position.y = 0;
-                    robotModel.add(body);
-
-                    const mast = new THREE.Mesh(new THREE.BoxGeometry(1.5, 7, 1.5), bodyMaterial);
-                    mast.position.y = 5;
-                    robotModel.add(mast);
-
-                    const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFF00, roughness: 0.8 });
-                    const battery = new THREE.Mesh(new THREE.BoxGeometry(4, 2, 1), batteryMaterial);
-                    battery.position.set(0, 9.5, -0.5);
-                    robotModel.add(battery);
-
-                    const strapMaterial = new THREE.MeshStandardMaterial({ color: 0x101010 });
-                    const strap = new THREE.Mesh(new THREE.BoxGeometry(1.7, 2.2, 1.7), strapMaterial);
-                    strap.position.set(0, 9.5, 0);
-                    robotModel.add(strap);
-                    
-                    const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0xF0F0F0, roughness: 0.5 });
-                    const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
-                    
-                    function createWheel() {
-                        const wheel = new THREE.Group();
-                        const tire = new THREE.Mesh(new THREE.CylinderGeometry(4.1, 4.1, 2, 32), tireMaterial);
-                        wheel.add(tire);
-                        const rim = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 2.2, 32), wheelMaterial);
-                        wheel.add(rim);
-
-                        const spokeGeometry = new THREE.BoxGeometry(3.5, 0.4, 0.4);
-                        for (let i = 0; i < 7; i++) {
-                            const spoke = new THREE.Mesh(spokeGeometry, wheelMaterial);
-                            const angle = (i / 7) * Math.PI * 2;
-                            spoke.rotation.z = angle;
-                            wheel.add(spoke);
-                        }
-                        return wheel;
-                    }
-
-                    leftWheel = createWheel();
-                    leftWheel.position.x = -6.5; 
-                    robotModel.add(leftWheel);
-
-                    rightWheel = createWheel();
-                    rightWheel.position.x = 6.5; 
-                    robotModel.add(rightWheel);
-                    
-                    [leftWheel, rightWheel].forEach(w => w.rotation.z = Math.PI / 2);
-
-                    scene.add(robotModel);
-
-                    function animate() {
-                        requestAnimationFrame(animate);
-
-                        // Plynna animacja w kazdej klatce
-                        const degToRad = Math.PI / 180;
-                        const wheelCircumferenceM = (Math.PI * WHEEL_DIAMETER_CM) / 100.0;
-                        const trackWidthM = TRACK_WIDTH_CM / 100.0;
-                        
-                        const deltaL = robotState.encoderL - robotState.lastEncoderL;
-                        const deltaR = robotState.encoderR - robotState.lastEncoderR;
-                        robotState.lastEncoderL = robotState.encoderL;
-                        robotState.lastEncoderR = robotState.encoderR;
-
-                        const deltaRevolutionsL = deltaL / IMPULSES_PER_REVOLUTION;
-                        const deltaRevolutionsR = deltaR / IMPULSES_PER_REVOLUTION;
-
-                        leftWheel.rotation.x -= deltaRevolutionsL * 2 * Math.PI;
-                        rightWheel.rotation.x -= deltaRevolutionsR * 2 * Math.PI;
-
-                        const deltaDistanceL = deltaRevolutionsL * wheelCircumferenceM;
-                        const deltaDistanceR = deltaRevolutionsR * wheelCircumferenceM;
-
-                        const deltaDistanceCenter = (deltaDistanceL + deltaDistanceR) / 2.0;
-                        const deltaRotationAngleRad = (deltaDistanceR - deltaDistanceL) / trackWidthM;
-                        
-                        robotModel.position.x += Math.sin(robotModel.rotation.y) * deltaDistanceCenter * 100;
-                        robotModel.position.z += Math.cos(robotModel.rotation.y) * deltaDistanceCenter * 100;
-                        
-                        robotModel.rotation.order = 'YXZ';
-                        robotModel.rotation.y -= deltaRotationAngleRad;
-                        robotModel.rotation.x = robotState.pitch * degToRad;
-                        robotModel.rotation.z = robotState.roll * degToRad;
-
-                        controls.update();
-                        renderer.render(scene, camera);
-                    }
-                    animate();
-
-                    window.addEventListener('resize', () => {
-                        if (!container || !renderer) return;
-                        camera.aspect = container.clientWidth / container.clientHeight;
-                        camera.updateProjectionMatrix();
-                        renderer.setSize(container.clientWidth, container.clientHeight);
-                    }, false);
+                    floor.material.map = texture;
+                    floor.material.needsUpdate = true;
                 },
-                undefined, 
+                undefined,
                 function (err) {
-                    console.error('Blad ladowania tekstury podlogi.');
+                    console.error('Nie udalo sie zaladowac tekstury podlogi.');
                     addLogMessage('Blad ladowania tekstury 3D!', 'error');
                 }
             );
+
+            robotModel = new THREE.Group();
+            
+            const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1A1A1A, roughness: 0.6 });
+            const body = new THREE.Mesh(new THREE.BoxGeometry(7, 3, 5), bodyMaterial);
+            body.position.y = 0;
+            robotModel.add(body);
+
+            const mast = new THREE.Mesh(new THREE.BoxGeometry(1.5, 7, 1.5), bodyMaterial);
+            mast.position.y = 5;
+            robotModel.add(mast);
+
+            const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFF00, roughness: 0.8 });
+            const battery = new THREE.Mesh(new THREE.BoxGeometry(4, 2, 1), batteryMaterial);
+            battery.position.set(0, 9.5, -0.5);
+            robotModel.add(battery);
+
+            const strapMaterial = new THREE.MeshStandardMaterial({ color: 0x101010 });
+            const strap = new THREE.Mesh(new THREE.BoxGeometry(1.7, 2.2, 1.7), strapMaterial);
+            strap.position.set(0, 9.5, 0);
+            robotModel.add(strap);
+            
+            const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0xF0F0F0, roughness: 0.5 });
+            const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+            
+            function createWheel() {
+                const wheel = new THREE.Group();
+                const tire = new THREE.Mesh(new THREE.CylinderGeometry(4.1, 4.1, 2, 32), tireMaterial);
+                wheel.add(tire);
+                const rim = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 2.2, 32), wheelMaterial);
+                wheel.add(rim);
+
+                const spokeGeometry = new THREE.BoxGeometry(3.5, 0.4, 0.4);
+                for (let i = 0; i < 7; i++) {
+                    const spoke = new THREE.Mesh(spokeGeometry, wheelMaterial);
+                    const angle = (i / 7) * Math.PI * 2;
+                    spoke.rotation.z = angle;
+                    wheel.add(spoke);
+                }
+                return wheel;
+            }
+
+            leftWheel = createWheel();
+            leftWheel.position.x = -6.5; 
+            robotModel.add(leftWheel);
+
+            rightWheel = createWheel();
+            rightWheel.position.x = 6.5; 
+            robotModel.add(rightWheel);
+            
+            [leftWheel, rightWheel].forEach(w => w.rotation.z = Math.PI / 2);
+
+            scene.add(robotModel);
+
+            function animate() {
+                requestAnimationFrame(animate);
+
+                const degToRad = Math.PI / 180;
+                const wheelCircumferenceM = (Math.PI * WHEEL_DIAMETER_CM) / 100.0;
+                const trackWidthM = TRACK_WIDTH_CM / 100.0;
+                
+                const deltaL = robotState.encoderL - robotState.lastEncoderL;
+                const deltaR = robotState.encoderR - robotState.lastEncoderR;
+                robotState.lastEncoderL = robotState.encoderL;
+                robotState.lastEncoderR = robotState.encoderR;
+
+                const deltaRevolutionsL = deltaL / IMPULSES_PER_REVOLUTION;
+                const deltaRevolutionsR = deltaR / IMPULSES_PER_REVOLUTION;
+
+                leftWheel.rotation.x -= deltaRevolutionsL * 2 * Math.PI;
+                rightWheel.rotation.x -= deltaRevolutionsR * 2 * Math.PI;
+
+                const deltaDistanceL = deltaRevolutionsL * wheelCircumferenceM;
+                const deltaDistanceR = deltaRevolutionsR * wheelCircumferenceM;
+
+                const deltaDistanceCenter = (deltaDistanceL + deltaDistanceR) / 2.0;
+                const deltaRotationAngleRad = (deltaDistanceR - deltaDistanceL) / trackWidthM;
+                
+                robotModel.position.x += Math.sin(robotModel.rotation.y) * deltaDistanceCenter * 100;
+                robotModel.position.z += Math.cos(robotModel.rotation.y) * deltaDistanceCenter * 100;
+                
+                robotModel.rotation.order = 'YXZ';
+                robotModel.rotation.y -= deltaRotationAngleRad;
+                robotModel.rotation.x = robotState.pitch * degToRad;
+                robotModel.rotation.z = robotState.roll * degToRad;
+
+                controls.update();
+                renderer.render(scene, camera);
+            }
+            animate();
+
+            window.addEventListener('resize', () => {
+                if (!container || !renderer) return;
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            }, false);
         }
         
         document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
@@ -1193,16 +1180,21 @@
         document.getElementById('saveProfileBtn').addEventListener('click', saveProfile);
         document.getElementById('applyProfileBtn').addEventListener('click', sendProfileToRobot);
         document.getElementById('profileSelect').addEventListener('change', applyProfileToPanel);
-
+        
+        // POPRAWKA: Nowa, niezawodna obsluga rozwijanych paneli
         document.querySelectorAll('.accordion-header').forEach(header => {
-            if (!header.classList.contains('active')) {
+            header.addEventListener('click', event => {
                 const content = header.nextElementSibling;
-                if (content) content.style.maxHeight = null;
-            } else {
-                const content = header.nextElementSibling;
-                if (content) content.style.maxHeight = content.scrollHeight + "px";
-            }
+                const isActive = header.classList.toggle('active');
+                
+                if (isActive) {
+                    content.style.maxHeight = content.scrollHeight + "px";
+                } else {
+                    content.style.maxHeight = null;
+                }
+            });
         });
+
     });
     
     window.onresize = () => { 
