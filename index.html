@@ -6,7 +6,7 @@
     <title>Robot Samo Balansujacy - Wersja 17.0-REALISTIC-SIM</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
         h1 { color: #61dafb; font-size: 1.8em; }
@@ -15,7 +15,7 @@
         .card { background-color: #3a3f47; border-radius: 8px; padding: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
         .info-grid, .status-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px; text-align: left; font-size: 1em; margin-top: 10px; align-items: center;}
         .info-grid strong, .status-grid strong { color: #a2f279; }
-        button { background-color: #61dafb; color: #282c34; border: none; padding: 8px 12px; border-radius: 5px; font-weight: bold; cursor: pointer; transition: background-color: 0.3s; font-size: 0.9em; }
+        button { background-color: #61dafb; color: #282c34; border: none; padding: 8px 12px; border-radius: 5px; font-weight: bold; cursor: pointer; transition: background-color 0.3s; font-size: 0.9em; }
         button:hover { background-color: #a2f279; }
         button:disabled { background-color: #4a4f58; color: #888; cursor: not-allowed; }
         #emergencyStopBtn { background-color: #ff6347; color: white; width: 100%; margin-top: 15px; }
@@ -72,7 +72,7 @@
         .dpad-input-group { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin: 10px 0; }
         .dpad-input-group label { text-align: right; font-weight: bold; color: #a2f279; }
         .dpad-input-group input { width: 100%; box-sizing: border-box; }
-        .accordion-header { background-color: #4a4f58; color: #61dafb; cursor: pointer; padding: 12px 15px; border: none; text-align: left; outline: none; font-size: 1.1em; font-weight: bold; width: 100%; border-radius: 8px; margin-top: 10px; transition: background-color: 0.3s; position: relative; }
+        .accordion-header { background-color: #4a4f58; color: #61dafb; cursor: pointer; padding: 12px 15px; border: none; text-align: left; outline: none; font-size: 1.1em; font-weight: bold; width: 100%; border-radius: 8px; margin-top: 10px; transition: background-color 0.3s; position: relative; }
         .accordion-header:hover { background-color: #5a6068; }
         .accordion-header.active { background-color: #61dafb; color: #282c34; border-bottom-left-radius: 0; border-bottom-right-radius: 0;}
         .accordion-header::after { content: '+'; position: absolute; right: 15px; font-size: 1.4em; transition: transform 0.3s; }
@@ -202,7 +202,8 @@
                 <button class="accordion-header">0. Konfiguracja Fizyczna i Dynamika</button>
                 <div class="accordion-content">
                     <div class="setting-container"><label for="encoderPPRInput">Impulsy na obrot (PPR)</label><div class="numeric-input-wrapper"><button id="encoderPPRMinus">-</button><input type="number" id="encoderPPRInput" min="100" max="5000" step="1" value="820"><button id="encoderPPRPlus">+</button></div></div>
-                    <div class="setting-container"><label for="wheelDiameterCmInput">Srednica kola (cm)</label><div class="numeric-input-wrapper"><button id="wheelDiameterCmMinus">-</button><input type="number" id="wheelDiameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameterCmPlus">+</button></div></div>
+                    <div class="setting-container"><label for="wheelDiameterCmInput">Srednica kola (cm)</label><div class="numeric-input-wrapper"><button id="wheelDiameterCmMinus">-</button><input type="number" id="wheelD
+ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameterCmPlus">+</button></div></div>
                     <div class="setting-container"><label for="trackWidthCmInput">Rozstaw kol (cm)</label><div class="numeric-input-wrapper"><button id="trackWidthCmMinus">-</button><input type="number" id="trackWidthCmInput" min="1" max="40" step="0.1" value="13.0"><button id="trackWidthCmPlus">+</button></div></div>
                     <div class="setting-container"><label for="motorBacklashInput">Luz silnika (impulsy)</label><div class="numeric-input-wrapper"><button id="motorBacklashMinus">-</button><input type="number" id="motorBacklashInput" min="0" max="200" step="1" value="0"><button id="motorBacklashPlus">+</button></div></div>
                     <hr style="border-color: #4a4f58; margin: 10px 0;">
@@ -313,7 +314,50 @@
     </div>
 
 <script>
+    // Globalne zmienne dla joysticka - przeniesione z DOMContentLoaded dla dostepnosci w window.onresize
+    let joystickCanvas, joystickCtx, joystickCenter, joystickRadius, knobRadius, isDragging = false;
+
+    // Funkcja resize joysticka - dostepna globalnie
+    function resizeJoystick() { 
+        const wrapper = document.getElementById('joystickWrapper'); 
+        if (!wrapper || !joystickCanvas) {
+            console.warn('Brak elementow joysticka podczas resize');
+            return;
+        }
+        joystickCanvas.width = wrapper.offsetWidth; 
+        joystickCanvas.height = wrapper.offsetHeight; 
+        joystickCenter = { x: joystickCanvas.width / 2, y: joystickCanvas.height / 2 }; 
+        joystickRadius = Math.min(joystickCanvas.width, joystickCanvas.height) / 2 * 0.9; 
+        knobRadius = joystickRadius / 3; 
+        drawJoystick(0, 0); 
+    }
+
+    // Funkcja rysowania joysticka - dostepna globalnie
+    function drawJoystick(x, y) {
+        if (!joystickCtx) {
+            console.warn('Brak kontekstu canvas dla joysticka');
+            return;
+        }
+        joystickCtx.clearRect(0, 0, joystickCanvas.width, joystickCanvas.height); 
+        joystickCtx.beginPath(); 
+        joystickCtx.arc(joystickCenter.x, joystickCenter.y, joystickRadius, 0, Math.PI * 2); 
+        joystickCtx.fillStyle = '#4a4f58'; 
+        joystickCtx.fill(); 
+        joystickCtx.beginPath(); 
+        joystickCtx.arc(joystickCenter.x + x, joystickCenter.y + y, knobRadius, 0, Math.PI * 2); 
+        joystickCtx.fillStyle = '#a2f279'; 
+        joystickCtx.fill(); 
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
+        // Inicjalizacja elementow joysticka
+        joystickCanvas = document.getElementById('joystickCanvas'); 
+        if (!joystickCanvas) {
+            console.error('Nie znaleziono elementu joystickCanvas');
+            return;
+        }
+        joystickCtx = joystickCanvas.getContext('2d');
+
         const PROFILE_PREFIX = 'robot_profile_v16.7_final_';
         const availableTelemetry = {
             'pitch': { label: 'Pitch (Kat)', color: '#61dafb' },
@@ -335,13 +379,9 @@
         const RX_UUID      = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
         const TX_UUID      = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
-        const joystickCanvas = document.getElementById('joystickCanvas'); 
-        const joystickCtx = joystickCanvas.getContext('2d');
-        let joystickCenter, joystickRadius, knobRadius, isDragging = false; 
-
         let scene, camera, renderer, controls, robotModel, leftWheel, rightWheel;
         
-        // POPRAWKA: Dodanie brakujacych stalych fizycznych dla wizualizacji 3D
+        // Stale fizyczne dla wizualizacji 3D
         const IMPULSES_PER_REVOLUTION = 820;
         const WHEEL_DIAMETER_CM = 8.2;
         const TRACK_WIDTH_CM = 13.0;
@@ -357,7 +397,7 @@
 
         async function connectBLE() {
             try {
-                console.log('Prosze o wybranie urzadzenia Bluetooth...');
+                console.log('Proszę o wybranie urzadzenia Bluetooth...');
                 document.getElementById('connectionText').textContent = 'Wybierz robota...';
                 bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
                 console.log('Laczenie z serwerem GATT...');
@@ -389,7 +429,10 @@
             console.log('Rozlaczono z robotem.');
             document.getElementById('connectionStatus').className = 'status-indicator status-disconnected';
             document.getElementById('connectionText').textContent = 'Rozlaczony';
-            ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => document.getElementById(id).checked = false);
+            ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => {
+                const element = document.getElementById(id);
+                if (element) element.checked = false;
+            });
             document.getElementById('systemStatus').className = 'status-indicator status-disconnected';
             document.getElementById('systemText').textContent = 'Nieznany';
             document.getElementById('connectBleBtn').disabled = false;
@@ -459,22 +502,37 @@
         }
 
         async function sendBleMessage(message) {
-            if (!rxCharacteristic) { console.warn("Proba wyslania danych bez polaczenia BLE."); return; }
+            if (!rxCharacteristic) { 
+                console.warn("Proba wyslania danych bez polaczenia BLE."); 
+                return; 
+            }
             try {
                 const encoder = new TextEncoder();
                 await rxCharacteristic.writeValue(encoder.encode(JSON.stringify(message)));
-            } catch(error) { console.error('Blad wysylania danych BLE:', error); }
+            } catch(error) { 
+                console.error('Blad wysylania danych BLE:', error); 
+            }
         }
 
-        function updateManualTuneReadout(data) { document.getElementById('manualEncoderL').textContent = data.encoderL; document.getElementById('manualEncoderR').textContent = data.encoderR; }
+        function updateManualTuneReadout(data) { 
+            const encoderL = document.getElementById('manualEncoderL');
+            const encoderR = document.getElementById('manualEncoderR');
+            if (encoderL) encoderL.textContent = data.encoderL;
+            if (encoderR) encoderR.textContent = data.encoderR;
+        }
 
         function applyInitialState(data) {
-            document.getElementById('balanceSwitch').checked = data.balancingEnabled;
-            document.getElementById('holdPositionSwitch').checked = data.holdPositionEnabled;
-            document.getElementById('speedModeSwitch').checked = data.speedModeEnabled;
+            const balanceSwitch = document.getElementById('balanceSwitch');
+            const holdPositionSwitch = document.getElementById('holdPositionSwitch');
+            const speedModeSwitch = document.getElementById('speedModeSwitch');
+            
+            if (balanceSwitch) balanceSwitch.checked = data.balancingEnabled;
+            if (holdPositionSwitch) holdPositionSwitch.checked = data.holdPositionEnabled;
+            if (speedModeSwitch) speedModeSwitch.checked = data.speedModeEnabled;
             
             if (data.pwm_max_value) {
-                document.getElementById('pwmResolutionVal').textContent = `10-bit (${data.pwm_max_value})`;
+                const pwmResolution = document.getElementById('pwmResolutionVal');
+                if (pwmResolution) pwmResolution.textContent = `10-bit (${data.pwm_max_value})`;
             }
             
             const params = { 
@@ -531,28 +589,50 @@
         }
 
         function updateUI(data) {
-            if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
+            const robotStateVal = document.getElementById('robotStateVal');
+            if (robotStateVal && data.robot_state !== undefined) robotStateVal.textContent = data.robot_state;
+            
             if (data.pitch !== undefined) { 
                 const displayPitch = data.pitch; 
-                document.getElementById('angleVal').textContent = displayPitch.toFixed(1) + ' \u00B0'; 
-                document.getElementById('angleIndicator').style.transform = 'rotate(' + displayPitch + 'deg)'; 
+                const angleVal = document.getElementById('angleVal');
+                const angleIndicator = document.getElementById('angleIndicator');
+                if (angleVal) angleVal.textContent = displayPitch.toFixed(1) + ' °';
+                if (angleIndicator) angleIndicator.style.transform = 'rotate(' + displayPitch + 'deg)';
             }
-            if (data.roll !== undefined) document.getElementById('rollVal').textContent = data.roll.toFixed(1) + ' \u00B0';
-            if (data.speed !== undefined) document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0);
+            
+            const rollVal = document.getElementById('rollVal');
+            if (rollVal && data.roll !== undefined) rollVal.textContent = data.roll.toFixed(1) + ' °';
+            
+            const speedVal = document.getElementById('speedVal');
+            if (speedVal && data.speed !== undefined) speedVal.textContent = parseFloat(data.speed).toFixed(0);
+            
             if (data.target_angle !== undefined) { 
-                finalTargetAngleForDisplay = data.target_angle; 
-                document.getElementById('targetAngleVal').textContent = parseFloat(data.target_angle).toFixed(1) + ' \u00B0'; 
+                finalTargetAngleForDisplay = data.target_angle;
+                const targetAngleVal = document.getElementById('targetAngleVal');
+                if (targetAngleVal) targetAngleVal.textContent = parseFloat(data.target_angle).toFixed(1) + ' °';
             }
-            if (data.balance_output !== undefined) document.getElementById('balanceOutputVal').textContent = parseFloat(data.balance_output).toFixed(2);
-            if (data.left_motor !== undefined) document.getElementById('leftMotorVal').textContent = Math.round(data.left_motor);
-            if (data.right_motor !== undefined) document.getElementById('rightMotorVal').textContent = Math.round(data.right_motor);
-            if (data.loop_time !== undefined) document.getElementById('loopTimeVal').textContent = data.loop_time + ' \u00B5s';
-            if (data.encoder_left !== undefined) document.getElementById('encoderLeftVal').textContent = data.encoder_left;
-            if (data.encoder_right !== undefined) document.getElementById('encoderRightVal').textContent = data.encoder_right;
+            
+            const balanceOutputVal = document.getElementById('balanceOutputVal');
+            if (balanceOutputVal && data.balance_output !== undefined) balanceOutputVal.textContent = parseFloat(data.balance_output).toFixed(2);
+            
+            const leftMotorVal = document.getElementById('leftMotorVal');
+            if (leftMotorVal && data.left_motor !== undefined) leftMotorVal.textContent = Math.round(data.left_motor);
+            
+            const rightMotorVal = document.getElementById('rightMotorVal');
+            if (rightMotorVal && data.right_motor !== undefined) rightMotorVal.textContent = Math.round(data.right_motor);
+            
+            const loopTimeVal = document.getElementById('loopTimeVal');
+            if (loopTimeVal && data.loop_time !== undefined) loopTimeVal.textContent = data.loop_time + ' μs';
+            
+            const encoderLeftVal = document.getElementById('encoderLeftVal');
+            if (encoderLeftVal && data.encoder_left !== undefined) encoderLeftVal.textContent = data.encoder_left;
+            
+            const encoderRightVal = document.getElementById('encoderRightVal');
+            if (encoderRightVal && data.encoder_right !== undefined) encoderRightVal.textContent = data.encoder_right;
             
             ['balanceSwitch', 'holdPositionSwitch'].forEach(id => { 
                 const el = document.getElementById(id); 
-                if (!lastUserInteraction[id] || (Date.now() - lastUserInteraction[id] > INTERACTION_TIMEOUT)) { 
+                if (el && (!lastUserInteraction[id] || (Date.now() - lastUserInteraction[id] > INTERACTION_TIMEOUT))) { 
                     if (data[id.replace('Switch', 'Enabled')] !== undefined) { 
                         const wasChecked = el.checked, isChecked = data[id.replace('Switch', 'Enabled')]; 
                         el.checked = isChecked; 
@@ -563,20 +643,25 @@
                 } 
             });
             
-            const systemStatus = document.getElementById('systemStatus'), systemText = document.getElementById('systemText'), emergencyBanner = document.getElementById('emergency-banner');
+            const systemStatus = document.getElementById('systemStatus');
+            const systemText = document.getElementById('systemText');
+            const emergencyBanner = document.getElementById('emergency-banner');
+            
             if (data.emergency_stop) { 
-                systemStatus.className = 'status-indicator status-error'; 
-                systemText.textContent = 'STOP AWARYJNY'; 
-                emergencyBanner.style.display = 'block'; 
+                if (systemStatus) systemStatus.className = 'status-indicator status-error'; 
+                if (systemText) systemText.textContent = 'STOP AWARYJNY'; 
+                if (emergencyBanner) emergencyBanner.style.display = 'block'; 
             } else { 
-                systemStatus.className = 'status-indicator status-ok'; 
-                systemText.textContent = 'OK'; 
-                emergencyBanner.style.display = 'none'; 
+                if (systemStatus) systemStatus.className = 'status-indicator status-ok'; 
+                if (systemText) systemText.textContent = 'OK'; 
+                if (emergencyBanner) emergencyBanner.style.display = 'none'; 
             }
         }
         
         function addLogMessage(message, level) { 
-            const logHistory = document.getElementById('log-history'); 
+            const logHistory = document.getElementById('log-history');
+            if (!logHistory) return;
+            
             const p = document.createElement('p'); 
             p.textContent = `[${new Date().toLocaleTimeString()}] [${level.toUpperCase()}] ${message}`; 
             if (level === 'error') p.style.color = '#ff6347'; 
@@ -656,64 +741,152 @@
         function setupManualTuningControls() { 
             document.querySelectorAll('.manual-tune-row').forEach(row => { 
                 const input = row.querySelector('.tune-input'); 
+                if (!input) return;
                 const step = 10;
                 
-                row.querySelector('.tune-plus').addEventListener('click', () => {
-                    input.value = Math.min(parseInt(input.value) + step, 1023);
-                }); 
-                row.querySelector('.tune-minus').addEventListener('click', () => {
-                    input.value = Math.max(parseInt(input.value) - step, 0);
-                }); 
-                row.querySelector('.test-btn').addEventListener('click', () => 
-                    sendBleMessage({ 
-                        type: 'set_direct_motor_control', 
-                        motor: row.dataset.motor, 
-                        direction: row.dataset.direction, 
-                        pwm: parseInt(input.value) 
-                    })
-                ); 
-                row.querySelector('.stop-btn').addEventListener('click', () => 
-                    sendBleMessage({ 
-                        type: 'set_direct_motor_control', 
-                        motor: row.dataset.motor, 
-                        direction: row.dataset.direction, 
-                        pwm: 0 
-                    })
-                ); 
+                const plusBtn = row.querySelector('.tune-plus');
+                const minusBtn = row.querySelector('.tune-minus');
+                const testBtn = row.querySelector('.test-btn');
+                const stopBtn = row.querySelector('.stop-btn');
+                
+                if (plusBtn) {
+                    plusBtn.addEventListener('click', () => {
+                        input.value = Math.min(parseInt(input.value) + step, 1023);
+                    }); 
+                }
+                
+                if (minusBtn) {
+                    minusBtn.addEventListener('click', () => {
+                        input.value = Math.max(parseInt(input.value) - step, 0);
+                    });
+                }
+                
+                if (testBtn) {
+                    testBtn.addEventListener('click', () => 
+                        sendBleMessage({ 
+                            type: 'set_direct_motor_control', 
+                            motor: row.dataset.motor, 
+                            direction: row.dataset.direction, 
+                            pwm: parseInt(input.value) 
+                        })
+                    );
+                }
+                
+                if (stopBtn) {
+                    stopBtn.addEventListener('click', () => 
+                        sendBleMessage({ 
+                            type: 'set_direct_motor_control', 
+                            motor: row.dataset.motor, 
+                            direction: row.dataset.direction, 
+                            pwm: 0 
+                        })
+                    );
+                }
             }); 
-            document.getElementById('manualTuneStopAll').addEventListener('click', () => 
-                sendBleMessage({ type: 'set_direct_motor_control', motor: 'all', pwm: 0 })
-            ); 
+            
+            const manualTuneStopAll = document.getElementById('manualTuneStopAll');
+            if (manualTuneStopAll) {
+                manualTuneStopAll.addEventListener('click', () => 
+                    sendBleMessage({ type: 'set_direct_motor_control', motor: 'all', pwm: 0 })
+                );
+            }
         }
 
         function setupControls() {
-            document.getElementById('balanceSwitch').addEventListener('change', e => { lastUserInteraction['balanceSwitch'] = Date.now(); sendBleMessage({ type: 'balance_toggle', enabled: e.target.checked }); });
-            document.getElementById('holdPositionSwitch').addEventListener('change', e => { lastUserInteraction['holdPositionSwitch'] = Date.now(); sendBleMessage({ type: 'hold_position_toggle', enabled: e.target.checked }); });
-            document.getElementById('speedModeSwitch').addEventListener('change', e => { sendBleMessage({ type: 'speed_mode_toggle', enabled: e.target.checked }); });
-            document.getElementById('resetZeroBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_zero' }));
-            document.getElementById('trimPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 1 }));
-            document.getElementById('trimMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -1 }));
-            document.getElementById('trimRollPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: 1 }));
-            document.getElementById('trimRollMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -1 }));
-            document.getElementById('saveBtn').addEventListener('click', () => { if(confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")){ sendBleMessage({ type: 'save_tunings' }); addLogMessage('Wyslano polecenie ZAPISU do EEPROM.', 'info'); }});
-            document.getElementById('loadBtn').addEventListener('click', () => { if(confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")){ sendBleMessage({ type: 'load_from_eeprom' }); addLogMessage('Wyslano polecenie ODCZYTU z EEPROM.', 'info'); }});
-            document.getElementById('emergencyStopBtn').addEventListener('click', () => sendBleMessage({ type: 'emergency_stop' }));
-            document.getElementById('resetEncodersBtn').addEventListener('click', () => {
-                sendBleMessage({ type: 'reset_encoders' });
-                if (robotModel) {
-                    robotModel.position.set(0, 0, 0);
-                    robotModel.rotation.set(0, 0, 0);
-                    robotState.lastEncoderL = 0;
-                    robotState.lastEncoderR = 0;
-                }
-            });
-            document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
+            const balanceSwitch = document.getElementById('balanceSwitch');
+            if (balanceSwitch) {
+                balanceSwitch.addEventListener('change', e => { 
+                    lastUserInteraction['balanceSwitch'] = Date.now(); 
+                    sendBleMessage({ type: 'balance_toggle', enabled: e.target.checked }); 
+                });
+            }
+            
+            const holdPositionSwitch = document.getElementById('holdPositionSwitch');
+            if (holdPositionSwitch) {
+                holdPositionSwitch.addEventListener('change', e => { 
+                    lastUserInteraction['holdPositionSwitch'] = Date.now(); 
+                    sendBleMessage({ type: 'hold_position_toggle', enabled: e.target.checked }); 
+                });
+            }
+            
+            const speedModeSwitch = document.getElementById('speedModeSwitch');
+            if (speedModeSwitch) {
+                speedModeSwitch.addEventListener('change', e => { 
+                    sendBleMessage({ type: 'speed_mode_toggle', enabled: e.target.checked }); 
+                });
+            }
+            
+            const resetZeroBtn = document.getElementById('resetZeroBtn');
+            if (resetZeroBtn) resetZeroBtn.addEventListener('click', () => sendBleMessage({ type: 'reset_zero' }));
+            
+            const trimPlusBtn = document.getElementById('trimPlusBtn');
+            if (trimPlusBtn) trimPlusBtn.addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 1 }));
+            
+            const trimMinusBtn = document.getElementById('trimMinusBtn');
+            if (trimMinusBtn) trimMinusBtn.addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -1 }));
+            
+            const trimRollPlusBtn = document.getElementById('trimRollPlusBtn');
+            if (trimRollPlusBtn) trimRollPlusBtn.addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: 1 }));
+            
+            const trimRollMinusBtn = document.getElementById('trimRollMinusBtn');
+            if (trimRollMinusBtn) trimRollMinusBtn.addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -1 }));
+            
+            const saveBtn = document.getElementById('saveBtn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', () => { 
+                    if(confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")){ 
+                        sendBleMessage({ type: 'save_tunings' }); 
+                        addLogMessage('Wyslano polecenie ZAPISU do EEPROM.', 'info'); 
+                    }
+                });
+            }
+            
+            const loadBtn = document.getElementById('loadBtn');
+            if (loadBtn) {
+                loadBtn.addEventListener('click', () => { 
+                    if(confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")){ 
+                        sendBleMessage({ type: 'load_from_eeprom' }); 
+                        addLogMessage('Wyslano polecenie ODCZYTU z EEPROM.', 'info'); 
+                    }
+                });
+            }
+            
+            const emergencyStopBtn = document.getElementById('emergencyStopBtn');
+            if (emergencyStopBtn) {
+                emergencyStopBtn.addEventListener('click', () => sendBleMessage({ type: 'emergency_stop' }));
+            }
+            
+            const resetEncodersBtn = document.getElementById('resetEncodersBtn');
+            if (resetEncodersBtn) {
+                resetEncodersBtn.addEventListener('click', () => {
+                    sendBleMessage({ type: 'reset_encoders' });
+                    if (robotModel) {
+                        robotModel.position.set(0, 0, 0);
+                        robotModel.rotation.set(0, 0, 0);
+                        robotState.lastEncoderL = 0;
+                        robotState.lastEncoderR = 0;
+                    }
+                });
+            }
+            
+            const calibrateMpuBtn = document.getElementById('calibrateMpuBtn');
+            if (calibrateMpuBtn) {
+                calibrateMpuBtn.addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
+            }
             
             const setupGroupedInput = (ids, msgType) => { 
                 ids.forEach(id => { 
-                    const input = document.getElementById(id + 'Input'), minusBtn = document.getElementById(id + 'Minus'), plusBtn = document.getElementById(id + 'Plus'); 
-                    if (!input || !minusBtn || !plusBtn) return; 
-                    const step = parseFloat(input.step) || 1, isFloat = input.step.includes('.'); 
+                    const input = document.getElementById(id + 'Input');
+                    const minusBtn = document.getElementById(id + 'Minus');
+                    const plusBtn = document.getElementById(id + 'Plus');
+                    
+                    if (!input || !minusBtn || !plusBtn) {
+                        console.warn(`Nie znaleziono wszystkich elementow dla ${id}`);
+                        return;
+                    }
+                    
+                    const step = parseFloat(input.step) || 1;
+                    const isFloat = input.step && input.step.includes('.'); 
                     
                     const sendGroupUpdate = () => { 
                         let msg = { type: msgType }; 
@@ -740,7 +913,8 @@
                     }; 
                     
                     const updateValue = (amount) => { 
-                        let current = parseFloat(input.value), newValue = current + amount; 
+                        let current = parseFloat(input.value);
+                        let newValue = current + amount; 
                         if (isFloat) { 
                             const dp = (step.toString().split('.')[1] || '').length; 
                             newValue = parseFloat(newValue.toFixed(dp)); 
@@ -769,31 +943,76 @@
             setupDpadControls();
         }
 
-        function setupDpadControls() { 
-            document.getElementById('dpad-up').addEventListener('click', () => sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) })); 
-            document.getElementById('dpad-down').addEventListener('click', () => sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) })); 
-            document.getElementById('dpad-left').addEventListener('click', () => sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) })); 
-            document.getElementById('dpad-right').addEventListener('click', () => sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) })); 
-            document.getElementById('dpad-stop').addEventListener('click', () => sendBleMessage({ type: 'command_stop' })); 
+        function setupDpadControls() {
+            const dpadUp = document.getElementById('dpad-up');
+            if (dpadUp) {
+                dpadUp.addEventListener('click', () => {
+                    const distInput = document.getElementById('dpadDistInput');
+                    const distance = distInput ? parseFloat(distInput.value) : 20;
+                    sendBleMessage({ type: 'execute_move', distance_cm: distance });
+                });
+            }
+            
+            const dpadDown = document.getElementById('dpad-down');
+            if (dpadDown) {
+                dpadDown.addEventListener('click', () => {
+                    const distInput = document.getElementById('dpadDistInput');
+                    const distance = distInput ? parseFloat(distInput.value) : 20;
+                    sendBleMessage({ type: 'execute_move', distance_cm: -distance });
+                });
+            }
+            
+            const dpadLeft = document.getElementById('dpad-left');
+            if (dpadLeft) {
+                dpadLeft.addEventListener('click', () => {
+                    const angleInput = document.getElementById('dpadAngleInput');
+                    const angle = angleInput ? parseFloat(angleInput.value) : 10;
+                    sendBleMessage({ type: 'execute_rotate', angle_deg: -angle });
+                });
+            }
+            
+            const dpadRight = document.getElementById('dpad-right');
+            if (dpadRight) {
+                dpadRight.addEventListener('click', () => {
+                    const angleInput = document.getElementById('dpadAngleInput');
+                    const angle = angleInput ? parseFloat(angleInput.value) : 10;
+                    sendBleMessage({ type: 'execute_rotate', angle_deg: angle });
+                });
+            }
+            
+            const dpadStop = document.getElementById('dpad-stop');
+            if (dpadStop) {
+                dpadStop.addEventListener('click', () => sendBleMessage({ type: 'command_stop' }));
+            }
         }
         
         function saveProfile() { 
-            const name = document.getElementById('profileNameInput').value; 
-            if (!name) { alert('Wpisz nazwe profilu!'); return; } 
+            const nameInput = document.getElementById('profileNameInput');
+            const name = nameInput ? nameInput.value : '';
+            if (!name) { 
+                alert('Wpisz nazwe profilu!'); 
+                return; 
+            } 
             const profileData = {}; 
-            document.querySelectorAll('#allSettings input[type=number], #controls-card input[type=number]').forEach(input => { profileData[input.id] = input.value; }); 
-            document.querySelectorAll('#allSettings input[type=checkbox], #controls-card input[type=checkbox]').forEach(input => { profileData[input.id] = input.checked; }); 
+            document.querySelectorAll('#allSettings input[type=number], #controls-card input[type=number]').forEach(input => { 
+                profileData[input.id] = input.value; 
+            }); 
+            document.querySelectorAll('#allSettings input[type=checkbox], #controls-card input[type=checkbox]').forEach(input => { 
+                profileData[input.id] = input.checked; 
+            }); 
             localStorage.setItem(PROFILE_PREFIX + name, JSON.stringify(profileData)); 
             addLogMessage(`Zapisano profil: ${name}`, 'info'); 
             loadProfiles(); 
         }
         
         function loadProfiles() { 
-            const select = document.getElementById('profileSelect'); 
+            const select = document.getElementById('profileSelect');
+            if (!select) return;
+            
             select.innerHTML = '<option value="">Wybierz profil...</option>'; 
             for (let i = 0; i < localStorage.length; i++) { 
                 const key = localStorage.key(i); 
-                if (key.startsWith(PROFILE_PREFIX)) { 
+                if (key && key.startsWith(PROFILE_PREFIX)) { 
                     const option = document.createElement('option'); 
                     option.value = key; 
                     option.textContent = key.replace(PROFILE_PREFIX, ''); 
@@ -803,37 +1022,49 @@
         }
         
         function applyProfileToPanel() { 
-            const key = document.getElementById('profileSelect').value; 
+            const select = document.getElementById('profileSelect');
+            const key = select ? select.value : '';
             if (!key) return; 
-            const profileData = JSON.parse(localStorage.getItem(key)); 
-            for (const id in profileData) { 
-                const input = document.getElementById(id); 
-                if (input) { 
-                    if (input.type === 'checkbox') {
-                        input.checked = profileData[id];
-                    } else {
-                        input.value = profileData[id];
-                    }
-                } 
-            } 
-            addLogMessage(`Zaladowano profil: ${key.replace(PROFILE_PREFIX, '')} do panelu.`, 'info'); 
+            
+            try {
+                const profileData = JSON.parse(localStorage.getItem(key) || '{}'); 
+                for (const id in profileData) { 
+                    const input = document.getElementById(id); 
+                    if (input) { 
+                        if (input.type === 'checkbox') {
+                            input.checked = profileData[id];
+                        } else {
+                            input.value = profileData[id];
+                        }
+                    } 
+                }
+                addLogMessage(`Zaladowano profil: ${key.replace(PROFILE_PREFIX, '')} do panelu.`, 'info');
+            } catch (error) {
+                console.error('Blad ladowania profilu:', error);
+                addLogMessage('Blad ladowania profilu', 'error');
+            }
         }
         
         function sendProfileToRobot() { 
             applyProfileToPanel(); 
             setTimeout(() => { 
                 document.querySelectorAll('#allSettings input[type=number], #controls-card input').forEach(input => { 
-                    input.dispatchEvent(new Event('change', { bubbles: true })); 
+                    if (input.dispatchEvent) {
+                        input.dispatchEvent(new Event('change', { bubbles: true })); 
+                    }
                 }); 
                 addLogMessage('Wyslano wartosci z profilu do robota.', 'info'); 
             }, 200); 
         }
         
         function setupChartControls() { 
-            const container = document.getElementById('chartControls'); 
+            const container = document.getElementById('chartControls');
+            if (!container) return;
+            
             container.innerHTML = ''; 
             Object.keys(availableTelemetry).forEach((key) => { 
-                const label = document.createElement('label'), checkbox = document.createElement('input'); 
+                const label = document.createElement('label');
+                const checkbox = document.createElement('input'); 
                 checkbox.type = 'checkbox'; 
                 checkbox.value = key; 
                 checkbox.checked = (key === 'pitch' || key === 'target_angle' || key === 'speed'); 
@@ -843,7 +1074,8 @@
                         sendBleMessage({ type: 'subscribe_variable', name: varName }); 
                     } else { 
                         sendBleMessage({ type: 'unsubscribe_variable', name: varName }); 
-                        const chartData = telemetryChart.data, datasetIndex = chartData.datasets.findIndex(ds => ds.label === availableTelemetry[varName].label); 
+                        const chartData = telemetryChart.data;
+                        const datasetIndex = chartData.datasets.findIndex(ds => ds.label === availableTelemetry[varName].label); 
                         if (datasetIndex > -1) { 
                             chartData.datasets.splice(datasetIndex, 1); 
                             telemetryChart.update(); 
@@ -856,35 +1088,13 @@
             }); 
         }
         
-        function resizeJoystick() { 
-            const wrapper = document.getElementById('joystickWrapper'); 
-            joystickCanvas.width = wrapper.offsetWidth; 
-            joystickCanvas.height = wrapper.offsetHeight; 
-            joystickCenter = { x: joystickCanvas.width / 2, y: joystickCanvas.height / 2 }; 
-            joystickRadius = Math.min(joystickCanvas.width, joystickCanvas.height) / 2 * 0.9; 
-            knobRadius = joystickRadius / 3; 
-            drawJoystick(0, 0); 
-        }
-        
-        function drawJoystick(x, y) { 
-            joystickCtx.clearRect(0, 0, joystickCanvas.width, joystickCanvas.height); 
-            joystickCtx.beginPath(); 
-            joystickCtx.arc(joystickCenter.x, joystickCenter.y, joystickRadius, 0, Math.PI * 2); 
-            joystickCtx.fillStyle = '#4a4f58'; 
-            joystickCtx.fill(); 
-            joystickCtx.beginPath(); 
-            joystickCtx.arc(joystickCenter.x + x, joystickCenter.y + y, knobRadius, 0, Math.PI * 2); 
-            joystickCtx.fillStyle = '#a2f279'; 
-            joystickCtx.fill(); 
-        }
-        
         function handleJoystickMove(e) { 
             if (!isDragging) return; 
             e.preventDefault(); 
             const rect = joystickCanvas.getBoundingClientRect(); 
             
-            const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
-            const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+            const clientX = e.clientX || (e.touches && e.touches ? e.touches.clientX : 0);
+            const clientY = e.clientY || (e.touches && e.touches ? e.touches.clientY : 0);
             
             const x = clientX - rect.left - joystickCenter.x;
             const y = clientY - rect.top - joystickCenter.y; 
@@ -922,7 +1132,7 @@
             const gp = gamepads[gamepadIndex]; 
             const deadzone = 0.15; 
             
-            let joyX = gp.axes[0] || 0;
+            let joyX = gp.axes || 0;
             let joyY = gp.axes[1] || 0;
             
             const magnitude = Math.sqrt(joyX*joyX + joyY*joyY); 
@@ -946,30 +1156,23 @@
         
         function handleGamepadButtonPress(index) {
             console.log("Gamepad button pressed: ", index);
-            switch(index) {
-                case 0:
-                    document.getElementById('balanceSwitch').click();
-                    break;
-                case 1:
-                     document.getElementById('emergencyStopBtn').click();
-                    break;
-                case 2:
-                    document.getElementById('holdPositionSwitch').click();
-                    break;
-                case 3:
-                    document.getElementById('speedModeSwitch').click();
-                    break;
-                case 8:
-                    document.getElementById('resetEncodersBtn').click();
-                    break;
-                case 9:
-                    document.getElementById('resetZeroBtn').click();
-                    break;
-            }
+            const buttonMap = {
+                0: 'balanceSwitch',
+                1: 'emergencyStopBtn', 
+                2: 'holdPositionSwitch',
+                3: 'speedModeSwitch',
+                8: 'resetEncodersBtn',
+                9: 'resetZeroBtn'
+            };
+            
+            const element = document.getElementById(buttonMap[index]);
+            if (element) element.click();
         }
 
         function setupGamepadControls() { 
-            const statusEl = document.getElementById('gamepadStatus'); 
+            const statusEl = document.getElementById('gamepadStatus');
+            if (!statusEl) return;
+            
             window.addEventListener("gamepadconnected", (event) => { 
                 gamepadIndex = event.gamepad.index; 
                 statusEl.textContent = 'Polaczony'; 
@@ -982,14 +1185,16 @@
                 statusEl.textContent = 'Brak'; 
                 statusEl.style.color = '#f7b731'; 
                 addLogMessage('Kontroler odlaczony.', 'warn'); 
-                cancelAnimationFrame(gamepadPollInterval); 
+                if (gamepadPollInterval) {
+                    cancelAnimationFrame(gamepadPollInterval); 
+                }
             }); 
         }
         
         function setupStateSync() { 
             document.addEventListener('visibilitychange', () => { 
                 if (document.visibilityState === 'visible') { 
-                    if (bleDevice && bleDevice.gatt.connected) { 
+                    if (bleDevice && bleDevice.gatt && bleDevice.gatt.connected) { 
                         sendBleMessage({ type: 'request_state' }); 
                     } 
                 } 
@@ -997,170 +1202,198 @@
         }
         
         function setupDiagnosticControls() { 
-            const startBtn = document.getElementById('startDiagnosticBtn'), stopBtn = document.getElementById('stopDiagnosticBtn'); 
-            startBtn.addEventListener('click', () => { 
-                sendBleMessage({ type: 'start_diagnostic' }); 
-                startBtn.style.display = 'none'; 
-                stopBtn.style.display = 'inline-block'; 
-                addLogMessage('Rozpoczeto analizator stanu pinow.', 'info'); 
-            }); 
-            stopBtn.addEventListener('click', () => { 
-                sendBleMessage({ type: 'stop_diagnostic' }); 
-                stopBtn.style.display = 'none'; 
-                startBtn.style.display = 'inline-block'; 
-                addLogMessage('Zakonczono analizator.', 'info'); 
-            }); 
+            const startBtn = document.getElementById('startDiagnosticBtn');
+            const stopBtn = document.getElementById('stopDiagnosticBtn');
+            
+            if (startBtn) {
+                startBtn.addEventListener('click', () => { 
+                    sendBleMessage({ type: 'start_diagnostic' }); 
+                    startBtn.style.display = 'none'; 
+                    if (stopBtn) stopBtn.style.display = 'inline-block'; 
+                    addLogMessage('Rozpoczeto analizator stanu pinow.', 'info'); 
+                });
+            }
+            
+            if (stopBtn) {
+                stopBtn.addEventListener('click', () => { 
+                    sendBleMessage({ type: 'stop_diagnostic' }); 
+                    stopBtn.style.display = 'none'; 
+                    if (startBtn) startBtn.style.display = 'inline-block'; 
+                    addLogMessage('Zakonczono analizator.', 'info'); 
+                });
+            }
         }
         
-        // POPRAWKA: Calkowicie nowa, niezawodna funkcja inicjalizacji 3D
         function setup3DVisualization() {
             const container = document.getElementById('canvas-3d-container');
-            if (!container) return;
-
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x20232a);
-
-            camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
-            camera.position.set(0, 8, 25); 
-
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(container.clientWidth, container.clientHeight);
-            container.innerHTML = '';
-            container.appendChild(renderer.domElement);
-
-            controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.enablePan = false;
-            controls.target.set(0, 2, 0); 
-            controls.update();
-
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-            scene.add(ambientLight);
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
-            directionalLight.position.set(10, 20, 15);
-            scene.add(directionalLight);
-            
-            const floorGeometry = new THREE.PlaneGeometry(200, 200);
-            const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x4a4f58, roughness: 0.8 }); 
-            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-            floor.rotation.x = -Math.PI / 2;
-            floor.position.y = -2.3; 
-            scene.add(floor);
-
-            const loader = new THREE.TextureLoader();
-            loader.load(
-                'https://i.imgur.com/gA3t1d3.jpg',
-                function (texture) {
-                    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-                    texture.repeat.set(10, 10);
-                    floor.material.map = texture;
-                    floor.material.needsUpdate = true;
-                },
-                undefined,
-                function (err) {
-                    console.error('Nie udalo sie zaladowac tekstury podlogi.');
-                    addLogMessage('Blad ladowania tekstury 3D!', 'error');
-                }
-            );
-
-            robotModel = new THREE.Group();
-            
-            const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1A1A1A, roughness: 0.6 });
-            const body = new THREE.Mesh(new THREE.BoxGeometry(7, 3, 5), bodyMaterial);
-            body.position.y = 0;
-            robotModel.add(body);
-
-            const mast = new THREE.Mesh(new THREE.BoxGeometry(1.5, 7, 1.5), bodyMaterial);
-            mast.position.y = 5;
-            robotModel.add(mast);
-
-            const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFF00, roughness: 0.8 });
-            const battery = new THREE.Mesh(new THREE.BoxGeometry(4, 2, 1), batteryMaterial);
-            battery.position.set(0, 9.5, -0.5);
-            robotModel.add(battery);
-
-            const strapMaterial = new THREE.MeshStandardMaterial({ color: 0x101010 });
-            const strap = new THREE.Mesh(new THREE.BoxGeometry(1.7, 2.2, 1.7), strapMaterial);
-            strap.position.set(0, 9.5, 0);
-            robotModel.add(strap);
-            
-            const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0xF0F0F0, roughness: 0.5 });
-            const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
-            
-            function createWheel() {
-                const wheel = new THREE.Group();
-                const tire = new THREE.Mesh(new THREE.CylinderGeometry(4.1, 4.1, 2, 32), tireMaterial);
-                wheel.add(tire);
-                const rim = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 2.2, 32), wheelMaterial);
-                wheel.add(rim);
-
-                const spokeGeometry = new THREE.BoxGeometry(3.5, 0.4, 0.4);
-                for (let i = 0; i < 7; i++) {
-                    const spoke = new THREE.Mesh(spokeGeometry, wheelMaterial);
-                    const angle = (i / 7) * Math.PI * 2;
-                    spoke.rotation.z = angle;
-                    wheel.add(spoke);
-                }
-                return wheel;
+            if (!container) {
+                console.error('Nie znaleziono kontenera 3D');
+                return;
             }
 
-            leftWheel = createWheel();
-            leftWheel.position.x = -6.5; 
-            robotModel.add(leftWheel);
+            try {
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x20232a);
 
-            rightWheel = createWheel();
-            rightWheel.position.x = 6.5; 
-            robotModel.add(rightWheel);
-            
-            [leftWheel, rightWheel].forEach(w => w.rotation.z = Math.PI / 2);
+                camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+                camera.position.set(0, 8, 25); 
 
-            scene.add(robotModel);
-
-            function animate() {
-                requestAnimationFrame(animate);
-
-                const degToRad = Math.PI / 180;
-                const wheelCircumferenceM = (Math.PI * WHEEL_DIAMETER_CM) / 100.0;
-                const trackWidthM = TRACK_WIDTH_CM / 100.0;
-                
-                const deltaL = robotState.encoderL - robotState.lastEncoderL;
-                const deltaR = robotState.encoderR - robotState.lastEncoderR;
-                robotState.lastEncoderL = robotState.encoderL;
-                robotState.lastEncoderR = robotState.encoderR;
-
-                const deltaRevolutionsL = deltaL / IMPULSES_PER_REVOLUTION;
-                const deltaRevolutionsR = deltaR / IMPULSES_PER_REVOLUTION;
-
-                leftWheel.rotation.x -= deltaRevolutionsL * 2 * Math.PI;
-                rightWheel.rotation.x -= deltaRevolutionsR * 2 * Math.PI;
-
-                const deltaDistanceL = deltaRevolutionsL * wheelCircumferenceM;
-                const deltaDistanceR = deltaRevolutionsR * wheelCircumferenceM;
-
-                const deltaDistanceCenter = (deltaDistanceL + deltaDistanceR) / 2.0;
-                const deltaRotationAngleRad = (deltaDistanceR - deltaDistanceL) / trackWidthM;
-                
-                robotModel.position.x += Math.sin(robotModel.rotation.y) * deltaDistanceCenter * 100;
-                robotModel.position.z += Math.cos(robotModel.rotation.y) * deltaDistanceCenter * 100;
-                
-                robotModel.rotation.order = 'YXZ';
-                robotModel.rotation.y -= deltaRotationAngleRad;
-                robotModel.rotation.x = robotState.pitch * degToRad;
-                robotModel.rotation.z = robotState.roll * degToRad;
-
-                controls.update();
-                renderer.render(scene, camera);
-            }
-            animate();
-
-            window.addEventListener('resize', () => {
-                if (!container || !renderer) return;
-                camera.aspect = container.clientWidth / container.clientHeight;
-                camera.updateProjectionMatrix();
+                renderer = new THREE.WebGLRenderer({ antialias: true });
                 renderer.setSize(container.clientWidth, container.clientHeight);
-            }, false);
+                container.innerHTML = '';
+                container.appendChild(renderer.domElement);
+
+                if (typeof THREE.OrbitControls !== 'undefined') {
+                    controls = new THREE.OrbitControls(camera, renderer.domElement);
+                    controls.enablePan = false;
+                    controls.target.set(0, 2, 0); 
+                    controls.update();
+                } else {
+                    console.warn('OrbitControls nie zostaly zaladowane - wizualizacja 3D bedzie statyczna');
+                    addLogMessage('Blad ladowania kontrolek 3D - widok statyczny', 'warn');
+                }
+
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+                scene.add(ambientLight);
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+                directionalLight.position.set(10, 20, 15);
+                scene.add(directionalLight);
+                
+                const floorGeometry = new THREE.PlaneGeometry(200, 200);
+                const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x4a4f58, roughness: 0.8 }); 
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.position.y = -2.3; 
+                scene.add(floor);
+
+                const loader = new THREE.TextureLoader();
+                loader.load(
+                    'https://i.imgur.com/gA3t1d3.jpg',
+                    function (texture) {
+                        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                        texture.repeat.set(10, 10);
+                        floor.material.map = texture;
+                        floor.material.needsUpdate = true;
+                    },
+                    undefined,
+                    function (err) {
+                        console.warn('Nie udalo sie zaladowac tekstury podlogi - uzywam domyslnego koloru');
+                    }
+                );
+
+                robotModel = new THREE.Group();
+                
+                const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1A1A1A, roughness: 0.6 });
+                const body = new THREE.Mesh(new THREE.BoxGeometry(7, 3, 5), bodyMaterial);
+                body.position.y = 0;
+                robotModel.add(body);
+
+                const mast = new THREE.Mesh(new THREE.BoxGeometry(1.5, 7, 1.5), bodyMaterial);
+                mast.position.y = 5;
+                robotModel.add(mast);
+
+                const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFF00, roughness: 0.8 });
+                const battery = new THREE.Mesh(new THREE.BoxGeometry(4, 2, 1), batteryMaterial);
+                battery.position.set(0, 9.5, -0.5);
+                robotModel.add(battery);
+
+                const strapMaterial = new THREE.MeshStandardMaterial({ color: 0x101010 });
+                const strap = new THREE.Mesh(new THREE.BoxGeometry(1.7, 2.2, 1.7), strapMaterial);
+                strap.position.set(0, 9.5, 0);
+                robotModel.add(strap);
+                
+                const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0xF0F0F0, roughness: 0.5 });
+                const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+                
+                function createWheel() {
+                    const wheel = new THREE.Group();
+                    const tire = new THREE.Mesh(new THREE.CylinderGeometry(4.1, 4.1, 2, 32), tireMaterial);
+                    wheel.add(tire);
+                    const rim = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 2.2, 32), wheelMaterial);
+                    wheel.add(rim);
+
+                    const spokeGeometry = new THREE.BoxGeometry(3.5, 0.4, 0.4);
+                    for (let i = 0; i < 7; i++) {
+                        const spoke = new THREE.Mesh(spokeGeometry, wheelMaterial);
+                        const angle = (i / 7) * Math.PI * 2;
+                        spoke.rotation.z = angle;
+                        wheel.add(spoke);
+                    }
+                    return wheel;
+                }
+
+                leftWheel = createWheel();
+                leftWheel.position.x = -6.5; 
+                robotModel.add(leftWheel);
+
+                rightWheel = createWheel();
+                rightWheel.position.x = 6.5; 
+                robotModel.add(rightWheel);
+                
+                [leftWheel, rightWheel].forEach(w => w.rotation.z = Math.PI / 2);
+
+                scene.add(robotModel);
+
+                function animate() {
+                    requestAnimationFrame(animate);
+
+                    const degToRad = Math.PI / 180;
+                    const wheelCircumferenceM = (Math.PI * WHEEL_DIAMETER_CM) / 100.0;
+                    const trackWidthM = TRACK_WIDTH_CM / 100.0;
+                    
+                    const deltaL = robotState.encoderL - robotState.lastEncoderL;
+                    const deltaR = robotState.encoderR - robotState.lastEncoderR;
+                    robotState.lastEncoderL = robotState.encoderL;
+                    robotState.lastEncoderR = robotState.encoderR;
+
+                    const deltaRevolutionsL = deltaL / IMPULSES_PER_REVOLUTION;
+                    const deltaRevolutionsR = deltaR / IMPULSES_PER_REVOLUTION;
+
+                    leftWheel.rotation.x -= deltaRevolutionsL * 2 * Math.PI;
+                    rightWheel.rotation.x -= deltaRevolutionsR * 2 * Math.PI;
+
+                    const deltaDistanceL = deltaRevolutionsL * wheelCircumferenceM;
+                    const deltaDistanceR = deltaRevolutionsR * wheelCircumferenceM;
+
+                    const deltaDistanceCenter = (deltaDistanceL + deltaDistanceR) / 2.0;
+                    const deltaRotationAngleRad = (deltaDistanceR - deltaDistanceL) / trackWidthM;
+                    
+                    robotModel.position.x += Math.sin(robotModel.rotation.y) * deltaDistanceCenter * 100;
+                    robotModel.position.z += Math.cos(robotModel.rotation.y) * deltaDistanceCenter * 100;
+                    
+                    robotModel.rotation.order = 'YXZ';
+                    robotModel.rotation.y -= deltaRotationAngleRad;
+                    robotModel.rotation.x = robotState.pitch * degToRad;
+                    robotModel.rotation.z = robotState.roll * degToRad;
+
+                    if (controls) controls.update();
+                    renderer.render(scene, camera);
+                }
+                animate();
+
+                window.addEventListener('resize', () => {
+                    if (!container || !renderer || !camera) return;
+                    camera.aspect = container.clientWidth / container.clientHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(container.clientWidth, container.clientHeight);
+                }, false);
+                
+                addLogMessage('Wizualizacja 3D zostala pomyslnie zainicjalizowana', 'info');
+                
+            } catch (error) {
+                console.error('Blad inicjalizacji 3D:', error);
+                addLogMessage('Blad inicjalizacji wizualizacji 3D', 'error');
+                const container = document.getElementById('canvas-3d-container');
+                if (container) {
+                    container.innerHTML = '<div style="color: #ff6347; text-align: center; padding: 50px;">Blad ladowania wizualizacji 3D</div>';
+                }
+            }
         }
         
-        document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
+        // Inicjalizacja wszystkich komponentow
+        const connectBleBtn = document.getElementById('connectBleBtn');
+        if (connectBleBtn) connectBleBtn.addEventListener('click', connectBLE);
+        
         resizeJoystick();
         setupChartControls();
         setupControls();
@@ -1170,33 +1403,56 @@
         setupGamepadControls();
         setup3DVisualization();
 
-        joystickCanvas.addEventListener('mousedown', startJoystickDrag);
-        joystickCanvas.addEventListener('touchstart', startJoystickDrag, { passive: false });
+        if (joystickCanvas) {
+            joystickCanvas.addEventListener('mousedown', startJoystickDrag);
+            joystickCanvas.addEventListener('touchstart', startJoystickDrag, { passive: false });
+        }
+        
         document.addEventListener('mousemove', handleJoystickMove);
         document.addEventListener('touchmove', handleJoystickMove, { passive: false });
         document.addEventListener('mouseup', endJoystickDrag);
         document.addEventListener('touchend', endJoystickDrag);
 
-        document.getElementById('saveProfileBtn').addEventListener('click', saveProfile);
-        document.getElementById('applyProfileBtn').addEventListener('click', sendProfileToRobot);
-        document.getElementById('profileSelect').addEventListener('change', applyProfileToPanel);
+        const saveProfileBtn = document.getElementById('saveProfileBtn');
+        if (saveProfileBtn) saveProfileBtn.addEventListener('click', saveProfile);
         
-        // POPRAWKA: Nowa, niezawodna obsluga rozwijanych paneli
+        const applyProfileBtn = document.getElementById('applyProfileBtn');
+        if (applyProfileBtn) applyProfileBtn.addEventListener('click', sendProfileToRobot);
+        
+        const profileSelect = document.getElementById('profileSelect');
+        if (profileSelect) profileSelect.addEventListener('change', applyProfileToPanel);
+        
+        // POPRAWIONA obsluga akordeonow z dodanym sprawdzaniem bledow
         document.querySelectorAll('.accordion-header').forEach(header => {
             header.addEventListener('click', event => {
+                event.preventDefault();
                 const content = header.nextElementSibling;
+                
+                if (!content || !content.classList.contains('accordion-content')) {
+                    console.error('Nie znaleziono odpowiedniego elementu accordion-content dla:', header.textContent);
+                    return;
+                }
+                
                 const isActive = header.classList.toggle('active');
                 
                 if (isActive) {
-                    content.style.maxHeight = content.scrollHeight + "px";
+                    // Rozwin akordeon
+                    content.classList.add('active');
+                    content.style.maxHeight = (content.scrollHeight + 30) + "px";
                 } else {
-                    content.style.maxHeight = null;
+                    // Zwin akordeon
+                    content.classList.remove('active');
+                    content.style.maxHeight = "0px";
                 }
+                
+                console.log('Akordeon:', header.textContent, isActive ? 'rozwiniety' : 'zwiniety');
             });
         });
 
+        addLogMessage('Aplikacja zostala pomyslnie zainicjalizowana', 'info');
     });
     
+    // Globalna funkcja resize dostepna dla window.onresize
     window.onresize = () => { 
         resizeJoystick(); 
     };
