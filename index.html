@@ -3,10 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot Samo Balansujacy - Wersja 18.3-FINAL-SYNC</title>
+    <title>Robot Samo Balansujacy - Wersja 19.0-ZERO-FAILURE</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/examples/js/controls/OrbitControls.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
         h1 { color: #61dafb; font-size: 1.8em; }
@@ -30,10 +28,10 @@
         input:disabled + .slider { background-color: #4a4f58; cursor: not-allowed; }
         fieldset { border: 1px solid #4a4f58; border-radius: 8px; margin-top: 15px; padding: 10px 15px; }
         legend { color: #61dafb; font-weight: bold; padding: 0 10px; font-size: 1.1em; }
-        #joystickWrapper { position: relative; width: 180px; height: 180px; border-radius: 50%; background-color: #4a4f58; border: 3px solid #61dafb; margin: 15px auto; }
+        #joystickWrapper { position: relative; width: 180px; height: 180px; border-radius: 50%; background-color: #4a4f58; border: 3px solid #61dafb; margin: 15px auto; cursor: pointer; }
         #joystickCanvas { width: 100%; height: 100%; display: block; cursor: grab; }
         #joystickCanvas:active { cursor: grabbing; }
-        #chart-wrapper, #canvas-3d-container { position: relative; height: 320px; border-radius: 8px; overflow: hidden; background-color: #20232a; }
+        #chart-wrapper { position: relative; height: 320px; border-radius: 8px; overflow: hidden; background-color: #20232a; }
         #log-container { text-align: left; height: 280px; overflow-y: auto; background-color: #20232a; padding: 10px; border-radius: 8px; margin-top: 15px; }
         .status-indicator { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
         .status-ok { background-color: #a2f279; }
@@ -143,16 +141,9 @@
                 <strong>Enkoder P:</strong> <span id="encoderRightVal">0</span>
             </div>
         </div>
-
+        
         <div class="card">
-            <button class="accordion-header active">Wizualizacja 3D</button>
-            <div class="accordion-content active" style="padding: 0;">
-                 <div id="canvas-3d-container"></div>
-            </div>
-        </div>
-
-        <div class="card">
-             <button class="accordion-header">Sterowanie Precyzyjne</button>
+             <button class="accordion-header" onclick="toggleAccordion(this)">Sterowanie Precyzyjne</button>
              <div class="accordion-content">
                 <fieldset>
                     <legend>Sterowanie Precyzyjne</legend>
@@ -178,8 +169,8 @@
         </div>
         
         <div class="card">
-            <button class="accordion-header">Wykres Telemetryczny</button>
-            <div class="accordion-content">
+            <button class="accordion-header active" onclick="toggleAccordion(this)">Wykres Telemetryczny</button>
+            <div class="accordion-content active">
                 <div id="chart-wrapper"><canvas id="telemetryChart"></canvas></div>
                 <div class="chart-controls" id="chartControls"></div>
             </div>
@@ -200,7 +191,7 @@
             </fieldset>
             
             <div id="allSettings">
-                <button class="accordion-header">0. Konfiguracja Fizyczna i Dynamika</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">0. Konfiguracja Fizyczna i Dynamika</button>
                 <div class="accordion-content">
                     <div class="setting-container"><label for="encoderPPRInput">Impulsy na obrot (PPR)</label><div class="numeric-input-wrapper"><button id="encoderPPRMinus">-</button><input type="number" id="encoderPPRInput" min="100" max="5000" step="1" value="820"><button id="encoderPPRPlus">+</button></div></div>
                     <div class="setting-container"><label for="wheelDiameterCmInput">Srednica kola (cm)</label><div class="numeric-input-wrapper"><button id="wheelDiameterCmMinus">-</button><input type="number" id="wheelDiameterCmInput" min="1" max="20" step="0.1" value="8.0"><button id="wheelDiameterCmPlus">+</button></div></div>
@@ -211,7 +202,7 @@
                     <div class="setting-container"><label for="balanceDeadbandAngleInput">Martwa Strefa Balansu (st.)</label><div class="numeric-input-wrapper"><button id="balanceDeadbandAngleMinus">-</button><input type="number" id="balanceDeadbandAngleInput" min="0" max="5" step="0.1" value="0.5"><button id="balanceDeadbandAnglePlus">+</button></div></div>
                 </div>
 
-                <button class="accordion-header">1. Strojenie Min. PWM (10-bit)</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">1. Strojenie Min. PWM (10-bit)</button>
                 <div class="accordion-content">
                      <div class="pwm-info">
                          <strong>ZAKRES:</strong> 0-1023 (10-bit)<br>
@@ -227,7 +218,7 @@
                      <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKO</button>
                 </div>
 
-                <button class="accordion-header">2. Ustawienia Min. PWM (10-bit)</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">2. Ustawienia Min. PWM (10-bit)</button>
                 <div class="accordion-content">
                     <div class="pwm-info">
                         <strong>ZAKRES:</strong> 0-1023 (10-bit)<br>
@@ -239,7 +230,7 @@
                     <div class="setting-block"><div class="setting-container"><label for="minPwmRightBwdInput">Min. PWM P (Tyl)</label><div class="numeric-input-wrapper"><button id="minPwmRightBwdMinus">-</button><input type="number" id="minPwmRightBwdInput" min="0" max="1023" step="1" value="640"><button id="minPwmRightBwdPlus">+</button></div></div></div>
                 </div>
                 
-                <button class="accordion-header">3. Strojenie PID (Balans)</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">3. Strojenie PID (Balans)</button>
                 <div class="accordion-content">
                     <div class="setting-block"><div class="setting-container"><label for="joystickAngleSensitivityInput">Maksymalny Kat (Tryb Kata)</label><div class="numeric-input-wrapper"><button id="joystickAngleSensitivityMinus">-</button><input type="number" id="joystickAngleSensitivityInput" min="1" max="25" step="1" value="10"><button id="joystickAngleSensitivityPlus">+</button></div></div></div>
                     <div class="setting-block"><div class="setting-container"><label for="kpBalanceInput">Kp (Sztywnosc)</label><div class="numeric-input-wrapper"><button id="kpBalanceMinus">-</button><input type="number" id="kpBalanceInput" min="0" max="200" step="1" value="95"><button id="kpBalancePlus">+</button></div></div></div>
@@ -250,7 +241,7 @@
                     <div class="setting-block"><div class="setting-container"><label for="balancePidDerivativeFilterAlphaInput">Filtr pochodnej (Alfa)</label><div class="numeric-input-wrapper"><button id="balancePidDerivativeFilterAlphaMinus">-</button><input type="number" id="balancePidDerivativeFilterAlphaInput" min="0.01" max="1.0" step="0.01" value="1"><button id="balancePidDerivativeFilterAlphaPlus">+</button></div></div></div>
                 </div>
                 
-                <button class="accordion-header">4. Strojenie PID (Predkosc)</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">4. Strojenie PID (Predkosc)</button>
                 <div class="accordion-content">
                     <div class="setting-block"><div class="setting-container"><label for="maxTargetAngleFromSpeedPIDInput">Maksymalny Kat (Tryb Predkosci)</label><div class="numeric-input-wrapper"><button id="maxTargetAngleFromSpeedPIDMinus">-</button><input type="number" id="maxTargetAngleFromSpeedPIDInput" min="1" max="25" step="1" value="15"><button id="maxTargetAngleFromSpeedPIDPlus">+</button></div></div></div>
                     <div class="setting-block"><div class="setting-container"><label for="kpSpeedInput">Kp Predkosci</label><div class="numeric-input-wrapper"><button id="kpSpeedMinus">-</button><input type="number" id="kpSpeedInput" min="0" max="5.0" step="0.01" value="0.05"><button id="kpSpeedPlus">+</button></div></div></div>
@@ -259,7 +250,7 @@
                     <div class="setting-block"><div class="setting-container"><label for="speedPidDeadbandInput">Margines bledu (imp/s)</label><div class="numeric-input-wrapper"><button id="speedPidDeadbandMinus">-</button><input type="number" id="speedPidDeadbandInput" min="0" max="100" step="1" value="5"><button id="speedPidDeadbandPlus">+</button></div></div></div>
                 </div>
 
-                <button class="accordion-header">5. Strojenie PID (Pozycja)</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">5. Strojenie PID (Pozycja)</button>
                 <div class="accordion-content">
                     <div class="setting-block"><div class="setting-container"><label for="maxTargetSpeedFromPosPIDInput">Max predkosc z PID Pozycji (imp/s)</label><div class="numeric-input-wrapper"><button id="maxTargetSpeedFromPosPIDMinus">-</button><input type="number" id="maxTargetSpeedFromPosPIDInput" min="200" max="4000" step="100" value="1000"><button id="maxTargetSpeedFromPosPIDPlus">+</button></div></div></div>
                     <div class="setting-block"><div class="setting-container"><label for="kpPositionInput">Kp Pozycji</label><div class="numeric-input-wrapper"><button id="kpPositionMinus">-</button><input type="number" id="kpPositionInput" min="0" max="5.0" step="0.05" value="2.5"><button id="kpPositionPlus">+</button></div></div></div>
@@ -268,14 +259,14 @@
                     <div class="setting-block"><div class="setting-container"><label for="positionPidDeadbandInput">Margines bledu (impulsy)</label><div class="numeric-input-wrapper"><button id="positionPidDeadbandMinus">-</button><input type="number" id="positionPidDeadbandInput" min="0" max="100" step="1" value="15"><button id="positionPidDeadbandPlus">+</button></div></div></div>
                 </div>
                 
-                <button class="accordion-header">6. Strojenie PID (Obrot)</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">6. Strojenie PID (Obrot)</button>
                 <div class="accordion-content">
                     <div class="setting-block"><div class="setting-container"><label for="kpRotationInput">Kp Obrotu</label><div class="numeric-input-wrapper"><button id="kpRotationMinus">-</button><input type="number" id="kpRotationInput" min="0" max="10.0" step="0.1" value="1"><button id="kpRotationPlus">+</button></div></div></div>
                     <div class="setting-block"><div class="setting-container"><label for="kiRotationInput">Ki Obrotu</label><div class="numeric-input-wrapper"><button id="kiRotationMinus">-</button><input type="number" id="kiRotationInput" min="0" max="1.0" step="0.001" value="0.01"><button id="kiRotationPlus">+</button></div></div></div>
                     <div class="setting-block"><div class="setting-container"><label for="kdRotationInput">Kd Obrotu</label><div class="numeric-input-wrapper"><button id="kdRotationMinus">-</button><input type="number" id="kdRotationInput" min="0" max="10.0" step="0.1" value="1"><button id="kdRotationPlus">+</button></div></div></div>
                 </div>
 
-                <button class="accordion-header">7. Strojenie PID (Utrzymanie Kierunku)</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">7. Strojenie PID (Utrzymanie Kierunku)</button>
                 <div class="accordion-content">
                     <div class="pwm-info">
                          <strong>INFO:</strong> Ten regulator jest aktywny tylko, gdy nie skrecasz joystickiem.<br>
@@ -286,7 +277,7 @@
                     <div class="setting-block"><div class="setting-container"><label for="kdHeadingInput">Kd Kierunku</label><div class="numeric-input-wrapper"><button id="kdHeadingMinus">-</button><input type="number" id="kdHeadingInput" min="0" max="5.0" step="0.05" value="0.1"><button id="kdHeadingPlus">+</button></div></div></div>
                 </div>
 
-                <button class="accordion-header">8. Strojenie PID (Przechyl w Skrecie)</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">8. Strojenie PID (Przechyl w Skrecie)</button>
                 <div class="accordion-content">
                     <div class="pwm-info">
                          <strong>INFO:</strong> Ten regulator stabilizuje robota na boki podczas skrecania.
@@ -296,7 +287,7 @@
                     <div class="setting-block"><div class="setting-container"><label for="kdRollInput">Kd Przechylu</label><div class="numeric-input-wrapper"><button id="kdRollMinus">-</button><input type="number" id="kdRollInput" min="0" max="5.0" step="0.05" value="0.5"><button id="kdRollPlus">+</button></div></div></div>
                 </div>
 
-                <button class="accordion-header">9. Ustawienia Dodatkowe</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">9. Ustawienia Dodatkowe</button>
                 <div class="accordion-content">
                     <div class="setting-block"><div class="setting-container"><label for="joystickDeadzoneInput">Martwa Strefa (%)</label><div class="numeric-input-wrapper"><button id="joystickDeadzoneMinus">-</button><input type="number" id="joystickDeadzoneInput" min="0" max="50" step="1" value="0"><button id="joystickDeadzonePlus">+</button></div></div></div>
                     <div class="setting-block"><div class="setting-container"><label for="turnFactorInput">Moc Skretu (%)</label><div class="numeric-input-wrapper"><button id="turnFactorMinus">-</button><input type="number" id="turnFactorInput" min="0" max="100" step="1" value="25"><button id="turnFactorPlus">+</button></div></div></div>
@@ -315,7 +306,7 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        const PROFILE_PREFIX = 'robot_profile_v17.0_final_';
+        const PROFILE_PREFIX = 'robot_profile_v19.0_final_';
         const availableTelemetry = {
             'pitch': { label: 'Pitch (Kat)', color: '#61dafb' },
             'roll': { label: 'Roll (Kat)', color: '#fd79a8' },
@@ -339,22 +330,6 @@
         const joystickCanvas = document.getElementById('joystickCanvas'); 
         const joystickCtx = joystickCanvas.getContext('2d');
         let joystickCenter, joystickRadius, knobRadius, isDragging = false; 
-
-        let scene, camera, renderer, controls, robotModel, leftWheel, rightWheel;
-        let simParams = {
-            IMPULSES_PER_REVOLUTION: 820,
-            WHEEL_DIAMETER_CM: 8.0,
-            TRACK_WIDTH_CM: 13.0
-        };
-
-        let robotState = {
-            pitch: 0,
-            roll: 0,
-            encoderL: 0,
-            encoderR: 0,
-            lastEncoderL: 0,
-            lastEncoderR: 0
-        };
 
         window.toggleAccordion = function(header) {
             const content = header.nextElementSibling;
@@ -424,10 +399,6 @@
                     case 'telemetry': 
                         updateUI(data); 
                         updateChart(data); 
-                        if(data.pitch !== undefined) robotState.pitch = data.pitch;
-                        if(data.roll !== undefined) robotState.roll = data.roll;
-                        if(data.encoder_left !== undefined) robotState.encoderL = data.encoder_left;
-                        if(data.encoder_right !== undefined) robotState.encoderR = data.encoder_right;
                         break;
                     case 'initial_state': handleConfigSegment(data); break;
                     case 'system_config': handleConfigSegment(data); break;
@@ -482,14 +453,9 @@
             if (data.pwm_max_value) {
                 document.getElementById('pwmResolutionVal').textContent = `10-bit (${data.pwm_max_value})`;
             }
-
-            if (data.encoder_ppr) simParams.IMPULSES_PER_REVOLUTION = data.encoder_ppr;
-            if (data.wheel_diameter_cm) simParams.WHEEL_DIAMETER_CM = data.wheel_diameter_cm;
-            if (data.track_width_cm) simParams.TRACK_WIDTH_CM = data.track_width_cm;
             
             const params = { 
                 expoJoystick: data.expo_joystick * 100.0, 
-                joystickSensitivity: data.joystick_sensitivity * 100.0,
                 joystickOutputScale: data.joystick_output_scale * 100.0,
                 maxSpeedJoystick: data.max_speed_joystick,
                 minPwmLeftFwd: data.min_pwm_left_fwd, 
@@ -702,15 +668,7 @@
             document.getElementById('saveBtn').addEventListener('click', () => { if(confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")){ sendBleMessage({ type: 'save_tunings' }); addLogMessage('Wyslano polecenie ZAPISU do EEPROM.', 'info'); }});
             document.getElementById('loadBtn').addEventListener('click', () => { if(confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")){ sendBleMessage({ type: 'load_from_eeprom' }); addLogMessage('Wyslano polecenie ODCZYTU z EEPROM.', 'info'); }});
             document.getElementById('emergencyStopBtn').addEventListener('click', () => sendBleMessage({ type: 'emergency_stop' }));
-            document.getElementById('resetEncodersBtn').addEventListener('click', () => {
-                sendBleMessage({ type: 'reset_encoders' });
-                if (robotModel) {
-                    robotModel.position.set(0, 0, 0);
-                    robotModel.rotation.set(0, 0, 0);
-                    robotState.lastEncoderL = 0;
-                    robotState.lastEncoderR = 0;
-                }
-            });
+            document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' }));
             document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
             
             const setupGroupedInput = (ids, msgType, keyMapping) => { 
@@ -901,12 +859,10 @@
             const normalizedX = finalX / joystickRadius;
             const normalizedY = -finalY / joystickRadius;
 
-            // --- POCZATEK KLUCZOWEJ POPRAWKI LOGIKI ---
             const holdPositionSwitch = document.getElementById('holdPositionSwitch');
             const speedModeSwitch = document.getElementById('speedModeSwitch');
             
-            // Jesli jakikolwiek ruch zostanie wykryty, wylacz tryby autonomiczne
-            if (distance > joystickRadius * 0.15) { // Martwa strefa 15%
+            if (distance > joystickRadius * 0.15) { 
                 if (holdPositionSwitch.checked) {
                     holdPositionSwitch.checked = false;
                     sendBleMessage({ type: 'hold_position_toggle', enabled: false });
@@ -919,9 +875,7 @@
                 }
             }
 
-            // Zawsze wysylaj ten sam, poprawny komunikat
             sendBleMessage({ type: 'joystick', x: normalizedX, y: normalizedY });
-            // --- KONIEC KLUCZOWEJ POPRAWKI LOGIKI ---
 
             drawJoystick(finalX, finalY); 
         }
@@ -1031,101 +985,6 @@
             }); 
         }
         
-        function setup3DVisualization() {
-            const container = document.getElementById('canvas-3d-container');
-            if (!container) return;
-            
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x20232a);
-            camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
-            camera.position.set(0, 8, 25); 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(container.clientWidth, container.clientHeight);
-            container.appendChild(renderer.domElement);
-            controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.enablePan = false;
-            controls.target.set(0, 2, 0); 
-            controls.update();
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-            scene.add(ambientLight);
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
-            directionalLight.position.set(10, 20, 15);
-            scene.add(directionalLight);
-            const floorGeometry = new THREE.PlaneGeometry(200, 200);
-            const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x4a4f58, roughness: 0.8 }); 
-            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-            floor.rotation.x = -Math.PI / 2;
-            floor.position.y = -2.3; 
-            scene.add(floor);
-            robotModel = new THREE.Group();
-            const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1A1A1A, roughness: 0.6 });
-            const body = new THREE.Mesh(new THREE.BoxGeometry(7, 3, 5), bodyMaterial);
-            body.position.y = 0;
-            robotModel.add(body);
-            const mast = new THREE.Mesh(new THREE.BoxGeometry(1.5, 7, 1.5), bodyMaterial);
-            mast.position.y = 5;
-            robotModel.add(mast);
-            const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFF00, roughness: 0.8 });
-            const battery = new THREE.Mesh(new THREE.BoxGeometry(4, 2, 1), batteryMaterial);
-            battery.position.set(0, 9.5, -0.5);
-            robotModel.add(battery);
-            const strapMaterial = new THREE.MeshStandardMaterial({ color: 0x101010 });
-            const strap = new THREE.Mesh(new THREE.BoxGeometry(1.7, 2.2, 1.7), strapMaterial);
-            strap.position.set(0, 9.5, 0);
-            robotModel.add(strap);
-            const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0xF0F0F0, roughness: 0.5 });
-            const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
-            function createWheel() {
-                const wheel = new THREE.Group();
-                const tire = new THREE.Mesh(new THREE.CylinderGeometry(4.1, 4.1, 2, 32), tireMaterial);
-                wheel.add(tire);
-                const rim = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 2.2, 32), wheelMaterial);
-                wheel.add(rim);
-                return wheel;
-            }
-            leftWheel = createWheel();
-            leftWheel.position.x = -6.5; 
-            robotModel.add(leftWheel);
-            rightWheel = createWheel();
-            rightWheel.position.x = 6.5; 
-            robotModel.add(rightWheel);
-            [leftWheel, rightWheel].forEach(w => w.rotation.z = Math.PI / 2);
-            scene.add(robotModel);
-            function animate() {
-                requestAnimationFrame(animate);
-                const degToRad = Math.PI / 180;
-                const wheelCircumferenceM = (Math.PI * simParams.WHEEL_DIAMETER_CM) / 100.0;
-                const trackWidthM = simParams.TRACK_WIDTH_CM / 100.0;
-                const deltaL = robotState.encoderL - robotState.lastEncoderL;
-                const deltaR = robotState.encoderR - robotState.lastEncoderR;
-                robotState.lastEncoderL = robotState.encoderL;
-                robotState.lastEncoderR = robotState.encoderR;
-                const deltaRevolutionsL = deltaL / simParams.IMPULSES_PER_REVOLUTION;
-                const deltaRevolutionsR = deltaR / simParams.IMPULSES_PER_REVOLUTION;
-                leftWheel.rotation.x -= deltaRevolutionsL * 2 * Math.PI;
-                rightWheel.rotation.x -= deltaRevolutionsR * 2 * Math.PI;
-                const deltaDistanceL = deltaRevolutionsL * wheelCircumferenceM;
-                const deltaDistanceR = deltaRevolutionsR * wheelCircumferenceM;
-                const deltaDistanceCenter = (deltaDistanceL + deltaDistanceR) / 2.0;
-                const deltaRotationAngleRad = (deltaDistanceR - deltaDistanceL) / trackWidthM;
-                robotModel.position.x += Math.sin(robotModel.rotation.y) * deltaDistanceCenter * 100;
-                robotModel.position.z += Math.cos(robotModel.rotation.y) * deltaDistanceCenter * 100;
-                robotModel.rotation.order = 'YXZ';
-                robotModel.rotation.y -= deltaRotationAngleRad;
-                robotModel.rotation.x = robotState.pitch * degToRad;
-                robotModel.rotation.z = robotState.roll * degToRad;
-                controls.update();
-                renderer.render(scene, camera);
-            }
-            animate();
-            window.addEventListener('resize', () => {
-                if (!container || !renderer) return;
-                camera.aspect = container.clientWidth / container.clientHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(container.clientWidth, container.clientHeight);
-            }, false);
-        }
-        
         document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
         resizeJoystick();
         setupChartControls();
@@ -1134,7 +993,6 @@
         setupStateSync();
         setupDiagnosticControls();
         setupGamepadControls();
-        setup3DVisualization();
 
         joystickCanvas.addEventListener('mousedown', startJoystickDrag);
         joystickCanvas.addEventListener('touchstart', startJoystickDrag, { passive: false });
@@ -1150,9 +1008,9 @@
         document.querySelectorAll('.accordion-header').forEach(header => {
             const content = header.nextElementSibling;
             if (header.classList.contains('active')) {
-                 setTimeout(() => { content.style.maxHeight = content.scrollHeight + 'px'; }, 100);
+                 setTimeout(() => { if (content) content.style.maxHeight = content.scrollHeight + 'px'; }, 100);
             } else {
-                content.style.maxHeight = '0px';
+                if (content) content.style.maxHeight = '0px';
             }
         });
     });
