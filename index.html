@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot Samo Balansujacy - Wersja 17.0-FINAL</title>
+    <title>Robot Samo Balansujacy - Wersja 17.0-REALISTIC-SIM</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/examples/js/controls/OrbitControls.js"></script>
@@ -15,7 +15,7 @@
         .card { background-color: #3a3f47; border-radius: 8px; padding: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
         .info-grid, .status-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px; text-align: left; font-size: 1em; margin-top: 10px; align-items: center;}
         .info-grid strong, .status-grid strong { color: #a2f279; }
-        button { background-color: #61dafb; color: #282c34; border: none; padding: 8px 12px; border-radius: 5px; font-weight: bold; cursor: pointer; transition: background-color 0.3s; font-size: 0.9em; }
+        button { background-color: #61dafb; color: #282c34; border: none; padding: 8px 12px; border-radius: 5px; font-weight: bold; cursor: pointer; transition: background-color: 0.3s; font-size: 0.9em; }
         button:hover { background-color: #a2f279; }
         button:disabled { background-color: #4a4f58; color: #888; cursor: not-allowed; }
         #emergencyStopBtn { background-color: #ff6347; color: white; width: 100%; margin-top: 15px; }
@@ -72,13 +72,13 @@
         .dpad-input-group { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin: 10px 0; }
         .dpad-input-group label { text-align: right; font-weight: bold; color: #a2f279; }
         .dpad-input-group input { width: 100%; box-sizing: border-box; }
-        .accordion-header { background-color: #4a4f58; color: #61dafb; cursor: pointer; padding: 12px 15px; border: none; text-align: left; outline: none; font-size: 1.1em; font-weight: bold; width: 100%; border-radius: 8px; margin-top: 10px; transition: background-color 0.3s; position: relative; }
+        .accordion-header { background-color: #4a4f58; color: #61dafb; cursor: pointer; padding: 12px 15px; border: none; text-align: left; outline: none; font-size: 1.1em; font-weight: bold; width: 100%; border-radius: 8px; margin-top: 10px; transition: background-color: 0.3s; position: relative; }
         .accordion-header:hover { background-color: #5a6068; }
         .accordion-header.active { background-color: #61dafb; color: #282c34; border-bottom-left-radius: 0; border-bottom-right-radius: 0;}
         .accordion-header::after { content: '+'; position: absolute; right: 15px; font-size: 1.4em; transition: transform 0.3s; }
         .accordion-header.active::after { content: '-'; }
         .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out; background-color: #3a3f47; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;}
-        .accordion-content.active { padding: 15px; }
+        .accordion-content.active { max-height: 2000px; transition: max-height 0.4s ease-in; padding: 15px; }
         .pwm-info { background-color: #20232a; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #61dafb; }
         .pwm-info strong { color: #a2f279; }
     </style>
@@ -96,8 +96,9 @@
             <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
             
             <fieldset style="padding: 10px 10px 5px 10px;"><legend>Strojenie Joysticka</legend>
-                <div class="setting-block"><div class="setting-container"><label for="joystickOutputScaleInput">Skala Wyjscia (%)</label><div class="numeric-input-wrapper"><button id="joystickOutputScaleMinus">-</button><input type="number" id="joystickOutputScaleInput" min="10" max="100" step="5" value="100"><button id="joystickOutputScalePlus">+</button></div></div></div>
                 <div class="setting-block"><div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)</label><div class="numeric-input-wrapper"><button id="expoJoystickMinus">-</button><input type="number" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button id="expoJoystickPlus">+</button></div></div></div>
+                <!-- POPRAWKA: Nowy suwak do zmiany czulosci joysticka -->
+                <div class="setting-block"><div class="setting-container"><label for="joystickSensitivityInput">Czulosc Joysticka (%)</label><div class="numeric-input-wrapper"><button id="joystickSensitivityMinus">-</button><input type="number" id="joystickSensitivityInput" min="10" max="100" step="1" value="100"><button id="joystickSensitivityPlus">+</button></div></div></div>
                 <div class="setting-block"><div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button id="maxSpeedJoystickMinus">-</button><input type="number" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button id="maxSpeedJoystickPlus">+</button></div></div></div>
             </fieldset>
             
@@ -202,8 +203,9 @@
                 <button class="accordion-header" onclick="toggleAccordion(this)">0. Konfiguracja Fizyczna i Dynamika</button>
                 <div class="accordion-content">
                     <div class="setting-container"><label for="encoderPPRInput">Impulsy na obrot (PPR)</label><div class="numeric-input-wrapper"><button id="encoderPPRMinus">-</button><input type="number" id="encoderPPRInput" min="100" max="5000" step="1" value="820"><button id="encoderPPRPlus">+</button></div></div>
-                    <div class="setting-container"><label for="wheelDiameterCmInput">Srednica kola (cm)</label><div class="numeric-input-wrapper"><button id="wheelDiameterCmMinus">-</button><input type="number" id="wheelDiameterCmInput" min="1" max="20" step="0.1" value="8.0"><button id="wheelDiameterCmPlus">+</button></div></div>
+                    <div class="setting-container"><label for="wheelDiameterCmInput">Srednica kola (cm)</label><div class="numeric-input-wrapper"><button id="wheelDiameterCmMinus">-</button><input type="number" id="wheelDiameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameterCmPlus">+</button></div></div>
                     <div class="setting-container"><label for="trackWidthCmInput">Rozstaw kol (cm)</label><div class="numeric-input-wrapper"><button id="trackWidthCmMinus">-</button><input type="number" id="trackWidthCmInput" min="1" max="40" step="0.1" value="13.0"><button id="trackWidthCmPlus">+</button></div></div>
+                    <div class="setting-container"><label for="motorBacklashInput">Luz silnika (impulsy)</label><div class="numeric-input-wrapper"><button id="motorBacklashMinus">-</button><input type="number" id="motorBacklashInput" min="0" max="200" step="1" value="0"><button id="motorBacklashPlus">+</button></div></div>
                     <hr style="border-color: #4a4f58; margin: 10px 0;">
                     <div class="setting-container"><label for="turnToRollTargetInput">Docelowy Kat Pochylenia (st.)</label><div class="numeric-input-wrapper"><button id="turnToRollTargetMinus">-</button><input type="number" id="turnToRollTargetInput" min="0" max="15" step="0.5" value="5.0"><button id="turnToRollTargetPlus">+</button></div></div>
                     <hr style="border-color: #4a4f58; margin: 10px 0;">
@@ -270,7 +272,6 @@
                 <button class="accordion-header" onclick="toggleAccordion(this)">6. Strojenie PID (Obrot)</button>
                 <div class="accordion-content">
                     <div class="setting-block"><div class="setting-container"><label for="kpRotationInput">Kp Obrotu</label><div class="numeric-input-wrapper"><button id="kpRotationMinus">-</button><input type="number" id="kpRotationInput" min="0" max="10.0" step="0.1" value="1"><button id="kpRotationPlus">+</button></div></div></div>
-                    <div class="setting-block"><div class="setting-container"><label for="kiRotationInput">Ki Obrotu</label><div class="numeric-input-wrapper"><button id="kiRotationMinus">-</button><input type="number" id="kiRotationInput" min="0" max="1.0" step="0.001" value="0.01"><button id="kiRotationPlus">+</button></div></div></div>
                     <div class="setting-block"><div class="setting-container"><label for="kdRotationInput">Kd Obrotu</label><div class="numeric-input-wrapper"><button id="kdRotationMinus">-</button><input type="number" id="kdRotationInput" min="0" max="10.0" step="0.1" value="1"><button id="kdRotationPlus">+</button></div></div></div>
                 </div>
 
@@ -313,8 +314,19 @@
     </div>
 
 <script>
+    // POPRAWKA: Przeniesienie funkcji toggleAccordion do zasiegu globalnego, aby dzialala z onclick
+    function toggleAccordion(header) {
+        const content = header.nextElementSibling;
+        const isActive = header.classList.toggle('active');
+        if (isActive) {
+            content.style.maxHeight = content.scrollHeight + "px";
+        } else {
+            content.style.maxHeight = null;
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
-        const PROFILE_PREFIX = 'robot_profile_v17.0_final_';
+        const PROFILE_PREFIX = 'robot_profile_v16.7_final_';
         const availableTelemetry = {
             'pitch': { label: 'Pitch (Kat)', color: '#61dafb' },
             'roll': { label: 'Roll (Kat)', color: '#fd79a8' },
@@ -340,12 +352,9 @@
         let joystickCenter, joystickRadius, knobRadius, isDragging = false; 
 
         let scene, camera, renderer, controls, robotModel, leftWheel, rightWheel;
-        // [POPRAWKA 3D] Zmienne globalne do dynamicznej konfiguracji symulacji
-        let simParams = {
-            IMPULSES_PER_REVOLUTION: 820,
-            WHEEL_DIAMETER_CM: 8.0,
-            TRACK_WIDTH_CM: 13.0
-        };
+        const IMPULSES_PER_REVOLUTION = 820;
+        const WHEEL_DIAMETER_CM = 8.2;
+        const TRACK_WIDTH_CM = 13.0;
 
         let robotState = {
             pitch: 0,
@@ -355,18 +364,6 @@
             lastEncoderL: 0,
             lastEncoderR: 0
         };
-
-        // [POPRAWKA UI] Nowa, poprawiona funkcja obslugi akordeonu
-        window.toggleAccordion = function(header) {
-            const content = header.nextElementSibling;
-            header.classList.toggle('active');
-
-            if (content.style.maxHeight && content.style.maxHeight !== '0px') {
-                content.style.maxHeight = '0px';
-            } else {
-                content.style.maxHeight = content.scrollHeight + "px";
-            }
-        }
 
         async function connectBLE() {
             try {
@@ -422,9 +419,17 @@
             try {
                 const data = JSON.parse(event.data);
                 switch (data.type) {
+                    // POPRAWKA: Nowy case do obslugi lekkiej telemetrii dla modelu 3D
+                    case '3d_telemetry':
+                        if (data.p !== undefined) robotState.pitch = data.p;
+                        if (data.r !== undefined) robotState.roll = data.r;
+                        if (data.el !== undefined) robotState.encoderL = data.el;
+                        if (data.er !== undefined) robotState.encoderR = data.er;
+                        break;
                     case 'telemetry': 
                         updateUI(data); 
                         updateChart(data); 
+                        // Zapasowe uaktualnienie stanu (glowne zrodlo to '3d_telemetry')
                         if(data.pitch !== undefined) robotState.pitch = data.pitch;
                         if(data.roll !== undefined) robotState.roll = data.roll;
                         if(data.encoder_left !== undefined) robotState.encoderL = data.encoder_left;
@@ -483,16 +488,11 @@
             if (data.pwm_max_value) {
                 document.getElementById('pwmResolutionVal').textContent = `10-bit (${data.pwm_max_value})`;
             }
-
-            // [POPRAWKA 3D] Aktualizacja parametrow symulacji
-            if (data.encoder_ppr) simParams.IMPULSES_PER_REVOLUTION = data.encoder_ppr;
-            if (data.wheel_diameter_cm) simParams.WHEEL_DIAMETER_CM = data.wheel_diameter_cm;
-            if (data.track_width_cm) simParams.TRACK_WIDTH_CM = data.track_width_cm;
             
             const params = { 
                 expoJoystick: data.expo_joystick, 
+                joystickSensitivity: data.joystick_sensitivity, // POPRAWKA: Obsluga nowego parametru
                 maxSpeedJoystick: data.max_speed_joystick,
-                joystickOutputScale: data.joystick_output_scale,
                 minPwmLeftFwd: data.min_pwm_left_fwd, 
                 minPwmLeftBwd: data.min_pwm_left_bwd, 
                 minPwmRightFwd: data.min_pwm_right_fwd, 
@@ -509,8 +509,7 @@
                 kpPosition: data.kp_p, 
                 kiPosition: data.ki_p, 
                 kdPosition: data.kd_p, 
-                kpRotation: data.kp_r,
-                kiRotation: data.ki_r, 
+                kpRotation: data.kp_r, 
                 kdRotation: data.kd_r,
                 kpHeading: data.kp_h, 
                 kiHeading: data.ki_h, 
@@ -519,6 +518,7 @@
                 kiRoll: data.ki_roll,
                 kdRoll: data.kd_roll,
                 joystickAngleSensitivity: data.joystick_angle_sensitivity, 
+                motorBacklash: data.motor_backlash, 
                 encoderPPR: data.encoder_ppr, 
                 wheelDiameterCm: data.wheel_diameter_cm, 
                 trackWidthCm: data.track_width_cm, 
@@ -533,7 +533,11 @@
             for (const [key, value] of Object.entries(params)) { 
                 const input = document.getElementById(`${key}Input`); 
                 if(input && value !== undefined) {
-                    input.value = value;
+                    if (key === 'joystickDeadzone' || key === 'turnFactor' || key === 'expoJoystick' || key === 'joystickSensitivity') {
+                        input.value = value / 100.0;
+                    } else {
+                        input.value = value;
+                    }
                 }
             }
         }
@@ -717,33 +721,6 @@
             });
             document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
             
-            const setupNumericInput = (id, msgType, paramName) => {
-                const input = document.getElementById(id + 'Input'), minusBtn = document.getElementById(id + 'Minus'), plusBtn = document.getElementById(id + 'Plus');
-                if (!input || !minusBtn || !plusBtn) return;
-                const step = parseFloat(input.step) || 1, isFloat = input.step.includes('.');
-                const updateValue = (amount) => {
-                    let current = parseFloat(input.value), newValue = current + amount;
-                    if (isFloat) {
-                        const dp = (step.toString().split('.')[1] || '').length;
-                        newValue = parseFloat(newValue.toFixed(dp));
-                    }
-                    input.value = Math.max(parseFloat(input.min), Math.min(parseFloat(input.max), newValue));
-                    input.dispatchEvent(new Event('change'));
-                };
-                minusBtn.addEventListener('click', () => updateValue(-step));
-                plusBtn.addEventListener('click', () => updateValue(step));
-                input.addEventListener('change', () => {
-                    let msg = { type: msgType, params: {} };
-                    msg.params[paramName] = parseFloat(input.value);
-                    sendBleMessage(msg);
-                });
-            };
-            
-            setupNumericInput('minPwmLeftFwd', 'set_min_pwm', 'min_pwm_left_fwd');
-            setupNumericInput('minPwmLeftBwd', 'set_min_pwm', 'min_pwm_left_bwd');
-            setupNumericInput('minPwmRightFwd', 'set_min_pwm', 'min_pwm_right_fwd');
-            setupNumericInput('minPwmRightBwd', 'set_min_pwm', 'min_pwm_right_bwd');
-
             const setupGroupedInput = (ids, msgType) => { 
                 ids.forEach(id => { 
                     const input = document.getElementById(id + 'Input'), minusBtn = document.getElementById(id + 'Minus'), plusBtn = document.getElementById(id + 'Plus'); 
@@ -756,16 +733,22 @@
                         ids.forEach(i => { 
                             const inputElement = document.getElementById(i + 'Input'); 
                             if(inputElement) { 
-                                let key = i.replace(/([A-Z])/g, "_$1").toLowerCase();
-                                let val = parseFloat(inputElement.value);
-                                // Specjalna obsluga procentow
-                                if (key === 'joystick_deadzone' || key === 'turn_factor' || key === 'expo_joystick' || key === 'joystick_output_scale') {
-                                    payload[key.replace('joystick_', '')] = val / 100.0;
-                                } else {
-                                    payload[key] = val;
-                                }
+                                // POPRAWKA: Nowa, solidna logika mapowania ID na klucze JSON
+                                let key;
+                                if (i === 'joystickSensitivity') key = 'sensitivity';
+                                else if (i === 'expoJoystick') key = 'expo';
+                                else if (i === 'maxSpeedJoystick') key = 'maxSpeed';
+                                else key = i.replace(/([A-Z])/g, "_$1").toLowerCase();
+                                payload[key] = parseFloat(inputElement.value);
                             } 
                         }); 
+                        
+                        // POPRAWKA: Dodana obsluga skalowania dla nowego parametru
+                        if (payload.joystick_deadzone !== undefined) payload.joystick_deadzone /= 100.0; 
+                        if (payload.turn_factor !== undefined) payload.turn_factor /= 100.0; 
+                        if (payload.expo !== undefined) payload.expo /= 100.0; 
+                        if (payload.sensitivity !== undefined) payload.sensitivity /= 100.0;
+
                         msg.params = payload; 
                         sendBleMessage(msg); 
                     }; 
@@ -786,14 +769,16 @@
                 }); 
             };
             
-            setupGroupedInput(['joystickDeadzone', 'turnFactor', 'expoJoystick', 'maxSpeedJoystick', 'joystickOutputScale'], 'set_joystick_tuning');
+            setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm_group');
+            // POPRAWKA: Dodanie nowego ID 'joystickSensitivity' do grupy
+            setupGroupedInput(['joystickDeadzone', 'turnFactor', 'expoJoystick', 'maxSpeedJoystick', 'joystickSensitivity'], 'set_joystick_tuning');
             setupGroupedInput(['kpBalance', 'kiBalance', 'kdBalance', 'joystickAngleSensitivity', 'balancePidDerivativeFilterAlpha'], 'balance_pid_update');
             setupGroupedInput(['kpSpeed', 'kiSpeed', 'kdSpeed', 'maxTargetAngleFromSpeedPID', 'speedPidDeadband'], 'speed_pid_update');
             setupGroupedInput(['kpPosition', 'kiPosition', 'kdPosition', 'maxTargetSpeedFromPosPID', 'positionPidDeadband'], 'position_pid_update');
-            setupGroupedInput(['kpRotation', 'kiRotation', 'kdRotation'], 'rotation_pid_update');
+            setupGroupedInput(['kpRotation', 'kdRotation'], 'rotation_pid_update');
             setupGroupedInput(['kpHeading', 'kiHeading', 'kdHeading'], 'heading_pid_update');
             setupGroupedInput(['kpRoll', 'kiRoll', 'kdRoll'], 'roll_pid_update');
-            setupGroupedInput(['encoderPPR', 'wheelDiameterCm', 'trackWidthCm', 'turnToRollTarget', 'balanceDeadbandAngle'], 'calibration_update');
+            setupGroupedInput(['encoderPPR', 'wheelDiameterCm', 'trackWidthCm', 'motorBacklash', 'turnToRollTarget', 'balanceDeadbandAngle'], 'calibration_update');
             
             setupManualTuningControls();
             setupDpadControls();
@@ -852,13 +837,9 @@
         function sendProfileToRobot() { 
             applyProfileToPanel(); 
             setTimeout(() => { 
-                document.querySelectorAll('#allSettings input[type=number], #controls-card input[type=number]').forEach(input => { 
-                    if (input.id.includes('Grouped')) {
-                         // This is a grouped input, trigger its specific update logic
-                         input.dispatchEvent(new Event('change', { bubbles: true })); 
-                    }
-                });
-                document.querySelectorAll('.setting-container input[type=number]').forEach(input => input.dispatchEvent(new Event('change')));
+                document.querySelectorAll('#allSettings input[type=number], #controls-card input').forEach(input => { 
+                    input.dispatchEvent(new Event('change', { bubbles: true })); 
+                }); 
                 addLogMessage('Wyslano wartosci z profilu do robota.', 'info'); 
             }, 200); 
         }
@@ -981,12 +962,24 @@
         function handleGamepadButtonPress(index) {
             console.log("Gamepad button pressed: ", index);
             switch(index) {
-                case 0: document.getElementById('balanceSwitch').click(); break;
-                case 1: document.getElementById('emergencyStopBtn').click(); break;
-                case 2: document.getElementById('holdPositionSwitch').click(); break;
-                case 3: document.getElementById('speedModeSwitch').click(); break;
-                case 8: document.getElementById('resetEncodersBtn').click(); break;
-                case 9: document.getElementById('resetZeroBtn').click(); break;
+                case 0:
+                    document.getElementById('balanceSwitch').click();
+                    break;
+                case 1:
+                     document.getElementById('emergencyStopBtn').click();
+                    break;
+                case 2:
+                    document.getElementById('holdPositionSwitch').click();
+                    break;
+                case 3:
+                    document.getElementById('speedModeSwitch').click();
+                    break;
+                case 8:
+                    document.getElementById('resetEncodersBtn').click();
+                    break;
+                case 9:
+                    document.getElementById('resetZeroBtn').click();
+                    break;
             }
         }
 
@@ -1073,6 +1066,8 @@
                     scene.add(floor);
 
                     robotModel = new THREE.Group();
+                    robotModel.userData.lastEncoderL = 0;
+                    robotModel.userData.lastEncoderR = 0;
                     
                     const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1A1A1A, roughness: 0.6 });
                     const body = new THREE.Mesh(new THREE.BoxGeometry(7, 3, 5), bodyMaterial);
@@ -1102,6 +1097,14 @@
                         wheel.add(tire);
                         const rim = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 2.2, 32), wheelMaterial);
                         wheel.add(rim);
+
+                        const spokeGeometry = new THREE.BoxGeometry(3.5, 0.4, 0.4);
+                        for (let i = 0; i < 7; i++) {
+                            const spoke = new THREE.Mesh(spokeGeometry, wheelMaterial);
+                            const angle = (i / 7) * Math.PI * 2;
+                            spoke.rotation.z = angle;
+                            wheel.add(spoke);
+                        }
                         return wheel;
                     }
 
@@ -1120,17 +1123,18 @@
                     function animate() {
                         requestAnimationFrame(animate);
 
+                        // Plynna animacja w kazdej klatce
                         const degToRad = Math.PI / 180;
-                        const wheelCircumferenceM = (Math.PI * simParams.WHEEL_DIAMETER_CM) / 100.0;
-                        const trackWidthM = simParams.TRACK_WIDTH_CM / 100.0;
+                        const wheelCircumferenceM = (Math.PI * WHEEL_DIAMETER_CM) / 100.0;
+                        const trackWidthM = TRACK_WIDTH_CM / 100.0;
                         
                         const deltaL = robotState.encoderL - robotState.lastEncoderL;
                         const deltaR = robotState.encoderR - robotState.lastEncoderR;
                         robotState.lastEncoderL = robotState.encoderL;
                         robotState.lastEncoderR = robotState.encoderR;
 
-                        const deltaRevolutionsL = deltaL / simParams.IMPULSES_PER_REVOLUTION;
-                        const deltaRevolutionsR = deltaR / simParams.IMPULSES_PER_REVOLUTION;
+                        const deltaRevolutionsL = deltaL / IMPULSES_PER_REVOLUTION;
+                        const deltaRevolutionsR = deltaR / IMPULSES_PER_REVOLUTION;
 
                         leftWheel.rotation.x -= deltaRevolutionsL * 2 * Math.PI;
                         rightWheel.rotation.x -= deltaRevolutionsR * 2 * Math.PI;
@@ -1191,12 +1195,12 @@
         document.getElementById('profileSelect').addEventListener('change', applyProfileToPanel);
 
         document.querySelectorAll('.accordion-header').forEach(header => {
-            const content = header.nextElementSibling;
-            if (header.classList.contains('active')) {
-                 // Uzywamy setTimeout, aby upewnic sie, ze DOM jest w pelni wyrenderowany
-                 setTimeout(() => { content.style.maxHeight = content.scrollHeight + 'px'; }, 100);
+            if (!header.classList.contains('active')) {
+                const content = header.nextElementSibling;
+                if (content) content.style.maxHeight = null;
             } else {
-                content.style.maxHeight = '0px';
+                const content = header.nextElementSibling;
+                if (content) content.style.maxHeight = content.scrollHeight + "px";
             }
         });
     });
