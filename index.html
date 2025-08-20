@@ -379,7 +379,7 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
         const RX_UUID      = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
         const TX_UUID      = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
-        let scene, camera, renderer, controls, robotModel, robotChassis, leftWheel, rightWheel;
+        let scene, camera, renderer, controls, robotModel, leftWheel, rightWheel;
         
         // Stale fizyczne dla wizualizacji 3D
         const IMPULSES_PER_REVOLUTION = 820;
@@ -397,7 +397,7 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
 
         async function connectBLE() {
             try {
-                console.log('Prosze o wybranie urzadzenia Bluetooth...');
+                console.log('Proszę o wybranie urzadzenia Bluetooth...');
                 document.getElementById('connectionText').textContent = 'Wybierz robota...';
                 bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
                 console.log('Laczenie z serwerem GATT...');
@@ -685,14 +685,14 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                         display: true, 
                         position: 'left', 
                         ticks: { color: '#61dafb' }, 
-                        title: { display: true, text: 'Kat / Predkosc', color: '#61dafb' } 
+                        title: { display: true, text: 'Wartosc', color: '#61dafb' } 
                     }, 
                     y1: { 
                         type: 'linear', 
                         display: true, 
                         position: 'right', 
                         ticks: { color: '#a2f279' }, 
-                        title: { display: true, text: 'Wyjscie PID / Silnik', color: '#a2f279' }, 
+                        title: { display: true, text: 'Wyjscie PID / PWM', color: '#a2f279' }, 
                         grid: { drawOnChartArea: false }, 
                     } 
                 }, 
@@ -861,16 +861,11 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                 resetEncodersBtn.addEventListener('click', () => {
                     sendBleMessage({ type: 'reset_encoders' });
                     if (robotModel) {
-                        robotModel.position.set(0, 0, 0); // Reset pozycji (chociaz nie powinna sie zmieniac)
-                        robotModel.rotation.set(0, 0, 0); // Reset obrotu
-                        if (robotChassis) {
-                           robotChassis.rotation.set(0,0,0);
-                        }
+                        robotModel.position.set(0, 0, 0);
+                        robotModel.rotation.set(0, 0, 0);
+                        robotState.lastEncoderL = 0;
+                        robotState.lastEncoderR = 0;
                     }
-                    robotState.lastEncoderL = 0;
-                    robotState.lastEncoderR = 0;
-                    robotState.encoderL = 0;
-                    robotState.encoderR = 0;
                 });
             }
             
@@ -1098,8 +1093,8 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
             e.preventDefault(); 
             const rect = joystickCanvas.getBoundingClientRect(); 
             
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const clientX = e.clientX || (e.touches && e.touches ? e.touches.clientX : 0);
+            const clientY = e.clientY || (e.touches && e.touches ? e.touches.clientY : 0);
             
             const x = clientX - rect.left - joystickCenter.x;
             const y = clientY - rect.top - joystickCenter.y; 
@@ -1229,9 +1224,6 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
             }
         }
         
-        // ======================================================================
-        // ZINTEGROWANA FUNKCJA WIZUALIZACJI (WERSJA UŻYTKOWNIKA + POPRAWKI)
-        // ======================================================================
         function setup3DVisualization() {
             const container = document.getElementById('canvas-3d-container');
             if (!container) {
@@ -1241,118 +1233,104 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
 
             try {
                 scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x87CEEB); // Niebieskie niebo
+                scene.background = new THREE.Color(0x20232a);
 
-                camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 2000);
-                camera.position.set(0, 15, 45); // Zwiększona odległość
+                camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+                camera.position.set(0, 8, 25); 
 
                 renderer = new THREE.WebGLRenderer({ antialias: true });
                 renderer.setSize(container.clientWidth, container.clientHeight);
-                renderer.shadowMap.enabled = true;
-                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
                 container.innerHTML = '';
                 container.appendChild(renderer.domElement);
 
                 if (typeof THREE.OrbitControls !== 'undefined') {
                     controls = new THREE.OrbitControls(camera, renderer.domElement);
                     controls.enablePan = false;
-                    controls.target.set(0, 2, 0);
-                    controls.maxDistance = 100;
-                    controls.minDistance = 10;
+                    controls.target.set(0, 2, 0); 
                     controls.update();
+                } else {
+                    console.warn('OrbitControls nie zostaly zaladowane - wizualizacja 3D bedzie statyczna');
+                    addLogMessage('Blad ladowania kontrolek 3D - widok statyczny', 'warn');
                 }
 
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
                 scene.add(ambientLight);
-                
-                const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-                directionalLight.position.set(20, 30, 10);
-                directionalLight.castShadow = true;
-                directionalLight.shadow.mapSize.width = 2048;
-                directionalLight.shadow.mapSize.height = 2048;
-                directionalLight.shadow.camera.near = 0.5;
-                directionalLight.shadow.camera.far = 500;
-                directionalLight.shadow.camera.left = -100;
-                directionalLight.shadow.camera.right = 100;
-                directionalLight.shadow.camera.top = 100;
-                directionalLight.shadow.camera.bottom = -100;
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+                directionalLight.position.set(10, 20, 15);
                 scene.add(directionalLight);
+                
+                const floorGeometry = new THREE.PlaneGeometry(200, 200);
+                const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x4a4f58, roughness: 0.8 }); 
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.position.y = -2.3; 
+                scene.add(floor);
 
-                const floorGeometry = new THREE.PlaneGeometry(400, 400);
                 const loader = new THREE.TextureLoader();
-                const floorMaterial = new THREE.MeshStandardMaterial({ 
-                    color: 0xD2B48C,
-                    roughness: 0.8,
-                    metalness: 0.1
-                });
-
                 loader.load(
-                    'data:image/svg+xml;base64,' + btoa(`
-                    <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
-                        <defs>
-                            <pattern id="wood" patternUnits="userSpaceOnUse" width="128" height="64">
-                                <rect width="126" height="62" fill="#D2B48C" stroke="#8B4513" stroke-width="1"/>
-                                <line x1="0" y1="10" x2="126" y2="12" stroke="#CD853F" stroke-width="1" opacity="0.7"/>
-                                <line x1="0" y1="20" x2="126" y2="22" stroke="#DEB887" stroke-width="1" opacity="0.5"/>
-                                <line x1="0" y1="35" x2="126" y2="37" stroke="#CD853F" stroke-width="1" opacity="0.6"/>
-                                <line x1="0" y1="45" x2="126" y2="47" stroke="#DEB887" stroke-width="1" opacity="0.4"/>
-                                <rect x="126" y="0" width="2" height="64" fill="#654321"/>
-                            </pattern>
-                        </defs>
-                        <rect width="512" height="512" fill="url(#wood)"/>
-                    </svg>`),
+                    'https://i.imgur.com/gA3t1d3.jpg',
                     function (texture) {
                         texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-                        texture.repeat.set(20, 20);
-                        floorMaterial.map = texture;
-                        floorMaterial.needsUpdate = true;
+                        texture.repeat.set(10, 10);
+                        floor.material.map = texture;
+                        floor.material.needsUpdate = true;
+                    },
+                    undefined,
+                    function (err) {
+                        console.warn('Nie udalo sie zaladowac tekstury podlogi - uzywam domyslnego koloru');
                     }
                 );
 
-                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-                floor.rotation.x = -Math.PI / 2;
-                floor.position.y = -4.1; // Obniżenie podłogi
-                floor.receiveShadow = true;
-                scene.add(floor);
+                robotModel = new THREE.Group();
                 
-                // POPRAWKA: Użycie hierarchii dla stabilności
-                robotModel = new THREE.Group(); // Kontener do skręcania
-                robotChassis = new THREE.Group(); // Kontener do przechylania
-                robotModel.add(robotChassis);
-
-                const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1A1A1A, roughness: 0.6, metalness: 0.3 });
+                const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1A1A1A, roughness: 0.6 });
                 const body = new THREE.Mesh(new THREE.BoxGeometry(7, 3, 5), bodyMaterial);
                 body.position.y = 0;
-                body.castShadow = true;
-                robotChassis.add(body); // Ciało dodane do podwozia
+                robotModel.add(body);
 
                 const mast = new THREE.Mesh(new THREE.BoxGeometry(1.5, 7, 1.5), bodyMaterial);
                 mast.position.y = 5;
-                mast.castShadow = true;
-                robotChassis.add(mast); // Maszt dodany do podwozia
+                robotModel.add(mast);
 
-                // ... reszta części ciała dodana do robotChassis ...
+                const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFF00, roughness: 0.8 });
+                const battery = new THREE.Mesh(new THREE.BoxGeometry(4, 2, 1), batteryMaterial);
+                battery.position.set(0, 9.5, -0.5);
+                robotModel.add(battery);
+
+                const strapMaterial = new THREE.MeshStandardMaterial({ color: 0x101010 });
+                const strap = new THREE.Mesh(new THREE.BoxGeometry(1.7, 2.2, 1.7), strapMaterial);
+                strap.position.set(0, 9.5, 0);
+                robotModel.add(strap);
+                
+                const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0xF0F0F0, roughness: 0.5 });
+                const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
                 
                 function createWheel() {
                     const wheel = new THREE.Group();
-                    const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 });
-                    const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xC0C0C0, roughness: 0.3, metalness: 0.8 });
-                    const tire = new THREE.Mesh(new THREE.CylinderGeometry(4.1, 4.1, 2, 64), tireMaterial);
-                    const rim = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 3.8, 2.2, 64), rimMaterial);
-                    tire.castShadow = true;
-                    rim.castShadow = true;
-                    wheel.add(tire, rim);
-                    wheel.rotation.z = Math.PI / 2;
+                    const tire = new THREE.Mesh(new THREE.CylinderGeometry(4.1, 4.1, 2, 32), tireMaterial);
+                    wheel.add(tire);
+                    const rim = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 2.2, 32), wheelMaterial);
+                    wheel.add(rim);
+
+                    const spokeGeometry = new THREE.BoxGeometry(3.5, 0.4, 0.4);
+                    for (let i = 0; i < 7; i++) {
+                        const spoke = new THREE.Mesh(spokeGeometry, wheelMaterial);
+                        const angle = (i / 7) * Math.PI * 2;
+                        spoke.rotation.z = angle;
+                        wheel.add(spoke);
+                    }
                     return wheel;
                 }
 
                 leftWheel = createWheel();
-                leftWheel.position.x = -3.5;
-                robotModel.add(leftWheel); // Koła dodane do głównego kontenera
+                leftWheel.position.x = -6.5; 
+                robotModel.add(leftWheel);
 
                 rightWheel = createWheel();
-                rightWheel.position.x = 3.5;
-                robotModel.add(rightWheel); // Koła dodane do głównego kontenera
+                rightWheel.position.x = 6.5; 
+                robotModel.add(rightWheel);
+                
+                [leftWheel, rightWheel].forEach(w => w.rotation.z = Math.PI / 2);
 
                 scene.add(robotModel);
 
@@ -1371,36 +1349,28 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                     const deltaRevolutionsL = deltaL / IMPULSES_PER_REVOLUTION;
                     const deltaRevolutionsR = deltaR / IMPULSES_PER_REVOLUTION;
 
-                    leftWheel.rotation.y += deltaRevolutionsL * 2 * Math.PI;
-                    rightWheel.rotation.y += deltaRevolutionsR * 2 * Math.PI;
+                    leftWheel.rotation.x -= deltaRevolutionsL * 2 * Math.PI;
+                    rightWheel.rotation.x -= deltaRevolutionsR * 2 * Math.PI;
 
                     const deltaDistanceL = deltaRevolutionsL * wheelCircumferenceM;
                     const deltaDistanceR = deltaRevolutionsR * wheelCircumferenceM;
+
                     const deltaDistanceCenter = (deltaDistanceL + deltaDistanceR) / 2.0;
                     const deltaRotationAngleRad = (deltaDistanceR - deltaDistanceL) / trackWidthM;
                     
-                    // POPRAWKA: Robot się nie rusza, tylko obraca
-                    // UWAGA: Jeśli robot skręca w złą stronę, zmień '-=' na '+='
+                    robotModel.position.x += Math.sin(robotModel.rotation.y) * deltaDistanceCenter * 100;
+                    robotModel.position.z += Math.cos(robotModel.rotation.y) * deltaDistanceCenter * 100;
+                    
+                    robotModel.rotation.order = 'YXZ';
                     robotModel.rotation.y -= deltaRotationAngleRad;
-                    
-                    // POPRAWKA: Przechylanie działa na osobnym obiekcie
-                    robotChassis.rotation.x = -robotState.pitch * degToRad;
-                    robotChassis.rotation.z = robotState.roll * degToRad;
+                    robotModel.rotation.x = robotState.pitch * degToRad;
+                    robotModel.rotation.z = robotState.roll * degToRad;
 
-                    // POPRAWKA: Przesuwanie tekstury podłogi
-                    if (floorMaterial.map) {
-                        const moveX = Math.sin(robotModel.rotation.y) * deltaDistanceCenter;
-                        const moveZ = Math.cos(robotModel.rotation.y) * deltaDistanceCenter;
-                        const textureScale = 20.0 / 400.0;
-                        floorMaterial.map.offset.x -= moveX * textureScale * 100;
-                        floorMaterial.map.offset.y -= moveZ * textureScale * 100;
-                    }
-                    
                     if (controls) controls.update();
                     renderer.render(scene, camera);
                 }
                 animate();
-                
+
                 window.addEventListener('resize', () => {
                     if (!container || !renderer || !camera) return;
                     camera.aspect = container.clientWidth / container.clientHeight;
@@ -1408,7 +1378,7 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                     renderer.setSize(container.clientWidth, container.clientHeight);
                 }, false);
                 
-                addLogMessage('Ulepszona wizualizacja 3D zostala pomyslnie zainicjalizowana', 'info');
+                addLogMessage('Wizualizacja 3D zostala pomyslnie zainicjalizowana', 'info');
                 
             } catch (error) {
                 console.error('Blad inicjalizacji 3D:', error);
@@ -1419,10 +1389,6 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                 }
             }
         }
-        
-        // ======================================================================
-        // KONIEC SEKCJI WIZUALIZACJI
-        // ======================================================================
         
         // Inicjalizacja wszystkich komponentow
         const connectBleBtn = document.getElementById('connectBleBtn');
@@ -1456,20 +1422,37 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
         const profileSelect = document.getElementById('profileSelect');
         if (profileSelect) profileSelect.addEventListener('change', applyProfileToPanel);
         
+        // POPRAWIONA obsluga akordeonow z dodanym sprawdzaniem bledow
         document.querySelectorAll('.accordion-header').forEach(header => {
             header.addEventListener('click', event => {
                 event.preventDefault();
                 const content = header.nextElementSibling;
-                if (!content || !content.classList.contains('accordion-content')) { return; }
+                
+                if (!content || !content.classList.contains('accordion-content')) {
+                    console.error('Nie znaleziono odpowiedniego elementu accordion-content dla:', header.textContent);
+                    return;
+                }
+                
                 const isActive = header.classList.toggle('active');
-                content.classList.toggle('active', isActive);
-                content.style.maxHeight = isActive ? (content.scrollHeight + 30) + "px" : "0px";
+                
+                if (isActive) {
+                    // Rozwin akordeon
+                    content.classList.add('active');
+                    content.style.maxHeight = (content.scrollHeight + 30) + "px";
+                } else {
+                    // Zwin akordeon
+                    content.classList.remove('active');
+                    content.style.maxHeight = "0px";
+                }
+                
+                console.log('Akordeon:', header.textContent, isActive ? 'rozwiniety' : 'zwiniety');
             });
         });
 
         addLogMessage('Aplikacja zostala pomyslnie zainicjalizowana', 'info');
     });
     
+    // Globalna funkcja resize dostepna dla window.onresize
     window.onresize = () => { 
         resizeJoystick(); 
     };
