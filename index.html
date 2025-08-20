@@ -7,6 +7,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- POPRAWKA: Dodajemy ladowarke do tekstur otoczenia HDRI -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
         h1 { color: #61dafb; font-size: 1.8em; }
@@ -685,14 +687,14 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                         display: true, 
                         position: 'left', 
                         ticks: { color: '#61dafb' }, 
-                        title: { display: true, text: 'Wartosc', color: '#61dafb' } 
+                        title: { display: true, text: 'Kat / Predkosc', color: '#61dafb' } // POPRAWKA: Lepszy opis osi
                     }, 
                     y1: { 
                         type: 'linear', 
                         display: true, 
                         position: 'right', 
                         ticks: { color: '#a2f279' }, 
-                        title: { display: true, text: 'Wyjscie PID / PWM', color: '#a2f279' }, 
+                        title: { display: true, text: 'Wyjscie PID / Silnik', color: '#a2f279' }, // POPRAWKA: Lepszy opis osi
                         grid: { drawOnChartArea: false }, 
                     } 
                 }, 
@@ -1238,110 +1240,104 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
 
             try {
                 scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x20232a);
-
                 camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
-                camera.position.set(0, 15, 40); // Oddalona pozycja poczatkowa
+                camera.position.set(0, 8, 35);
 
-                renderer = new THREE.WebGLRenderer({ antialias: true }); // Wlaczone wygladzanie krawedzi
+                renderer = new THREE.WebGLRenderer({ antialias: true });
                 renderer.setSize(container.clientWidth, container.clientHeight);
+                renderer.toneMapping = THREE.ACESFilmicToneMapping; // Lepsze odwzorowanie kolorow
+                renderer.toneMappingExposure = 1.0;
                 container.innerHTML = '';
                 container.appendChild(renderer.domElement);
 
                 controls = new THREE.OrbitControls(camera, renderer.domElement);
-                controls.target.set(0, 2, 0); // Cel na robocie
+                controls.target.set(0, 2, 0);
                 controls.update();
 
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-                scene.add(ambientLight);
-                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
-                directionalLight.position.set(10, 20, 15);
-                scene.add(directionalLight);
+                // POPRAWKA: Ladowanie otoczenia HDRI dla realistycznego oswietlenia i tla
+                new THREE.RGBELoader().load('https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_03_1k.hdr', function(texture) {
+                    texture.mapping = THREE.EquirectangularReflectionMapping;
+                    scene.background = texture;
+                    scene.environment = texture;
+                    addLogMessage("Zaladowano otoczenie 3D", "info");
+                });
                 
                 const floorGeometry = new THREE.PlaneGeometry(200, 200);
-                const floorMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.8 }); 
+                // Uzywamy materialu z niskim 'roughness' zeby odbijal otoczenie
+                const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x808080, metalness: 0.1, roughness: 0.3 }); 
                 floor = new THREE.Mesh(floorGeometry, floorMaterial);
                 floor.rotation.x = -Math.PI / 2;
-                floor.position.y = -4.1; // Obnizamy podloge zeby kola nie wchodzily w nia
+                floor.position.y = -4.1;
                 scene.add(floor);
 
                 const loader = new THREE.TextureLoader();
                 loader.load(
-                    'https://threejs.org/examples/textures/hardwood2_diffuse.jpg', // Bardziej niezawodny link do tekstury
+                    'https://threejs.org/examples/textures/hardwood2_diffuse.jpg', // Niezawodny link
                     function (texture) {
                         texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-                        texture.repeat.set(20, 20); // Skalowanie tekstury
+                        texture.repeat.set(15, 15);
                         floor.material.map = texture;
                         floor.material.needsUpdate = true;
-                    },
-                    undefined,
-                    function (err) {
-                        console.warn('Nie udalo sie zaladowac tekstury podlogi - uzywam domyslnego koloru');
-                        addLogMessage("Nie udalo sie zaladowac tekstury podlogi", "warn");
                     }
                 );
 
                 robotModel = new THREE.Group();
                 
-                const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1A1A1A, roughness: 0.6 });
+                const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1A1A1A, roughness: 0.4, metalness: 0.2 });
                 const body = new THREE.Mesh(new THREE.BoxGeometry(7, 3, 5), bodyMaterial);
-                body.position.y = 0;
                 robotModel.add(body);
-
-                const mast = new THREE.Mesh(new THREE.BoxGeometry(1.5, 7, 1.5), bodyMaterial);
-                mast.position.y = 5;
-                robotModel.add(mast);
-
-                const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFF00, roughness: 0.8 });
-                const battery = new THREE.Mesh(new THREE.BoxGeometry(4, 2, 1), batteryMaterial);
-                battery.position.set(0, 9.5, -0.5);
-                robotModel.add(battery);
-
-                const strapMaterial = new THREE.MeshStandardMaterial({ color: 0x101010 });
-                const strap = new THREE.Mesh(new THREE.BoxGeometry(1.7, 2.2, 1.7), strapMaterial);
-                strap.position.set(0, 9.5, 0);
-                robotModel.add(strap);
                 
-                const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.5 });
-                const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
-                
-                // POPRAWKA: Uproszczona i wygladzona funkcja tworzenia kola
+                // POPRAWKA: Nowa, zoptymalizowana i estetyczna funkcja kola
                 function createWheel() {
-                    const wheel = new THREE.Group();
-                    const segments = 64; // Zwiekszona ilosc segmentow dla gladkosci
-                    
+                    const wheelGroup = new THREE.Group();
+                    const segments = 64;
+                    const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+                    const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.2, metalness: 0.1 });
+
                     // Opona
                     const tire = new THREE.Mesh(new THREE.CylinderGeometry(4.1, 4.1, 2, segments), tireMaterial);
-                    wheel.add(tire);
+                    wheelGroup.add(tire);
                     
-                    // Felga
-                    const rim = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.5, 2.2, segments), wheelMaterial);
-                    wheel.add(rim);
+                    // Felga (powierzchnia czolowa)
+                    const rimFace = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 3.8, 2.2, segments), rimMaterial);
+                    wheelGroup.add(rimFace);
+
+                    // Centralny hub
+                    const hub = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 2.3, segments), rimMaterial);
+                    wheelGroup.add(hub);
 
                     // Szprychy
-                    const spokeGeometry = new THREE.BoxGeometry(7, 0.4, 0.4);
+                    const spokeLength = 3.8 - 1.0;
+                    const spokeGeometry = new THREE.BoxGeometry(spokeLength, 0.4, 0.5);
+
                     for (let i = 0; i < 7; i++) {
-                        const spoke = new THREE.Mesh(spokeGeometry, wheelMaterial);
-                        const angle = (i / 7) * Math.PI; // Polowa okregu, 7 ramion
+                        const spoke = new THREE.Mesh(spokeGeometry, rimMaterial);
+                        const angle = (i / 7) * (Math.PI * 2);
+                        
+                        // Pozycjonowanie srodka szprychy pomiedzy hubem a krawedzia felgi
+                        const spokeCenterRadius = 1.0 + spokeLength / 2;
+                        spoke.position.x = Math.cos(angle) * spokeCenterRadius;
+                        spoke.position.y = Math.sin(angle) * spokeCenterRadius;
+                        
                         spoke.rotation.z = angle;
-                        wheel.add(spoke);
+                        wheelGroup.add(spoke);
                     }
-                    return wheel;
+                    return wheelGroup;
                 }
 
                 leftWheel = createWheel();
-                leftWheel.position.x = -6.5; 
+                leftWheel.position.x = -3.5;
                 robotModel.add(leftWheel);
 
                 rightWheel = createWheel();
-                rightWheel.position.x = 6.5; 
+                rightWheel.position.x = 3.5;
                 robotModel.add(rightWheel);
                 
                 [leftWheel, rightWheel].forEach(w => w.rotation.z = Math.PI / 2);
 
                 scene.add(robotModel);
 
-                // POPRAWKA: Nowa funkcja animacji z przesuwana podloga
+                // POPRAWKA: Nowa, uproszczona funkcja animacji z czytelnymi opcjami zmiany kierunku
                 function animate() {
                     requestAnimationFrame(animate);
 
@@ -1357,7 +1353,6 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                     const deltaRevolutionsL = deltaL / IMPULSES_PER_REVOLUTION;
                     const deltaRevolutionsR = deltaR / IMPULSES_PER_REVOLUTION;
                     
-                    // UWAGA: Jesli kola kreca sie w zla strone, zmien '-=' na '+='
                     leftWheel.rotation.x -= deltaRevolutionsL * 2 * Math.PI;
                     rightWheel.rotation.x -= deltaRevolutionsR * 2 * Math.PI;
 
@@ -1365,24 +1360,23 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                     const deltaDistanceR = deltaRevolutionsR * wheelCircumferenceM;
 
                     // UWAGA: Jesli robot jedzie do tylu zamiast do przodu, zmien znak ponizej (np. z 1 na -1)
-                    const deltaDistanceCenter = (deltaDistanceL + deltaDistanceR) / 2.0 * 1;
+                    const deltaDistanceCenter = (deltaDistanceL + deltaDistanceR) / 2.0 * 1.0;
                     const deltaRotationAngleRad = (deltaDistanceR - deltaDistanceL) / trackWidthM;
                     
-                    // Rotacja robota
+                    // Rotacja calego modelu robota
                     robotModel.rotation.order = 'YXZ';
-                    // UWAGA: Jesli robot skreca w zla strone, zmien '-=' na '+='
-                    robotModel.rotation.y -= deltaRotationAngleRad;
+                    // UWAGA: Jesli robot skreca w zla strone, zmien '+=' na '-='
+                    robotModel.rotation.y += deltaRotationAngleRad;
                     robotModel.rotation.x = robotState.pitch * degToRad;
                     robotModel.rotation.z = robotState.roll * degToRad;
 
-                    // Przesuwanie tekstury podlogi zamiast robota
-                    if (floor.material.map) {
-                        const moveX = Math.sin(robotModel.rotation.y) * deltaDistanceCenter * 100;
-                        const moveZ = Math.cos(robotModel.rotation.y) * deltaDistanceCenter * 100;
-
-                        const textureScale = 20 / 200; // (repeat / planeSize)
-                        floor.material.map.offset.x -= moveX * textureScale;
-                        floor.material.map.offset.y -= moveZ * textureScale;
+                    // Przesuwanie tekstury podlogi dla iluzji ruchu
+                    if (floor && floor.material && floor.material.map) {
+                        const moveX = Math.sin(robotModel.rotation.y) * deltaDistanceCenter;
+                        const moveZ = Math.cos(robotModel.rotation.y) * deltaDistanceCenter;
+                        const textureScale = 15.0 / 200.0; // (repeat / planeSize)
+                        floor.material.map.offset.x -= moveX * textureScale * 100;
+                        floor.material.map.offset.y -= moveZ * textureScale * 100;
                     }
 
                     controls.update();
@@ -1441,37 +1435,20 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
         const profileSelect = document.getElementById('profileSelect');
         if (profileSelect) profileSelect.addEventListener('change', applyProfileToPanel);
         
-        // POPRAWIONA obsluga akordeonow z dodanym sprawdzaniem bledow
         document.querySelectorAll('.accordion-header').forEach(header => {
             header.addEventListener('click', event => {
                 event.preventDefault();
                 const content = header.nextElementSibling;
-                
-                if (!content || !content.classList.contains('accordion-content')) {
-                    console.error('Nie znaleziono odpowiedniego elementu accordion-content dla:', header.textContent);
-                    return;
-                }
-                
+                if (!content || !content.classList.contains('accordion-content')) { return; }
                 const isActive = header.classList.toggle('active');
-                
-                if (isActive) {
-                    // Rozwin akordeon
-                    content.classList.add('active');
-                    content.style.maxHeight = (content.scrollHeight + 30) + "px";
-                } else {
-                    // Zwin akordeon
-                    content.classList.remove('active');
-                    content.style.maxHeight = "0px";
-                }
-                
-                console.log('Akordeon:', header.textContent, isActive ? 'rozwiniety' : 'zwiniety');
+                content.classList.toggle('active', isActive);
+                content.style.maxHeight = isActive ? (content.scrollHeight + 30) + "px" : "0px";
             });
         });
 
         addLogMessage('Aplikacja zostala pomyslnie zainicjalizowana', 'info');
     });
     
-    // Globalna funkcja resize dostepna dla window.onresize
     window.onresize = () => { 
         resizeJoystick(); 
     };
