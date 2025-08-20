@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot Samo Balansujacy - Wersja 18.1-STABLE-CORE</title>
+    <title>Robot Samo Balansujacy - Wersja 18.2-ARCH-FIX</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -305,7 +305,7 @@
     </div>
 
 <script>
-    const PROFILE_PREFIX = 'robot_profile_v18.1_stable_';
+    const PROFILE_PREFIX = 'robot_profile_v18.2_archfix_';
     const availableTelemetry = {
         'pitch': { label: 'Pitch (Kat)', color: '#61dafb' },
         'roll': { label: 'Roll (Kat)', color: '#fd79a8' },
@@ -680,10 +680,10 @@
                         } 
                     }); 
 
-                    if (payload.deadzone !== undefined) payload.deadzone /= 100.0; 
+                    if (payload.joystick_deadzone !== undefined) payload.joystick_deadzone /= 100.0; 
                     if (payload.turn_factor !== undefined) payload.turn_factor /= 100.0; 
-                    if (payload.expo !== undefined) payload.expo /= 100.0; 
-                    if (payload.sensitivity !== undefined) payload.sensitivity /= 100.0; 
+                    if (payload.expo_joystick !== undefined) payload.expo_joystick /= 100.0; 
+                    if (payload.joystick_sensitivity !== undefined) payload.joystick_sensitivity /= 100.0; 
                     
                     msg.params = payload; 
                     sendBleMessage(msg); 
@@ -705,28 +705,15 @@
             }); 
         };
 
-        // PRZYWROCONA LOGIKA Z KEYMAPPING - GWARANCJA ZGODNOSCI PROTOKOLU
         setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm_group', { 'minPwmLeftFwd': 'min_pwm_left_fwd', 'minPwmLeftBwd': 'min_pwm_left_bwd', 'minPwmRightFwd': 'min_pwm_right_fwd', 'minPwmRightBwd': 'min_pwm_right_bwd'});
-        
-        setupGroupedInput(['joystickDeadzone', 'turnFactor', 'expoJoystick', 'maxSpeedJoystick', 'joystickSensitivity'], 'set_joystick_tuning', { 
-            'joystickDeadzone': 'joystick_deadzone', 'turnFactor': 'turn_factor', 'expoJoystick': 'expo_joystick', 'maxSpeedJoystick': 'max_speed_joystick', 'joystickSensitivity': 'joystick_sensitivity'
-        });
-
-        setupGroupedInput(['kpBalance', 'kiBalance', 'kdBalance', 'joystickAngleSensitivity', 'balancePidDerivativeFilterAlpha'], 'balance_pid_update', { 
-            'kpBalance': 'kp_b', 'kiBalance': 'ki_b', 'kdBalance': 'kd_b', 'joystickAngleSensitivity': 'joystick_angle_sensitivity',
-            'balancePidDerivativeFilterAlpha': 'filter_alpha'
-        });
-
+        setupGroupedInput(['joystickDeadzone', 'turnFactor', 'expoJoystick', 'maxSpeedJoystick', 'joystickSensitivity'], 'set_joystick_tuning', { 'joystickDeadzone': 'joystick_deadzone', 'turnFactor': 'turn_factor', 'expoJoystick': 'expo_joystick', 'maxSpeedJoystick': 'max_speed_joystick', 'joystickSensitivity': 'joystick_sensitivity' });
+        setupGroupedInput(['kpBalance', 'kiBalance', 'kdBalance', 'joystickAngleSensitivity', 'balancePidDerivativeFilterAlpha'], 'balance_pid_update', { 'kpBalance': 'kp_b', 'kiBalance': 'ki_b', 'kdBalance': 'kd_b', 'joystickAngleSensitivity': 'joystick_angle_sensitivity', 'balancePidDerivativeFilterAlpha': 'filter_alpha' });
         setupGroupedInput(['kpSpeed', 'kiSpeed', 'kdSpeed', 'maxTargetAngleFromSpeedPID', 'speedPidDeadband'], 'speed_pid_update', { 'kpSpeed': 'kp_s', 'kiSpeed': 'ki_s', 'kdSpeed': 'kd_s', 'maxTargetAngleFromSpeedPID': 'max_target_angle', 'speedPidDeadband': 'speed_pid_deadband' });
         setupGroupedInput(['kpPosition', 'kiPosition', 'kdPosition', 'maxTargetSpeedFromPosPID', 'positionPidDeadband'], 'position_pid_update', { 'kpPosition': 'kp_p', 'kiPosition': 'ki_p', 'kdPosition': 'kd_p', 'maxTargetSpeedFromPosPID': 'max_target_speed', 'positionPidDeadband': 'position_pid_deadband' });
         setupGroupedInput(['kpRotation', 'kdRotation'], 'rotation_pid_update', { 'kpRotation': 'kp_r', 'kdRotation': 'kd_r' });
         setupGroupedInput(['kpHeading', 'kiHeading', 'kdHeading'], 'heading_pid_update', { 'kpHeading': 'kp_h', 'kiHeading': 'ki_h', 'kdHeading': 'kd_h' });
         setupGroupedInput(['kpRoll', 'kiRoll', 'kdRoll'], 'roll_pid_update', { 'kpRoll': 'kp_roll', 'kiRoll': 'ki_roll', 'kdRoll': 'kd_roll' });
-        
-        setupGroupedInput(['encoderPPR', 'wheelDiameterCm', 'trackWidthCm', 'motorBacklash', 'turnToRollTarget', 'balanceDeadbandAngle'], 'calibration_update', { 
-            'encoderPPR': 'encoder_ppr', 'wheelDiameterCm': 'wheel_diameter_cm', 'trackWidthCm': 'track_width_cm', 'motorBacklash': 'motor_backlash', 
-            'turnToRollTarget': 'turn_to_roll_target', 'balanceDeadbandAngle': 'balance_deadband_angle'
-        });
+        setupGroupedInput(['encoderPPR', 'wheelDiameterCm', 'trackWidthCm', 'motorBacklash', 'turnToRollTarget', 'balanceDeadbandAngle'], 'calibration_update', { 'encoderPPR': 'encoder_ppr', 'wheelDiameterCm': 'wheel_diameter_cm', 'trackWidthCm': 'track_width_cm', 'motorBacklash': 'motor_backlash', 'turnToRollTarget': 'turn_to_roll_target', 'balanceDeadbandAngle': 'balance_deadband_angle' });
 
         setupManualTuningControls();
         setupDpadControls();
@@ -856,7 +843,6 @@
         const distance = Math.sqrt(x * x + y * y); 
 
         let finalX, finalY;
-        // KLUCZOWE ULEPSZENIE: Ograniczenie zasiegu joysticka do okregu
         if (distance > joystickRadius) { 
             const angle = Math.atan2(y, x); 
             finalX = joystickRadius * Math.cos(angle); 
@@ -865,8 +851,32 @@
             finalX = x; 
             finalY = y; 
         } 
-        drawJoystick(finalX, finalY); 
-        sendBleMessage({ type: 'joystick', x: finalX / joystickRadius, y: -finalY / joystickRadius });
+        
+        const normalizedX = finalX / joystickRadius;
+        const normalizedY = -finalY / joystickRadius;
+
+        // --- POCZATEK KLUCZOWEJ ZMIANY ARCHITEKTONICZNEJ ---
+        const holdPositionSwitch = document.getElementById('holdPositionSwitch');
+        if (distance > joystickRadius * 0.15 && holdPositionSwitch.checked) {
+            holdPositionSwitch.checked = false;
+            sendBleMessage({ type: 'hold_position_toggle', enabled: false });
+            addLogMessage("Joystick uzyty - wylaczono 'Trzymaj Pozycje'", "info");
+        }
+
+        if (document.getElementById('speedModeSwitch').checked) {
+            // TRYB PREDKOSCI: Joystick zadaje docelowa predkosc
+            const maxSpeed = parseFloat(document.getElementById('maxSpeedJoystickInput').value);
+            const targetSpeed = normalizedY * maxSpeed;
+            sendBleMessage({ type: 'joystick_speed', speed: targetSpeed, turn: normalizedX });
+        } else {
+            // TRYB KATA: Joystick zadaje docelowy kat
+            const maxAngle = parseFloat(document.getElementById('joystickAngleSensitivityInput').value);
+            const targetAngle = normalizedY * maxAngle;
+            sendBleMessage({ type: 'joystick_angle', angle: targetAngle, turn: normalizedX });
+        }
+        // --- KONIEC KLUCZOWEJ ZMIANY ARCHITEKTONICZNEJ ---
+        
+        drawJoystick(finalX, finalY);
     }
 
     function startJoystickDrag(e){
@@ -878,7 +888,9 @@
         if (!isDragging) return;
         isDragging = false;
         drawJoystick(0, 0); 
-        sendBleMessage({ type: 'joystick', x: 0, y: 0 });
+        // Wyslij zerowe wartosci dla obu trybow, robot sam wybierze wlasciwy
+        sendBleMessage({ type: 'joystick_speed', speed: 0, turn: 0 });
+        sendBleMessage({ type: 'joystick_angle', angle: 0, turn: 0 });
     }
 
     function pollGamepad() { 
@@ -894,7 +906,23 @@
         if (magnitude < deadzone) { joyX = 0; joyY = 0; } 
 
         if (joyX !== lastGamepadState.x || joyY !== lastGamepadState.y) { 
-            sendBleMessage({ type: 'joystick', x: joyX, y: -joyY }); 
+            const holdPositionSwitch = document.getElementById('holdPositionSwitch');
+            if (magnitude > deadzone && holdPositionSwitch.checked) {
+                holdPositionSwitch.checked = false;
+                sendBleMessage({ type: 'hold_position_toggle', enabled: false });
+                addLogMessage("Gamepad uzyty - wylaczono 'Trzymaj Pozycje'", "info");
+            }
+
+            if (document.getElementById('speedModeSwitch').checked) {
+                const maxSpeed = parseFloat(document.getElementById('maxSpeedJoystickInput').value);
+                const targetSpeed = -joyY * maxSpeed;
+                sendBleMessage({ type: 'joystick_speed', speed: targetSpeed, turn: joyX });
+            } else {
+                const maxAngle = parseFloat(document.getElementById('joystickAngleSensitivityInput').value);
+                const targetAngle = -joyY * maxAngle;
+                sendBleMessage({ type: 'joystick_angle', angle: targetAngle, turn: joyX });
+            }
+            
             lastGamepadState.x = joyX; 
             lastGamepadState.y = joyY; 
         }
