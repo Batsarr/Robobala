@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot Samo Balansujacy - Wersja 18.0-EXPERT</title>
+    <title>Robot Samo Balansujacy - Wersja 18.1-STABLE-CORE</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -305,7 +305,7 @@
     </div>
 
 <script>
-    const PROFILE_PREFIX = 'robot_profile_v18.0_expert_';
+    const PROFILE_PREFIX = 'robot_profile_v18.1_stable_';
     const availableTelemetry = {
         'pitch': { label: 'Pitch (Kat)', color: '#61dafb' },
         'roll': { label: 'Roll (Kat)', color: '#fd79a8' },
@@ -663,7 +663,7 @@
         document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' }));
         document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
 
-        const setupGroupedInput = (ids, msgType) => { 
+        const setupGroupedInput = (ids, msgType, keyMapping) => { 
             ids.forEach(id => { 
                 const input = document.getElementById(id + 'Input'), minusBtn = document.getElementById(id + 'Minus'), plusBtn = document.getElementById(id + 'Plus'); 
                 if (!input || !minusBtn || !plusBtn) return; 
@@ -672,30 +672,18 @@
                 const sendGroupUpdate = () => { 
                     let msg = { type: msgType }; 
                     let payload = {}; 
-                    let allValid = true;
-
                     ids.forEach(i => { 
                         const inputElement = document.getElementById(i + 'Input'); 
                         if(inputElement) { 
-                            const value = parseFloat(inputElement.value);
-                            if (!isFinite(value)) {
-                                console.error(`Nieprawidlowa wartosc w ${i}: ${inputElement.value}`);
-                                allValid = false;
-                            }
-                            let key = i.replace(/([A-Z])/g, "_$1").toLowerCase();
-                            payload[key] = value;
+                            let key = keyMapping[i] || i; 
+                            payload[key] = parseFloat(inputElement.value); 
                         } 
                     }); 
-                    
-                    if (!allValid) {
-                        addLogMessage("BLAD: Jedno z pol zawiera nieprawidlowa wartosc. Wysylka zablokowana.", "error");
-                        return;
-                    }
 
-                    if (payload.joystick_deadzone !== undefined) payload.joystick_deadzone /= 100.0; 
+                    if (payload.deadzone !== undefined) payload.deadzone /= 100.0; 
                     if (payload.turn_factor !== undefined) payload.turn_factor /= 100.0; 
-                    if (payload.expo_joystick !== undefined) payload.expo_joystick /= 100.0; 
-                    if (payload.joystick_sensitivity !== undefined) payload.joystick_sensitivity /= 100.0; 
+                    if (payload.expo !== undefined) payload.expo /= 100.0; 
+                    if (payload.sensitivity !== undefined) payload.sensitivity /= 100.0; 
                     
                     msg.params = payload; 
                     sendBleMessage(msg); 
@@ -717,16 +705,28 @@
             }); 
         };
 
-        setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm_group');
-        setupGroupedInput(['joystickDeadzone', 'turnFactor'], 'set_joystick_tuning_basic'); // Oddzielna grupa dla istniejacych
-        setupGroupedInput(['expoJoystick', 'maxSpeedJoystick', 'joystickSensitivity'], 'set_joystick_tuning_advanced'); // Nowa grupa
-        setupGroupedInput(['kpBalance', 'kiBalance', 'kdBalance', 'joystickAngleSensitivity', 'balancePidDerivativeFilterAlpha'], 'balance_pid_update');
-        setupGroupedInput(['kpSpeed', 'kiSpeed', 'kdSpeed', 'maxTargetAngleFromSpeedPID', 'speedPidDeadband'], 'speed_pid_update');
-        setupGroupedInput(['kpPosition', 'kiPosition', 'kdPosition', 'maxTargetSpeedFromPosPID', 'positionPidDeadband'], 'position_pid_update');
-        setupGroupedInput(['kpRotation', 'kdRotation'], 'rotation_pid_update');
-        setupGroupedInput(['kpHeading', 'kiHeading', 'kdHeading'], 'heading_pid_update');
-        setupGroupedInput(['kpRoll', 'kiRoll', 'kdRoll'], 'roll_pid_update');
-        setupGroupedInput(['encoderPPR', 'wheelDiameterCm', 'trackWidthCm', 'motorBacklash', 'turnToRollTarget', 'balanceDeadbandAngle'], 'calibration_update');
+        // PRZYWROCONA LOGIKA Z KEYMAPPING - GWARANCJA ZGODNOSCI PROTOKOLU
+        setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm_group', { 'minPwmLeftFwd': 'min_pwm_left_fwd', 'minPwmLeftBwd': 'min_pwm_left_bwd', 'minPwmRightFwd': 'min_pwm_right_fwd', 'minPwmRightBwd': 'min_pwm_right_bwd'});
+        
+        setupGroupedInput(['joystickDeadzone', 'turnFactor', 'expoJoystick', 'maxSpeedJoystick', 'joystickSensitivity'], 'set_joystick_tuning', { 
+            'joystickDeadzone': 'joystick_deadzone', 'turnFactor': 'turn_factor', 'expoJoystick': 'expo_joystick', 'maxSpeedJoystick': 'max_speed_joystick', 'joystickSensitivity': 'joystick_sensitivity'
+        });
+
+        setupGroupedInput(['kpBalance', 'kiBalance', 'kdBalance', 'joystickAngleSensitivity', 'balancePidDerivativeFilterAlpha'], 'balance_pid_update', { 
+            'kpBalance': 'kp_b', 'kiBalance': 'ki_b', 'kdBalance': 'kd_b', 'joystickAngleSensitivity': 'joystick_angle_sensitivity',
+            'balancePidDerivativeFilterAlpha': 'filter_alpha'
+        });
+
+        setupGroupedInput(['kpSpeed', 'kiSpeed', 'kdSpeed', 'maxTargetAngleFromSpeedPID', 'speedPidDeadband'], 'speed_pid_update', { 'kpSpeed': 'kp_s', 'kiSpeed': 'ki_s', 'kdSpeed': 'kd_s', 'maxTargetAngleFromSpeedPID': 'max_target_angle', 'speedPidDeadband': 'speed_pid_deadband' });
+        setupGroupedInput(['kpPosition', 'kiPosition', 'kdPosition', 'maxTargetSpeedFromPosPID', 'positionPidDeadband'], 'position_pid_update', { 'kpPosition': 'kp_p', 'kiPosition': 'ki_p', 'kdPosition': 'kd_p', 'maxTargetSpeedFromPosPID': 'max_target_speed', 'positionPidDeadband': 'position_pid_deadband' });
+        setupGroupedInput(['kpRotation', 'kdRotation'], 'rotation_pid_update', { 'kpRotation': 'kp_r', 'kdRotation': 'kd_r' });
+        setupGroupedInput(['kpHeading', 'kiHeading', 'kdHeading'], 'heading_pid_update', { 'kpHeading': 'kp_h', 'kiHeading': 'ki_h', 'kdHeading': 'kd_h' });
+        setupGroupedInput(['kpRoll', 'kiRoll', 'kdRoll'], 'roll_pid_update', { 'kpRoll': 'kp_roll', 'kiRoll': 'ki_roll', 'kdRoll': 'kd_roll' });
+        
+        setupGroupedInput(['encoderPPR', 'wheelDiameterCm', 'trackWidthCm', 'motorBacklash', 'turnToRollTarget', 'balanceDeadbandAngle'], 'calibration_update', { 
+            'encoderPPR': 'encoder_ppr', 'wheelDiameterCm': 'wheel_diameter_cm', 'trackWidthCm': 'track_width_cm', 'motorBacklash': 'motor_backlash', 
+            'turnToRollTarget': 'turn_to_roll_target', 'balanceDeadbandAngle': 'balance_deadband_angle'
+        });
 
         setupManualTuningControls();
         setupDpadControls();
@@ -994,7 +994,6 @@
         document.getElementById('applyProfileBtn').addEventListener('click', sendProfileToRobot); 
         document.getElementById('profileSelect').addEventListener('change', applyProfileToPanel); 
 
-        // Inicjalizacja stanu akordeonow po zaladowaniu
         document.querySelectorAll('.accordion-header.active').forEach(header => {
             const content = header.nextElementSibling;
             if (content) {
