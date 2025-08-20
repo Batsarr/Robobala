@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot Samo Balansujacy - Wersja 17.2-STABLE-TUNING</title>
+    <title>Robot Samo Balansujacy - Wersja 17.3-CRITICAL-FIX</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -55,7 +55,6 @@
             border: 1px solid #61dafb; border-radius: 5px; margin: 0 4px; padding: 4px; 
             -moz-appearance: textfield; transition: border-color 0.3s, box-shadow 0.3s;
         }
-        /* NOWE STYLE DLA WALIDACJI I SPRZEZENIA ZWROTNEGO */
         .numeric-input-wrapper input[type=number].input-pending { border-color: #f7b731; box-shadow: 0 0 5px #f7b731; }
         .numeric-input-wrapper input[type=number].input-success { border-color: #a2f279; box-shadow: 0 0 5px #a2f279; }
         .numeric-input-wrapper input[type=number].input-error { border-color: #ff6347; box-shadow: 0 0 5px #ff6347; }
@@ -342,9 +341,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // KONFIGURACJA I STAN
         // ---------------------------------------------------------------------
         config: {
-            PROFILE_PREFIX: 'robot_profile_v17.2_stable_',
+            PROFILE_PREFIX: 'robot_profile_v17.3_stable_',
             INTERACTION_TIMEOUT: 500, // ms
-            DEBOUNCE_DELAY: 350, // ms, lekko zwiekszony dla pewnosci
+            DEBOUNCE_DELAY: 350, // ms
             SERVICE_UUID: "4fafc201-1fb5-459e-8fcc-c5c9c331914b",
             RX_UUID:      "beb5483e-36e1-4688-b7f5-ea07361b26a9",
             TX_UUID:      "beb5483e-36e1-4688-b7f5-ea07361b26a8",
@@ -627,7 +626,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     App.ui.setButtonState(App.dom.loadBtn, 'Wczytaj z EEPROM', false);
                     App.ui.addLogMessage('Ustawienia wczytane z EEPROM robota.', 'info');
                 } else {
-                    // Potwierdzenie dla grup parametrow
                     const group = App.controls.tuningGroups[action];
                     if (group && status === 'ok') {
                         group.forEach(id => {
@@ -867,15 +865,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // MODUL OBSLUGI KONTROLEK I ZDARZEN
         // ---------------------------------------------------------------------
         controls: {
-            tuningGroups: {}, // Przechowuje grupy parametrow dla potwierdzen
+            tuningGroups: {},
             setupAll() {
-                // Przyciski glowne
                 App.dom.connectBleBtn.addEventListener('click', App.ble.connect);
                 App.dom.saveProfileBtn.addEventListener('click', App.profiles.save.bind(App.profiles));
                 App.dom.applyProfileBtn.addEventListener('click', App.profiles.sendToRobot.bind(App.profiles));
                 App.dom.profileSelect.addEventListener('change', App.profiles.applyToPanel.bind(App.profiles));
-
-                // Przelaczniki
                 App.dom.balanceSwitch.addEventListener('change', e => { 
                     App.state.lastUserInteraction['balanceSwitch'] = Date.now(); 
                     App.ble.sendMessage({ type: 'balance_toggle', enabled: e.target.checked }); 
@@ -887,8 +882,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 App.dom.speedModeSwitch.addEventListener('change', e => { 
                     App.ble.sendMessage({ type: 'speed_mode_toggle', enabled: e.target.checked }); 
                 });
-
-                // Przyciski akcji
                 App.dom.resetZeroBtn.addEventListener('click', () => App.ble.sendMessage({ type: 'reset_zero' }));
                 App.dom.trimPlusBtn.addEventListener('click', () => App.ble.sendMessage({ type: 'adjust_zero', value: 1 }));
                 App.dom.trimMinusBtn.addEventListener('click', () => App.ble.sendMessage({ type: 'adjust_zero', value: -1 }));
@@ -897,8 +890,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 App.dom.emergencyStopBtn.addEventListener('click', () => App.ble.sendMessage({ type: 'emergency_stop' }));
                 App.dom.resetEncodersBtn.addEventListener('click', () => App.ble.sendMessage({ type: 'reset_encoders' }));
                 App.dom.calibrateMpuBtn.addEventListener('click', () => App.ble.sendMessage({ type: 'calibrate_mpu' }));
-
-                // Przyciski z informacja zwrotna
                 App.dom.saveBtn.addEventListener('click', () => { 
                     if(confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")){ 
                         App.ui.setButtonState(App.dom.saveBtn, 'Zapisywanie...', true);
@@ -911,8 +902,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         App.ble.sendMessage({ type: 'load_from_eeprom' }); 
                     }
                 });
-
-                // Inne
                 this.setupChartControls();
                 this.setupTuningControls();
                 this.setupManualTuning();
@@ -925,14 +914,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             setupTuningControls() {
                 const setupGroupedInput = (ids, msgType) => { 
-                    this.tuningGroups[msgType] = ids; // Rejestracja grupy
+                    this.tuningGroups[msgType] = ids;
                     
                     const debouncedSend = App.util.debounce(() => {
                         let msg = { type: msgType }; 
                         let payload = {}; 
                         let isValid = true;
 
-                        ids.forEach(id => {
+                        ids.forEach(id => { // POPRAWKA KRYTYCZNA: 'i' zmienione na 'id'
                             const inputElement = document.getElementById(id + 'Input');
                             if (!inputElement) return;
 
@@ -945,14 +934,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                             
                             let key;
-                            if (i === 'joystickSensitivity') key = 'sensitivity';
-                            else if (i === 'expoJoystick') key = 'expo';
-                            else if (i === 'maxSpeedJoystick') key = 'maxSpeed';
+                            if (id === 'joystickSensitivity') key = 'sensitivity';
+                            else if (id === 'expoJoystick') key = 'expo';
+                            else if (id === 'maxSpeedJoystick') key = 'maxSpeed';
                             else key = id.replace(/([A-Z])/g, "_$1").toLowerCase();
                             payload[key] = value;
                         });
 
-                        if (!isValid) return; // Przerwij, jesli walidacja sie nie powiodla
+                        if (!isValid) return;
 
                         if (payload.joystick_deadzone !== undefined) payload.joystick_deadzone /= 100.0; 
                         if (payload.turn_factor !== undefined) payload.turn_factor /= 100.0; 
@@ -974,7 +963,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         const updateValue = (amount) => { 
                             let current = parseFloat(input.value);
-                            if (!isFinite(current)) current = 0; // Ochrona przed NaN
+                            if (!isFinite(current)) current = 0; // ZABEZPIECZENIE
                             let newValue = current + amount; 
                             if (isFloat) { 
                                 const dp = (step.toString().split('.')[1] || '').length; 
@@ -982,18 +971,18 @@ document.addEventListener('DOMContentLoaded', () => {
                             } 
                             input.value = Math.max(parseFloat(input.min), Math.min(parseFloat(input.max), newValue)); 
                             
-                            ids.forEach(i => App.ui.setInputVisualState(document.getElementById(i + 'Input'), 'pending'));
+                            ids.forEach(id_inner => App.ui.setInputVisualState(document.getElementById(id_inner + 'Input'), 'pending'));
                             debouncedSend();
                         }; 
                         
                         const handleChange = () => {
-                            ids.forEach(i => App.ui.setInputVisualState(document.getElementById(i + 'Input'), 'pending'));
+                            ids.forEach(id_inner => App.ui.setInputVisualState(document.getElementById(id_inner + 'Input'), 'pending')); // POPRAWKA KRYTYCZNA: 'i' zmienione na 'id_inner'
                             debouncedSend();
                         };
 
                         minusBtn.addEventListener('click', () => updateValue(-step)); 
                         plusBtn.addEventListener('click', () => updateValue(step)); 
-                        input.addEventListener('input', handleChange); // Zmienione z 'change' na 'input' dla lepszej reakcji
+                        input.addEventListener('input', handleChange);
                     }); 
                 };
             
