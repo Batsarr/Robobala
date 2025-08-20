@@ -381,7 +381,7 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
         const RX_UUID      = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
         const TX_UUID      = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
-        let scene, camera, renderer, controls, robotModel, leftWheel, rightWheel, floor;
+        let scene, camera, renderer, controls, robotModel, robotChassis, leftWheel, rightWheel, floor;
         
         // Stale fizyczne dla wizualizacji 3D
         const IMPULSES_PER_REVOLUTION = 820;
@@ -687,14 +687,14 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                         display: true, 
                         position: 'left', 
                         ticks: { color: '#61dafb' }, 
-                        title: { display: true, text: 'Kat / Predkosc', color: '#61dafb' } // POPRAWKA: Lepszy opis osi
+                        title: { display: true, text: 'Kat / Predkosc', color: '#61dafb' } 
                     }, 
                     y1: { 
                         type: 'linear', 
                         display: true, 
                         position: 'right', 
                         ticks: { color: '#a2f279' }, 
-                        title: { display: true, text: 'Wyjscie PID / Silnik', color: '#a2f279' }, // POPRAWKA: Lepszy opis osi
+                        title: { display: true, text: 'Wyjscie PID / Silnik', color: '#a2f279' }, 
                         grid: { drawOnChartArea: false }, 
                     } 
                 }, 
@@ -865,6 +865,7 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                     // POPRAWKA: Resetowanie stanu wizualizacji 3D
                     if (robotModel) {
                         robotModel.rotation.set(0, 0, 0);
+                        if(robotChassis) robotChassis.rotation.set(0,0,0);
                         if (floor && floor.material.map) {
                            floor.material.map.offset.set(0, 0);
                         }
@@ -1245,7 +1246,7 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
 
                 renderer = new THREE.WebGLRenderer({ antialias: true });
                 renderer.setSize(container.clientWidth, container.clientHeight);
-                renderer.toneMapping = THREE.ACESFilmicToneMapping; // Lepsze odwzorowanie kolorow
+                renderer.toneMapping = THREE.ACESFilmicToneMapping;
                 renderer.toneMappingExposure = 1.0;
                 container.innerHTML = '';
                 container.appendChild(renderer.domElement);
@@ -1254,7 +1255,6 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                 controls.target.set(0, 2, 0);
                 controls.update();
 
-                // POPRAWKA: Ladowanie otoczenia HDRI dla realistycznego oswietlenia i tla
                 new THREE.RGBELoader().load('https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_03_1k.hdr', function(texture) {
                     texture.mapping = THREE.EquirectangularReflectionMapping;
                     scene.background = texture;
@@ -1263,7 +1263,6 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                 });
                 
                 const floorGeometry = new THREE.PlaneGeometry(200, 200);
-                // Uzywamy materialu z niskim 'roughness' zeby odbijal otoczenie
                 const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x808080, metalness: 0.1, roughness: 0.3 }); 
                 floor = new THREE.Mesh(floorGeometry, floorMaterial);
                 floor.rotation.x = -Math.PI / 2;
@@ -1272,7 +1271,7 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
 
                 const loader = new THREE.TextureLoader();
                 loader.load(
-                    'https://threejs.org/examples/textures/hardwood2_diffuse.jpg', // Niezawodny link
+                    'https://threejs.org/examples/textures/hardwood2_diffuse.jpg',
                     function (texture) {
                         texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
                         texture.repeat.set(15, 15);
@@ -1280,64 +1279,45 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                         floor.material.needsUpdate = true;
                     }
                 );
-
-                robotModel = new THREE.Group();
                 
+                // POPRAWKA: Nowa, stabilna hierarchia modelu
+                robotModel = new THREE.Group(); // Glowny kontener, odpowiada za SKRECANIE (os Y)
+                robotChassis = new THREE.Group(); // Pod-kontener, odpowiada za POCHYLENIE (Pitch/Roll)
+                robotModel.add(robotChassis);
+
                 const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1A1A1A, roughness: 0.4, metalness: 0.2 });
                 const body = new THREE.Mesh(new THREE.BoxGeometry(7, 3, 5), bodyMaterial);
-                robotModel.add(body);
-                
-                // POPRAWKA: Nowa, zoptymalizowana i estetyczna funkcja kola
+                // Cialo robota jest dzieckiem podwozia (chassis), wiec bedzie sie przechylac
+                robotChassis.add(body);
+
+                // POPRAWKA: Nowa, prosta i stabilna funkcja kola
                 function createWheel() {
                     const wheelGroup = new THREE.Group();
                     const segments = 64;
-                    const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
-                    const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.2, metalness: 0.1 });
+                    const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8, metalness: 0.0 });
+                    const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xDDDDDD, roughness: 0.2, metalness: 0.3 });
 
-                    // Opona
-                    const tire = new THREE.Mesh(new THREE.CylinderGeometry(4.1, 4.1, 2, segments), tireMaterial);
+                    const tire = new THREE.Mesh(new THREE.CylinderGeometry(4.1, 4.1, 2.2, segments), tireMaterial);
                     wheelGroup.add(tire);
                     
-                    // Felga (powierzchnia czolowa)
-                    const rimFace = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 3.8, 2.2, segments), rimMaterial);
+                    const rimFace = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 3.8, 2.0, segments), rimMaterial);
                     wheelGroup.add(rimFace);
-
-                    // Centralny hub
-                    const hub = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 2.3, segments), rimMaterial);
-                    wheelGroup.add(hub);
-
-                    // Szprychy
-                    const spokeLength = 3.8 - 1.0;
-                    const spokeGeometry = new THREE.BoxGeometry(spokeLength, 0.4, 0.5);
-
-                    for (let i = 0; i < 7; i++) {
-                        const spoke = new THREE.Mesh(spokeGeometry, rimMaterial);
-                        const angle = (i / 7) * (Math.PI * 2);
-                        
-                        // Pozycjonowanie srodka szprychy pomiedzy hubem a krawedzia felgi
-                        const spokeCenterRadius = 1.0 + spokeLength / 2;
-                        spoke.position.x = Math.cos(angle) * spokeCenterRadius;
-                        spoke.position.y = Math.sin(angle) * spokeCenterRadius;
-                        
-                        spoke.rotation.z = angle;
-                        wheelGroup.add(spoke);
-                    }
+                    
+                    wheelGroup.rotation.z = Math.PI / 2;
                     return wheelGroup;
                 }
 
                 leftWheel = createWheel();
                 leftWheel.position.x = -3.5;
+                // Kola sa dziecmi glownego kontenera, wiec beda sie skrecac, ale nie przechylac
                 robotModel.add(leftWheel);
 
                 rightWheel = createWheel();
                 rightWheel.position.x = 3.5;
                 robotModel.add(rightWheel);
-                
-                [leftWheel, rightWheel].forEach(w => w.rotation.z = Math.PI / 2);
 
                 scene.add(robotModel);
 
-                // POPRAWKA: Nowa, uproszczona funkcja animacji z czytelnymi opcjami zmiany kierunku
                 function animate() {
                     requestAnimationFrame(animate);
 
@@ -1353,24 +1333,25 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                     const deltaRevolutionsL = deltaL / IMPULSES_PER_REVOLUTION;
                     const deltaRevolutionsR = deltaR / IMPULSES_PER_REVOLUTION;
                     
-                    leftWheel.rotation.x -= deltaRevolutionsL * 2 * Math.PI;
-                    rightWheel.rotation.x -= deltaRevolutionsR * 2 * Math.PI;
+                    // Rotacja kol wokol ich osi Y (po obroceniu calej grupy kola, os Y staje sie osia obrotu)
+                    leftWheel.rotation.y -= deltaRevolutionsL * 2 * Math.PI;
+                    rightWheel.rotation.y -= deltaRevolutionsR * 2 * Math.PI;
 
                     const deltaDistanceL = deltaRevolutionsL * wheelCircumferenceM;
                     const deltaDistanceR = deltaRevolutionsR * wheelCircumferenceM;
 
-                    // UWAGA: Jesli robot jedzie do tylu zamiast do przodu, zmien znak ponizej (np. z 1 na -1)
+                    // UWAGA: Jesli robot jedzie do tylu zamiast do przodu, zmien znak ponizej (np. z 1.0 na -1.0)
                     const deltaDistanceCenter = (deltaDistanceL + deltaDistanceR) / 2.0 * 1.0;
                     const deltaRotationAngleRad = (deltaDistanceR - deltaDistanceL) / trackWidthM;
                     
-                    // Rotacja calego modelu robota
-                    robotModel.rotation.order = 'YXZ';
-                    // UWAGA: Jesli robot skreca w zla strone, zmien '+=' na '-='
-                    robotModel.rotation.y += deltaRotationAngleRad;
-                    robotModel.rotation.x = robotState.pitch * degToRad;
-                    robotModel.rotation.z = robotState.roll * degToRad;
+                    // Rotacja calego modelu (skrecanie)
+                    // UWAGA: Jesli robot skreca w zla strone, zmien '-=' na '+='
+                    robotModel.rotation.y -= deltaRotationAngleRad;
+                    
+                    // Rotacja samego podwozia (przechylanie)
+                    robotChassis.rotation.x = robotState.pitch * degToRad;
+                    robotChassis.rotation.z = robotState.roll * degToRad;
 
-                    // Przesuwanie tekstury podlogi dla iluzji ruchu
                     if (floor && floor.material && floor.material.map) {
                         const moveX = Math.sin(robotModel.rotation.y) * deltaDistanceCenter;
                         const moveZ = Math.cos(robotModel.rotation.y) * deltaDistanceCenter;
