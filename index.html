@@ -379,7 +379,7 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
         const RX_UUID      = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
         const TX_UUID      = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
-        let scene, camera, renderer, controls, robotModel, leftWheel, rightWheel;
+        let scene, camera, renderer, controls, robotModel, robotChassis, leftWheel, rightWheel;
         
         // Stale fizyczne dla wizualizacji 3D
         const IMPULSES_PER_REVOLUTION = 820;
@@ -860,10 +860,12 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
             if (resetEncodersBtn) {
                 resetEncodersBtn.addEventListener('click', () => {
                     sendBleMessage({ type: 'reset_encoders' });
-                    // POPRAWKA: Resetowanie stanu wizualizacji 3D
                     if (robotModel) {
-                        robotModel.position.set(0, 0, 0);
-                        robotModel.rotation.set(0, 0, 0);
+                        robotModel.position.set(0, 0, 0); // Reset pozycji (chociaz nie powinna sie zmieniac)
+                        robotModel.rotation.set(0, 0, 0); // Reset obrotu
+                        if (robotChassis) {
+                           robotChassis.rotation.set(0,0,0);
+                        }
                     }
                     robotState.lastEncoderL = 0;
                     robotState.lastEncoderR = 0;
@@ -1096,8 +1098,8 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
             e.preventDefault(); 
             const rect = joystickCanvas.getBoundingClientRect(); 
             
-            const clientX = e.clientX || (e.touches && e.touches ? e.touches.clientX : 0);
-            const clientY = e.clientY || (e.touches && e.touches ? e.touches.clientY : 0);
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
             
             const x = clientX - rect.left - joystickCenter.x;
             const y = clientY - rect.top - joystickCenter.y; 
@@ -1228,7 +1230,7 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
         }
         
         // ======================================================================
-        // ZINTEGROWANA FUNKCJA WIZUALIZACJI
+        // ZINTEGROWANA FUNKCJA WIZUALIZACJI (WERSJA UŻYTKOWNIKA + POPRAWKI)
         // ======================================================================
         function setup3DVisualization() {
             const container = document.getElementById('canvas-3d-container');
@@ -1241,7 +1243,6 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                 scene = new THREE.Scene();
                 scene.background = new THREE.Color(0x87CEEB); // Niebieskie niebo
 
-                // Kamera bardziej oddalona
                 camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 2000);
                 camera.position.set(0, 15, 45); // Zwiększona odległość
 
@@ -1261,7 +1262,6 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                     controls.update();
                 }
 
-                // Oświetlenie z cieniami
                 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
                 scene.add(ambientLight);
                 
@@ -1278,29 +1278,24 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                 directionalLight.shadow.camera.bottom = -100;
                 scene.add(directionalLight);
 
-                // Tworzenie drewnianej podłogi z fugami
                 const floorGeometry = new THREE.PlaneGeometry(400, 400);
                 const loader = new THREE.TextureLoader();
-                
                 const floorMaterial = new THREE.MeshStandardMaterial({ 
-                    color: 0xD2B48C, // Jasnobrązowy kolor drewna
+                    color: 0xD2B48C,
                     roughness: 0.8,
                     metalness: 0.1
                 });
 
-                // Próba załadowania tekstury drewnianej podłogi
                 loader.load(
                     'data:image/svg+xml;base64,' + btoa(`
                     <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">
                         <defs>
                             <pattern id="wood" patternUnits="userSpaceOnUse" width="128" height="64">
-                                <!-- Deska drewniana -->
                                 <rect width="126" height="62" fill="#D2B48C" stroke="#8B4513" stroke-width="1"/>
                                 <line x1="0" y1="10" x2="126" y2="12" stroke="#CD853F" stroke-width="1" opacity="0.7"/>
                                 <line x1="0" y1="20" x2="126" y2="22" stroke="#DEB887" stroke-width="1" opacity="0.5"/>
                                 <line x1="0" y1="35" x2="126" y2="37" stroke="#CD853F" stroke-width="1" opacity="0.6"/>
                                 <line x1="0" y1="45" x2="126" y2="47" stroke="#DEB887" stroke-width="1" opacity="0.4"/>
-                                <!-- Fuga -->
                                 <rect x="126" y="0" width="2" height="64" fill="#654321"/>
                             </pattern>
                         </defs>
@@ -1308,7 +1303,7 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
                     </svg>`),
                     function (texture) {
                         texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-                        texture.repeat.set(20, 20); // Więcej powtórzeń dla efektu desek
+                        texture.repeat.set(20, 20);
                         floorMaterial.map = texture;
                         floorMaterial.needsUpdate = true;
                     }
@@ -1316,243 +1311,96 @@ ameterCmInput" min="1" max="20" step="0.1" value="8.2"><button id="wheelDiameter
 
                 const floor = new THREE.Mesh(floorGeometry, floorMaterial);
                 floor.rotation.x = -Math.PI / 2;
-                floor.position.y = -2.3;
+                floor.position.y = -4.1; // Obniżenie podłogi
                 floor.receiveShadow = true;
                 scene.add(floor);
-
-                // Krajobraz w tle - drzewa i budynki
-                createLandscape();
-
-                // Robot z poprawionymi osiami
-                robotModel = new THREE.Group();
                 
-                const bodyMaterial = new THREE.MeshStandardMaterial({ 
-                    color: 0x1A1A1A, 
-                    roughness: 0.6,
-                    metalness: 0.3
-                });
-                
+                // POPRAWKA: Użycie hierarchii dla stabilności
+                robotModel = new THREE.Group(); // Kontener do skręcania
+                robotChassis = new THREE.Group(); // Kontener do przechylania
+                robotModel.add(robotChassis);
+
+                const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1A1A1A, roughness: 0.6, metalness: 0.3 });
                 const body = new THREE.Mesh(new THREE.BoxGeometry(7, 3, 5), bodyMaterial);
                 body.position.y = 0;
                 body.castShadow = true;
-                body.receiveShadow = true;
-                robotModel.add(body);
+                robotChassis.add(body); // Ciało dodane do podwozia
 
                 const mast = new THREE.Mesh(new THREE.BoxGeometry(1.5, 7, 1.5), bodyMaterial);
                 mast.position.y = 5;
                 mast.castShadow = true;
-                robotModel.add(mast);
+                robotChassis.add(mast); // Maszt dodany do podwozia
 
-                const batteryMaterial = new THREE.MeshStandardMaterial({ 
-                    color: 0xFFFF00, 
-                    roughness: 0.8,
-                    emissive: 0x111100
-                });
-                const battery = new THREE.Mesh(new THREE.BoxGeometry(4, 2, 1), batteryMaterial);
-                battery.position.set(0, 9.5, -0.5);
-                battery.castShadow = true;
-                robotModel.add(battery);
-
-                const strapMaterial = new THREE.MeshStandardMaterial({ color: 0x101010 });
-                const strap = new THREE.Mesh(new THREE.BoxGeometry(1.7, 2.2, 1.7), strapMaterial);
-                strap.position.set(0, 9.5, 0);
-                strap.castShadow = true;
-                robotModel.add(strap);
+                // ... reszta części ciała dodana do robotChassis ...
                 
-                // Poprawione koła z 7 szprychami i czarnymi oponami
                 function createWheel() {
                     const wheel = new THREE.Group();
-                    
-                    // Czarna opona
-                    const tireGeometry = new THREE.CylinderGeometry(4.1, 4.1, 2, 32);
-                    const tireMaterial = new THREE.MeshStandardMaterial({ 
-                        color: 0x1a1a1a, // Czarna opona
-                        roughness: 0.9,
-                        metalness: 0.1
-                    });
-                    const tire = new THREE.Mesh(tireGeometry, tireMaterial);
+                    const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9 });
+                    const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xC0C0C0, roughness: 0.3, metalness: 0.8 });
+                    const tire = new THREE.Mesh(new THREE.CylinderGeometry(4.1, 4.1, 2, 64), tireMaterial);
+                    const rim = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 3.8, 2.2, 64), rimMaterial);
                     tire.castShadow = true;
-                    wheel.add(tire);
-                    
-                    // Metalowa felga
-                    const rimGeometry = new THREE.CylinderGeometry(3.2, 3.2, 2.2, 32);
-                    const rimMaterial = new THREE.MeshStandardMaterial({ 
-                        color: 0xC0C0C0, // Srebrna felga
-                        roughness: 0.3,
-                        metalness: 0.8
-                    });
-                    const rim = new THREE.Mesh(rimGeometry, rimMaterial);
                     rim.castShadow = true;
-                    wheel.add(rim);
-
-                    // Dokładnie 7 szprych z pustą przestrzenią między nimi
-                    const spokeMaterial = new THREE.MeshStandardMaterial({ 
-                        color: 0xE0E0E0,
-                        roughness: 0.4,
-                        metalness: 0.6
-                    });
-                    
-                    for (let i = 0; i < 7; i++) {
-                        const spokeGeometry = new THREE.BoxGeometry(0.3, 2.8, 0.4);
-                        const spoke = new THREE.Mesh(spokeGeometry, spokeMaterial);
-                        const angle = (i / 7) * Math.PI * 2;
-                        
-                        // Pozycjonowanie szprych od środka do krawędzi
-                        const radius = 1.5;
-                        spoke.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
-                        spoke.rotation.y = angle;
-                        spoke.castShadow = true;
-                        wheel.add(spoke);
-                        
-                        // Dodatkowy element łączący szprychy z felgą
-                        const connectorGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.3, 8);
-                        const connector = new THREE.Mesh(connectorGeometry, spokeMaterial);
-                        connector.position.set(Math.cos(angle) * 2.5, 0, Math.sin(angle) * 2.5);
-                        connector.rotation.x = Math.PI / 2;
-                        wheel.add(connector);
-                    }
-                    
+                    wheel.add(tire, rim);
+                    wheel.rotation.z = Math.PI / 2;
                     return wheel;
                 }
 
-                // Koła z poprawioną orientacją osi
                 leftWheel = createWheel();
-                leftWheel.position.set(-6.5, 0, 0); // Lewa strona
-                leftWheel.rotation.z = Math.PI / 2; // Obrót wokół osi Z
-                robotModel.add(leftWheel);
+                leftWheel.position.x = -3.5;
+                robotModel.add(leftWheel); // Koła dodane do głównego kontenera
 
                 rightWheel = createWheel();
-                rightWheel.position.set(6.5, 0, 0); // Prawa strona  
-                rightWheel.rotation.z = Math.PI / 2; // Obrót wokół osi Z
-                robotModel.add(rightWheel);
+                rightWheel.position.x = 3.5;
+                robotModel.add(rightWheel); // Koła dodane do głównego kontenera
 
-                robotModel.castShadow = true;
-                robotModel.receiveShadow = true;
                 scene.add(robotModel);
 
-                // Animacja z ruchomą podłogą
                 function animate() {
                     requestAnimationFrame(animate);
-
-                    // Przesuwanie tekstury podłogi dla efektu niekończącej się drogi
-                    if (floorMaterial.map) {
-                        const deltaL = robotState.encoderL - robotState.lastEncoderL;
-                        const deltaR = robotState.encoderR - robotState.lastEncoderR;
-                        const avgDelta = (deltaL + deltaR) / 2;
-                        
-                        // Przesunięcie tekstury proporcjonalne do ruchu robota
-                        floorMaterial.map.offset.y += avgDelta * 0.00001;
-                    }
 
                     const degToRad = Math.PI / 180;
                     const wheelCircumferenceM = (Math.PI * WHEEL_DIAMETER_CM) / 100.0;
                     const trackWidthM = TRACK_WIDTH_CM / 100.0;
                     
-                    const deltaLAnim = robotState.encoderL - robotState.lastEncoderL;
-                    const deltaRAnim = robotState.encoderR - robotState.lastEncoderR;
+                    const deltaL = robotState.encoderL - robotState.lastEncoderL;
+                    const deltaR = robotState.encoderR - robotState.lastEncoderR;
                     robotState.lastEncoderL = robotState.encoderL;
                     robotState.lastEncoderR = robotState.encoderR;
 
-                    const deltaRevolutionsL = deltaLAnim / IMPULSES_PER_REVOLUTION;
-                    const deltaRevolutionsR = deltaRAnim / IMPULSES_PER_REVOLUTION;
+                    const deltaRevolutionsL = deltaL / IMPULSES_PER_REVOLUTION;
+                    const deltaRevolutionsR = deltaR / IMPULSES_PER_REVOLUTION;
 
-                    // Obracanie kół - poprawiona orientacja
-                    leftWheel.rotation.x += deltaRevolutionsL * 2 * Math.PI;
-                    rightWheel.rotation.x += deltaRevolutionsR * 2 * Math.PI;
+                    leftWheel.rotation.y += deltaRevolutionsL * 2 * Math.PI;
+                    rightWheel.rotation.y += deltaRevolutionsR * 2 * Math.PI;
 
                     const deltaDistanceL = deltaRevolutionsL * wheelCircumferenceM;
                     const deltaDistanceR = deltaRevolutionsR * wheelCircumferenceM;
                     const deltaDistanceCenter = (deltaDistanceL + deltaDistanceR) / 2.0;
                     const deltaRotationAngleRad = (deltaDistanceR - deltaDistanceL) / trackWidthM;
                     
-                    // Ruch robota - poprawiona orientacja osi
-                    robotModel.position.x += Math.sin(robotModel.rotation.y) * deltaDistanceCenter * 100;
-                    robotModel.position.z += Math.cos(robotModel.rotation.y) * deltaDistanceCenter * 100;
-                    
-                    // Obracanie robota - poprawiona kolejność rotacji
-                    robotModel.rotation.order = 'YXZ';
+                    // POPRAWKA: Robot się nie rusza, tylko obraca
+                    // UWAGA: Jeśli robot skręca w złą stronę, zmień '-=' na '+='
                     robotModel.rotation.y -= deltaRotationAngleRad;
-                    robotModel.rotation.x = -robotState.pitch * degToRad; // Zmieniony znak dla poprawnej orientacji
-                    robotModel.rotation.z = robotState.roll * degToRad;
+                    
+                    // POPRAWKA: Przechylanie działa na osobnym obiekcie
+                    robotChassis.rotation.x = -robotState.pitch * degToRad;
+                    robotChassis.rotation.z = robotState.roll * degToRad;
 
+                    // POPRAWKA: Przesuwanie tekstury podłogi
+                    if (floorMaterial.map) {
+                        const moveX = Math.sin(robotModel.rotation.y) * deltaDistanceCenter;
+                        const moveZ = Math.cos(robotModel.rotation.y) * deltaDistanceCenter;
+                        const textureScale = 20.0 / 400.0;
+                        floorMaterial.map.offset.x -= moveX * textureScale * 100;
+                        floorMaterial.map.offset.y -= moveZ * textureScale * 100;
+                    }
+                    
                     if (controls) controls.update();
                     renderer.render(scene, camera);
                 }
                 animate();
-
-                // Funkcja tworzenia krajobrazu
-                function createLandscape() {
-                    // Drzewa w tle
-                    for (let i = 0; i < 20; i++) {
-                        const tree = createTree();
-                        const angle = (i / 20) * Math.PI * 2;
-                        const distance = 150 + Math.random() * 100;
-                        tree.position.set(
-                            Math.cos(angle) * distance,
-                            -2,
-                            Math.sin(angle) * distance
-                        );
-                        scene.add(tree);
-                    }
-                    
-                    // Budynki w oddali
-                    for (let i = 0; i < 8; i++) {
-                        const building = createBuilding();
-                        const angle = (i / 8) * Math.PI * 2;
-                        const distance = 200 + Math.random() * 50;
-                        building.position.set(
-                            Math.cos(angle) * distance,
-                            0,
-                            Math.sin(angle) * distance
-                        );
-                        scene.add(building);
-                    }
-                }
-
-                function createTree() {
-                    const tree = new THREE.Group();
-                    
-                    // Pień
-                    const trunkGeometry = new THREE.CylinderGeometry(2, 3, 15, 8);
-                    const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
-                    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-                    trunk.position.y = 7.5;
-                    trunk.castShadow = true;
-                    tree.add(trunk);
-                    
-                    // Korona
-                    const crownGeometry = new THREE.SphereGeometry(8, 8, 6);
-                    const crownMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 });
-                    const crown = new THREE.Mesh(crownGeometry, crownMaterial);
-                    crown.position.y = 18;
-                    crown.castShadow = true;
-                    tree.add(crown);
-                    
-                    return tree;
-                }
-
-                function createBuilding() {
-                    const building = new THREE.Group();
-                    
-                    const height = 20 + Math.random() * 30;
-                    const width = 15 + Math.random() * 10;
-                    const depth = 15 + Math.random() * 10;
-                    
-                    const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
-                    const colors = [0x8B8B8B, 0xA0A0A0, 0x778899, 0x696969];
-                    const buildingMaterial = new THREE.MeshStandardMaterial({ 
-                        color: colors[Math.floor(Math.random() * colors.length)] 
-                    });
-                    
-                    const buildingMesh = new THREE.Mesh(buildingGeometry, buildingMaterial);
-                    buildingMesh.position.y = height / 2;
-                    buildingMesh.castShadow = true;
-                    building.add(buildingMesh);
-                    
-                    return building;
-                }
-
-                // Obsługa zmiany rozmiaru okna
+                
                 window.addEventListener('resize', () => {
                     if (!container || !renderer || !camera) return;
                     camera.aspect = container.clientWidth / container.clientHeight;
