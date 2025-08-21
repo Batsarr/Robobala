@@ -453,7 +453,14 @@
         try {
             addLogMessage('Prosze o wybranie urzadzenia Bluetooth...', 'info');
             document.getElementById('connectionText').textContent = 'Wybierz robota...';
-            bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ name: 'RoboBala-LQR' }], optionalServices: [SERVICE_UUID] });
+            
+            // =================================================================================
+            // === POPRAWKA KRYTYCZNA: ZMIANA METODY FILTROWANIA URZADZENIA BLE ===
+            // Zamiast zawodnego filtrowania po nazwie, uzywamy niezawodnego filtrowania
+            // po unikalnym identyfikatorze uslugi (SERVICE_UUID), tak jak w dzialajacej wersji PID.
+            // To rozwiazuje problem bledu "NetworkError" na poziomie przegladarki.
+            // =================================================================================
+            bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }] });
             
             addLogMessage(`Laczenie z ${bleDevice.name}...`, 'info');
             document.getElementById('connectionText').textContent = 'Laczenie...';
