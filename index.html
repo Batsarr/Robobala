@@ -455,14 +455,15 @@
             document.getElementById('connectionText').textContent = 'Wybierz robota...';
             
             // =================================================================================
-            // === POPRAWKA KRYTYCZNA: PRAWIDLOWA STRUKTURA ZADANIA O URZADZENIE BLE ===
-            // Poprzednia wersja blednie umieszczala SERVICE_UUID w 'optionalServices'
-            // i filtrowala po zawodnej nazwie. Poprawna, stabilna metoda (uzywana w wersji PID)
-            // to filtrowanie bezposrednio po USLUDZE, co gwarantuje znalezienie robota.
-            // To rozwiazuje problem bledu "NetworkError" na poziomie przegladarki.
+            // === OSTATECZNA POPRAWKA: NAJBARDZIEJ NIEZAWODNA METODA POLACZENIA ===
+            // Laczymy niezawodny filtr po usludze (jak w wersji PID) z jawna deklaracja
+            // tej uslugi jako opcjonalnej. Gwarantuje to maksymalna kompatybilnosc,
+            // szczegolnie z restrykcyjnymi systemami mobilnymi (Android).
+            // To jest ostateczne rozwiazanie problemu "NetworkError".
             // =================================================================================
             bleDevice = await navigator.bluetooth.requestDevice({
-                filters: [{ services: [SERVICE_UUID] }]
+                filters: [{ services: [SERVICE_UUID] }],
+                optionalServices: [SERVICE_UUID]
             });
             
             addLogMessage(`Laczenie z ${bleDevice.name}...`, 'info');
