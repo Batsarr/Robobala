@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot Samo Balansujacy - Wersja 19.0-ZERO-FAILURE</title>
+    <title>Robot Samo Balansujacy - Wersja 19.1-FINAL-STABLE</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -306,7 +306,7 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        const PROFILE_PREFIX = 'robot_profile_v19.0_final_';
+        const PROFILE_PREFIX = 'robot_profile_v19.1_stable_';
         const availableTelemetry = {
             'pitch': { label: 'Pitch (Kat)', color: '#61dafb' },
             'roll': { label: 'Roll (Kat)', color: '#fd79a8' },
@@ -338,7 +338,7 @@
             if (content.style.maxHeight && content.style.maxHeight !== '0px') {
                 content.style.maxHeight = '0px';
             } else {
-                content.style.maxHeight = content.scrollHeight + "px";
+                content.style.maxHeight = content.scrollHeight + 30 + "px";
             }
         }
 
@@ -713,7 +713,7 @@
             };
             
             setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm_group', { 'minPwmLeftFwd': 'min_pwm_left_fwd', 'minPwmLeftBwd': 'min_pwm_left_bwd', 'minPwmRightFwd': 'min_pwm_right_fwd', 'minPwmRightBwd': 'min_pwm_right_bwd'});
-            setupGroupedInput(['joystickDeadzone', 'turnFactor', 'expoJoystick', 'maxSpeedJoystick', 'joystickOutputScale'], 'set_joystick_tuning', { 'joystickDeadzone': 'joystick_deadzone', 'turnFactor': 'turn_factor', 'expoJoystick': 'expo_joystick', 'maxSpeedJoystick': 'max_speed_joystick', 'joystickOutputScale': 'joystick_output_scale' });
+            setupGroupedInput(['joystickDeadzone', 'turnFactor', 'expoJoystick', 'maxSpeedJoystick', 'joystickOutputScale'], 'set_joystick_tuning', { 'joystickDeadzone': 'joystick_deadzone', 'turnFactor': 'turn_factor', 'expoJoystick': 'expo_joystick', 'maxSpeedJoystick': 'max_speed_joystick', 'joystickOutputScale': 'output_scale' });
             setupGroupedInput(['kpBalance', 'kiBalance', 'kdBalance', 'joystickAngleSensitivity', 'balancePidDerivativeFilterAlpha'], 'balance_pid_update', { 'kpBalance': 'kp_b', 'kiBalance': 'ki_b', 'kdBalance': 'kd_b', 'joystickAngleSensitivity': 'joystick_angle_sensitivity', 'balancePidDerivativeFilterAlpha': 'filter_alpha' });
             setupGroupedInput(['kpSpeed', 'kiSpeed', 'kdSpeed', 'maxTargetAngleFromSpeedPID', 'speedPidDeadband'], 'speed_pid_update', { 'kpSpeed': 'kp_s', 'kiSpeed': 'ki_s', 'kdSpeed': 'kd_s', 'maxTargetAngleFromSpeedPID': 'max_target_angle', 'speedPidDeadband': 'speed_pid_deadband' });
             setupGroupedInput(['kpPosition', 'kiPosition', 'kdPosition', 'maxTargetSpeedFromPosPID', 'positionPidDeadband'], 'position_pid_update', { 'kpPosition': 'kp_p', 'kiPosition': 'ki_p', 'kdPosition': 'kd_p', 'maxTargetSpeedFromPosPID': 'max_target_speed', 'positionPidDeadband': 'position_pid_deadband' });
@@ -862,14 +862,16 @@
             const holdPositionSwitch = document.getElementById('holdPositionSwitch');
             const speedModeSwitch = document.getElementById('speedModeSwitch');
             
-            if (distance > joystickRadius * 0.15) { 
+            if (distance > joystickRadius * 0.20) { // Martwa strefa 20%
                 if (holdPositionSwitch.checked) {
                     holdPositionSwitch.checked = false;
+                    lastUserInteraction['holdPositionSwitch'] = Date.now();
                     sendBleMessage({ type: 'hold_position_toggle', enabled: false });
                     addLogMessage("Joystick uzyty - wylaczono 'Trzymaj Pozycje'", "info");
                 }
                 if (speedModeSwitch.checked) {
                     speedModeSwitch.checked = false;
+                    lastUserInteraction['speedModeSwitch'] = Date.now();
                     sendBleMessage({ type: 'speed_mode_toggle', enabled: false });
                     addLogMessage("Joystick uzyty - wylaczono 'Tryb Predkosci'", "info");
                 }
@@ -907,14 +909,16 @@
             if (joyX !== lastGamepadState.x || joyY !== lastGamepadState.y) { 
                 const holdPositionSwitch = document.getElementById('holdPositionSwitch');
                 const speedModeSwitch = document.getElementById('speedModeSwitch');
-                if (magnitude > deadzone) {
+                if (magnitude > 0.20) { // Martwa strefa 20%
                     if (holdPositionSwitch.checked) {
                         holdPositionSwitch.checked = false;
+                        lastUserInteraction['holdPositionSwitch'] = Date.now();
                         sendBleMessage({ type: 'hold_position_toggle', enabled: false });
                         addLogMessage("Gamepad uzyty - wylaczono 'Trzymaj Pozycje'", "info");
                     }
                     if (speedModeSwitch.checked) {
                         speedModeSwitch.checked = false;
+                        lastUserInteraction['speedModeSwitch'] = Date.now();
                         sendBleMessage({ type: 'speed_mode_toggle', enabled: false });
                         addLogMessage("Gamepad uzyty - wylaczono 'Tryb Predkosci'", "info");
                     }
@@ -1008,7 +1012,7 @@
         document.querySelectorAll('.accordion-header').forEach(header => {
             const content = header.nextElementSibling;
             if (header.classList.contains('active')) {
-                 setTimeout(() => { if (content) content.style.maxHeight = content.scrollHeight + 'px'; }, 100);
+                 setTimeout(() => { if (content) content.style.maxHeight = content.scrollHeight + 30 + 'px'; }, 100);
             } else {
                 if (content) content.style.maxHeight = '0px';
             }
