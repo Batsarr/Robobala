@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot Samo Balansujacy LQR - Wersja 18.0-STABLE</title>
+    <title>Robot LQR - Wersja 18.0-STABLE</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/examples/js/controls/OrbitControls.js"></script>
@@ -92,12 +92,13 @@
         .lqr-info strong { color: #f7b731; }
         .parameter-group { background-color: #20232a; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
         .parameter-group h5 { color: #61dafb; margin: 0 0 8px 0; font-size: 1.1em; }
+        #syncConfigBtn { background-color: #f7b731; width: 100%; margin-top: 10px; }
     </style>
 </head>
 <body>
     <div id="emergency-banner">ZATRZYMANIE AWARYJNE</div>
 
-    <h1>Robot Samo Balansujacy LQR - Panel Sterowania</h1>
+    <h1>Robot LQR - Panel Sterowania</h1>
     <div class="main-grid">
         <div class="card" id="controls-card">
             <h2>Sterowanie</h2>
@@ -131,7 +132,7 @@
         
         <div class="card">
             <h2>Status Robota</h2>
-            <button id="connectBleBtn" style="width: 100%; margin-bottom: 15px;">POLACZ Z ROBOTEM PRZEZ BLUETOOTH</button>
+            <button id="connectBleBtn" style="width: 100%; margin-bottom: 15px;">POLACZ Z ROBOTEM</button>
             <div class="status-grid">
                 <strong>Polaczenie:</strong> <div><span id="connectionStatus" class="status-indicator status-disconnected"></span> <span id="connectionText">Rozlaczony</span></div>
                 <strong>Status Systemu:</strong> <div><span id="systemStatus" class="status-indicator status-disconnected"></span> <span id="systemText">Nieznany</span></div>
@@ -140,6 +141,7 @@
                 <strong>Czas Petli:</strong> <span id="loopTimeVal">0 &micro;s</span>
                 <strong>Sterowanie:</strong> <span id="controllerTypeVal" style="font-weight:bold; color: #a2f279;">LQR</span>
             </div>
+            <button id="syncConfigBtn" disabled>Synchronizuj Konfiguracje</button>
             <div class="info-grid">
                 <strong>Kat (Pitch):</strong> <div class="angle-display"><span id="angleVal">0.0 &deg;</span><div class="angle-indicator-wrapper"><div id="angleIndicator" class="angle-indicator-needle"></div></div></div>
                 <strong>Kat (Roll):</strong> <span id="rollVal">0.0 &deg;</span>
@@ -450,24 +452,18 @@
     }
 
     async function connectBLE() {
+        addLogMessage('Prosze o wybranie urzadzenia Bluetooth...', 'info');
         try {
-            addLogMessage('Prosze o wybranie urzadzenia Bluetooth...', 'info');
-            document.getElementById('connectionText').textContent = 'Wybierz robota...';
-            
-            // =================================================================================
-            // === OSTATECZNA POPRAWKA: NAJBARDZIEJ NIEZAWODNA METODA POLACZENIA ===
-            // Laczymy niezawodny filtr po usludze (jak w wersji PID) z jawna deklaracja
-            // tej uslugi jako opcjonalnej. Gwarantuje to maksymalna kompatybilnosc,
-            // szczegolnie z restrykcyjnymi systemami mobilnymi (Android).
-            // To jest ostateczne rozwiazanie problemu "NetworkError".
-            // =================================================================================
             bleDevice = await navigator.bluetooth.requestDevice({
                 filters: [{ services: [SERVICE_UUID] }],
                 optionalServices: [SERVICE_UUID]
             });
-            
+
             addLogMessage(`Laczenie z ${bleDevice.name}...`, 'info');
+            document.getElementById('connectBleBtn').disabled = true;
             document.getElementById('connectionText').textContent = 'Laczenie...';
+            
+            bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
             const server = await bleDevice.gatt.connect();
             
             addLogMessage('Pobieranie serwisu...', 'info');
@@ -480,20 +476,17 @@
             addLogMessage('Nasluchiwanie na powiadomienia...', 'info');
             await txCharacteristic.startNotifications();
             txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification);
-            bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
             
             document.getElementById('connectionStatus').className = 'status-indicator status-ok';
-            document.getElementById('connectionText').textContent = 'Polaczony z ' + bleDevice.name;
-            document.getElementById('connectBleBtn').disabled = true;
-            
-            addLogMessage('Polaczono! Zadam stanu poczatkowego.', 'info');
-            sendBleMessage({ type: 'request_state' });
-            
-            document.querySelectorAll('#chartControls input:checked').forEach(cb => cb.dispatchEvent(new Event('change')));
+            document.getElementById('connectionText').textContent = 'Polaczony';
+            document.getElementById('syncConfigBtn').disabled = false;
+            addLogMessage('Polaczono! Kliknij "Synchronizuj Konfiguracje", aby wczytac dane.', 'info');
+
         } catch(error) {
             addLogMessage(`Blad polaczenia BLE: ${error}`, 'error');
             document.getElementById('connectionStatus').className = 'status-indicator status-error';
             document.getElementById('connectionText').textContent = 'Blad polaczenia';
+            document.getElementById('connectBleBtn').disabled = false;
         }
     }
 
@@ -505,6 +498,7 @@
         document.getElementById('systemStatus').className = 'status-indicator status-disconnected';
         document.getElementById('systemText').textContent = 'Nieznany';
         document.getElementById('connectBleBtn').disabled = false;
+        document.getElementById('syncConfigBtn').disabled = true;
         rxCharacteristic = null;
         txCharacteristic = null;
         pendingConfigSegments = {};
@@ -524,9 +518,10 @@
                 case 'telemetry': updateUI(data); updateChart(data); break;
                 case 'initial_state': handleConfigSegment(data); break;
                 case 'system_config': handleConfigSegment(data); break;
+                case 'physics_config': handleConfigSegment(data); break;
                 case 'lqr_config': handleConfigSegment(data); break;
                 case 'motor_config': handleConfigSegment(data); break;
-                case 'log': addLogMessage(data.message, data.level); break;
+                case 'log': addLogMessage(`[ROBOT] ${data.message}`, data.level); break;
                 case 'manual_tune_telemetry': updateManualTuneReadout(data); break;
             }
         } catch (e) {
@@ -543,7 +538,7 @@
 
         pendingConfigSegments[segment] = data;
 
-        const expectedSegments = ['basic', 'system', 'lqr', 'motor'];
+        const expectedSegments = ['basic', 'system', 'physics', 'lqr', 'motor'];
         const hasAllSegments = expectedSegments.every(seg => pendingConfigSegments[seg]);
 
         if (hasAllSegments) {
@@ -745,6 +740,12 @@
     }
     
     function setupControls() {
+        document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
+        document.getElementById('syncConfigBtn').addEventListener('click', () => {
+            addLogMessage('Zadanie stanu poczatkowego...', 'info');
+            sendBleMessage({ type: 'request_state' });
+        });
+
         document.getElementById('balanceSwitch').addEventListener('change', e => { lastUserInteraction['balanceSwitch'] = Date.now(); sendBleMessage({ type: 'balance_toggle', enabled: e.target.checked }); });
         document.getElementById('holdPositionSwitch').addEventListener('change', e => { lastUserInteraction['holdPositionSwitch'] = Date.now(); sendBleMessage({ type: 'hold_position_toggle', enabled: e.target.checked }); });
         document.getElementById('speedModeSwitch').addEventListener('change', e => sendBleMessage({ type: 'speed_mode_toggle', enabled: e.target.checked }));
@@ -1003,7 +1004,7 @@
     function setupStateSync() { 
         document.addEventListener('visibilitychange', () => { 
             if (document.visibilityState === 'visible' && bleDevice && bleDevice.gatt.connected) { 
-                sendBleMessage({ type: 'request_state' }); 
+                // Nie wysylaj automatycznie stanu
             } 
         }); 
     }
@@ -1019,10 +1020,9 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('connectBleBtn').addEventListener('click', connectBLE); 
+        setupControls(); 
         resizeJoystick(); 
         setupChartControls(); 
-        setupControls(); 
         loadProfiles(); 
         setupStateSync(); 
         setupDiagnosticControls(); 
