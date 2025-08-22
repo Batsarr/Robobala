@@ -107,8 +107,8 @@
             <div class="control-row"><span class="control-label">LQR Aktywny</span><label class="switch"><input type="checkbox" id="lqrEnabledSwitch" checked><span class="slider round"></span></label></div>
             
             <fieldset style="padding: 10px 10px 5px 10px;"><legend>Strojenie Joysticka</legend>
-                <div class="setting-block"><div class="setting-container"><label for="joystickOutputScaleInput">Skala Wyjscia</label><div class="numeric-input-wrapper"><button id="joystickOutputScaleMinus">-</button><input type="number" id="joystickOutputScaleInput" min="0.1" max="1.0" step="0.05" value="1.0"><button id="joystickOutputScalePlus">+</button></div></div></div>
-                <div class="setting-block"><div class="setting-container"><label for="expoJoystickInput">Expo Joysticka</label><div class="numeric-input-wrapper"><button id="expoJoystickMinus">-</button><input type="number" id="expoJoystickInput" min="0" max="0.9" step="0.01" value="0"><button id="expoJoystickPlus">+</button></div></div></div>
+                <div class="setting-block"><div class="setting-container"><label for="joystickOutputScaleInput">Skala Wyjscia (%)</label><div class="numeric-input-wrapper"><button id="joystickOutputScaleMinus">-</button><input type="number" id="joystickOutputScaleInput" min="10" max="100" step="5" value="100"><button id="joystickOutputScalePlus">+</button></div></div></div>
+                <div class="setting-block"><div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)</label><div class="numeric-input-wrapper"><button id="expoJoystickMinus">-</button><input type="number" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button id="expoJoystickPlus">+</button></div></div></div>
                 <div class="setting-block"><div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button id="maxSpeedJoystickMinus">-</button><input type="number" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button id="maxSpeedJoystickPlus">+</button></div></div></div>
             </fieldset>
             
@@ -498,7 +498,12 @@
             const inputId = `${key}Input`;
             const input = document.getElementById(inputId);
             if (input && value !== undefined) {
-                 input.value = value;
+                 // Skalowanie wartosci z float (0-1) na procenty (0-100) dla pol
+                 if (key === 'expoJoystick' || key === 'joystickOutputScale') {
+                    input.value = value * 100;
+                 } else {
+                    input.value = value;
+                 }
             }
         }
         addLogMessage("Parametry robota zsynchronizowane z panelem.", "info");
@@ -687,7 +692,12 @@
                         const el = document.getElementById(i + 'Input');
                         if (el) {
                             let key = i.replace(/([A-Z])/g, "_$1").toLowerCase();
-                            msg.params[key] = parseFloat(el.value);
+                            let value = parseFloat(el.value);
+                            // Skalowanie z % na float przed wyslaniem
+                            if (key === 'expo_joystick' || key === 'joystick_output_scale') {
+                                value = value / 100.0;
+                            }
+                            msg.params[key] = value;
                         }
                     });
                     sendBleMessage(msg);
