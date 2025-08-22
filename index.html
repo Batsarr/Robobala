@@ -3,10 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Wersja 18.0-STABLE</title>
+    <title>Robot LQR - Wersja 20.0-STABLE</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/examples/js/controls/OrbitControls.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
         h1 { color: #61dafb; font-size: 1.8em; }
@@ -32,8 +30,8 @@
         legend { color: #61dafb; font-weight: bold; padding: 0 10px; font-size: 1.1em; }
         #joystickWrapper { position: relative; width: 180px; height: 180px; border-radius: 50%; background-color: #4a4f58; border: 3px solid #61dafb; margin: 15px auto; }
         #joystickCanvas { width: 100%; height: 100%; display: block; }
-        #chart-wrapper, #canvas-3d-container { position: relative; height: 320px; border-radius: 8px; overflow: hidden; background-color: #20232a; }
-        #log-container { text-align: left; height: 280px; overflow-y: auto; background-color: #20232a; padding: 10px; border-radius: 8px; margin-top: 15px; }
+        #chart-wrapper { position: relative; height: 320px; border-radius: 8px; overflow: hidden; background-color: #20232a; }
+        #log-container { text-align: left; height: 350px; overflow-y: auto; background-color: #20232a; padding: 10px; border-radius: 8px; margin-top: 15px; }
         .status-indicator { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
         .status-ok { background-color: #a2f279; }
         .status-warn { background-color: #f7b731; }
@@ -136,15 +134,15 @@
             <div class="status-grid">
                 <strong>Polaczenie:</strong> <div><span id="connectionStatus" class="status-indicator status-disconnected"></span> <span id="connectionText">Rozlaczony</span></div>
                 <strong>Status Systemu:</strong> <div><span id="systemStatus" class="status-indicator status-disconnected"></span> <span id="systemText">Nieznany</span></div>
-                <strong>Status Kontrolera:</strong> <span id="gamepadStatus" style="font-weight:bold; color: #f7b731;">Brak</span>
                 <strong>Tryb Pracy:</strong> <span id="robotStateVal" style="font-weight:bold; color: #61dafb;">IDLE</span>
                 <strong>Czas Petli:</strong> <span id="loopTimeVal">0 &micro;s</span>
-                <strong>Sterowanie:</strong> <span id="controllerTypeVal" style="font-weight:bold; color: #a2f279;">LQR</span>
+                <hr style="grid-column: 1 / -1; border-color: #4a4f58; margin: 5px 0;">
+                <strong>Wolna Sterta (RAM):</strong> <span id="freeHeapVal" style="font-weight:bold; color: #f7b731;">0 B</span>
+                <strong>Stos Pętli (min.):</strong> <span id="stackHwmVal" style="font-weight:bold; color: #f7b731;">0 B</span>
             </div>
             <button id="syncConfigBtn" disabled>Synchronizuj Konfiguracje</button>
             <div class="info-grid">
                 <strong>Kat (Pitch):</strong> <div class="angle-display"><span id="angleVal">0.0 &deg;</span><div class="angle-indicator-wrapper"><div id="angleIndicator" class="angle-indicator-needle"></div></div></div>
-                <strong>Kat (Roll):</strong> <span id="rollVal">0.0 &deg;</span>
                 <strong>Predkosc (imp/s):</strong> <span id="speedVal">0</span>
                 <strong>Zadany Kat:</strong> <span id="targetAngleVal">0.0 &deg;</span>
                 <hr style="grid-column: 1 / -1; border-color: #4a4f58; margin: 5px 0;">
@@ -154,13 +152,6 @@
                 <hr style="grid-column: 1 / -1; border-color: #4a4f58; margin: 5px 0;">
                 <strong>Enkoder L:</strong> <span id="encoderLeftVal">0</span>
                 <strong>Enkoder P:</strong> <span id="encoderRightVal">0</span>
-            </div>
-        </div>
-
-        <div class="card">
-            <button class="accordion-header active" onclick="toggleAccordion(this)">Wizualizacja 3D</button>
-            <div class="accordion-content active" style="padding: 0;">
-                 <div id="canvas-3d-container"></div>
             </div>
         </div>
 
@@ -181,10 +172,6 @@
                 </fieldset>
                 <fieldset style="margin-top: 15px;">
                     <legend>Diagnostyka</legend>
-                    <div id="diagnostic-controls" style="display: flex; justify-content: center;">
-                        <button id="startDiagnosticBtn" style="width:100%;background-color:#f7b731;">Start Analizatora Enkoderow</button>
-                        <button id="stopDiagnosticBtn" style="display:none; background-color: #ff6347;width:100%;">Stop Analizatora</button>
-                    </div>
                      <button id="calibrateMpuBtn" style="width:100%; margin-top:10px; background-color:#f7b731;">Kalibruj MPU (DMP)</button>
                 </fieldset>
             </div>
@@ -215,23 +202,19 @@
             <div id="allSettings">
                 <button class="accordion-header" onclick="toggleAccordion(this)">0. Parametry Fizyczne Robota</button>
                 <div class="accordion-content">
-                    <div class="lqr-info">
-                        <strong>Uwaga:</strong> Parametry fizyczne wplywaja bezposrednio na macierze A, B w modelu LQR. Zmiana tych wartosci wymaga ponownego strojenia wzmocnien Q i R.
-                    </div>
-                    
                     <div class="physics-section">
                         <h4>Parametry Masy</h4>
                         <div class="setting-container">
                             <label for="mBodyInput" class="tooltip">Masa korpusu (kg)
-                                <span class="tooltiptext"><strong>Wplyw:</strong> Wieksza masa korpusu zwieksza stabilnosc katowa, ale wymaga wiekszego momentu do korekty. Typowe wartosci: 0.5-2.0 kg. Wplywa na moment bezwladnosci calego systemu.</span>
+                                <span class="tooltiptext"><strong>Wplyw:</strong> Laczna masa robota bez kol i silnikow. Wplywa na moment bezwladnosci.</span>
                             </label>
-                            <div class="numeric-input-wrapper"><button id="mBodyMinus">-</button><input type="number" id="mBodyInput" min="0.1" max="5.0" step="0.1" value="0.8"><button id="mBodyPlus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="mBodyMinus">-</button><input type="number" id="mBodyInput" min="0.1" max="5.0" step="0.01" value="0.225"><button id="mBodyPlus">+</button></div>
                         </div>
                         <div class="setting-container">
                             <label for="mWheelInput" class="tooltip">Masa kola (kg)
-                                <span class="tooltiptext"><strong>Wplyw:</strong> Wplywa na bezwladnosc obrotowa kol i odpowiedz na sterowanie. Wieksza masa kol = wolniejsza akceleracja. Typowe wartosci: 0.05-0.2 kg.</span>
+                                <span class="tooltiptext"><strong>Wplyw:</strong> Masa jednego kola razem z silnikiem. Wplywa na bezwladnosc.</span>
                             </label>
-                            <div class="numeric-input-wrapper"><button id="mWheelMinus">-</button><input type="number" id="mWheelInput" min="0.01" max="1.0" step="0.01" value="0.1"><button id="mWheelPlus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="mWheelMinus">-</button><input type="number" id="mWheelInput" min="0.01" max="1.0" step="0.005" value="0.0275"><button id="mWheelPlus">+</button></div>
                         </div>
                     </div>
                     
@@ -239,69 +222,9 @@
                         <h4>Parametry Geometryczne</h4>
                         <div class="setting-container">
                             <label for="LInput" class="tooltip">Wysokosc srodka masy (m)
-                                <span class="tooltiptext"><strong>Wplyw:</strong> Kluczowy parametr! Okresla moment odwracajacy. Wieksze L = wieksza niestabilnosc = wymagane wieksze wzmocnienia Q. Mierzyc od osi kol do srodka masy. Typowe: 0.08-0.15 m.</span>
+                                <span class="tooltiptext"><strong>Wplyw:</strong> Kluczowy parametr! Odleglosc od osi kol do srodka masy calego robota. Wieksze L = wieksza niestabilnosc.</span>
                             </label>
                             <div class="numeric-input-wrapper"><button id="LMinus">-</button><input type="number" id="LInput" min="0.01" max="0.5" step="0.01" value="0.1"><button id="LPlus">+</button></div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="RWheelInput" class="tooltip">Promien kola (m)
-                                <span class="tooltiptext"><strong>Wplyw:</strong> Wplywa na przeliczenia predkosc-obroty i moment napedowy. Wiekszy promien = wiekszy moment na kat skretu kierownicy. Musi odpowiadac rzeczywistym kolom!</span>
-                            </label>
-                            <div class="numeric-input-wrapper"><button id="RWheelMinus">-</button><input type="number" id="RWheelInput" min="0.01" max="0.2" step="0.001" value="0.04"><button id="RWheelPlus">+</button></div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="trackWidthPhysInput" class="tooltip">Rozstaw kol (m)
-                                <span class="tooltiptext"><strong>Wplyw:</strong> Wplywa na stabilnosc boczna i charakterystyki obrotowe. Wiekszy rozstaw = wieksza stabilnosc boczna, ale wiekszy moment potrzebny do obrotu.</span>
-                            </label>
-                            <div class="numeric-input-wrapper"><button id="trackWidthPhysMinus">-</button><input type="number" id="trackWidthPhysInput" min="0.05" max="0.5" step="0.001" value="0.13"><button id="trackWidthPhysPlus">+</button></div>
-                        </div>
-                    </div>
-                    
-                    <div class="physics-section">
-                        <h4>Momenty Bezwladnosci</h4>
-                        <div class="setting-container">
-                            <label for="IBodyInput" class="tooltip">I korpusu (kg.m2)
-                                <span class="tooltiptext"><strong>Wplyw:</strong> Moment bezwladnosci korpusu wzgledem srodka masy. Wiekszy = wolniejsza reakcja na zmiany kata. Dla prostokatnego korpusu: I = (1/12)*m*(h2+w2). Typowe: 0.005-0.02 kg.m2.</span>
-                            </label>
-                            <div class="numeric-input-wrapper"><button id="IBodyMinus">-</button><input type="number" id="IBodyInput" min="0.001" max="0.1" step="0.001" value="0.01"><button id="IBodyPlus">+</button></div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="IWheelInput" class="tooltip">I kola (kg.m2)
-                                <span class="tooltiptext"><strong>Wplyw:</strong> Moment bezwladnosci kola wzgledem jego osi. Dla pelnego walca: I = (1/2)*m*R2. Wplywa na opor przy akceleracji kol. Typowe: 0.00005-0.001 kg.m2.</span>
-                            </label>
-                            <div class="numeric-input-wrapper"><button id="IWheelMinus">-</button><input type="number" id="IWheelInput" min="0.00001" max="0.01" step="0.00001" value="0.0001"><button id="IWheelPlus">+</button></div>
-                        </div>
-                    </div>
-                    
-                    <div class="physics-section">
-                        <h4>Wspolczynniki Tlumienia</h4>
-                        <div class="setting-container">
-                            <label for="bMotorInput" class="tooltip">Tarcie silnikow (N.m.s/rad)
-                                <span class="tooltiptext"><strong>Wplyw:</strong> Modeluje wewnetrzne tarcie silnikow i przekladni. Wieksza wartosc = wieksze tlumienie ruchu obrotowego. Wplywa na stabilnosc wysokich czestotliwosci. Typowe: 0.05-0.2.</span>
-                            </label>
-                            <div class="numeric-input-wrapper"><button id="bMotorMinus">-</button><input type="number" id="bMotorInput" min="0.01" max="1.0" step="0.01" value="0.1"><button id="bMotorPlus">+</button></div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="bWheelInput" class="tooltip">Tarcie kol (N.s/m)
-                                <span class="tooltiptext"><strong>Wplyw:</strong> Tarcie kol o podloze. Wieksza wartosc = wiekszy opor ruchu liniowego. Zalezy od typu podloza i kol. Za duze = robot "przyklejony", za male = poslizg. Typowe: 0.005-0.05.</span>
-                            </label>
-                            <div class="numeric-input-wrapper"><button id="bWheelMinus">-</button><input type="number" id="bWheelInput" min="0.001" max="0.2" step="0.001" value="0.01"><button id="bWheelPlus">+</button></div>
-                        </div>
-                    </div>
-                    
-                    <div class="physics-section">
-                        <h4>Parametry Napedu</h4>
-                        <div class="setting-container">
-                            <label for="gearRatioInput" class="tooltip">Przelozenie (1:X)
-                                <span class="tooltiptext"><strong>Wplyw:</strong> Przelozenie przekladni. 1.0 = direct drive. Wieksze wartosci = wiekszy moment, mniejsza predkosc. Wplywa na skutecznosc sterowania i predkosc maksymalna.</span>
-                            </label>
-                            <div class="numeric-input-wrapper"><button id="gearRatioMinus">-</button><input type="number" id="gearRatioInput" min="0.1" max="10.0" step="0.1" value="1.0"><button id="gearRatioPlus">+</button></div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="motorConstInput" class="tooltip">Stala momentu (N.m/A)
-                                <span class="tooltiptext"><strong>Wplyw:</strong> Stala momentu silnika - ile momentu na 1A pradu. Wieksza wartosc = silniejszy silnik = wieksza skutecznosc sterowania. Sprawdz w datasheet silnika. Typowe: 0.005-0.05 N.m/A.</span>
-                            </label>
-                            <div class="numeric-input-wrapper"><button id="motorConstMinus">-</button><input type="number" id="motorConstInput" min="0.001" max="0.1" step="0.001" value="0.01"><button id="motorConstPlus">+</button></div>
                         </div>
                     </div>
                 </div>
@@ -316,25 +239,25 @@
                         <h5>Wagi Stanow (Macierz Q)</h5>
                         <div class="setting-container">
                             <label for="q1AngleInput" class="tooltip">Q1 - Kat (theta)
-                                <span class="tooltiptext"><strong>Wplyw:</strong> Kara za odchylenie od pionu. Wieksza wartosc = robot mocniej "walczy" o utrzymanie pionu, ale moze byc nerwowy. Za mala = robot sie przewraca. Typowe: 50-500.</span>
+                                <span class="tooltiptext"><strong>Wplyw:</strong> Kara za odchylenie od pionu. Wieksza wartosc = robot mocniej "walczy" o utrzymanie pionu.</span>
                             </label>
                             <div class="numeric-input-wrapper"><button id="q1AngleMinus">-</button><input type="number" id="q1AngleInput" min="1" max="1000" step="5" value="100"><button id="q1AnglePlus">+</button></div>
                         </div>
                         <div class="setting-container">
                             <label for="q2AngularVelInput" class="tooltip">Q2 - Predkosc katowa (theta_dot)
-                                <span class="tooltiptext"><strong>Wplyw:</strong> Kara za szybkie zmiany kata. Wieksza wartosc = mniejsze oscylacje i przesregulowanie, ale wolniejsza reakcja. Stabilizuje system. Typowe: 5-50.</span>
+                                <span class="tooltiptext"><strong>Wplyw:</strong> Kara za szybkie zmiany kata. Wieksza wartosc = mniejsze oscylacje.</span>
                             </label>
                             <div class="numeric-input-wrapper"><button id="q2AngularVelMinus">-</button><input type="number" id="q2AngularVelInput" min="0.1" max="100" step="1" value="10"><button id="q2AngularVelPlus">+</button></div>
                         </div>
                         <div class="setting-container">
                             <label for="q3PositionInput" class="tooltip">Q3 - Pozycja (s)
-                                <span class="tooltiptext"><strong>Wplyw:</strong> Kara za drift pozycyjny. Wieksza wartosc = robot wraca do pozycji wyjsciowej, ale moze oscylowac. Za mala = robot "wedruje". Typowe: 0.1-10.</span>
+                                <span class="tooltiptext"><strong>Wplyw:</strong> Kara za dryf pozycyjny. Wieksza wartosc = robot wraca do pozycji wyjsciowej.</span>
                             </label>
                             <div class="numeric-input-wrapper"><button id="q3PositionMinus">-</button><input type="number" id="q3PositionInput" min="0.01" max="50" step="0.1" value="1"><button id="q3PositionPlus">+</button></div>
                         </div>
                         <div class="setting-container">
                             <label for="q4VelocityInput" class="tooltip">Q4 - Predkosc (s_dot)
-                                <span class="tooltiptext"><strong>Wplyw:</strong> Kara za szybkie ruchy liniowe. Wieksza wartosc = plynniejsze ruchy, mniejsze przyspieszenia. Pomaga w stabilnosci podczas ruchu. Typowe: 1-20.</span>
+                                <span class="tooltiptext"><strong>Wplyw:</strong> Kara za szybkie ruchy liniowe. Wieksza wartosc = plynniejsze ruchy.</span>
                             </label>
                             <div class="numeric-input-wrapper"><button id="q4VelocityMinus">-</button><input type="number" id="q4VelocityInput" min="0.1" max="100" step="0.5" value="5"><button id="q4VelocityPlus">+</button></div>
                         </div>
@@ -344,7 +267,7 @@
                         <h5>Waga Sterowania (Skalar R)</h5>
                         <div class="setting-container">
                             <label for="rControlInput" class="tooltip">R - Waga sterowania
-                                <span class="tooltiptext"><strong>Wplyw:</strong> Kara za zuzycie energii (PWM silnikow). Wieksza wartosc = oszczedniejsze sterowanie, ale slabsza kontrola. Za duza = robot sie przewraca, za mala = energochlonny. Typowe: 0.01-1.0.</span>
+                                <span class="tooltiptext"><strong>Wplyw:</strong> Kara za zuzycie energii (PWM silnikow). Wieksza wartosc = oszczedniejsze sterowanie.</span>
                             </label>
                             <div class="numeric-input-wrapper"><button id="rControlMinus">-</button><input type="number" id="rControlInput" min="0.001" max="10" step="0.01" value="0.1"><button id="rControlPlus">+</button></div>
                         </div>
@@ -357,7 +280,7 @@
                         <h5>Kalibracja Mechaniczna</h5>
                         <div class="setting-container">
                             <label for="wheelDiameterCmInput">Srednica kola (cm)</label>
-                            <div class="numeric-input-wrapper"><button id="wheelDiameterCmMinus">-</button><input type="number" id="wheelDiameterCmInput" min="3" max="30" step="0.1" value="8.0"><button id="wheelDiameterCmPlus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="wheelDiameterCmMinus">-</button><input type="number" id="wheelDiameterCmInput" min="3" max="30" step="0.1" value="8.2"><button id="wheelDiameterCmPlus">+</button></div>
                         </div>
                         <div class="setting-container">
                             <label for="trackWidthCmInput">Rozstaw kol (cm)</label>
@@ -411,20 +334,16 @@
     </div>
 
 <script>
-    const PROFILE_PREFIX = 'robot_profile_lqr_v18_';
+    const PROFILE_PREFIX = 'robot_profile_lqr_v20_';
     const availableTelemetry = {
         'pitch': { label: 'Pitch (Kat)', color: '#61dafb' },
-        'roll': { label: 'Roll (Kat)', color: '#fd79a8' },
         'target_angle': { label: 'Zadany Kat', color: '#a2f279' },
         'speed': { label: 'Predkosc', color: '#f7b731' },
         'lqr_output': { label: 'LQR Wyjscie', color: '#ff9ff3' },
-        'left_motor': { label: 'Lewy Silnik', color: '#54a0ff' },
-        'right_motor': { label: 'Prawy Silnik', color: '#ee5253' }
     };
     let lastUserInteraction = {};
     const INTERACTION_TIMEOUT = 500;
     let finalTargetAngleForDisplay = 0.0;
-    let gamepadIndex, gamepadPollInterval, lastGamepadState = { x: 0, y: 0, buttons: [] };
     let bleDevice, rxCharacteristic, txCharacteristic;
     let pendingConfigSegments = {};
     let logBuffer = [];
@@ -438,14 +357,12 @@
     const joystickCtx = joystickCanvas.getContext('2d');
     let joystickCenter, joystickRadius, knobRadius, isDragging = false; 
 
-    let scene, camera, renderer, controls, robotModel, leftWheel, rightWheel;
-
     function toggleAccordion(header) {
         const content = header.nextElementSibling;
         header.classList.toggle('active');
 
-        if (content.style.maxHeight) {
-            content.style.maxHeight = null;
+        if (content.style.maxHeight && content.style.maxHeight !== '0px') {
+            content.style.maxHeight = '0px';
         } else {
             content.style.maxHeight = content.scrollHeight + "px";
         }
@@ -522,7 +439,7 @@
                 case 'lqr_config': handleConfigSegment(data); break;
                 case 'motor_config': handleConfigSegment(data); break;
                 case 'log': addLogMessage(`[ROBOT] ${data.message}`, data.level); break;
-                case 'manual_tune_telemetry': updateManualTuneReadout(data); break;
+                case 'memory_info': updateMemoryInfo(data); break;
             }
         } catch (e) {
             addLogMessage(`Blad parsowania JSON: ${e}. Dane: ${event.data}`, 'error');
@@ -560,20 +477,18 @@
         } catch(error) { addLogMessage(`Blad wysylania danych BLE: ${error}`, 'error'); }
     }
 
-    function updateManualTuneReadout(data) { document.getElementById('manualEncoderL').textContent = data.encoder_left; document.getElementById('manualEncoderR').textContent = data.encoder_right; }
-
     function applyInitialState(data) {
         document.getElementById('balanceSwitch').checked = data.balancingEnabled;
         document.getElementById('holdPositionSwitch').checked = data.holdPositionEnabled;
         document.getElementById('speedModeSwitch').checked = data.speedModeEnabled;
         document.getElementById('lqrEnabledSwitch').checked = data.lqrEnabled;
         
-        if (data.pwm_max_value) document.getElementById('controllerTypeVal').textContent = `LQR (PWM ${data.pwm_max_value})`;
-
         const params = {
-            expoJoystick: data.expo_joystick / 100.0,
+            expoJoystick: data.expo_joystick,
             maxSpeedJoystick: data.max_speed_joystick,
-            joystickOutputScale: data.joystick_output_scale / 100.0,
+            joystickOutputScale: data.joystick_output_scale,
+            joystickDeadzone: data.joystick_deadzone,
+            turnFactor: data.turn_factor,
             
             minPwmLeftFwd: data.min_pwm_left_fwd, 
             minPwmLeftBwd: data.min_pwm_left_bwd, 
@@ -586,9 +501,9 @@
             q4Velocity: data.q4_velocity,
             rControl: data.r_control,
             
-            mBody: data.m_body, mWheel: data.m_wheel, L: data.L, RWheel: data.R_wheel, trackWidthPhys: data.track_width_phys,
-            IBody: data.I_body, IWheel: data.I_wheel, bMotor: data.b_motor, bWheel: data.b_wheel, 
-            gearRatio: data.gear_ratio, motorConst: data.motor_const,
+            mBody: data.m_body, 
+            mWheel: data.m_wheel, 
+            L: data.L,
 
             wheelDiameterCm: data.wheel_diameter_cm,
             trackWidthCm: data.track_width_cm,
@@ -597,7 +512,13 @@
         
         for (const [key, value] of Object.entries(params)) {
             const input = document.getElementById(`${key}Input`);
-            if (input && value !== undefined) input.value = value;
+            if (input && value !== undefined) {
+                if (key.includes('expo') || key.includes('turnFactor') || key.includes('joystickDeadzone') || key.includes('joystickOutputScale')) {
+                    input.value = value / 100.0;
+                } else {
+                    input.value = value;
+                }
+            }
         }
     }
 
@@ -608,7 +529,6 @@
             document.getElementById('angleVal').textContent = displayPitch.toFixed(1) + ' \u00B0'; 
             document.getElementById('angleIndicator').style.transform = 'rotate(' + displayPitch + 'deg)'; 
         }
-        if (data.roll !== undefined) document.getElementById('rollVal').textContent = data.roll.toFixed(1) + ' \u00B0';
         if (data.speed !== undefined) document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0);
         if (data.target_angle !== undefined) { 
             finalTargetAngleForDisplay = data.target_angle; 
@@ -640,6 +560,11 @@
             systemText.textContent = 'OK'; 
             emergencyBanner.style.display = 'none'; 
         }
+    }
+
+    function updateMemoryInfo(data) {
+        if (data.free_heap !== undefined) document.getElementById('freeHeapVal').textContent = `${data.free_heap} B`;
+        if (data.ctrl_stack_hwm !== undefined) document.getElementById('stackHwmVal').textContent = `${data.ctrl_stack_hwm} B`;
     }
 
     function addLogMessage(message, level = 'info') { 
@@ -762,37 +687,6 @@
         document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' }));
         document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
 
-        const setupNumericInput = (id, msgType, paramName, isPercentage = false) => {
-            const input = document.getElementById(id + 'Input');
-            const minusBtn = document.getElementById(id + 'Minus');
-            const plusBtn = document.getElementById(id + 'Plus');
-            if (!input || !minusBtn || !plusBtn) return;
-            const step = parseFloat(input.step) || 1;
-            const isFloat = input.step.includes('.');
-
-            const updateValue = (amount) => {
-                let current = parseFloat(input.value);
-                let newValue = current + amount;
-                if (isFloat) {
-                    const dp = (step.toString().split('.')[1] || '').length;
-                    newValue = parseFloat(newValue.toFixed(dp));
-                }
-                input.value = Math.max(parseFloat(input.min), Math.min(parseFloat(input.max), newValue));
-                input.dispatchEvent(new Event('change'));
-            };
-
-            minusBtn.addEventListener('click', () => updateValue(-step));
-            plusBtn.addEventListener('click', () => updateValue(step));
-
-            input.addEventListener('change', () => {
-                let msg = { type: msgType, params: {} };
-                let value = parseFloat(input.value);
-                if (isPercentage) value /= 100.0;
-                msg.params[paramName] = value;
-                sendBleMessage(msg);
-            });
-        };
-        
         const setupGroupedInput = (ids, msgType) => {
             ids.forEach(id => {
                 const input = document.getElementById(id + 'Input'), minusBtn = document.getElementById(id + 'Minus'), plusBtn = document.getElementById(id + 'Plus');
@@ -804,7 +698,6 @@
                         const el = document.getElementById(i + 'Input');
                         if (el) {
                             let key = i.replace(/([A-Z])/g, "_$1").toLowerCase();
-                            key = key.replace('phys', ''); 
                             msg.params[key] = parseFloat(el.value);
                         }
                     });
@@ -828,9 +721,9 @@
             });
         };
         
-        setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick'], 'set_joystick_tuning');
+        setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickDeadzone', 'turnFactor'], 'set_joystick_tuning');
         setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl'], 'lqr_update');
-        setupGroupedInput(['mBody', 'mWheel', 'L', 'RWheel', 'trackWidthPhys', 'IBody', 'IWheel', 'bMotor', 'bWheel', 'gearRatio', 'motorConst'], 'physics_update');
+        setupGroupedInput(['mBody', 'mWheel', 'L'], 'physics_update');
         setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr'], 'calibration_update');
         setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm');
         
@@ -960,47 +853,6 @@
     function startJoystickDrag(e){ isDragging = true; handleJoystickMove(e); }
     function endJoystickDrag(e){ if (!isDragging) return; isDragging = false; drawJoystick(0, 0); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
     
-    function setupGamepadControls() { 
-        const statusEl = document.getElementById('gamepadStatus'); 
-        window.addEventListener("gamepadconnected", (event) => { 
-            gamepadIndex = event.gamepad.index; 
-            statusEl.textContent = 'Polaczony'; statusEl.style.color = '#a2f279'; 
-            addLogMessage(`Kontroler polaczony: ${event.gamepad.id}`, 'info');
-            lastGamepadState.buttons = Array(event.gamepad.buttons.length).fill(false);
-            pollGamepad(); 
-        }); 
-        window.addEventListener("gamepaddisconnected", (event) => { 
-            statusEl.textContent = 'Brak'; statusEl.style.color = '#f7b731'; 
-            addLogMessage('Kontroler odlaczony.', 'warn'); 
-            cancelAnimationFrame(gamepadPollInterval); 
-        }); 
-    }
-    
-    function pollGamepad() { 
-        const gamepads = navigator.getGamepads(); 
-        if (!gamepads[gamepadIndex]) return; 
-        const gp = gamepads[gamepadIndex]; 
-        const deadzone = 0.15; 
-        let joyX = gp.axes[0] || 0;
-        let joyY = gp.axes[1] || 0;
-        if (Math.sqrt(joyX*joyX + joyY*joyY) < deadzone) { joyX = 0; joyY = 0; } 
-
-        if (joyX !== lastGamepadState.x || joyY !== lastGamepadState.y) { 
-            sendBleMessage({ type: 'joystick', x: joyX, y: -joyY }); 
-            lastGamepadState.x = joyX; 
-            lastGamepadState.y = joyY; 
-        }
-
-        gp.buttons.forEach((button, i) => {
-            if (button.pressed && !lastGamepadState.buttons[i]) {
-                // handleGamepadButtonPress(i);
-            }
-            lastGamepadState.buttons[i] = button.pressed;
-        });
-
-        requestAnimationFrame(pollGamepad); 
-    }
-
     function setupStateSync() { 
         document.addEventListener('visibilitychange', () => { 
             if (document.visibilityState === 'visible' && bleDevice && bleDevice.gatt.connected) { 
@@ -1011,14 +863,12 @@
 
     function setupDiagnosticControls() { 
         const startBtn = document.getElementById('startDiagnosticBtn'), stopBtn = document.getElementById('stopDiagnosticBtn'); 
-        startBtn.addEventListener('click', () => { sendBleMessage({ type: 'start_diagnostic' }); startBtn.style.display = 'none'; stopBtn.style.display = 'block'; }); 
-        stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'stop_diagnostic' }); stopBtn.style.display = 'none'; startBtn.style.display = 'block'; }); 
+        if(startBtn && stopBtn) {
+            startBtn.addEventListener('click', () => { sendBleMessage({ type: 'start_diagnostic' }); startBtn.style.display = 'none'; stopBtn.style.display = 'block'; }); 
+            stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'stop_diagnostic' }); stopBtn.style.display = 'none'; startBtn.style.display = 'block'; }); 
+        }
     }
     
-    function setup3DVisualization() {
-        // ... (kod 3D jest poprawny i pozostaje bez zmian)
-    }
-
     document.addEventListener('DOMContentLoaded', () => {
         setupControls(); 
         resizeJoystick(); 
@@ -1026,8 +876,6 @@
         loadProfiles(); 
         setupStateSync(); 
         setupDiagnosticControls(); 
-        setupGamepadControls(); 
-        setup3DVisualization();
 
         joystickCanvas.addEventListener('mousedown', startJoystickDrag);
         joystickCanvas.addEventListener('touchstart', startJoystickDrag, { passive: false });
