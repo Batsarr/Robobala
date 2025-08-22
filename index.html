@@ -107,8 +107,8 @@
             <div class="control-row"><span class="control-label">LQR Aktywny</span><label class="switch"><input type="checkbox" id="lqrEnabledSwitch" checked><span class="slider round"></span></label></div>
             
             <fieldset style="padding: 10px 10px 5px 10px;"><legend>Strojenie Joysticka</legend>
-                <div class="setting-block"><div class="setting-container"><label for="joystickOutputScaleInput">Skala Wyjscia (%)</label><div class="numeric-input-wrapper"><button id="joystickOutputScaleMinus">-</button><input type="number" id="joystickOutputScaleInput" min="10" max="100" step="5" value="100"><button id="joystickOutputScalePlus">+</button></div></div></div>
-                <div class="setting-block"><div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)</label><div class="numeric-input-wrapper"><button id="expoJoystickMinus">-</button><input type="number" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button id="expoJoystickPlus">+</button></div></div></div>
+                <div class="setting-block"><div class="setting-container"><label for="joystickOutputScaleInput">Skala Wyjscia (%)</label><div class="numeric-input-wrapper"><button id="joystickOutputScaleMinus">-</button><input type="number" id="joystickOutputScaleInput" min="0.1" max="1.0" step="0.05" value="1.0"><button id="joystickOutputScalePlus">+</button></div></div></div>
+                <div class="setting-block"><div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)</label><div class="numeric-input-wrapper"><button id="expoJoystickMinus">-</button><input type="number" id="expoJoystickInput" min="0" max="0.9" step="0.01" value="0"><button id="expoJoystickPlus">+</button></div></div></div>
                 <div class="setting-block"><div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button id="maxSpeedJoystickMinus">-</button><input type="number" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button id="maxSpeedJoystickPlus">+</button></div></div></div>
             </fieldset>
             
@@ -345,7 +345,6 @@
     const INTERACTION_TIMEOUT = 500;
     let finalTargetAngleForDisplay = 0.0;
     let bleDevice, rxCharacteristic, txCharacteristic;
-    let pendingConfigSegments = {};
     let configSyncTimeout = null;
     let logBuffer = [];
     const MAX_LOG_LINES = 200;
@@ -423,58 +422,37 @@
         document.getElementById('syncConfigBtn').disabled = true;
         rxCharacteristic = null;
         txCharacteristic = null;
-        pendingConfigSegments = {};
     }
 
     function handleBleNotification(event) {
         const value = event.target.value;
         const decoder = new TextDecoder('utf-8');
         const jsonString = decoder.decode(value);
-        handleIncomingData({ data: jsonString });
-    }
-
-    function handleIncomingData(event) {
+        
         try {
-            const data = JSON.parse(event.data);
+            const data = JSON.parse(jsonString);
             switch (data.type) {
-                case 'telemetry': updateUI(data); updateChart(data); break;
-                case 'initial_state': handleConfigSegment(data); break;
-                case 'system_config': handleConfigSegment(data); break;
-                case 'physics_config': handleConfigSegment(data); break;
-                case 'lqr_config': handleConfigSegment(data); break;
-                case 'motor_config': handleConfigSegment(data); break;
-                case 'log': addLogMessage(`[ROBOT] ${data.message}`, data.level); break;
-                case 'memory_info': updateMemoryInfo(data); break;
+                case 'telemetry':
+                    updateUI(data);
+                    updateChart(data);
+                    break;
+                case 'full_config':
+                    if (configSyncTimeout) {
+                        clearTimeout(configSyncTimeout);
+                        configSyncTimeout = null;
+                    }
+                    applyInitialState(data);
+                    addLogMessage("Odebrano pelna konfiguracje. Synchronizacja zakonczona.", "info");
+                    break;
+                case 'log':
+                    addLogMessage(`[ROBOT] ${data.message}`, data.level);
+                    break;
+                case 'memory_info':
+                    updateMemoryInfo(data);
+                    break;
             }
         } catch (e) {
-            addLogMessage(`Blad parsowania JSON: ${e}. Dane: ${event.data}`, 'error');
-        }
-    }
-
-    function handleConfigSegment(data) {
-        const segment = data.segment;
-        if (!segment) {
-            applyInitialState(data);
-            return;
-        }
-
-        pendingConfigSegments[segment] = data;
-
-        const expectedSegments = ['basic', 'system', 'physics', 'lqr', 'motor'];
-        const hasAllSegments = expectedSegments.every(seg => pendingConfigSegments[seg]);
-
-        if (hasAllSegments) {
-            if (configSyncTimeout) {
-                clearTimeout(configSyncTimeout);
-                configSyncTimeout = null;
-            }
-            let combinedConfig = {};
-            expectedSegments.forEach(seg => {
-                Object.assign(combinedConfig, pendingConfigSegments[seg]);
-            });
-            applyInitialState(combinedConfig);
-            pendingConfigSegments = {};
-            addLogMessage('Odebrano pelna konfiguracje.', 'info');
+            addLogMessage(`Blad parsowania JSON: ${e}. Dane: ${jsonString}`, 'error');
         }
     }
 
@@ -496,22 +474,18 @@
             expoJoystick: data.expo_joystick,
             maxSpeedJoystick: data.max_speed_joystick,
             joystickOutputScale: data.joystick_output_scale,
-            
             minPwmLeftFwd: data.min_pwm_left_fwd, 
             minPwmLeftBwd: data.min_pwm_left_bwd, 
             minPwmRightFwd: data.min_pwm_right_fwd, 
             minPwmRightBwd: data.min_pwm_right_bwd, 
-            
             q1Angle: data.q1_angle,
             q2AngularVel: data.q2_angular_vel,
             q3Position: data.q3_position,
             q4Velocity: data.q4_velocity,
             rControl: data.r_control,
-            
             mBody: data.m_body, 
             mWheel: data.m_wheel, 
             L: data.L,
-
             wheelDiameterCm: data.wheel_diameter_cm,
             trackWidthCm: data.track_width_cm,
             encoderPpr: data.encoder_ppr,
@@ -673,22 +647,20 @@
         document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
         document.getElementById('syncConfigBtn').addEventListener('click', () => {
             addLogMessage('Zadanie stanu poczatkowego...', 'info');
-            pendingConfigSegments = {}; // Reset before new sync
             sendBleMessage({ type: 'request_state' });
 
             if (configSyncTimeout) clearTimeout(configSyncTimeout);
             
             configSyncTimeout = setTimeout(() => {
-                addLogMessage('Blad: Timeout synchronizacji. Nie otrzymano wszystkich danych od robota.', 'error');
-                pendingConfigSegments = {};
+                addLogMessage('Blad: Timeout synchronizacji. Nie otrzymano danych od robota.', 'error');
                 configSyncTimeout = null;
             }, 8000);
         });
 
         document.getElementById('balanceSwitch').addEventListener('change', e => { lastUserInteraction['balanceSwitch'] = Date.now(); sendBleMessage({ type: 'balance_toggle', enabled: e.target.checked }); });
         document.getElementById('holdPositionSwitch').addEventListener('change', e => { lastUserInteraction['holdPositionSwitch'] = Date.now(); sendBleMessage({ type: 'hold_position_toggle', enabled: e.target.checked }); });
-        document.getElementById('speedModeSwitch').addEventListener('change', e => sendBleMessage({ type: 'speed_mode_toggle', enabled: e.target.checked }));
-        document.getElementById('lqrEnabledSwitch').addEventListener('change', e => sendBleMessage({ type: 'lqr_enabled_toggle', enabled: e.target.checked }));
+        document.getElementById('speedModeSwitch').addEventListener('change', e => sendBleMessage({ type: 'speed_mode_toggle', enabled: e.target.checked }); });
+        document.getElementById('lqrEnabledSwitch').addEventListener('change', e => sendBleMessage({ type: 'lqr_enabled_toggle', enabled: e.target.checked }); });
 
         document.getElementById('resetZeroBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_zero' }));
         document.getElementById('trimPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 1 }));
