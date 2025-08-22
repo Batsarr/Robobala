@@ -423,7 +423,7 @@
         rxCharacteristic = null;
         txCharacteristic = null;
     }
-    
+
     function handleBleNotification(event) {
         const value = event.target.value;
         const decoder = new TextDecoder('utf-8');
@@ -445,7 +445,6 @@
                         configSyncTimeout = null;
                     }
                     applyInitialState(data);
-                    addLogMessage("Odebrano pelna konfiguracje. Synchronizacja zakonczona.", "info");
                     break;
                 case 'log':
                     addLogMessage(`[ROBOT] ${data.message}`, data.level);
@@ -458,7 +457,7 @@
             addLogMessage(`Blad parsowania JSON: ${e}. Dane: ${event.data}`, 'error');
         }
     }
-
+    
     async function sendBleMessage(message) {
         if (!rxCharacteristic) { console.warn("Proba wyslania danych bez polaczenia BLE."); return; }
         try {
@@ -498,8 +497,9 @@
             const inputId = `${key}Input`;
             const input = document.getElementById(inputId);
             if (input && value !== undefined) {
-                 // Skalowanie wartosci z float (0-1) na procenty (0-100) dla pol
-                 if (key === 'expoJoystick' || key === 'joystickOutputScale') {
+                 if (key === 'expoJoystick') {
+                    input.value = value * 100;
+                 } else if (key === 'joystickOutputScale') {
                     input.value = value * 100;
                  } else {
                     input.value = value;
@@ -531,9 +531,8 @@
         ['balanceSwitch', 'holdPositionSwitch'].forEach(id => { 
             const el = document.getElementById(id); 
             if (!lastUserInteraction[id] || (Date.now() - lastUserInteraction[id] > INTERACTION_TIMEOUT)) {
-                const stateKey = id.replace('Switch', 'Enabled');
-                if (data[stateKey] !== undefined) {
-                    el.checked = data[stateKey];
+                if (data[id.replace('Switch', 'Enabled')] !== undefined) {
+                    el.checked = data[id.replace('Switch', 'Enabled')];
                 }
             }
         });
@@ -556,6 +555,7 @@
     }
 
     function addLogMessage(message, level = 'info') { 
+        const logHistory = document.getElementById('log-history');
         const entry = { message, level, timestamp: new Date().toLocaleTimeString() };
         logBuffer.unshift(entry);
         if (logBuffer.length > MAX_LOG_LINES) logBuffer.pop();
@@ -667,8 +667,8 @@
 
         document.getElementById('balanceSwitch').addEventListener('change', e => { lastUserInteraction['balanceSwitch'] = Date.now(); sendBleMessage({ type: 'balance_toggle', enabled: e.target.checked }); });
         document.getElementById('holdPositionSwitch').addEventListener('change', e => { lastUserInteraction['holdPositionSwitch'] = Date.now(); sendBleMessage({ type: 'hold_position_toggle', enabled: e.target.checked }); });
-        document.getElementById('speedModeSwitch').addEventListener('change', e => sendBleMessage({ type: 'speed_mode_toggle', enabled: e.target.checked }); });
-        document.getElementById('lqrEnabledSwitch').addEventListener('change', e => sendBleMessage({ type: 'lqr_enabled_toggle', enabled: e.target.checked }); });
+        document.getElementById('speedModeSwitch').addEventListener('change', e => sendBleMessage({ type: 'speed_mode_toggle', enabled: e.target.checked }));
+        document.getElementById('lqrEnabledSwitch').addEventListener('change', e => sendBleMessage({ type: 'lqr_enabled_toggle', enabled: e.target.checked }));
 
         document.getElementById('resetZeroBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_zero' }));
         document.getElementById('trimPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 1 }));
@@ -693,7 +693,6 @@
                         if (el) {
                             let key = i.replace(/([A-Z])/g, "_$1").toLowerCase();
                             let value = parseFloat(el.value);
-                            // Skalowanie z % na float przed wyslaniem
                             if (key === 'expo_joystick' || key === 'joystick_output_scale') {
                                 value = value / 100.0;
                             }
@@ -724,6 +723,7 @@
         setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl'], 'lqr_update');
         setupGroupedInput(['mBody', 'mWheel', 'L'], 'physics_update');
         setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr'], 'calibration_update');
+        setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm');
         
         setupManualTuningControls();
         setupDpadControls();
@@ -851,12 +851,29 @@
     function startJoystickDrag(e){ isDragging = true; handleJoystickMove(e); }
     function endJoystickDrag(e){ if (!isDragging) return; isDragging = false; drawJoystick(0, 0); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
     
+    function setupStateSync() { 
+        document.addEventListener('visibilitychange', () => { 
+            if (document.visibilityState === 'visible' && bleDevice && bleDevice.gatt.connected) { 
+                // Nie wysylaj automatycznie stanu
+            } 
+        }); 
+    }
+
+    function setupDiagnosticControls() { 
+        const startBtn = document.getElementById('startDiagnosticBtn'), stopBtn = document.getElementById('stopDiagnosticBtn'); 
+        if(startBtn && stopBtn) {
+            startBtn.addEventListener('click', () => { sendBleMessage({ type: 'start_diagnostic' }); startBtn.style.display = 'none'; stopBtn.style.display = 'block'; }); 
+            stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'stop_diagnostic' }); stopBtn.style.display = 'none'; startBtn.style.display = 'block'; }); 
+        }
+    }
     
     document.addEventListener('DOMContentLoaded', () => {
         setupControls(); 
         resizeJoystick(); 
         setupChartControls(); 
         loadProfiles(); 
+        setupStateSync(); 
+        setupDiagnosticControls(); 
 
         joystickCanvas.addEventListener('mousedown', startJoystickDrag);
         joystickCanvas.addEventListener('touchstart', startJoystickDrag, { passive: false });
