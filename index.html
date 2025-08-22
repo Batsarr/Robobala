@@ -31,7 +31,7 @@
         #joystickWrapper { position: relative; width: 180px; height: 180px; border-radius: 50%; background-color: #4a4f58; border: 3px solid #61dafb; margin: 15px auto; }
         #joystickCanvas { width: 100%; height: 100%; display: block; }
         #chart-wrapper { position: relative; height: 320px; border-radius: 8px; overflow: hidden; background-color: #20232a; }
-        #log-container { text-align: left; height: 350px; overflow-y: auto; background-color: #20232a; padding: 10px; border-radius: 8px; margin-top: 15px; }
+        #log-history { text-align: left; height: 350px; overflow-y: auto; background-color: #20232a; padding: 10px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; }
         .status-indicator { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
         .status-ok { background-color: #a2f279; }
         .status-warn { background-color: #f7b731; }
@@ -138,7 +138,7 @@
                 <strong>Czas Petli:</strong> <span id="loopTimeVal">0 &micro;s</span>
                 <hr style="grid-column: 1 / -1; border-color: #4a4f58; margin: 5px 0;">
                 <strong>Wolna Sterta (RAM):</strong> <span id="freeHeapVal" style="font-weight:bold; color: #f7b731;">0 B</span>
-                <strong>Stos Pętli (min.):</strong> <span id="stackHwmVal" style="font-weight:bold; color: #f7b731;">0 B</span>
+                <strong>Stos Petli (min.):</strong> <span id="stackHwmVal" style="font-weight:bold; color: #f7b731;">0 B</span>
             </div>
             <button id="syncConfigBtn" disabled>Synchronizuj Konfiguracje</button>
             <div class="info-grid">
@@ -346,6 +346,7 @@
     let finalTargetAngleForDisplay = 0.0;
     let bleDevice, rxCharacteristic, txCharacteristic;
     let pendingConfigSegments = {};
+    let configSyncTimeout = null;
     let logBuffer = [];
     const MAX_LOG_LINES = 200;
 
@@ -409,6 +410,10 @@
 
     function onDisconnected() {
         addLogMessage('Rozlaczono z robotem.', 'warn');
+        if (configSyncTimeout) {
+            clearTimeout(configSyncTimeout);
+            configSyncTimeout = null;
+        }
         document.getElementById('connectionStatus').className = 'status-indicator status-disconnected';
         document.getElementById('connectionText').textContent = 'Rozlaczony';
         ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'lqrEnabledSwitch'].forEach(id => document.getElementById(id).checked = false);
@@ -459,13 +464,17 @@
         const hasAllSegments = expectedSegments.every(seg => pendingConfigSegments[seg]);
 
         if (hasAllSegments) {
+            if (configSyncTimeout) {
+                clearTimeout(configSyncTimeout);
+                configSyncTimeout = null;
+            }
             let combinedConfig = {};
             expectedSegments.forEach(seg => {
                 Object.assign(combinedConfig, pendingConfigSegments[seg]);
             });
             applyInitialState(combinedConfig);
             pendingConfigSegments = {};
-            addLogMessage('Odebrano pelna konfiguracje (segmentowana)', 'info');
+            addLogMessage('Odebrano pelna konfiguracje.', 'info');
         }
     }
 
@@ -487,8 +496,6 @@
             expoJoystick: data.expo_joystick,
             maxSpeedJoystick: data.max_speed_joystick,
             joystickOutputScale: data.joystick_output_scale,
-            joystickDeadzone: data.joystick_deadzone,
-            turnFactor: data.turn_factor,
             
             minPwmLeftFwd: data.min_pwm_left_fwd, 
             minPwmLeftBwd: data.min_pwm_left_bwd, 
@@ -511,15 +518,13 @@
         };
         
         for (const [key, value] of Object.entries(params)) {
-            const input = document.getElementById(`${key}Input`);
+            const inputId = `${key}Input`;
+            const input = document.getElementById(inputId);
             if (input && value !== undefined) {
-                if (key.includes('expo') || key.includes('turnFactor') || key.includes('joystickDeadzone') || key.includes('joystickOutputScale')) {
-                    input.value = value / 100.0;
-                } else {
-                    input.value = value;
-                }
+                 input.value = value;
             }
         }
+        addLogMessage("Parametry robota zsynchronizowane z panelem.", "info");
     }
 
     function updateUI(data) {
@@ -544,8 +549,9 @@
         ['balanceSwitch', 'holdPositionSwitch'].forEach(id => { 
             const el = document.getElementById(id); 
             if (!lastUserInteraction[id] || (Date.now() - lastUserInteraction[id] > INTERACTION_TIMEOUT)) {
-                if (data[id.replace('Switch', 'Enabled')] !== undefined) {
-                    el.checked = data[id.replace('Switch', 'Enabled')];
+                const stateKey = id.replace('Switch', 'Enabled');
+                if (data[stateKey] !== undefined) {
+                    el.checked = data[stateKey];
                 }
             }
         });
@@ -568,7 +574,6 @@
     }
 
     function addLogMessage(message, level = 'info') { 
-        const logHistory = document.getElementById('log-history');
         const entry = { message, level, timestamp: new Date().toLocaleTimeString() };
         logBuffer.unshift(entry);
         if (logBuffer.length > MAX_LOG_LINES) logBuffer.pop();
@@ -668,7 +673,16 @@
         document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
         document.getElementById('syncConfigBtn').addEventListener('click', () => {
             addLogMessage('Zadanie stanu poczatkowego...', 'info');
+            pendingConfigSegments = {}; // Reset before new sync
             sendBleMessage({ type: 'request_state' });
+
+            if (configSyncTimeout) clearTimeout(configSyncTimeout);
+            
+            configSyncTimeout = setTimeout(() => {
+                addLogMessage('Blad: Timeout synchronizacji. Nie otrzymano wszystkich danych od robota.', 'error');
+                pendingConfigSegments = {};
+                configSyncTimeout = null;
+            }, 5000);
         });
 
         document.getElementById('balanceSwitch').addEventListener('change', e => { lastUserInteraction['balanceSwitch'] = Date.now(); sendBleMessage({ type: 'balance_toggle', enabled: e.target.checked }); });
@@ -721,11 +735,10 @@
             });
         };
         
-        setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickDeadzone', 'turnFactor'], 'set_joystick_tuning');
+        setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick'], 'set_joystick_tuning');
         setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl'], 'lqr_update');
         setupGroupedInput(['mBody', 'mWheel', 'L'], 'physics_update');
         setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr'], 'calibration_update');
-        setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm');
         
         setupManualTuningControls();
         setupDpadControls();
@@ -853,29 +866,12 @@
     function startJoystickDrag(e){ isDragging = true; handleJoystickMove(e); }
     function endJoystickDrag(e){ if (!isDragging) return; isDragging = false; drawJoystick(0, 0); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
     
-    function setupStateSync() { 
-        document.addEventListener('visibilitychange', () => { 
-            if (document.visibilityState === 'visible' && bleDevice && bleDevice.gatt.connected) { 
-                // Nie wysylaj automatycznie stanu
-            } 
-        }); 
-    }
-
-    function setupDiagnosticControls() { 
-        const startBtn = document.getElementById('startDiagnosticBtn'), stopBtn = document.getElementById('stopDiagnosticBtn'); 
-        if(startBtn && stopBtn) {
-            startBtn.addEventListener('click', () => { sendBleMessage({ type: 'start_diagnostic' }); startBtn.style.display = 'none'; stopBtn.style.display = 'block'; }); 
-            stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'stop_diagnostic' }); stopBtn.style.display = 'none'; startBtn.style.display = 'block'; }); 
-        }
-    }
     
     document.addEventListener('DOMContentLoaded', () => {
         setupControls(); 
         resizeJoystick(); 
         setupChartControls(); 
         loadProfiles(); 
-        setupStateSync(); 
-        setupDiagnosticControls(); 
 
         joystickCanvas.addEventListener('mousedown', startJoystickDrag);
         joystickCanvas.addEventListener('touchstart', startJoystickDrag, { passive: false });
