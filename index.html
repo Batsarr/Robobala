@@ -682,7 +682,7 @@
                 addLogMessage('Blad: Timeout synchronizacji. Nie otrzymano wszystkich danych od robota.', 'error');
                 pendingConfigSegments = {};
                 configSyncTimeout = null;
-            }, 5000);
+            }, 8000);
         });
 
         document.getElementById('balanceSwitch').addEventListener('change', e => { lastUserInteraction['balanceSwitch'] = Date.now(); sendBleMessage({ type: 'balance_toggle', enabled: e.target.checked }); });
