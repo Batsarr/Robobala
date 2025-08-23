@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Wersja 25.5-FINAL</title>
+    <title>Robot LQR - Wersja 25.6-FINAL</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -44,9 +44,8 @@
         .profile-controls { display: flex; gap: 10px; margin-top: 10px; }
         .chart-controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 10px; font-size: 0.9em; }
         .chart-controls label { color: #fff; }
-        .setting-block { margin-bottom: 0; }
-        .setting-container { display: flex; align-items: center; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
-        .setting-container label { font-size: 1em; font-weight: bold; color: #a2f279; text-align: left; flex-grow: 1; position: relative; }
+        .setting-container { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin: 8px 0; }
+        .setting-container label { font-size: 1em; font-weight: bold; color: #a2f279; text-align: left; }
         .numeric-input-wrapper { display: flex; align-items: center; flex-shrink: 0; }
         .numeric-input-wrapper button { background-color: #4a4f58; color: #61dafb; padding: 4px 8px; font-size: 1em; line-height: 1; min-width: 30px; }
         .numeric-input-wrapper input[type=number] { width: 90px; text-align: center; font-size: 1em; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 5px; margin: 0 4px; padding: 4px; -moz-appearance: textfield; }
@@ -70,7 +69,7 @@
         .dpad-input-group { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin: 10px 0; }
         .dpad-input-group label { text-align: right; font-weight: bold; color: #a2f279; }
         .dpad-input-group input { width: 100%; box-sizing: border-box; }
-        .accordion-header { background-color: #4a4f58; color: #61dafb; cursor: pointer; padding: 12px 15px; border: none; text-align: left; outline: none; font-size: 1.1em; font-weight: bold; width: 100%; border-radius: 8px; margin-top: 10px; transition: background-color 0.3s; position: relative; }
+        .accordion-header { background-color: #4a4f58; color: #61dafb; cursor: pointer; padding: 12px 15px; border: none; text-align: left; outline: none; font-size: 1.1em; font-weight: bold; width: 100%; border-radius: 8px; margin-top: 5px; transition: background-color 0.3s; position: relative; }
         .accordion-header:hover { background-color: #5a6068; }
         .accordion-header.active { background-color: #61dafb; color: #282c34; border-bottom-left-radius: 0; border-bottom-right-radius: 0;}
         .accordion-header::after { content: '+'; position: absolute; right: 15px; font-size: 1.4em; transition: transform 0.3s; }
@@ -86,10 +85,6 @@
         .parameter-group { background-color: #20232a; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
         .parameter-group h5 { color: #61dafb; margin: 0 0 8px 0; font-size: 1.1em; }
         #syncConfigBtn { background-color: #f7b731; width: 100%; margin-top: 10px; }
-        
-        .help-icon { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: #61dafb; color: #282c34; font-size: 12px; font-weight: bold; text-align: center; line-height: 16px; margin-left: 8px; cursor: pointer; user-select: none; }
-        .help-text { background-color: #20232a; color: #fff; border-radius: 6px; padding: 10px; border: 1px solid #61dafb; margin-top: 8px; text-align: left; font-size: 0.9em; line-height: 1.4; width: 100%; box-sizing: border-box; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease-out; padding-top: 0; padding-bottom: 0; }
-        .help-text.visible { max-height: 200px; padding-top: 10px; padding-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -106,9 +101,9 @@
             <div class="control-row"><span class="control-label">LQR Aktywny</span><label class="switch"><input type="checkbox" id="lqrEnabledSwitch" checked><span class="slider round"></span></label></div>
             
             <fieldset style="padding: 10px 10px 5px 10px;"><legend>Strojenie Joysticka</legend>
-                <div class="setting-block"><div class="setting-container"><label for="joystickOutputScaleInput">Skala Wyjscia (%)</label><div class="numeric-input-wrapper"><button id="joystickOutputScaleMinus">-</button><input type="number" id="joystickOutputScaleInput" min="10" max="100" step="5" value="100"><button id="joystickOutputScalePlus">+</button></div></div></div>
-                <div class="setting-block"><div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)</label><div class="numeric-input-wrapper"><button id="expoJoystickMinus">-</button><input type="number" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button id="expoJoystickPlus">+</button></div></div></div>
-                <div class="setting-block"><div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button id="maxSpeedJoystickMinus">-</button><input type="number" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button id="maxSpeedJoystickPlus">+</button></div></div></div>
+                <div class="setting-container"><label for="joystickOutputScaleInput">Skala Wyjscia (%)</label><div class="numeric-input-wrapper"><button id="joystickOutputScaleMinus">-</button><input type="number" id="joystickOutputScaleInput" min="10" max="100" step="5" value="100"><button id="joystickOutputScalePlus">+</button></div></div>
+                <div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)</label><div class="numeric-input-wrapper"><button id="expoJoystickMinus">-</button><input type="number" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button id="expoJoystickPlus">+</button></div></div>
+                <div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button id="maxSpeedJoystickMinus">-</button><input type="number" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button id="maxSpeedJoystickPlus">+</button></div></div>
             </fieldset>
             
             <hr style="border-color: #4a4f58; margin: 15px 0;">
@@ -192,58 +187,29 @@
                     <select id="lqrPresetSelect" style="width: 100%; padding: 5px;"></select>
                 </div>
                  <div class="profile-controls">
-                    <button id="applyLqrPresetBtn" style="width: 100%;">Zastosuj Preset do Panelu</button>
+                    <button id="applyLqrPresetBtn" style="width: 100%;">Zastosuj Preset</button>
                 </div>
             </fieldset>
             
             <div id="allSettings">
-                <button class="accordion-header active" onclick="toggleAccordion(this)">1. Wagi LQR (Macierz Q i R)</button>
-                <div class="accordion-content active">
+                <button class="accordion-header" onclick="toggleAccordion(this)">1. Wagi LQR (Macierz Q i R)</button>
+                <div class="accordion-content">
                     <div class="parameter-group">
                         <h5>Wagi Stanow (Macierz Q)</h5>
-                        <div class="setting-container">
-                            <label for="q1AngleInput">Q1 - Kat (theta)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="q1AngleInput" min="0" max="1000" step="5" value="100"><button class="lqr-plus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kara za odchylenie od pionu. Wieksza wartosc = robot mocniej 'walczy' o utrzymanie pionu, jest sztywniejszy.</div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="q2AngularVelInput">Q2 - Predkosc katowa<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="q2AngularVelInput" min="0" max="100" step="1" value="10"><button class="lqr-plus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kara za szybkie zmiany kata (oscylacje). Wieksza wartosc = lepsze tlumienie drgan, bardziej plynna reakcja.</div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="q3PositionInput">Q3 - Pozycja (s)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="q3PositionInput" min="0" max="100" step="0.1" value="1"><button class="lqr-plus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kara za dryf pozycyjny. Wieksza wartosc = robot aktywniej wraca do pozycji wyjsciowej po zatrzymaniu.</div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="q4VelocityInput">Q4 - Predkosc (s_dot)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="q4VelocityInput" min="0" max="100" step="0.5" value="5"><button class="lqr-plus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kara za szybkie ruchy liniowe. Wieksza wartosc = plynniejsze, mniej gwaltowne przyspieszanie i hamowanie.</div>
-                        </div>
+                        <div class="setting-container"><label for="q1AngleInput">Q1 - Kat (theta)</label><div class="numeric-input-wrapper"><button id="q1AngleMinus">-</button><input type="number" class="lqr-input" id="q1AngleInput" min="0" max="1000" step="5" value="100"><button id="q1AnglePlus">+</button></div></div>
+                        <div class="setting-container"><label for="q2AngularVelInput">Q2 - Predkosc katowa</label><div class="numeric-input-wrapper"><button id="q2AngularVelMinus">-</button><input type="number" class="lqr-input" id="q2AngularVelInput" min="0" max="100" step="1" value="10"><button id="q2AngularVelPlus">+</button></div></div>
+                        <div class="setting-container"><label for="q3PositionInput">Q3 - Pozycja (s)</label><div class="numeric-input-wrapper"><button id="q3PositionMinus">-</button><input type="number" class="lqr-input" id="q3PositionInput" min="0" max="100" step="0.1" value="1"><button id="q3PositionPlus">+</button></div></div>
+                        <div class="setting-container"><label for="q4VelocityInput">Q4 - Predkosc (s_dot)</label><div class="numeric-input-wrapper"><button id="q4VelocityMinus">-</button><input type="number" class="lqr-input" id="q4VelocityInput" min="0" max="100" step="0.5" value="5"><button id="q4VelocityPlus">+</button></div></div>
                     </div>
                     
                     <div class="parameter-group">
                         <h5>Waga Sterowania (Skalar R)</h5>
-                        <div class="setting-container">
-                            <label for="rControlInput">R - Waga sterowania<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="rControlInput" min="0.001" max="10" step="0.01" value="0.1"><button class="lqr-plus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kara za zuzycie energii (PWM silnikow). Wieksza wartosc = slabsze, bardziej oszczedne sterowanie. Mniejsza wartosc = mocniejsza reakcja.</div>
-                        </div>
+                        <div class="setting-container"><label for="rControlInput">R - Waga sterowania</label><div class="numeric-input-wrapper"><button id="rControlMinus">-</button><input type="number" class="lqr-input" id="rControlInput" min="0.001" max="10" step="0.01" value="0.1"><button id="rControlPlus">+</button></div></div>
                     </div>
-
-                    <button id="applyLqrWeightsBtn" style="width:100%; background-color:#a2f279; margin-top:10px;">Zastosuj Wagi i Przelicz</button>
 
                     <div class="parameter-group">
                         <h5>Wzmocnienie Glowne</h5>
-                        <div class="setting-container">
-                            <label for="lqrOutputScalarInput">Skala Wyjscia LQR<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="lqrOutputScalarMinus">-</button><input type="number" id="lqrOutputScalarInput" min="0.1" max="50.0" step="0.1" value="20.0"><button id="lqrOutputScalarPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Glowny mnoznik dla calego sygnalu sterujacego. Zwiekszaj, jesli robot jest 'slaby', zmniejszaj, jesli jest zbyt agresywny lub wpada w oscylacje. To Twoje glowne pokretlo do strojenia!</div>
-                        </div>
-                    </div>
-                    <div class="lqr-info">
-                        <strong>Teoria LQR:</strong> Kontroler minimalizuje wskaznik jakosci J = integral(x'Qx + u'Ru)dt. Wieksze wagi Q = wieksza kara za odchylenia stanu, wieksze R = wieksza kara za sterowanie (energie).
+                        <div class="setting-container"><label for="lqrOutputScalarInput">Skala Wyjscia LQR</label><div class="numeric-input-wrapper"><button id="lqrOutputScalarMinus">-</button><input type="number" id="lqrOutputScalarInput" min="0.1" max="50.0" step="0.1" value="20.0"><button id="lqrOutputScalarPlus">+</button></div></div>
                     </div>
                 </div>
                 
@@ -251,36 +217,15 @@
                 <div class="accordion-content">
                     <div class="physics-section">
                         <h4>Parametry Fizyczne Robota</h4>
-                        <div class="setting-container">
-                            <label for="mBodyInput">Masa korpusu (kg)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="mBodyMinus">-</button><input type="number" id="mBodyInput" min="0.1" max="5.0" step="0.01" value="0.150"><button id="mBodyPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Laczna masa robota bez kol i silnikow. Wplywa na moment bezwladnosci. Zmien, jesli dodasz lub usuniesz komponenty.</div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="mWheelInput">Masa kola (kg)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="mWheelMinus">-</button><input type="number" id="mWheelInput" min="0.01" max="1.0" step="0.005" value="0.055"><button id="mWheelPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Masa jednego kola razem z silnikiem. Wplywa na bezwladnosc calego ukladu.</div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="LInput">Wysokosc srodka masy (m)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="LMinus">-</button><input type="number" id="LInput" min="0.01" max="0.5" step="0.001" value="0.087"><button id="LPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kluczowy parametr! Odleglosc od osi kol do srodka masy korpusu. Wieksze L = wieksza niestabilnosc, ale potencjalnie wolniejsza reakcja.</div>
-                        </div>
+                        <div class="setting-container"><label for="mBodyInput">Masa korpusu (kg)</label><div class="numeric-input-wrapper"><button id="mBodyMinus">-</button><input type="number" id="mBodyInput" min="0.1" max="5.0" step="0.01" value="0.150"><button id="mBodyPlus">+</button></div></div>
+                        <div class="setting-container"><label for="mWheelInput">Masa kola (kg)</label><div class="numeric-input-wrapper"><button id="mWheelMinus">-</button><input type="number" id="mWheelInput" min="0.01" max="1.0" step="0.005" value="0.055"><button id="mWheelPlus">+</button></div></div>
+                        <div class="setting-container"><label for="LInput">Wysokosc srodka masy (m)</label><div class="numeric-input-wrapper"><button id="LMinus">-</button><input type="number" id="LInput" min="0.01" max="0.5" step="0.001" value="0.087"><button id="LPlus">+</button></div></div>
                     </div>
                     <div class="parameter-group">
                         <h5>Kalibracja Mechaniczna</h5>
-                        <div class="setting-container">
-                            <label for="wheelDiameterCmInput">Srednica kola (cm)</label>
-                            <div class="numeric-input-wrapper"><button id="wheelDiameterCmMinus">-</button><input type="number" id="wheelDiameterCmInput" min="3" max="30" step="0.1" value="8.2"><button id="wheelDiameterCmPlus">+</button></div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="trackWidthCmInput">Rozstaw kol (cm)</label>
-                            <div class="numeric-input-wrapper"><button id="trackWidthCmMinus">-</button><input type="number" id="trackWidthCmInput" min="5" max="50" step="0.1" value="13.0"><button id="trackWidthCmPlus">+</button></div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="encoderPprInput">Impulsy na obrot (PPR)</label>
-                            <div class="numeric-input-wrapper"><button id="encoderPprMinus">-</button><input type="number" id="encoderPprInput" min="100" max="5000" step="10" value="820"><button id="encoderPprPlus">+</button></div>
-                        </div>
+                        <div class="setting-container"><label for="wheelDiameterCmInput">Srednica kola (cm)</label><div class="numeric-input-wrapper"><button id="wheelDiameterCmMinus">-</button><input type="number" id="wheelDiameterCmInput" min="3" max="30" step="0.1" value="8.2"><button id="wheelDiameterCmPlus">+</button></div></div>
+                        <div class="setting-container"><label for="trackWidthCmInput">Rozstaw kol (cm)</label><div class="numeric-input-wrapper"><button id="trackWidthCmMinus">-</button><input type="number" id="trackWidthCmInput" min="5" max="50" step="0.1" value="13.0"><button id="trackWidthCmPlus">+</button></div></div>
+                        <div class="setting-container"><label for="encoderPprInput">Impulsy na obrot (PPR)</label><div class="numeric-input-wrapper"><button id="encoderPprMinus">-</button><input type="number" id="encoderPprInput" min="100" max="5000" step="10" value="820"><button id="encoderPprPlus">+</button></div></div>
                     </div>
                 </div>
 
@@ -305,8 +250,8 @@
             </div>
         </div>
         <div class="card">
-            <button class="accordion-header" onclick="toggleAccordion(this)">Logi Systemowe</button>
-            <div class="accordion-content">
+            <button class="accordion-header active" onclick="toggleAccordion(this)">Logi Systemowe</button>
+            <div class="accordion-content active">
                 <div id="log-history"></div>
                 <div style="margin-top: 10px; display: flex; gap: 10px; justify-content: center; align-items: center;">
                     <button onclick="clearLogs()" style="background-color: #f7b731;">Wyczysc Logi</button>
@@ -365,6 +310,13 @@
     function toggleAccordion(header) {
         const content = header.nextElementSibling;
         header.classList.toggle('active');
+        
+        // Re-kalkulacja wysokosci po animacji
+        setTimeout(() => {
+            if (content.style.maxHeight && content.style.maxHeight !== '0px') {
+                content.style.maxHeight = content.scrollHeight + "px";
+            }
+        }, 400);
 
         if (content.style.maxHeight && content.style.maxHeight !== '0px') {
             content.style.maxHeight = '0px';
@@ -676,6 +628,7 @@
             if (e.target.checked) {
                 document.getElementById('speedModeSwitch').checked = false;
                 document.getElementById('speedModeSwitch').disabled = true;
+                sendBleMessage({ type: 'speed_mode_toggle', enabled: false });
             } else {
                 document.getElementById('speedModeSwitch').disabled = false;
             }
@@ -685,6 +638,7 @@
             if (e.target.checked) {
                 document.getElementById('holdPositionSwitch').checked = false;
                 document.getElementById('holdPositionSwitch').disabled = true;
+                sendBleMessage({ type: 'hold_position_toggle', enabled: false });
             } else {
                 document.getElementById('holdPositionSwitch').disabled = false;
             }
@@ -702,25 +656,44 @@
         document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' }));
         document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
 
-        const setupGroupedInput = (ids, msgType) => {
+        let lqrUpdateTimeout;
+        const DEBOUNCE_DELAY = 300;
+
+        const setupGroupedInput = (ids, msgType, isLqrWeight = false) => {
             ids.forEach(id => {
                 const input = document.getElementById(id + 'Input'), minusBtn = document.getElementById(id + 'Minus'), plusBtn = document.getElementById(id + 'Plus');
                 if (!input || !minusBtn || !plusBtn) return;
                 
                 const updateAndSend = () => {
-                    let msg = { type: msgType, params: {} };
-                    ids.forEach(i => {
-                        const el = document.getElementById(i + 'Input');
-                        if (el) {
-                            let key = i.replace(/([A-Z])/g, "_$1").toLowerCase();
-                            let value = parseFloat(el.value);
-                            if (key === 'expo_joystick' || key === 'joystick_output_scale') {
-                                value = value / 100.0;
+                    if (isLqrWeight) {
+                        clearTimeout(lqrUpdateTimeout);
+                        lqrUpdateTimeout = setTimeout(() => {
+                            let msg = { type: msgType, params: {} };
+                            ids.forEach(i => {
+                                const el = document.getElementById(i + 'Input');
+                                if (el) {
+                                    let key = i.replace(/([A-Z])/g, "_$1").toLowerCase();
+                                    msg.params[key] = parseFloat(el.value);
+                                }
+                            });
+                            sendBleMessage(msg);
+                            addLogMessage('Wyslano nowe wagi LQR do przeliczenia.', 'info');
+                        }, DEBOUNCE_DELAY);
+                    } else {
+                        let msg = { type: msgType, params: {} };
+                        ids.forEach(i => {
+                            const el = document.getElementById(i + 'Input');
+                            if (el) {
+                                let key = i.replace(/([A-Z])/g, "_$1").toLowerCase();
+                                let value = parseFloat(el.value);
+                                if (key === 'expo_joystick' || key === 'joystick_output_scale') {
+                                    value = value / 100.0;
+                                }
+                                msg.params[key] = value;
                             }
-                            msg.params[key] = value;
-                        }
-                    });
-                    sendBleMessage(msg);
+                        });
+                        sendBleMessage(msg);
+                    }
                 };
                 
                 const step = parseFloat(input.step) || 1, isFloat = input.step.includes('.');
@@ -741,41 +714,11 @@
         };
         
         setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick'], 'set_joystick_tuning');
-        setupGroupedInput(['lqrOutputScalar'], 'lqr_update');
+        setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'], 'lqr_update', true);
         setupGroupedInput(['mBody', 'mWheel', 'L'], 'physics_update');
         setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr'], 'calibration_update');
         setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm');
         
-        document.querySelectorAll('.lqr-input').forEach(input => {
-            const minusBtn = input.previousElementSibling;
-            const plusBtn = input.nextElementSibling;
-            const step = parseFloat(input.step) || 1;
-            const isFloat = input.step.includes('.');
-            
-            const updateValue = (amount) => {
-                let current = parseFloat(input.value), newValue = current + amount;
-                if (isFloat) {
-                    const dp = (step.toString().split('.')[1] || '').length;
-                    newValue = parseFloat(newValue.toFixed(dp));
-                }
-                input.value = Math.max(parseFloat(input.min), Math.min(parseFloat(input.max), newValue));
-            };
-
-            minusBtn.addEventListener('click', () => updateValue(-step));
-            plusBtn.addEventListener('click', () => updateValue(step));
-        });
-
-        document.getElementById('applyLqrWeightsBtn').addEventListener('click', () => {
-            let msg = { type: 'lqr_update', params: {} };
-            document.querySelectorAll('.lqr-input').forEach(input => {
-                let key = input.id.replace('Input', '');
-                key = key.replace(/([A-Z])/g, "_$1").toLowerCase();
-                msg.params[key] = parseFloat(input.value);
-            });
-            sendBleMessage(msg);
-            addLogMessage('Wyslano nowe wagi LQR do przeliczenia.', 'info');
-        });
-
         setupManualTuningControls();
         setupDpadControls();
     }
@@ -796,6 +739,9 @@
             option.textContent = preset.name;
             select.appendChild(option);
         }
+        
+        select.value = 'balanced';
+
         document.getElementById('applyLqrPresetBtn').addEventListener('click', () => {
             const selectedKey = select.value;
             if (lqrPresets[selectedKey] && lqrPresets[selectedKey].values) {
@@ -804,13 +750,17 @@
                     q1: 'q1AngleInput', q2: 'q2AngularVelInput', q3: 'q3PositionInput',
                     q4: 'q4VelocityInput', r: 'rControlInput'
                 };
+                let msg = { type: 'lqr_update', params: {} };
                 for (const [key, id] of Object.entries(mapping)) {
                     const input = document.getElementById(id);
                     if (input && values[key] !== undefined) {
                         input.value = values[key];
+                        let paramKey = id.replace('Input', '').replace(/([A-Z])/g, "_$1").toLowerCase();
+                        msg.params[paramKey] = values[key];
                     }
                 }
-                addLogMessage(`Zaladowano preset '${lqrPresets[selectedKey].name}' do panelu. Kliknij 'Zastosuj Wagi', aby wyslac do robota.`, 'info');
+                sendBleMessage(msg);
+                addLogMessage(`Zaladowano i wyslano preset '${lqrPresets[selectedKey].name}'.`, 'info');
             }
         });
     }
@@ -947,12 +897,12 @@
         document.addEventListener('mouseup', endJoystickDrag); 
         document.addEventListener('touchend', endJoystickDrag);
 
-        document.querySelectorAll('.accordion-header.active').forEach(header => {
+        document.querySelectorAll('.accordion-header').forEach(header => {
             const content = header.nextElementSibling;
-            if (content) {
-                setTimeout(() => {
-                    content.style.maxHeight = content.scrollHeight + "px";
-                }, 100);
+            if (header.classList.contains('active')) {
+                 setTimeout(() => { content.style.maxHeight = content.scrollHeight + 'px'; }, 100);
+            } else {
+                content.style.maxHeight = '0px';
             }
         });
     });
