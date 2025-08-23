@@ -85,6 +85,10 @@
         .parameter-group { background-color: #20232a; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
         .parameter-group h5 { color: #61dafb; margin: 0 0 8px 0; font-size: 1.1em; }
         #syncConfigBtn { background-color: #f7b731; width: 100%; margin-top: 10px; }
+        
+        .help-icon { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: #61dafb; color: #282c34; font-size: 12px; font-weight: bold; text-align: center; line-height: 16px; margin-left: 8px; cursor: pointer; user-select: none; }
+        .help-text { background-color: #20232a; color: #fff; border-radius: 6px; padding: 10px; border: 1px solid #61dafb; margin-top: 8px; text-align: left; font-size: 0.9em; line-height: 1.4; width: 100%; box-sizing: border-box; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease-out; padding-top: 0; padding-bottom: 0; grid-column: 1 / -1; }
+        .help-text.visible { max-height: 200px; padding-top: 10px; padding-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -196,20 +200,47 @@
                 <div class="accordion-content">
                     <div class="parameter-group">
                         <h5>Wagi Stanow (Macierz Q)</h5>
-                        <div class="setting-container"><label for="q1AngleInput">Q1 - Kat (theta)</label><div class="numeric-input-wrapper"><button id="q1AngleMinus">-</button><input type="number" class="lqr-input" id="q1AngleInput" min="0" max="1000" step="5" value="100"><button id="q1AnglePlus">+</button></div></div>
-                        <div class="setting-container"><label for="q2AngularVelInput">Q2 - Predkosc katowa</label><div class="numeric-input-wrapper"><button id="q2AngularVelMinus">-</button><input type="number" class="lqr-input" id="q2AngularVelInput" min="0" max="100" step="1" value="10"><button id="q2AngularVelPlus">+</button></div></div>
-                        <div class="setting-container"><label for="q3PositionInput">Q3 - Pozycja (s)</label><div class="numeric-input-wrapper"><button id="q3PositionMinus">-</button><input type="number" class="lqr-input" id="q3PositionInput" min="0" max="100" step="0.1" value="1"><button id="q3PositionPlus">+</button></div></div>
-                        <div class="setting-container"><label for="q4VelocityInput">Q4 - Predkosc (s_dot)</label><div class="numeric-input-wrapper"><button id="q4VelocityMinus">-</button><input type="number" class="lqr-input" id="q4VelocityInput" min="0" max="100" step="0.5" value="5"><button id="q4VelocityPlus">+</button></div></div>
+                        <div class="setting-container">
+                            <label for="q1AngleInput">Q1 - Kat (theta)<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="q1AngleInput" min="0" max="1000" step="5" value="100"><button class="lqr-plus">+</button></div>
+                            <div class="help-text"><strong>Wplyw:</strong> Kara za odchylenie od pionu. Wieksza wartosc = robot mocniej 'walczy' o utrzymanie pionu, jest sztywniejszy.</div>
+                        </div>
+                        <div class="setting-container">
+                            <label for="q2AngularVelInput">Q2 - Predkosc katowa<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="q2AngularVelInput" min="0" max="100" step="1" value="10"><button class="lqr-plus">+</button></div>
+                            <div class="help-text"><strong>Wplyw:</strong> Kara za szybkie zmiany kata (oscylacje). Wieksza wartosc = lepsze tlumienie drgan, bardziej plynna reakcja.</div>
+                        </div>
+                        <div class="setting-container">
+                            <label for="q3PositionInput">Q3 - Pozycja (s)<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="q3PositionInput" min="0" max="100" step="0.1" value="1"><button class="lqr-plus">+</button></div>
+                            <div class="help-text"><strong>Wplyw:</strong> Kara za dryf pozycyjny. Wieksza wartosc = robot aktywniej wraca do pozycji wyjsciowej po zatrzymaniu.</div>
+                        </div>
+                        <div class="setting-container">
+                            <label for="q4VelocityInput">Q4 - Predkosc (s_dot)<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="q4VelocityInput" min="0" max="100" step="0.5" value="5"><button class="lqr-plus">+</button></div>
+                            <div class="help-text"><strong>Wplyw:</strong> Kara za szybkie ruchy liniowe. Wieksza wartosc = plynniejsze, mniej gwaltowne przyspieszanie i hamowanie.</div>
+                        </div>
                     </div>
                     
                     <div class="parameter-group">
                         <h5>Waga Sterowania (Skalar R)</h5>
-                        <div class="setting-container"><label for="rControlInput">R - Waga sterowania</label><div class="numeric-input-wrapper"><button id="rControlMinus">-</button><input type="number" class="lqr-input" id="rControlInput" min="0.001" max="10" step="0.01" value="0.1"><button id="rControlPlus">+</button></div></div>
+                        <div class="setting-container">
+                            <label for="rControlInput">R - Waga sterowania<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="rControlInput" min="0.001" max="10" step="0.01" value="0.1"><button class="lqr-plus">+</button></div>
+                            <div class="help-text"><strong>Wplyw:</strong> Kara za zuzycie energii (PWM silnikow). Wieksza wartosc = slabsze, bardziej oszczedne sterowanie. Mniejsza wartosc = mocniejsza reakcja.</div>
+                        </div>
                     </div>
 
                     <div class="parameter-group">
                         <h5>Wzmocnienie Glowne</h5>
-                        <div class="setting-container"><label for="lqrOutputScalarInput">Skala Wyjscia LQR</label><div class="numeric-input-wrapper"><button id="lqrOutputScalarMinus">-</button><input type="number" id="lqrOutputScalarInput" min="0.1" max="50.0" step="0.1" value="20.0"><button id="lqrOutputScalarPlus">+</button></div></div>
+                        <div class="setting-container">
+                            <label for="lqrOutputScalarInput">Skala Wyjscia LQR<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button id="lqrOutputScalarMinus">-</button><input type="number" id="lqrOutputScalarInput" min="0.1" max="50.0" step="0.1" value="20.0"><button id="lqrOutputScalarPlus">+</button></div>
+                            <div class="help-text"><strong>Wplyw:</strong> Glowny mnoznik dla calego sygnalu sterujacego. Zwiekszaj, jesli robot jest 'slaby', zmniejszaj, jesli jest zbyt agresywny lub wpada w oscylacje. To Twoje glowne pokretlo do strojenia!</div>
+                        </div>
+                    </div>
+                    <div class="lqr-info">
+                        <strong>Teoria LQR:</strong> Kontroler minimalizuje wskaznik jakosci J = integral(x'Qx + u'Ru)dt. Wieksze wagi Q = wieksza kara za odchylenia stanu, wieksze R = wieksza kara za sterowanie (energie).
                     </div>
                 </div>
                 
@@ -217,15 +248,36 @@
                 <div class="accordion-content">
                     <div class="physics-section">
                         <h4>Parametry Fizyczne Robota</h4>
-                        <div class="setting-container"><label for="mBodyInput">Masa korpusu (kg)</label><div class="numeric-input-wrapper"><button id="mBodyMinus">-</button><input type="number" id="mBodyInput" min="0.1" max="5.0" step="0.01" value="0.150"><button id="mBodyPlus">+</button></div></div>
-                        <div class="setting-container"><label for="mWheelInput">Masa kola (kg)</label><div class="numeric-input-wrapper"><button id="mWheelMinus">-</button><input type="number" id="mWheelInput" min="0.01" max="1.0" step="0.005" value="0.055"><button id="mWheelPlus">+</button></div></div>
-                        <div class="setting-container"><label for="LInput">Wysokosc srodka masy (m)</label><div class="numeric-input-wrapper"><button id="LMinus">-</button><input type="number" id="LInput" min="0.01" max="0.5" step="0.001" value="0.087"><button id="LPlus">+</button></div></div>
+                        <div class="setting-container">
+                            <label for="mBodyInput">Masa korpusu (kg)<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button id="mBodyMinus">-</button><input type="number" id="mBodyInput" min="0.1" max="5.0" step="0.01" value="0.150"><button id="mBodyPlus">+</button></div>
+                            <div class="help-text"><strong>Wplyw:</strong> Laczna masa robota bez kol i silnikow. Wplywa na moment bezwladnosci. Zmien, jesli dodasz lub usuniesz komponenty.</div>
+                        </div>
+                        <div class="setting-container">
+                            <label for="mWheelInput">Masa kola (kg)<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button id="mWheelMinus">-</button><input type="number" id="mWheelInput" min="0.01" max="1.0" step="0.005" value="0.055"><button id="mWheelPlus">+</button></div>
+                            <div class="help-text"><strong>Wplyw:</strong> Masa jednego kola razem z silnikiem. Wplywa na bezwladnosc calego ukladu.</div>
+                        </div>
+                        <div class="setting-container">
+                            <label for="LInput">Wysokosc srodka masy (m)<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button id="LMinus">-</button><input type="number" id="LInput" min="0.01" max="0.5" step="0.001" value="0.087"><button id="LPlus">+</button></div>
+                            <div class="help-text"><strong>Wplyw:</strong> Kluczowy parametr! Odleglosc od osi kol do srodka masy korpusu. Wieksze L = wieksza niestabilnosc, ale potencjalnie wolniejsza reakcja.</div>
+                        </div>
                     </div>
                     <div class="parameter-group">
                         <h5>Kalibracja Mechaniczna</h5>
-                        <div class="setting-container"><label for="wheelDiameterCmInput">Srednica kola (cm)</label><div class="numeric-input-wrapper"><button id="wheelDiameterCmMinus">-</button><input type="number" id="wheelDiameterCmInput" min="3" max="30" step="0.1" value="8.2"><button id="wheelDiameterCmPlus">+</button></div></div>
-                        <div class="setting-container"><label for="trackWidthCmInput">Rozstaw kol (cm)</label><div class="numeric-input-wrapper"><button id="trackWidthCmMinus">-</button><input type="number" id="trackWidthCmInput" min="5" max="50" step="0.1" value="13.0"><button id="trackWidthCmPlus">+</button></div></div>
-                        <div class="setting-container"><label for="encoderPprInput">Impulsy na obrot (PPR)</label><div class="numeric-input-wrapper"><button id="encoderPprMinus">-</button><input type="number" id="encoderPprInput" min="100" max="5000" step="10" value="820"><button id="encoderPprPlus">+</button></div></div>
+                        <div class="setting-container">
+                            <label for="wheelDiameterCmInput">Srednica kola (cm)</label>
+                            <div class="numeric-input-wrapper"><button id="wheelDiameterCmMinus">-</button><input type="number" id="wheelDiameterCmInput" min="3" max="30" step="0.1" value="8.2"><button id="wheelDiameterCmPlus">+</button></div>
+                        </div>
+                        <div class="setting-container">
+                            <label for="trackWidthCmInput">Rozstaw kol (cm)</label>
+                            <div class="numeric-input-wrapper"><button id="trackWidthCmMinus">-</button><input type="number" id="trackWidthCmInput" min="5" max="50" step="0.1" value="13.0"><button id="trackWidthCmPlus">+</button></div>
+                        </div>
+                        <div class="setting-container">
+                            <label for="encoderPprInput">Impulsy na obrot (PPR)</label>
+                            <div class="numeric-input-wrapper"><button id="encoderPprMinus">-</button><input type="number" id="encoderPprInput" min="100" max="5000" step="10" value="820"><button id="encoderPprPlus">+</button></div>
+                        </div>
                     </div>
                 </div>
 
@@ -309,18 +361,24 @@
 
     function toggleAccordion(header) {
         const content = header.nextElementSibling;
-        header.classList.toggle('active');
+        const isActive = header.classList.contains('active');
         
-        setTimeout(() => {
-            if (content.style.maxHeight && content.style.maxHeight !== '0px') {
-                content.style.maxHeight = content.scrollHeight + "px";
+        // Zamknij wszystkie inne otwarte akordeony w tej samej karcie
+        const parentCard = header.closest('.card');
+        parentCard.querySelectorAll('.accordion-header.active').forEach(otherHeader => {
+            if (otherHeader !== header) {
+                otherHeader.classList.remove('active');
+                otherHeader.nextElementSibling.style.maxHeight = '0px';
             }
-        }, 400);
+        });
 
-        if (content.style.maxHeight && content.style.maxHeight !== '0px') {
-            content.style.maxHeight = '0px';
-        } else {
+        // Otworz lub zamknij klikniety
+        if (!isActive) {
+            header.classList.add('active');
             content.style.maxHeight = content.scrollHeight + "px";
+        } else {
+            header.classList.remove('active');
+            content.style.maxHeight = '0px';
         }
     }
 
@@ -900,10 +958,17 @@
             const content = header.nextElementSibling;
             if (header.classList.contains('active')) {
                  setTimeout(() => { content.style.maxHeight = content.scrollHeight + 'px'; }, 100);
-            } else {
-                content.style.maxHeight = '0px';
             }
         });
+        
+        // Ustaw domyslny preset po zaladowaniu
+        document.getElementById('applyLqrPresetBtn').click();
+        
+        // Otworz logi domyslnie
+        const logHeader = document.querySelector('.card:last-child .accordion-header');
+        if (logHeader) {
+            setTimeout(() => toggleAccordion(logHeader), 100);
+        }
     });
 
     window.onresize = () => { resizeJoystick(); };
