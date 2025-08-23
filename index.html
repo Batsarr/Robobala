@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Wersja 25.2-FINAL</title>
+    <title>Robot LQR - Wersja 25.5-FINAL</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -81,51 +81,15 @@
         .pwm-info strong { color: #a2f279; }
         .physics-section { background-color: #2a2f35; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #a2f279; }
         .physics-section h4 { color: #a2f279; margin-top: 0; margin-bottom: 10px; }
-        .lqr-info { background-color: #2a2f35; padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #f7b731; }
+        .lqr-info { background-color: #2a2f35; padding: 12px; border-radius: 6px; margin-top: 15px; border-left: 4px solid #f7b731; }
         .lqr-info strong { color: #f7b731; }
         .parameter-group { background-color: #20232a; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
         .parameter-group h5 { color: #61dafb; margin: 0 0 8px 0; font-size: 1.1em; }
         #syncConfigBtn { background-color: #f7b731; width: 100%; margin-top: 10px; }
         
-        /* === NOWY SYSTEM POMOCY === */
-        .help-icon {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            background-color: #61dafb;
-            color: #282c34;
-            font-size: 12px;
-            font-weight: bold;
-            text-align: center;
-            line-height: 16px;
-            margin-left: 8px;
-            cursor: pointer;
-            user-select: none;
-        }
-        .help-text {
-            background-color: #20232a;
-            color: #fff;
-            border-radius: 6px;
-            padding: 10px;
-            border: 1px solid #61dafb;
-            margin-top: 8px;
-            text-align: left;
-            font-size: 0.9em;
-            line-height: 1.4;
-            width: 100%;
-            box-sizing: border-box;
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease-out, padding 0.3s ease-out;
-            padding-top: 0;
-            padding-bottom: 0;
-        }
-        .help-text.visible {
-            max-height: 200px; /* Wystarczajaco duzo, zeby pomiescic tekst */
-            padding-top: 10px;
-            padding-bottom: 10px;
-        }
+        .help-icon { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: #61dafb; color: #282c34; font-size: 12px; font-weight: bold; text-align: center; line-height: 16px; margin-left: 8px; cursor: pointer; user-select: none; }
+        .help-text { background-color: #20232a; color: #fff; border-radius: 6px; padding: 10px; border: 1px solid #61dafb; margin-top: 8px; text-align: left; font-size: 0.9em; line-height: 1.4; width: 100%; box-sizing: border-box; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease-out; padding-top: 0; padding-bottom: 0; }
+        .help-text.visible { max-height: 200px; padding-top: 10px; padding-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -221,7 +185,7 @@
         </div>
         
         <div class="card">
-            <h2>Konfiguracja LQR</h2>
+            <h2>Konfiguracja</h2>
             <fieldset>
                 <legend>Profile Ustawien LQR</legend>
                 <div class="profile-controls">
@@ -233,9 +197,60 @@
             </fieldset>
             
             <div id="allSettings">
-                <button class="accordion-header" onclick="toggleAccordion(this)">0. Parametry Fizyczne Robota</button>
+                <button class="accordion-header active" onclick="toggleAccordion(this)">1. Wagi LQR (Macierz Q i R)</button>
+                <div class="accordion-content active">
+                    <div class="parameter-group">
+                        <h5>Wagi Stanow (Macierz Q)</h5>
+                        <div class="setting-container">
+                            <label for="q1AngleInput">Q1 - Kat (theta)<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="q1AngleInput" min="1" max="1000" step="5" value="100"><button class="lqr-plus">+</button></div>
+                            <div class="help-text"><strong>Wplyw:</strong> Kara za odchylenie od pionu. Wieksza wartosc = robot mocniej 'walczy' o utrzymanie pionu, jest sztywniejszy.</div>
+                        </div>
+                        <div class="setting-container">
+                            <label for="q2AngularVelInput">Q2 - Predkosc katowa<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="q2AngularVelInput" min="0.1" max="100" step="1" value="10"><button class="lqr-plus">+</button></div>
+                            <div class="help-text"><strong>Wplyw:</strong> Kara za szybkie zmiany kata (oscylacje). Wieksza wartosc = lepsze tlumienie drgan, bardziej plynna reakcja.</div>
+                        </div>
+                        <div class="setting-container">
+                            <label for="q3PositionInput">Q3 - Pozycja (s)<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="q3PositionInput" min="0.01" max="50" step="0.1" value="1"><button class="lqr-plus">+</button></div>
+                            <div class="help-text"><strong>Wplyw:</strong> Kara za dryf pozycyjny. Wieksza wartosc = robot aktywniej wraca do pozycji wyjsciowej po zatrzymaniu.</div>
+                        </div>
+                        <div class="setting-container">
+                            <label for="q4VelocityInput">Q4 - Predkosc (s_dot)<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="q4VelocityInput" min="0.1" max="100" step="0.5" value="5"><button class="lqr-plus">+</button></div>
+                            <div class="help-text"><strong>Wplyw:</strong> Kara za szybkie ruchy liniowe. Wieksza wartosc = plynniejsze, mniej gwaltowne przyspieszanie i hamowanie.</div>
+                        </div>
+                    </div>
+                    
+                    <div class="parameter-group">
+                        <h5>Waga Sterowania (Skalar R)</h5>
+                        <div class="setting-container">
+                            <label for="rControlInput">R - Waga sterowania<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="rControlInput" min="0.001" max="10" step="0.01" value="0.1"><button class="lqr-plus">+</button></div>
+                            <div class="help-text"><strong>Wplyw:</strong> Kara za zuzycie energii (PWM silnikow). Wieksza wartosc = slabsze, bardziej oszczedne sterowanie. Mniejsza wartosc = mocniejsza reakcja.</div>
+                        </div>
+                    </div>
+
+                    <button id="applyLqrWeightsBtn" style="width:100%; background-color:#a2f279; margin-top:10px;">Zastosuj Wagi i Przelicz</button>
+
+                    <div class="parameter-group">
+                        <h5>Wzmocnienie Glowne</h5>
+                        <div class="setting-container">
+                            <label for="lqrOutputScalarInput">Skala Wyjscia LQR<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button id="lqrOutputScalarMinus">-</button><input type="number" id="lqrOutputScalarInput" min="0.1" max="50.0" step="0.1" value="20.0"><button id="lqrOutputScalarPlus">+</button></div>
+                            <div class="help-text"><strong>Wplyw:</strong> Glowny mnoznik dla calego sygnalu sterujacego. Zwiekszaj, jesli robot jest 'slaby', zmniejszaj, jesli jest zbyt agresywny lub wpada w oscylacje. To Twoje glowne pokretlo do strojenia!</div>
+                        </div>
+                    </div>
+                    <div class="lqr-info">
+                        <strong>Teoria LQR:</strong> Kontroler minimalizuje wskaznik jakosci J = integral(x'Qx + u'Ru)dt. Wieksze wagi Q = wieksza kara za odchylenia stanu, wieksze R = wieksza kara za sterowanie (energie).
+                    </div>
+                </div>
+                
+                <button class="accordion-header" onclick="toggleAccordion(this)">2. Parametry Sprzetowe</button>
                 <div class="accordion-content">
                     <div class="physics-section">
+                        <h4>Parametry Fizyczne Robota</h4>
                         <div class="setting-container">
                             <label for="mBodyInput">Masa korpusu (kg)<span class="help-icon">?</span></label>
                             <div class="numeric-input-wrapper"><button id="mBodyMinus">-</button><input type="number" id="mBodyInput" min="0.1" max="5.0" step="0.01" value="0.150"><button id="mBodyPlus">+</button></div>
@@ -252,59 +267,6 @@
                             <div class="help-text"><strong>Wplyw:</strong> Kluczowy parametr! Odleglosc od osi kol do srodka masy korpusu. Wieksze L = wieksza niestabilnosc, ale potencjalnie wolniejsza reakcja.</div>
                         </div>
                     </div>
-                </div>
-                
-                <button class="accordion-header active" onclick="toggleAccordion(this)">1. Wagi LQR (Macierz Q i R)</button>
-                <div class="accordion-content active">
-                    <div class="lqr-info">
-                        <strong>Teoria LQR:</strong> Kontroler minimalizuje wskaznik jakosci J = integral(x'Qx + u'Ru)dt. Wieksze wagi Q = wieksza kara za odchylenia stanu, wieksze R = wieksza kara za sterowanie (energie).
-                    </div>
-                    
-                    <div class="parameter-group">
-                        <h5>Wagi Stanow (Macierz Q)</h5>
-                        <div class="setting-container">
-                            <label for="q1AngleInput">Q1 - Kat (theta)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="q1AngleMinus">-</button><input type="number" id="q1AngleInput" min="1" max="1000" step="5" value="100"><button id="q1AnglePlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kara za odchylenie od pionu. Wieksza wartosc = robot mocniej 'walczy' o utrzymanie pionu, jest sztywniejszy.</div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="q2AngularVelInput">Q2 - Predkosc katowa<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="q2AngularVelMinus">-</button><input type="number" id="q2AngularVelInput" min="0.1" max="100" step="1" value="10"><button id="q2AngularVelPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kara za szybkie zmiany kata (oscylacje). Wieksza wartosc = lepsze tlumienie drgan, bardziej plynna reakcja.</div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="q3PositionInput">Q3 - Pozycja (s)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="q3PositionMinus">-</button><input type="number" id="q3PositionInput" min="0.01" max="50" step="0.1" value="1"><button id="q3PositionPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kara za dryf pozycyjny. Wieksza wartosc = robot aktywniej wraca do pozycji wyjsciowej po zatrzymaniu.</div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="q4VelocityInput">Q4 - Predkosc (s_dot)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="q4VelocityMinus">-</button><input type="number" id="q4VelocityInput" min="0.1" max="100" step="0.5" value="5"><button id="q4VelocityPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kara za szybkie ruchy liniowe. Wieksza wartosc = plynniejsze, mniej gwaltowne przyspieszanie i hamowanie.</div>
-                        </div>
-                    </div>
-                    
-                    <div class="parameter-group">
-                        <h5>Waga Sterowania (Skalar R)</h5>
-                        <div class="setting-container">
-                            <label for="rControlInput">R - Waga sterowania<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="rControlMinus">-</button><input type="number" id="rControlInput" min="0.001" max="10" step="0.01" value="0.1"><button id="rControlPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kara za zuzycie energii (PWM silnikow). Wieksza wartosc = slabsze, bardziej oszczedne sterowanie. Mniejsza wartosc = mocniejsza reakcja.</div>
-                        </div>
-                    </div>
-
-                    <div class="parameter-group">
-                        <h5>Wzmocnienie Glowne</h5>
-                        <div class="setting-container">
-                            <label for="lqrOutputScalarInput">Skala Wyjscia LQR<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="lqrOutputScalarMinus">-</button><input type="number" id="lqrOutputScalarInput" min="0.1" max="10.0" step="0.1" value="1.0"><button id="lqrOutputScalarPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Glowny mnoznik dla calego sygnalu sterujacego. Zwiekszaj, jesli robot jest 'slaby', zmniejszaj, jesli jest zbyt agresywny lub wpada w oscylacje. To Twoje glowne pokretlo do strojenia!</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <button class="accordion-header" onclick="toggleAccordion(this)">2. Parametry Sprzetowe</button>
-                <div class="accordion-content">
                     <div class="parameter-group">
                         <h5>Kalibracja Mechaniczna</h5>
                         <div class="setting-container">
@@ -365,10 +327,14 @@
 <script>
     const lqrPresets = {
         'default': { name: 'Wybierz gotowy zestaw...', values: null },
-        'stiff': { name: 'Duza Sztywnosc (stacjonarnie)', values: { q1: 450, q2: 25, q3: 1, q4: 5, r: 0.08 } },
-        'precise': { name: 'Precyzyjna Jazda (zbalansowany)', values: { q1: 120, q2: 15, q3: 15, q4: 10, r: 0.1 } },
-        'fast': { name: 'Szybka Jazda (plynnosc)', values: { q1: 90, q2: 10, q3: 0.5, q4: 20, r: 0.05 } },
-        'soft': { name: 'Nierowna Nawierzchnia (miekkki)', values: { q1: 70, q2: 30, q3: 0.1, q4: 5, r: 0.2 } },
+        'balanced': { name: '1. Zbalansowany (Startowy)', values: { q1: 150, q2: 15, q3: 10, q4: 20, r: 0.08 } },
+        'stiff': { name: '2. Bardzo Sztywny (Precyzja)', values: { q1: 500, q2: 25, q3: 5, q4: 10, r: 0.1 } },
+        'soft': { name: '3. Miekki (Tlumienie)', values: { q1: 80, q2: 40, q3: 1, q4: 25, r: 0.2 } },
+        'fast_aggressive': { name: '4. Szybka Jazda (Agresywny)', values: { q1: 100, q2: 10, q3: 0.5, q4: 30, r: 0.05 } },
+        'slow_smooth': { name: '5. Powolna Jazda (Plynnosc)', values: { q1: 120, q2: 20, q3: 2, q4: 5, r: 0.3 } },
+        'strong_hold': { name: '6. Mocne Trzymanie Pozycji', values: { q1: 150, q2: 15, q3: 80, q4: 20, r: 0.1 } },
+        'balance_only': { name: '7. Minimalistyczny (Tylko Balans)', values: { q1: 200, q2: 20, q3: 0, q4: 0, r: 0.1 } },
+        'experimental_speed': { name: '8. Eksperymentalny (Wysokie Predkosci)', values: { q1: 70, q2: 5, q3: 0.1, q4: 50, r: 0.04 } }
     };
 
     const availableTelemetry = {
@@ -392,6 +358,10 @@
     const joystickCanvas = document.getElementById('joystickCanvas'); 
     const joystickCtx = joystickCanvas.getContext('2d');
     let joystickCenter, joystickRadius, knobRadius, isDragging = false; 
+    
+    // === POPRAWKA STABILNOSCI: Throttling Joysticka ===
+    let lastJoystickSendTime = 0;
+    const JOYSTICK_SEND_INTERVAL = 50; // Wysylaj co 50ms (20 razy na sekunde)
 
     function toggleAccordion(header) {
         const content = header.nextElementSibling;
@@ -703,7 +673,7 @@
         document.getElementById('balanceSwitch').addEventListener('change', e => { lastUserInteraction['balanceSwitch'] = Date.now(); sendBleMessage({ type: 'balance_toggle', enabled: e.target.checked }); });
         document.getElementById('holdPositionSwitch').addEventListener('change', e => { lastUserInteraction['holdPositionSwitch'] = Date.now(); sendBleMessage({ type: 'hold_position_toggle', enabled: e.target.checked }); });
         document.getElementById('speedModeSwitch').addEventListener('change', e => sendBleMessage({ type: 'speed_mode_toggle', enabled: e.target.checked }));
-        document.getElementById('lqrEnabledSwitch').addEventListener('change', e => sendBleMessage({ type: 'lqr_enabled_toggle', enabled: e.target.checked }));
+        document.getElementById('lqrEnabledSwitch').addEventListener('change', e => sendBleMessage({ type: 'lqr_enabled_toggle', enabled: e.target.checked });
 
         document.getElementById('resetZeroBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_zero' }));
         document.getElementById('trimPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 1 }));
@@ -755,11 +725,43 @@
         };
         
         setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick'], 'set_joystick_tuning');
-        setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'], 'lqr_update');
+        setupGroupedInput(['lqrOutputScalar'], 'lqr_update');
         setupGroupedInput(['mBody', 'mWheel', 'L'], 'physics_update');
         setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr'], 'calibration_update');
         setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm');
         
+        // === POPRAWKA STABILNOSCI: Oddzielna obsluga wag LQR ===
+        document.querySelectorAll('.lqr-input').forEach(input => {
+            const id = input.id.replace('Input', '');
+            const minusBtn = input.previousElementSibling;
+            const plusBtn = input.nextElementSibling;
+            const step = parseFloat(input.step) || 1;
+            const isFloat = input.step.includes('.');
+            
+            const updateValue = (amount) => {
+                let current = parseFloat(input.value), newValue = current + amount;
+                if (isFloat) {
+                    const dp = (step.toString().split('.')[1] || '').length;
+                    newValue = parseFloat(newValue.toFixed(dp));
+                }
+                input.value = Math.max(parseFloat(input.min), Math.min(parseFloat(input.max), newValue));
+            };
+
+            minusBtn.addEventListener('click', () => updateValue(-step));
+            plusBtn.addEventListener('click', () => updateValue(step));
+        });
+
+        document.getElementById('applyLqrWeightsBtn').addEventListener('click', () => {
+            let msg = { type: 'lqr_update', params: {} };
+            document.querySelectorAll('.lqr-input').forEach(input => {
+                let key = input.id.replace('Input', '');
+                key = key.replace(/([A-Z])/g, "_$1").toLowerCase();
+                msg.params[key] = parseFloat(input.value);
+            });
+            sendBleMessage(msg);
+            addLogMessage('Wyslano nowe wagi LQR do przeliczenia.', 'info');
+        });
+
         setupManualTuningControls();
         setupDpadControls();
     }
@@ -794,7 +796,7 @@
                         input.value = values[key];
                     }
                 }
-                addLogMessage(`Zaladowano preset '${lqrPresets[selectedKey].name}' do panelu. Zmien wartosci lub od razu zapisz w EEPROM.`, 'info');
+                addLogMessage(`Zaladowano preset '${lqrPresets[selectedKey].name}' do panelu. Kliknij 'Zastosuj Wagi', aby wyslac do robota.`, 'info');
             }
         });
     }
@@ -808,7 +810,6 @@
                 if (helpText) {
                     helpText.classList.toggle('visible');
                     
-                    // Przelicz wysokosc akordeonu, jesli jest otwarty
                     const accordionContent = container.closest('.accordion-content');
                     if (accordionContent && accordionContent.classList.contains('active')) {
                         accordionContent.style.maxHeight = accordionContent.scrollHeight + 'px';
@@ -883,11 +884,23 @@
             finalY = joystickRadius * Math.sin(angle); 
         } 
         drawJoystick(finalX, finalY); 
-        sendBleMessage({ type: 'joystick', x: finalX / joystickRadius, y: -finalY / joystickRadius });
+        
+        // === POPRAWKA STABILNOSCI: Throttling Joysticka ===
+        const now = Date.now();
+        if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) {
+            sendBleMessage({ type: 'joystick', x: finalX / joystickRadius, y: -finalY / joystickRadius });
+            lastJoystickSendTime = now;
+        }
     }
 
     function startJoystickDrag(e){ isDragging = true; handleJoystickMove(e); }
-    function endJoystickDrag(e){ if (!isDragging) return; isDragging = false; drawJoystick(0, 0); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
+    function endJoystickDrag(e){ 
+        if (!isDragging) return; 
+        isDragging = false; 
+        drawJoystick(0, 0); 
+        sendBleMessage({ type: 'joystick', x: 0, y: 0 }); 
+        lastJoystickSendTime = 0; // Resetuj timer, aby zerowa pozycja zostala wyslana natychmiast
+    }
     
     function setupStateSync() { 
         document.addEventListener('visibilitychange', () => { 
