@@ -311,7 +311,6 @@
         const content = header.nextElementSibling;
         header.classList.toggle('active');
         
-        // Re-kalkulacja wysokosci po animacji
         setTimeout(() => {
             if (content.style.maxHeight && content.style.maxHeight !== '0px') {
                 content.style.maxHeight = content.scrollHeight + "px";
