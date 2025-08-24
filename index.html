@@ -108,10 +108,8 @@
                 <div class="setting-container"><label for="joystickOutputScaleInput">Skala Wyjscia (%)</label><div class="numeric-input-wrapper"><button id="joystickOutputScaleMinus">-</button><input type="number" id="joystickOutputScaleInput" min="10" max="100" step="5" value="100"><button id="joystickOutputScalePlus">+</button></div></div>
                 <div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)</label><div class="numeric-input-wrapper"><button id="expoJoystickMinus">-</button><input type="number" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button id="expoJoystickPlus">+</button></div></div>
                 <div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button id="maxSpeedJoystickMinus">-</button><input type="number" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button id="maxSpeedJoystickPlus">+</button></div></div>
-                <!-- *** ZMIANA START *** Dodano nowe kontrolki -->
                 <div class="setting-container"><label for="joystickAngleSensitivityInput">Czulosc Kata (st.)</label><div class="numeric-input-wrapper"><button id="joystickAngleSensitivityMinus">-</button><input type="number" id="joystickAngleSensitivityInput" min="1" max="30" step="0.5" value="10"><button id="joystickAngleSensitivityPlus">+</button></div></div>
                 <div class="setting-container"><label for="turnFactorInput">Czulosc Skretu (%)</label><div class="numeric-input-wrapper"><button id="turnFactorMinus">-</button><input type="number" id="turnFactorInput" min="0" max="100" step="5" value="25"><button id="turnFactorPlus">+</button></div></div>
-                <!-- *** ZMIANA KONIEC *** -->
             </fieldset>
             
             <hr style="border-color: #4a4f58; margin: 15px 0;">
@@ -362,6 +360,9 @@
     
     let lastJoystickSendTime = 0;
     const JOYSTICK_SEND_INTERVAL = 50;
+    // *** ZMIANA START *** Dodano flage do rozwiazania problemu 'GATT in progress'
+    let isSendingJoystick = false;
+    // *** ZMIANA KONIEC ***
 
     function toggleAccordion(header) {
         const content = header.nextElementSibling;
@@ -494,10 +495,8 @@
             expoJoystick: data.expo_joystick,
             maxSpeedJoystick: data.max_speed_joystick,
             joystickOutputScale: data.joystick_output_scale,
-            // *** ZMIANA START *** Dodano nowe parametry do synchronizacji
             turnFactor: data.turn_factor,
             joystickAngleSensitivity: data.joystick_angle_sensitivity,
-            // *** ZMIANA KONIEC ***
             minPwmLeftFwd: data.min_pwm_left_fwd, 
             minPwmLeftBwd: data.min_pwm_left_bwd, 
             minPwmRightFwd: data.min_pwm_right_fwd, 
@@ -520,13 +519,11 @@
             const inputId = `${key}Input`;
             const input = document.getElementById(inputId);
             if (input && value !== undefined) {
-                 // *** ZMIANA START *** Dodano 'turnFactor' do konwersji na procenty
                  if (key === 'expoJoystick' || key === 'joystickOutputScale' || key === 'turnFactor') {
                     input.value = value * 100;
                  } else {
                     input.value = value;
                  }
-                 // *** ZMIANA KONIEC ***
             }
         }
         addLogMessage("Parametry robota zsynchronizowane z panelem.", "info");
@@ -753,11 +750,9 @@
                             if (el) {
                                 let key = i.replace(/([A-Z])/g, "_$1").toLowerCase();
                                 let value = parseFloat(el.value);
-                                // *** ZMIANA START *** Dodano 'turn_factor' do konwersji
                                 if (key === 'expo_joystick' || key === 'joystick_output_scale' || key === 'turn_factor') {
                                     value = value / 100.0;
                                 }
-                                // *** ZMIANA KONIEC ***
                                 msg.params[key] = value;
                             }
                         });
@@ -782,9 +777,7 @@
             });
         };
         
-        // *** ZMIANA START *** Dodano nowe ID do obslugi
         setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'], 'set_joystick_tuning');
-        // *** ZMIANA KONIEC ***
         setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'], 'lqr_update', true);
         setupGroupedInput(['mBody', 'mWheel', 'L'], 'physics_update');
         setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr'], 'calibration_update');
@@ -903,6 +896,18 @@
         joystickCtx.fill(); 
     }
 
+    // *** ZMIANA START *** Stworzono dedykowana funkcje do wysylania danych z joysticka
+    async function sendJoystickData(x, y) {
+        if (isSendingJoystick) return; // Pomin wyslanie, jesli poprzednie jest w toku
+        isSendingJoystick = true;
+        try {
+            await sendBleMessage({ type: 'joystick', x: x, y: y });
+        } finally {
+            isSendingJoystick = false; // Zawsze odblokuj po zakonczeniu operacji
+        }
+    }
+    // *** ZMIANA KONIEC ***
+
     function handleJoystickMove(e) { 
         if (!isDragging) return; 
         e.preventDefault(); 
@@ -922,7 +927,9 @@
         
         const now = Date.now();
         if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) {
-            sendBleMessage({ type: 'joystick', x: finalX / joystickRadius, y: -finalY / joystickRadius });
+            // *** ZMIANA START *** Uzyto nowej, bezpiecznej funkcji
+            sendJoystickData(finalX / joystickRadius, -finalY / joystickRadius);
+            // *** ZMIANA KONIEC ***
             lastJoystickSendTime = now;
         }
     }
@@ -932,7 +939,9 @@
         if (!isDragging) return; 
         isDragging = false; 
         drawJoystick(0, 0); 
-        sendBleMessage({ type: 'joystick', x: 0, y: 0 }); 
+        // *** ZMIANA START *** Uzyto nowej, bezpiecznej funkcji
+        sendJoystickData(0, 0); 
+        // *** ZMIANA KONIEC ***
         lastJoystickSendTime = 0;
     }
     
@@ -978,14 +987,12 @@
         // Ustaw domyslny preset po zaladowaniu
         document.getElementById('applyLqrPresetBtn').click();
         
-        // Otworz logi domyslnie
-        const logHeader = document.querySelector('.card:last-child .accordion-header');
-        if (logHeader) {
-            setTimeout(() => toggleAccordion(logHeader), 100);
-        }
+        // *** ZMIANA START *** Usunieto fragment kodu, ktory zamykal domyslnie otwarte logi
+        // (usunięto blok 'if (logHeader) ...')
+        // *** ZMIANA KONIEC ***
     });
 
     window.onresize = () => { resizeJoystick(); };
 </script>
 </body>
-</html>
+</html>```
