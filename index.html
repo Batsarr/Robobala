@@ -84,7 +84,6 @@
         .lqr-info strong { color: #f7b731; }
         .parameter-group { background-color: #20232a; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
         .parameter-group h5 { color: #61dafb; margin: 0 0 8px 0; font-size: 1.1em; }
-        
         .help-icon { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: #61dafb; color: #282c34; font-size: 12px; font-weight: bold; text-align: center; line-height: 16px; margin-left: 8px; cursor: pointer; user-select: none; }
         .help-text { background-color: #20232a; color: #fff; border-radius: 6px; padding: 10px; border: 1px solid #61dafb; margin-top: 8px; text-align: left; font-size: 0.9em; line-height: 1.4; width: 100%; box-sizing: border-box; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease-out; padding-top: 0; padding-bottom: 0; grid-column: 1 / -1; }
         .help-text.visible { max-height: 200px; padding-top: 10px; padding-bottom: 10px; }
@@ -359,11 +358,7 @@
     
     let lastJoystickSendTime = 0;
     const JOYSTICK_SEND_INTERVAL = 50;
-    
-    // *** ZMIANA START *** Wprowadzenie systemu kolejkowania
-    let bleCommandQueue = [];
-    let isProcessingQueue = false;
-    // *** ZMIANA KONIEC ***
+    let isSendingJoystick = false;
 
     function toggleAccordion(header) {
         const content = header.nextElementSibling;
@@ -416,8 +411,14 @@
             
             document.getElementById('connectionStatus').className = 'status-indicator status-ok';
             document.getElementById('connectionText').textContent = 'Polaczony';
-            document.getElementById('syncConfigBtn').disabled = false;
-            addLogMessage('Polaczono! Kliknij "Synchronizuj Konfiguracje", aby wczytac dane.', 'info');
+            
+            // Poprawka bledu: Sprawdzamy czy element istnieje przed proba jego modyfikacji
+            const syncBtn = document.getElementById('syncConfigBtn');
+            if (syncBtn) {
+                syncBtn.disabled = false;
+            }
+            
+            addLogMessage('Polaczono! Mozesz teraz sterowac robotem.', 'info');
 
         } catch(error) {
             addLogMessage(`Blad polaczenia BLE: ${error}`, 'error');
@@ -433,15 +434,22 @@
             clearTimeout(configSyncTimeout);
             configSyncTimeout = null;
         }
-        bleCommandQueue = []; // Wyczysc kolejke po rozlaczeniu
-        isProcessingQueue = false;
+        
         document.getElementById('connectionStatus').className = 'status-indicator status-disconnected';
         document.getElementById('connectionText').textContent = 'Rozlaczony';
-        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'lqrEnabledSwitch'].forEach(id => document.getElementById(id).checked = false);
+        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'lqrEnabledSwitch'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.checked = false;
+        });
         document.getElementById('systemStatus').className = 'status-indicator status-disconnected';
         document.getElementById('systemText').textContent = 'Nieznany';
         document.getElementById('connectBleBtn').disabled = false;
-        document.getElementById('syncConfigBtn').disabled = true;
+        
+        // *** ZMIANA START *** Usunieto odwolanie do nieistniejacego przycisku
+        // const syncBtn = document.getElementById('syncConfigBtn');
+        // if (syncBtn) syncBtn.disabled = true;
+        // *** ZMIANA KONIEC ***
+
         rxCharacteristic = null;
         txCharacteristic = null;
     }
@@ -480,51 +488,15 @@
         }
     }
     
-    // *** ZMIANA START *** Nowy system kolejkowania
-    // Funkcja do wysylania, ktora bedzie zarzadzana przez kolejke
-    async function _sendBleMessageUnmanaged(message) {
-        if (!rxCharacteristic) { 
-            console.warn("Proba wyslania danych bez polaczenia BLE."); 
-            // W przypadku bledu polaczenia, wyczysc kolejke, aby uniknac wysylania starych danych po ponownym polaczeniu
-            bleCommandQueue = [];
-            return; 
-        }
+    async function sendBleMessage(message) {
+        if (!rxCharacteristic) { console.warn("Proba wyslania danych bez polaczenia BLE."); return; }
         try {
             const encoder = new TextEncoder();
-            await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message))); // Uzycie writeValueWithoutResponse dla wiekszej przepustowosci
-        } catch(error) { 
-            addLogMessage(`Blad wysylania danych BLE: ${error}`, 'error'); 
-        }
+            // Uzywamy writeValueWithoutResponse dla wiekszej przepustowosci i mniejszego ryzyka bledu 'GATT in progress'
+            await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message)));
+        } catch(error) { addLogMessage(`Blad wysylania danych BLE: ${error}`, 'error'); }
     }
 
-    // Menedzer kolejki
-    async function processBleQueue() {
-        if (isProcessingQueue || bleCommandQueue.length === 0) {
-            return;
-        }
-        isProcessingQueue = true;
-        
-        const message = bleCommandQueue.shift(); // Pobierz pierwszy element z kolejki
-
-        try {
-            await _sendBleMessageUnmanaged(message);
-        } finally {
-            isProcessingQueue = false;
-            // Od razu sprobuj przetworzyc kolejny element, jesli jakis jest
-            setTimeout(processBleQueue, 0); 
-        }
-    }
-
-    // Nowa, publiczna funkcja do dodawania komend do kolejki
-    function enqueueBleMessage(message) {
-        // Optymalizacja dla joysticka: usun stare pozycje, zostaw tylko najnowsza
-        if (message.type === 'joystick') {
-            bleCommandQueue = bleCommandQueue.filter(cmd => cmd.type !== 'joystick');
-        }
-        bleCommandQueue.push(message);
-        processBleQueue(); // Uruchom procesowanie
-    }
-    // *** ZMIANA KONIEC ***
 
     function applyInitialState(data) {
         document.getElementById('balanceSwitch').checked = data.balancingEnabled;
@@ -702,61 +674,59 @@
                 input.dispatchEvent(new Event('change'));
             }); 
             row.querySelector('.test-btn').addEventListener('click', () => 
-                enqueueBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: parseInt(input.value) })
+                sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: parseInt(input.value) })
             ); 
             row.querySelector('.stop-btn').addEventListener('click', () => 
-                enqueueBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: 0 })
+                sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: 0 })
             ); 
         }); 
         document.getElementById('manualTuneStopAll').addEventListener('click', () => 
-            enqueueBleMessage({ type: 'set_direct_motor_control', motor: 'all', pwm: 0 })
+            sendBleMessage({ type: 'set_direct_motor_control', motor: 'all', pwm: 0 })
         ); 
     }
     
     function setupControls() {
         document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
         
-        // *** ZMIANA START *** Usunieto przycisk i logike synchronizacji
         const syncButton = document.getElementById('syncConfigBtn');
         if (syncButton) {
             syncButton.parentElement.removeChild(syncButton);
         }
-        // *** ZMIANA KONIEC ***
 
-        document.getElementById('balanceSwitch').addEventListener('change', e => { lastUserInteraction['balanceSwitch'] = Date.now(); enqueueBleMessage({ type: 'balance_toggle', enabled: e.target.checked }); });
+        document.getElementById('balanceSwitch').addEventListener('change', e => { lastUserInteraction['balanceSwitch'] = Date.now(); sendBleMessage({ type: 'balance_toggle', enabled: e.target.checked }); });
         document.getElementById('holdPositionSwitch').addEventListener('change', e => { 
             lastUserInteraction['holdPositionSwitch'] = Date.now(); 
-            enqueueBleMessage({ type: 'hold_position_toggle', enabled: e.target.checked });
+            sendBleMessage({ type: 'hold_position_toggle', enabled: e.target.checked });
             if (e.target.checked) {
                 document.getElementById('speedModeSwitch').checked = false;
                 document.getElementById('speedModeSwitch').disabled = true;
-                enqueueBleMessage({ type: 'speed_mode_toggle', enabled: false });
+                sendBleMessage({ type: 'speed_mode_toggle', enabled: false });
             } else {
                 document.getElementById('speedModeSwitch').disabled = false;
             }
         });
         document.getElementById('speedModeSwitch').addEventListener('change', e => { 
-            enqueueBleMessage({ type: 'speed_mode_toggle', enabled: e.target.checked });
+            sendBleMessage({ type: 'speed_mode_toggle', enabled: e.target.checked });
             if (e.target.checked) {
                 document.getElementById('holdPositionSwitch').checked = false;
                 document.getElementById('holdPositionSwitch').disabled = true;
-                enqueueBleMessage({ type: 'hold_position_toggle', enabled: false });
+                sendBleMessage({ type: 'hold_position_toggle', enabled: false });
             } else {
                 document.getElementById('holdPositionSwitch').disabled = false;
             }
         });
-        document.getElementById('lqrEnabledSwitch').addEventListener('change', e => enqueueBleMessage({ type: 'lqr_enabled_toggle', enabled: e.target.checked }));
+        document.getElementById('lqrEnabledSwitch').addEventListener('change', e => sendBleMessage({ type: 'lqr_enabled_toggle', enabled: e.target.checked }));
 
-        document.getElementById('resetZeroBtn').addEventListener('click', () => enqueueBleMessage({ type: 'reset_zero' }));
-        document.getElementById('trimPlusBtn').addEventListener('click', () => enqueueBleMessage({ type: 'adjust_zero', value: 1 }));
-        document.getElementById('trimMinusBtn').addEventListener('click', () => enqueueBleMessage({ type: 'adjust_zero', value: -1 }));
-        document.getElementById('trimRollPlusBtn').addEventListener('click', () => enqueueBleMessage({ type: 'adjust_roll', value: 1 }));
-        document.getElementById('trimRollMinusBtn').addEventListener('click', () => enqueueBleMessage({ type: 'adjust_roll', value: -1 }));
-        document.getElementById('saveBtn').addEventListener('click', () => { if(confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")){ enqueueBleMessage({ type: 'save_tunings' }); addLogMessage('Wyslano polecenie ZAPISU do EEPROM.', 'info'); }});
-        document.getElementById('loadBtn').addEventListener('click', () => { if(confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")){ enqueueBleMessage({ type: 'load_from_eeprom' }); addLogMessage('Wyslano polecenie ODCZYTU z EEPROM.', 'info'); }});
-        document.getElementById('emergencyStopBtn').addEventListener('click', () => enqueueBleMessage({ type: 'emergency_stop' }));
-        document.getElementById('resetEncodersBtn').addEventListener('click', () => enqueueBleMessage({ type: 'reset_encoders' }));
-        document.getElementById('calibrateMpuBtn').addEventListener('click', () => enqueueBleMessage({ type: 'calibrate_mpu' }));
+        document.getElementById('resetZeroBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_zero' }));
+        document.getElementById('trimPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 1 }));
+        document.getElementById('trimMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -1 }));
+        document.getElementById('trimRollPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: 1 }));
+        document.getElementById('trimRollMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -1 }));
+        document.getElementById('saveBtn').addEventListener('click', () => { if(confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")){ sendBleMessage({ type: 'save_tunings' }); addLogMessage('Wyslano polecenie ZAPISU do EEPROM.', 'info'); }});
+        document.getElementById('loadBtn').addEventListener('click', () => { if(confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")){ sendBleMessage({ type: 'load_from_eeprom' }); addLogMessage('Wyslano polecenie ODCZYTU z EEPROM.', 'info'); }});
+        document.getElementById('emergencyStopBtn').addEventListener('click', () => sendBleMessage({ type: 'emergency_stop' }));
+        document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' }));
+        document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
 
         let lqrUpdateTimeout;
         const DEBOUNCE_DELAY = 300;
@@ -778,7 +748,7 @@
                                     msg.params[key] = parseFloat(el.value);
                                 }
                             });
-                            enqueueBleMessage(msg);
+                            sendBleMessage(msg);
                             addLogMessage('Wyslano nowe wagi LQR do przeliczenia.', 'info');
                         }, DEBOUNCE_DELAY);
                     } else {
@@ -794,7 +764,7 @@
                                 msg.params[key] = value;
                             }
                         });
-                        enqueueBleMessage(msg);
+                        sendBleMessage(msg);
                     }
                 };
                 
@@ -826,11 +796,11 @@
     }
     
     function setupDpadControls() { 
-        document.getElementById('dpad-up').addEventListener('click', () => enqueueBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) })); 
-        document.getElementById('dpad-down').addEventListener('click', () => enqueueBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) })); 
-        document.getElementById('dpad-left').addEventListener('click', () => enqueueBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) })); 
-        document.getElementById('dpad-right').addEventListener('click', () => enqueueBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) })); 
-        document.getElementById('dpad-stop').addEventListener('click', () => enqueueBleMessage({ type: 'command_stop' })); 
+        document.getElementById('dpad-up').addEventListener('click', () => sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) })); 
+        document.getElementById('dpad-down').addEventListener('click', () => sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) })); 
+        document.getElementById('dpad-left').addEventListener('click', () => sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) })); 
+        document.getElementById('dpad-right').addEventListener('click', () => sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) })); 
+        document.getElementById('dpad-stop').addEventListener('click', () => sendBleMessage({ type: 'command_stop' })); 
     }
 
     function setupLqrPresets() {
@@ -859,7 +829,7 @@
                         msg.params[paramKey] = values[key];
                     }
                 }
-                enqueueBleMessage(msg);
+                sendBleMessage(msg);
                 addLogMessage(`Zaladowano i wyslano preset '${lqrPresets[selectedKey].name}'.`, 'info');
             }
         });
@@ -894,9 +864,9 @@
             checkbox.addEventListener('change', (e) => { 
                 const varName = e.target.value; 
                 if (e.target.checked) { 
-                    enqueueBleMessage({ type: 'subscribe_variable', name: varName }); 
+                    sendBleMessage({ type: 'subscribe_variable', name: varName }); 
                 } else { 
-                    enqueueBleMessage({ type: 'unsubscribe_variable', name: varName }); 
+                    sendBleMessage({ type: 'unsubscribe_variable', name: varName }); 
                     const chartData = telemetryChart.data, datasetIndex = chartData.datasets.findIndex(ds => ds.label === availableTelemetry[varName].label); 
                     if (datasetIndex > -1) { 
                         chartData.datasets.splice(datasetIndex, 1); 
@@ -931,7 +901,7 @@
         joystickCtx.fillStyle = '#a2f279'; 
         joystickCtx.fill(); 
     }
-    
+
     function handleJoystickMove(e) { 
         if (!isDragging) return; 
         e.preventDefault(); 
@@ -951,7 +921,7 @@
         
         const now = Date.now();
         if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) {
-            enqueueBleMessage({ type: 'joystick', x: finalX / joystickRadius, y: -finalY / joystickRadius });
+            sendBleMessage({ type: 'joystick', x: finalX / joystickRadius, y: -finalY / joystickRadius });
             lastJoystickSendTime = now;
         }
     }
@@ -961,44 +931,23 @@
         if (!isDragging) return; 
         isDragging = false; 
         drawJoystick(0, 0); 
-        enqueueBleMessage({ type: 'joystick', x: 0, y: 0 }); 
+        sendBleMessage({ type: 'joystick', x: 0, y: 0 }); 
         lastJoystickSendTime = 0;
     }
     
-    // *** ZMIANA START *** Nowe funkcje do obslugi pamieci w przegladarce
-    const SETTINGS_STORAGE_KEY = 'robotLqrSettings_v25.6';
-
-    function saveSettingsToBrowser() {
-        const settings = {};
-        document.querySelectorAll('#allSettings input[type=number], #controls-card input[type=number]').forEach(input => {
-            settings[input.id] = input.value;
-        });
-        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-        console.log("Zapisano ustawienia w przegladarce.");
+    function setupStateSync() { 
+        document.addEventListener('visibilitychange', () => { 
+            if (document.visibilityState === 'visible' && bleDevice && bleDevice.gatt.connected) {
+                // Nie odswiezaj automatycznie, aby uniknac nadpisania zmian
+            } 
+        }); 
     }
-
-    function loadSettingsFromBrowser() {
-        const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
-        if (savedSettings) {
-            const settings = JSON.parse(savedSettings);
-            for (const id in settings) {
-                const input = document.getElementById(id);
-                if (input) {
-                    input.value = settings[id];
-                }
-            }
-            addLogMessage("Zaladowano ostatnie ustawienia z pamieci przegladarki.", "info");
-        } else {
-            addLogMessage("Brak zapisanych ustawien w przegladarce, uzyto wartosci domyslnych.", "info");
-        }
-    }
-    // *** ZMIANA KONIEC ***
 
     function setupDiagnosticControls() { 
         const startBtn = document.getElementById('startDiagnosticBtn'), stopBtn = document.getElementById('stopDiagnosticBtn'); 
         if(startBtn && stopBtn) {
-            startBtn.addEventListener('click', () => { enqueueBleMessage({ type: 'start_diagnostic' }); startBtn.style.display = 'none'; stopBtn.style.display = 'block'; }); 
-            stopBtn.addEventListener('click', () => { enqueueBleMessage({ type: 'stop_diagnostic' }); stopBtn.style.display = 'none'; startBtn.style.display = 'block'; }); 
+            startBtn.addEventListener('click', () => { sendBleMessage({ type: 'start_diagnostic' }); startBtn.style.display = 'none'; stopBtn.style.display = 'block'; }); 
+            stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'stop_diagnostic' }); stopBtn.style.display = 'none'; startBtn.style.display = 'block'; }); 
         }
     }
     
@@ -1008,13 +957,8 @@
         setupChartControls(); 
         setupLqrPresets();
         setupHelpIcons();
+        setupStateSync(); 
         setupDiagnosticControls(); 
-
-        // *** ZMIANA START *** Ladowanie ustawien i nasluchiwanie na zmiany
-        loadSettingsFromBrowser();
-        document.getElementById('allSettings').addEventListener('change', saveSettingsToBrowser);
-        document.getElementById('controls-card').addEventListener('change', saveSettingsToBrowser);
-        // *** ZMIANA KONIEC ***
 
         joystickCanvas.addEventListener('mousedown', startJoystickDrag);
         joystickCanvas.addEventListener('touchstart', startJoystickDrag, { passive: false });
