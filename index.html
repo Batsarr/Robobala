@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Wersja 25.6-FINAL</title>
+    <title>Robot LQR - Wersja 25.9-FINAL</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -13,9 +13,9 @@
         .card { background-color: #3a3f47; border-radius: 8px; padding: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
         .info-grid, .status-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px; text-align: left; font-size: 1em; margin-top: 10px; align-items: center;}
         .info-grid strong, .status-grid strong { color: #a2f279; }
-        button { background-color: #61dafb; color: #282c34; border: none; padding: 8px 12px; border-radius: 5px; font-weight: bold; cursor: pointer; transition: background-color 0.3s; font-size: 0.9em; }
+        button { background-color: #61dafb; color: #282c34; border: none; padding: 8px 12px; border-radius: 5px; font-weight: bold; cursor: pointer; transition: background-color 0.3s, opacity 0.3s; font-size: 0.9em; }
         button:hover { background-color: #a2f279; }
-        button:disabled { background-color: #4a4f58; color: #888; cursor: not-allowed; }
+        button:disabled { background-color: #4a4f58; color: #888; cursor: not-allowed; opacity: 0.6; }
         #emergencyStopBtn { background-color: #ff6347; color: white; width: 100%; margin-top: 15px; }
         .control-row { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 10px; }
         .control-label { font-size: 1.1em; font-weight: bold; }
@@ -41,7 +41,8 @@
         .angle-display { display: flex; align-items: center; justify-content: space-between; }
         .angle-indicator-wrapper { position: relative; width: 34px; height: 34px; background-color: #20232a; border-radius: 50%; border: 1px solid #61dafb; }
         .angle-indicator-needle { position: absolute; bottom: 50%; left: calc(50% - 1px); width: 2px; height: 50%; background-color: #ff6347; transform-origin: bottom center; transition: transform 0.1s linear; }
-        .profile-controls { display: flex; gap: 10px; margin-top: 10px; }
+        .profile-controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+        .profile-controls > * { flex: 1 1 auto; }
         .chart-controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 10px; font-size: 0.9em; }
         .chart-controls label { color: #fff; }
         .setting-container { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin: 8px 0; }
@@ -103,12 +104,12 @@
             <div class="control-row"><span class="control-label">LQR Aktywny</span><label class="switch"><input type="checkbox" id="lqrEnabledSwitch" checked><span class="slider round"></span></label></div>
             
             <fieldset style="padding: 10px 10px 5px 10px;"><legend>Strojenie Joysticka</legend>
-                <div class="setting-container"><label for="joystickOutputScaleInput">Skala Wyjscia (%)</label><div class="numeric-input-wrapper"><button id="joystickOutputScaleMinus">-</button><input type="number" id="joystickOutputScaleInput" min="10" max="100" step="5" value="100"><button id="joystickOutputScalePlus">+</button></div></div>
-                <div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)</label><div class="numeric-input-wrapper"><button id="expoJoystickMinus">-</button><input type="number" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button id="expoJoystickPlus">+</button></div></div>
-                <div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button id="maxSpeedJoystickMinus">-</button><input type="number" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button id="maxSpeedJoystickPlus">+</button></div></div>
-                <div class="setting-container"><label for="joystickAngleSensitivityInput">Czulosc Kata (st.)</label><div class="numeric-input-wrapper"><button id="joystickAngleSensitivityMinus">-</button><input type="number" id="joystickAngleSensitivityInput" min="1" max="30" step="0.5" value="10"><button id="joystickAngleSensitivityPlus">+</button></div></div>
-                <div class="setting-container"><label for="turnFactorInput">Czulosc Skretu (%)</label><div class="numeric-input-wrapper"><button id="turnFactorMinus">-</button><input type="number" id="turnFactorInput" min="0" max="100" step="5" value="25"><button id="turnFactorPlus">+</button></div></div>
-                <div class="setting-container"><label for="holdPositionMarginPulsesInput">Margines Trzymania Poz. (impulsy)</label><div class="numeric-input-wrapper"><button id="holdPositionMarginPulsesMinus">-</button><input type="number" id="holdPositionMarginPulsesInput" min="0" max="100" step="1" value="15"><button id="holdPositionMarginPulsesPlus">+</button></div></div>
+                <div class="setting-container"><label for="joystickOutputScaleInput">Skala Wyjscia (%)</label><div class="numeric-input-wrapper"><button id="joystickOutputScaleMinus">-</button><input type="number" class="config-value" id="joystickOutputScaleInput" min="10" max="100" step="5" value="100"><button id="joystickOutputScalePlus">+</button></div></div>
+                <div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)</label><div class="numeric-input-wrapper"><button id="expoJoystickMinus">-</button><input type="number" class="config-value" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button id="expoJoystickPlus">+</button></div></div>
+                <div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button id="maxSpeedJoystickMinus">-</button><input type="number" class="config-value" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button id="maxSpeedJoystickPlus">+</button></div></div>
+                <div class="setting-container"><label for="joystickAngleSensitivityInput">Czulosc Kata (st.)</label><div class="numeric-input-wrapper"><button id="joystickAngleSensitivityMinus">-</button><input type="number" class="config-value" id="joystickAngleSensitivityInput" min="1" max="30" step="0.5" value="10"><button id="joystickAngleSensitivityPlus">+</button></div></div>
+                <div class="setting-container"><label for="turnFactorInput">Czulosc Skretu (%)</label><div class="numeric-input-wrapper"><button id="turnFactorMinus">-</button><input type="number" class="config-value" id="turnFactorInput" min="0" max="100" step="5" value="25"><button id="turnFactorPlus">+</button></div></div>
+                <div class="setting-container"><label for="holdPositionMarginPulsesInput">Margines Trzymania Poz. (impulsy)</label><div class="numeric-input-wrapper"><button id="holdPositionMarginPulsesMinus">-</button><input type="number" class="config-value" id="holdPositionMarginPulsesInput" min="0" max="100" step="1" value="15"><button id="holdPositionMarginPulsesPlus">+</button></div></div>
             </fieldset>
             
             <hr style="border-color: #4a4f58; margin: 15px 0;">
@@ -191,7 +192,15 @@
                     <select id="lqrPresetSelect" style="width: 100%; padding: 5px;"></select>
                 </div>
                  <div class="profile-controls">
-                    <button id="applyLqrPresetBtn" style="width: 100%;">Zastosuj Preset</button>
+                    <button id="applyLqrPresetBtn" style="width: 100%;">Zastosuj i Wczytaj do Panelu</button>
+                </div>
+                <hr style="border-color: #4a4f58; margin: 15px 0;">
+                <div class="profile-controls">
+                    <input type="text" id="newPresetNameInput" placeholder="Nazwa nowego presetu..." style="width: 100%; padding: 5px;">
+                </div>
+                <div class="profile-controls">
+                    <button id="savePresetBtn" style="background-color: #a2f279;">Zapisz jako Nowy</button>
+                    <button id="deletePresetBtn" style="background-color: #ff6347;" disabled>Usuń Wybrany</button>
                 </div>
             </fieldset>
             
@@ -202,22 +211,22 @@
                         <h5>Wagi Stanow (Macierz Q)</h5>
                         <div class="setting-container">
                             <label for="q1AngleInput">Q1 - Kat (theta)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="q1AngleInput" min="0" max="1000" step="5" value="100"><button class="lqr-plus">+</button></div>
+                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input config-value" id="q1AngleInput" min="0" max="1000" step="5" value="100"><button class="lqr-plus">+</button></div>
                             <div class="help-text"><strong>Wplyw:</strong> Kara za odchylenie od pionu. Wieksza wartosc = robot mocniej 'walczy' o utrzymanie pionu, jest sztywniejszy.</div>
                         </div>
                         <div class="setting-container">
                             <label for="q2AngularVelInput">Q2 - Predkosc katowa<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="q2AngularVelInput" min="0" max="100" step="1" value="10"><button class="lqr-plus">+</button></div>
+                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input config-value" id="q2AngularVelInput" min="0" max="100" step="1" value="10"><button class="lqr-plus">+</button></div>
                             <div class="help-text"><strong>Wplyw:</strong> Kara za szybkie zmiany kata (oscylacje). Wieksza wartosc = lepsze tlumienie drgan, bardziej plynna reakcja.</div>
                         </div>
                         <div class="setting-container">
                             <label for="q3PositionInput">Q3 - Pozycja (s)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="q3PositionInput" min="0" max="100" step="0.1" value="1"><button class="lqr-plus">+</button></div>
+                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input config-value" id="q3PositionInput" min="0" max="100" step="0.1" value="1"><button class="lqr-plus">+</button></div>
                             <div class="help-text"><strong>Wplyw:</strong> Kara za dryf pozycyjny. Wieksza wartosc = robot aktywniej wraca do pozycji wyjsciowej po zatrzymaniu.</div>
                         </div>
                         <div class="setting-container">
                             <label for="q4VelocityInput">Q4 - Predkosc (s_dot)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="q4VelocityInput" min="0" max="100" step="0.5" value="5"><button class="lqr-plus">+</button></div>
+                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input config-value" id="q4VelocityInput" min="0" max="100" step="0.5" value="5"><button class="lqr-plus">+</button></div>
                             <div class="help-text"><strong>Wplyw:</strong> Kara za szybkie ruchy liniowe. Wieksza wartosc = plynniejsze, mniej gwaltowne przyspieszanie i hamowanie.</div>
                         </div>
                     </div>
@@ -226,7 +235,7 @@
                         <h5>Waga Sterowania (Skalar R)</h5>
                         <div class="setting-container">
                             <label for="rControlInput">R - Waga sterowania<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input" id="rControlInput" min="0.001" max="10" step="0.01" value="0.1"><button class="lqr-plus">+</button></div>
+                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input config-value" id="rControlInput" min="0.001" max="10" step="0.01" value="0.1"><button class="lqr-plus">+</button></div>
                             <div class="help-text"><strong>Wplyw:</strong> Kara za zuzycie energii (PWM silnikow). Wieksza wartosc = slabsze, bardziej oszczedne sterowanie. Mniejsza wartosc = mocniejsza reakcja.</div>
                         </div>
                     </div>
@@ -235,7 +244,7 @@
                         <h5>Wzmocnienie Glowne</h5>
                         <div class="setting-container">
                             <label for="lqrOutputScalarInput">Skala Wyjscia LQR<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="lqrOutputScalarMinus">-</button><input type="number" id="lqrOutputScalarInput" min="0.1" max="50.0" step="0.1" value="20.0"><button id="lqrOutputScalarPlus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="lqrOutputScalarMinus">-</button><input type="number" class="config-value" id="lqrOutputScalarInput" min="0.1" max="50.0" step="0.1" value="20.0"><button id="lqrOutputScalarPlus">+</button></div>
                             <div class="help-text"><strong>Wplyw:</strong> Glowny mnoznik dla calego sygnalu sterujacego. Zwiekszaj, jesli robot jest 'slaby', zmniejszaj, jesli jest zbyt agresywny lub wpada w oscylacje. To Twoje glowne pokretlo do strojenia!</div>
                         </div>
                     </div>
@@ -250,17 +259,17 @@
                         <h4>Parametry Fizyczne Robota</h4>
                         <div class="setting-container">
                             <label for="mBodyInput">Masa korpusu (kg)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="mBodyMinus">-</button><input type="number" id="mBodyInput" min="0.1" max="5.0" step="0.01" value="0.150"><button id="mBodyPlus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="mBodyMinus">-</button><input type="number" class="config-value" id="mBodyInput" min="0.1" max="5.0" step="0.01" value="0.150"><button id="mBodyPlus">+</button></div>
                             <div class="help-text"><strong>Wplyw:</strong> Laczna masa robota bez kol i silnikow. Wplywa na moment bezwladnosci. Zmien, jesli dodasz lub usuniesz komponenty.</div>
                         </div>
                         <div class="setting-container">
                             <label for="mWheelInput">Masa kola (kg)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="mWheelMinus">-</button><input type="number" id="mWheelInput" min="0.01" max="1.0" step="0.005" value="0.055"><button id="mWheelPlus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="mWheelMinus">-</button><input type="number" class="config-value" id="mWheelInput" min="0.01" max="1.0" step="0.005" value="0.055"><button id="mWheelPlus">+</button></div>
                             <div class="help-text"><strong>Wplyw:</strong> Masa jednego kola razem z silnikiem. Wplywa na bezwladnosc calego ukladu.</div>
                         </div>
                         <div class="setting-container">
                             <label for="LInput">Wysokosc srodka masy (m)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="LMinus">-</button><input type="number" id="LInput" min="0.01" max="0.5" step="0.001" value="0.087"><button id="LPlus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="LMinus">-</button><input type="number" class="config-value" id="LInput" min="0.01" max="0.5" step="0.001" value="0.087"><button id="LPlus">+</button></div>
                             <div class="help-text"><strong>Wplyw:</strong> Kluczowy parametr! Odleglosc od osi kol do srodka masy korpusu. Wieksze L = wieksza niestabilnosc, ale potencjalnie wolniejsza reakcja.</div>
                         </div>
                     </div>
@@ -268,15 +277,15 @@
                         <h5>Kalibracja Mechaniczna</h5>
                         <div class="setting-container">
                             <label for="wheelDiameterCmInput">Srednica kola (cm)</label>
-                            <div class="numeric-input-wrapper"><button id="wheelDiameterCmMinus">-</button><input type="number" id="wheelDiameterCmInput" min="3" max="30" step="0.1" value="8.2"><button id="wheelDiameterCmPlus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="wheelDiameterCmMinus">-</button><input type="number" class="config-value" id="wheelDiameterCmInput" min="3" max="30" step="0.1" value="8.2"><button id="wheelDiameterCmPlus">+</button></div>
                         </div>
                         <div class="setting-container">
                             <label for="trackWidthCmInput">Rozstaw kol (cm)</label>
-                            <div class="numeric-input-wrapper"><button id="trackWidthCmMinus">-</button><input type="number" id="trackWidthCmInput" min="5" max="50" step="0.1" value="13.0"><button id="trackWidthCmPlus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="trackWidthCmMinus">-</button><input type="number" class="config-value" id="trackWidthCmInput" min="5" max="50" step="0.1" value="13.0"><button id="trackWidthCmPlus">+</button></div>
                         </div>
                         <div class="setting-container">
                             <label for="encoderPprInput">Impulsy na obrot (PPR)</label>
-                            <div class="numeric-input-wrapper"><button id="encoderPprMinus">-</button><input type="number" id="encoderPprInput" min="100" max="5000" step="10" value="820"><button id="encoderPprPlus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="encoderPprMinus">-</button><input type="number" class="config-value" id="encoderPprInput" min="100" max="5000" step="10" value="820"><button id="encoderPprPlus">+</button></div>
                         </div>
                     </div>
                 </div>
@@ -322,8 +331,8 @@
     </div>
 
 <script>
-    const lqrPresets = {
-        'default': { name: 'Wybierz gotowy zestaw...', values: null },
+    // Stale presety wbudowane
+    const lqrBuiltInPresets = {
         'balanced': { name: '1. Zbalansowany (Startowy)', values: { q1: 150, q2: 15, q3: 10, q4: 20, r: 0.08 } },
         'stiff': { name: '2. Bardzo Sztywny (Precyzja)', values: { q1: 500, q2: 25, q3: 5, q4: 10, r: 0.1 } },
         'soft': { name: '3. Miekki (Tlumienie)', values: { q1: 80, q2: 40, q3: 1, q4: 25, r: 0.2 } },
@@ -333,6 +342,8 @@
         'balance_only': { name: '7. Minimalistyczny (Tylko Balans)', values: { q1: 200, q2: 20, q3: 0, q4: 0, r: 0.1 } },
         'experimental_speed': { name: '8. Eksperymentalny (Wysokie Predkosci)', values: { q1: 70, q2: 5, q3: 0.1, q4: 50, r: 0.04 } }
     };
+
+    const CUSTOM_PRESET_PREFIX = 'lqr_custom_preset_';
 
     const availableTelemetry = {
         'pitch': { label: 'Pitch (Kat)', color: '#61dafb' },
@@ -360,11 +371,17 @@
     const JOYSTICK_SEND_INTERVAL = 50;
     let isSendingJoystick = false;
 
+    const debounceAction = (button) => {
+        button.disabled = true;
+        setTimeout(() => {
+            button.disabled = false;
+        }, 1000);
+    };
+
     function toggleAccordion(header) {
         const content = header.nextElementSibling;
         const isActive = header.classList.contains('active');
         
-        // Zamknij wszystkie inne otwarte akordeony w tej samej karcie
         const parentCard = header.closest('.card');
         parentCard.querySelectorAll('.accordion-header.active').forEach(otherHeader => {
             if (otherHeader !== header) {
@@ -373,7 +390,6 @@
             }
         });
 
-        // Otworz lub zamknij klikniety
         if (!isActive) {
             header.classList.add('active');
             content.style.maxHeight = content.scrollHeight + "px";
@@ -412,12 +428,6 @@
             document.getElementById('connectionStatus').className = 'status-indicator status-ok';
             document.getElementById('connectionText').textContent = 'Polaczony';
             
-            // Poprawka bledu: Sprawdzamy czy element istnieje przed proba jego modyfikacji
-            const syncBtn = document.getElementById('syncConfigBtn');
-            if (syncBtn) {
-                syncBtn.disabled = false;
-            }
-            
             addLogMessage('Polaczono! Mozesz teraz sterowac robotem.', 'info');
 
         } catch(error) {
@@ -445,11 +455,6 @@
         document.getElementById('systemText').textContent = 'Nieznany';
         document.getElementById('connectBleBtn').disabled = false;
         
-        // *** ZMIANA START *** Usunieto odwolanie do nieistniejacego przycisku
-        // const syncBtn = document.getElementById('syncConfigBtn');
-        // if (syncBtn) syncBtn.disabled = true;
-        // *** ZMIANA KONIEC ***
-
         rxCharacteristic = null;
         txCharacteristic = null;
     }
@@ -489,14 +494,16 @@
     }
     
     async function sendBleMessage(message) {
-        if (!rxCharacteristic) { console.warn("Proba wyslania danych bez polaczenia BLE."); return; }
+        if (!rxCharacteristic) { 
+            console.warn("Proba wyslania danych bez polaczenia BLE."); 
+            addLogMessage("Brak polaczenia z robotem!", "error");
+            return; 
+        }
         try {
             const encoder = new TextEncoder();
-            // Uzywamy writeValueWithoutResponse dla wiekszej przepustowosci i mniejszego ryzyka bledu 'GATT in progress'
             await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message)));
         } catch(error) { addLogMessage(`Blad wysylania danych BLE: ${error}`, 'error'); }
     }
-
 
     function applyInitialState(data) {
         document.getElementById('balanceSwitch').checked = data.balancingEnabled;
@@ -664,6 +671,8 @@
         document.querySelectorAll('.manual-tune-row').forEach(row => { 
             const input = row.querySelector('.tune-input'); 
             const step = 10;
+            const testBtn = row.querySelector('.test-btn');
+            const stopBtn = row.querySelector('.stop-btn');
 
             row.querySelector('.tune-plus').addEventListener('click', () => {
                 input.value = Math.min(parseInt(input.value) + step, 1023);
@@ -673,26 +682,27 @@
                 input.value = Math.max(parseInt(input.value) - step, 0);
                 input.dispatchEvent(new Event('change'));
             }); 
-            row.querySelector('.test-btn').addEventListener('click', () => 
-                sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: parseInt(input.value) })
-            ); 
-            row.querySelector('.stop-btn').addEventListener('click', () => 
-                sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: 0 })
-            ); 
+            testBtn.addEventListener('click', (e) => {
+                debounceAction(e.target);
+                sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: parseInt(input.value) });
+            }); 
+            stopBtn.addEventListener('click', (e) => {
+                debounceAction(e.target);
+                sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: 0 });
+            }); 
         }); 
-        document.getElementById('manualTuneStopAll').addEventListener('click', () => 
-            sendBleMessage({ type: 'set_direct_motor_control', motor: 'all', pwm: 0 })
-        ); 
+        document.getElementById('manualTuneStopAll').addEventListener('click', (e) => {
+            debounceAction(e.target);
+            sendBleMessage({ type: 'set_direct_motor_control', motor: 'all', pwm: 0 });
+        }); 
     }
     
     function setupControls() {
-        document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
+        document.getElementById('connectBleBtn').addEventListener('click', (e) => {
+            debounceAction(e.target);
+            connectBLE();
+        });
         
-        const syncButton = document.getElementById('syncConfigBtn');
-        if (syncButton) {
-            syncButton.parentElement.removeChild(syncButton);
-        }
-
         document.getElementById('balanceSwitch').addEventListener('change', e => { lastUserInteraction['balanceSwitch'] = Date.now(); sendBleMessage({ type: 'balance_toggle', enabled: e.target.checked }); });
         document.getElementById('holdPositionSwitch').addEventListener('change', e => { 
             lastUserInteraction['holdPositionSwitch'] = Date.now(); 
@@ -717,16 +727,36 @@
         });
         document.getElementById('lqrEnabledSwitch').addEventListener('change', e => sendBleMessage({ type: 'lqr_enabled_toggle', enabled: e.target.checked }));
 
-        document.getElementById('resetZeroBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_zero' }));
+        document.getElementById('resetZeroBtn').addEventListener('click', (e) => {
+            debounceAction(e.target);
+            sendBleMessage({ type: 'reset_zero' });
+        });
+        
         document.getElementById('trimPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 1 }));
         document.getElementById('trimMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -1 }));
         document.getElementById('trimRollPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: 1 }));
         document.getElementById('trimRollMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -1 }));
-        document.getElementById('saveBtn').addEventListener('click', () => { if(confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")){ sendBleMessage({ type: 'save_tunings' }); addLogMessage('Wyslano polecenie ZAPISU do EEPROM.', 'info'); }});
-        document.getElementById('loadBtn').addEventListener('click', () => { if(confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")){ sendBleMessage({ type: 'load_from_eeprom' }); addLogMessage('Wyslano polecenie ODCZYTU z EEPROM.', 'info'); }});
-        document.getElementById('emergencyStopBtn').addEventListener('click', () => sendBleMessage({ type: 'emergency_stop' }));
-        document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' }));
-        document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
+        
+        document.getElementById('saveBtn').addEventListener('click', (e) => {
+            debounceAction(e.target);
+            if(confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")){ sendBleMessage({ type: 'save_tunings' }); addLogMessage('Wyslano polecenie ZAPISU do EEPROM.', 'info'); }
+        });
+        document.getElementById('loadBtn').addEventListener('click', (e) => {
+            debounceAction(e.target);
+            if(confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")){ sendBleMessage({ type: 'load_from_eeprom' }); addLogMessage('Wyslano polecenie ODCZYTU z EEPROM.', 'info'); }
+        });
+        document.getElementById('emergencyStopBtn').addEventListener('click', (e) => {
+            debounceAction(e.target);
+            sendBleMessage({ type: 'emergency_stop' });
+        });
+        document.getElementById('resetEncodersBtn').addEventListener('click', (e) => {
+            debounceAction(e.target);
+            sendBleMessage({ type: 'reset_encoders' });
+        });
+        document.getElementById('calibrateMpuBtn').addEventListener('click', (e) => {
+            debounceAction(e.target);
+            sendBleMessage({ type: 'calibrate_mpu' });
+        });
 
         let lqrUpdateTimeout;
         const DEBOUNCE_DELAY = 300;
@@ -796,43 +826,139 @@
     }
     
     function setupDpadControls() { 
-        document.getElementById('dpad-up').addEventListener('click', () => sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) })); 
-        document.getElementById('dpad-down').addEventListener('click', () => sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) })); 
-        document.getElementById('dpad-left').addEventListener('click', () => sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) })); 
-        document.getElementById('dpad-right').addEventListener('click', () => sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) })); 
-        document.getElementById('dpad-stop').addEventListener('click', () => sendBleMessage({ type: 'command_stop' })); 
+        document.querySelectorAll('.dpad-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                debounceAction(e.target);
+                const id = e.target.id;
+                if (id === 'dpad-up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) }); 
+                else if (id === 'dpad-down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) }); 
+                else if (id === 'dpad-left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) }); 
+                else if (id === 'dpad-right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) }); 
+                else if (id === 'dpad-stop') sendBleMessage({ type: 'command_stop' });
+            });
+        });
     }
 
-    function setupLqrPresets() {
+    function loadPresets() {
         const select = document.getElementById('lqrPresetSelect');
-        for (const [key, preset] of Object.entries(lqrPresets)) {
+        const deleteBtn = document.getElementById('deletePresetBtn');
+        select.innerHTML = ''; 
+
+        const builtInGroup = document.createElement('optgroup');
+        builtInGroup.label = 'Gotowe Zestawy';
+        for (const [key, preset] of Object.entries(lqrBuiltInPresets)) {
             const option = document.createElement('option');
             option.value = key;
             option.textContent = preset.name;
-            select.appendChild(option);
+            builtInGroup.appendChild(option);
         }
+        select.appendChild(builtInGroup);
+
+        const customGroup = document.createElement('optgroup');
+        customGroup.label = 'Moje Ustawienia';
+        let customPresetsFound = false;
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith(CUSTOM_PRESET_PREFIX)) {
+                const option = document.createElement('option');
+                option.value = key; 
+                option.textContent = key.replace(CUSTOM_PRESET_PREFIX, '');
+                customGroup.appendChild(option);
+                customPresetsFound = true;
+            }
+        }
+        if (customPresetsFound) {
+            select.appendChild(customGroup);
+        }
+
+        updateDeleteButtonState();
+    }
+
+    function updateDeleteButtonState() {
+        const select = document.getElementById('lqrPresetSelect');
+        const deleteBtn = document.getElementById('deletePresetBtn');
+        const selectedValue = select.value;
+        deleteBtn.disabled = !selectedValue.startsWith(CUSTOM_PRESET_PREFIX);
+    }
+
+    function savePreset() {
+        const nameInput = document.getElementById('newPresetNameInput');
+        const name = nameInput.value.trim();
+        if (!name) {
+            alert('Wpisz nazwe dla nowego presetu!');
+            return;
+        }
+
+        const presetData = {};
+        document.querySelectorAll('.config-value').forEach(input => {
+            presetData[input.id] = input.value;
+        });
+
+        const key = CUSTOM_PRESET_PREFIX + name;
+        localStorage.setItem(key, JSON.stringify(presetData));
         
-        document.getElementById('applyLqrPresetBtn').addEventListener('click', () => {
-            const selectedKey = select.value;
-            if (lqrPresets[selectedKey] && lqrPresets[selectedKey].values) {
-                const values = lqrPresets[selectedKey].values;
-                const mapping = {
-                    q1: 'q1AngleInput', q2: 'q2AngularVelInput', q3: 'q3PositionInput',
-                    q4: 'q4VelocityInput', r: 'rControlInput'
-                };
-                let msg = { type: 'lqr_update', params: {} };
-                for (const [key, id] of Object.entries(mapping)) {
+        addLogMessage(`Zapisano nowy preset: '${name}'`, 'info');
+        nameInput.value = ''; 
+        loadPresets(); 
+    }
+
+    function deletePreset() {
+        const select = document.getElementById('lqrPresetSelect');
+        const key = select.value;
+
+        if (!key.startsWith(CUSTOM_PRESET_PREFIX)) {
+            addLogMessage('Nie mozna usunac wbudowanego presetu.', 'warn');
+            return;
+        }
+
+        if (confirm(`Czy na pewno chcesz usunac preset '${key.replace(CUSTOM_PRESET_PREFIX, '')}'?`)) {
+            localStorage.removeItem(key);
+            addLogMessage(`Usunieto preset: '${key.replace(CUSTOM_PRESET_PREFIX, '')}'`, 'info');
+            loadPresets(); 
+        }
+    }
+
+    function applyPreset() {
+        const select = document.getElementById('lqrPresetSelect');
+        const key = select.value;
+        let valuesToApply;
+        let presetName;
+
+        if (lqrBuiltInPresets[key]) {
+            valuesToApply = lqrBuiltInPresets[key].values;
+            presetName = lqrBuiltInPresets[key].name;
+            const mapping = { q1: 'q1AngleInput', q2: 'q2AngularVelInput', q3: 'q3PositionInput', q4: 'q4VelocityInput', r: 'rControlInput' };
+            for(const [param, id] of Object.entries(mapping)) {
+                const input = document.getElementById(id);
+                if(input && valuesToApply[param] !== undefined) {
+                    input.value = valuesToApply[param];
+                }
+            }
+        } else if (key.startsWith(CUSTOM_PRESET_PREFIX)) {
+            const presetDataString = localStorage.getItem(key);
+            if(presetDataString) {
+                valuesToApply = JSON.parse(presetDataString);
+                presetName = key.replace(CUSTOM_PRESET_PREFIX, '');
+                 for(const [id, value] of Object.entries(valuesToApply)) {
                     const input = document.getElementById(id);
-                    if (input && values[key] !== undefined) {
-                        input.value = values[key];
-                        let paramKey = id.replace('Input', '').replace(/([A-Z])/g, "_$1").toLowerCase();
-                        msg.params[paramKey] = values[key];
+                    if(input) {
+                        input.value = value;
                     }
                 }
-                sendBleMessage(msg);
-                addLogMessage(`Zaladowano i wyslano preset '${lqrPresets[selectedKey].name}'.`, 'info');
             }
-        });
+        } else {
+            return; 
+        }
+
+        addLogMessage(`Zastosowano preset '${presetName}' do panelu.`, 'info');
+        
+        // Czekamy krotka chwile, zeby wartosci w polach sie odswiezyly w DOM
+        setTimeout(() => {
+            document.querySelectorAll('.config-value, .lqr-input').forEach(input => {
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            addLogMessage(`Wyslano wartosci z presetu '${presetName}' do robota.`, 'info');
+        }, 100);
     }
 
     function setupHelpIcons() {
@@ -935,30 +1061,27 @@
         lastJoystickSendTime = 0;
     }
     
-    function setupStateSync() { 
-        document.addEventListener('visibilitychange', () => { 
-            if (document.visibilityState === 'visible' && bleDevice && bleDevice.gatt.connected) {
-                // Nie odswiezaj automatycznie, aby uniknac nadpisania zmian
-            } 
-        }); 
-    }
-
-    function setupDiagnosticControls() { 
-        const startBtn = document.getElementById('startDiagnosticBtn'), stopBtn = document.getElementById('stopDiagnosticBtn'); 
-        if(startBtn && stopBtn) {
-            startBtn.addEventListener('click', () => { sendBleMessage({ type: 'start_diagnostic' }); startBtn.style.display = 'none'; stopBtn.style.display = 'block'; }); 
-            stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'stop_diagnostic' }); stopBtn.style.display = 'none'; startBtn.style.display = 'block'; }); 
-        }
-    }
-    
     document.addEventListener('DOMContentLoaded', () => {
         setupControls(); 
         resizeJoystick(); 
         setupChartControls(); 
-        setupLqrPresets();
         setupHelpIcons();
-        setupStateSync(); 
-        setupDiagnosticControls(); 
+
+        loadPresets();
+        document.getElementById('applyLqrPresetBtn').addEventListener('click', (e) => {
+            debounceAction(e.target);
+            applyPreset();
+        });
+        document.getElementById('savePresetBtn').addEventListener('click', (e) => {
+            debounceAction(e.target);
+            savePreset();
+        });
+        document.getElementById('deletePresetBtn').addEventListener('click', (e) => {
+            debounceAction(e.target);
+            deletePreset();
+        });
+        document.getElementById('lqrPresetSelect').addEventListener('change', updateDeleteButtonState);
+
 
         joystickCanvas.addEventListener('mousedown', startJoystickDrag);
         joystickCanvas.addEventListener('touchstart', startJoystickDrag, { passive: false });
