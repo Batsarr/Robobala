@@ -110,6 +110,9 @@
                 <div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button id="maxSpeedJoystickMinus">-</button><input type="number" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button id="maxSpeedJoystickPlus">+</button></div></div>
                 <div class="setting-container"><label for="joystickAngleSensitivityInput">Czulosc Kata (st.)</label><div class="numeric-input-wrapper"><button id="joystickAngleSensitivityMinus">-</button><input type="number" id="joystickAngleSensitivityInput" min="1" max="30" step="0.5" value="10"><button id="joystickAngleSensitivityPlus">+</button></div></div>
                 <div class="setting-container"><label for="turnFactorInput">Czulosc Skretu (%)</label><div class="numeric-input-wrapper"><button id="turnFactorMinus">-</button><input type="number" id="turnFactorInput" min="0" max="100" step="5" value="25"><button id="turnFactorPlus">+</button></div></div>
+                 <!-- *** ZMIANA START *** Dodano nowa kontrolke -->
+                <div class="setting-container"><label for="holdPositionMarginPulsesInput">Margines Trzymania Poz. (impulsy)</label><div class="numeric-input-wrapper"><button id="holdPositionMarginPulsesMinus">-</button><input type="number" id="holdPositionMarginPulsesInput" min="0" max="100" step="1" value="15"><button id="holdPositionMarginPulsesPlus">+</button></div></div>
+                 <!-- *** ZMIANA KONIEC *** -->
             </fieldset>
             
             <hr style="border-color: #4a4f58; margin: 15px 0;">
@@ -539,6 +542,7 @@
             joystickOutputScale: data.joystick_output_scale,
             turnFactor: data.turn_factor,
             joystickAngleSensitivity: data.joystick_angle_sensitivity,
+            holdPositionMarginPulses: data.hold_position_margin_pulses,
             minPwmLeftFwd: data.min_pwm_left_fwd, 
             minPwmLeftBwd: data.min_pwm_left_bwd, 
             minPwmRightFwd: data.min_pwm_right_fwd, 
@@ -822,7 +826,7 @@
         setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'], 'set_joystick_tuning');
         setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'], 'lqr_update', true);
         setupGroupedInput(['mBody', 'mWheel', 'L'], 'physics_update');
-        setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr'], 'calibration_update');
+        setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'holdPositionMarginPulses'], 'calibration_update');
         setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm');
         
         setupManualTuningControls();
@@ -846,8 +850,6 @@
             select.appendChild(option);
         }
         
-        select.value = 'balanced';
-
         document.getElementById('applyLqrPresetBtn').addEventListener('click', () => {
             const selectedKey = select.value;
             if (lqrPresets[selectedKey] && lqrPresets[selectedKey].values) {
@@ -1010,8 +1012,6 @@
             }
         });
         
-        // Ustaw domyslny preset po zaladowaniu
-        document.getElementById('applyLqrPresetBtn').click();
     });
 
     window.onresize = () => { resizeJoystick(); };
