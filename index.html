@@ -360,9 +360,7 @@
     
     let lastJoystickSendTime = 0;
     const JOYSTICK_SEND_INTERVAL = 50;
-    // *** ZMIANA START *** Dodano flage do rozwiazania problemu 'GATT in progress'
     let isSendingJoystick = false;
-    // *** ZMIANA KONIEC ***
 
     function toggleAccordion(header) {
         const content = header.nextElementSibling;
@@ -896,15 +894,18 @@
         joystickCtx.fill(); 
     }
 
-    // *** ZMIANA START *** Stworzono dedykowana funkcje do wysylania danych z joysticka
-    async function sendJoystickData(x, y) {
-        if (isSendingJoystick) return; // Pomin wyslanie, jesli poprzednie jest w toku
-        isSendingJoystick = true;
-        try {
-            await sendBleMessage({ type: 'joystick', x: x, y: y });
-        } finally {
-            isSendingJoystick = false; // Zawsze odblokuj po zakonczeniu operacji
+    // *** ZMIANA START *** Wprowadzono nowa, niezawodna logike wysylania danych
+    function sendJoystickData(x, y) {
+        if (isSendingJoystick) {
+            return; // Pomin wyslanie, jesli poprzednie jest jeszcze w toku
         }
+        isSendingJoystick = true;
+        sendBleMessage({ type: 'joystick', x: x, y: y });
+
+        // Gwarantowane zwolnienie blokady po krotkim czasie, aby uniknac trwalego zablokowania
+        setTimeout(() => {
+            isSendingJoystick = false;
+        }, 50); // 50ms to bezpieczny interwal, ktory zapobiega bledom GATT
     }
     // *** ZMIANA KONIEC ***
 
@@ -927,9 +928,7 @@
         
         const now = Date.now();
         if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) {
-            // *** ZMIANA START *** Uzyto nowej, bezpiecznej funkcji
             sendJoystickData(finalX / joystickRadius, -finalY / joystickRadius);
-            // *** ZMIANA KONIEC ***
             lastJoystickSendTime = now;
         }
     }
@@ -939,9 +938,7 @@
         if (!isDragging) return; 
         isDragging = false; 
         drawJoystick(0, 0); 
-        // *** ZMIANA START *** Uzyto nowej, bezpiecznej funkcji
         sendJoystickData(0, 0); 
-        // *** ZMIANA KONIEC ***
         lastJoystickSendTime = 0;
     }
     
@@ -986,13 +983,9 @@
         
         // Ustaw domyslny preset po zaladowaniu
         document.getElementById('applyLqrPresetBtn').click();
-        
-        // *** ZMIANA START *** Usunieto fragment kodu, ktory zamykal domyslnie otwarte logi
-        // (usunięto blok 'if (logHeader) ...')
-        // *** ZMIANA KONIEC ***
     });
 
     window.onresize = () => { resizeJoystick(); };
 </script>
 </body>
-</html>```
+</html>
