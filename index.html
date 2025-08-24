@@ -108,6 +108,10 @@
                 <div class="setting-container"><label for="joystickOutputScaleInput">Skala Wyjscia (%)</label><div class="numeric-input-wrapper"><button id="joystickOutputScaleMinus">-</button><input type="number" id="joystickOutputScaleInput" min="10" max="100" step="5" value="100"><button id="joystickOutputScalePlus">+</button></div></div>
                 <div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)</label><div class="numeric-input-wrapper"><button id="expoJoystickMinus">-</button><input type="number" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button id="expoJoystickPlus">+</button></div></div>
                 <div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button id="maxSpeedJoystickMinus">-</button><input type="number" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button id="maxSpeedJoystickPlus">+</button></div></div>
+                <!-- *** ZMIANA START *** Dodano nowe kontrolki -->
+                <div class="setting-container"><label for="joystickAngleSensitivityInput">Czulosc Kata (st.)</label><div class="numeric-input-wrapper"><button id="joystickAngleSensitivityMinus">-</button><input type="number" id="joystickAngleSensitivityInput" min="1" max="30" step="0.5" value="10"><button id="joystickAngleSensitivityPlus">+</button></div></div>
+                <div class="setting-container"><label for="turnFactorInput">Czulosc Skretu (%)</label><div class="numeric-input-wrapper"><button id="turnFactorMinus">-</button><input type="number" id="turnFactorInput" min="0" max="100" step="5" value="25"><button id="turnFactorPlus">+</button></div></div>
+                <!-- *** ZMIANA KONIEC *** -->
             </fieldset>
             
             <hr style="border-color: #4a4f58; margin: 15px 0;">
@@ -490,6 +494,10 @@
             expoJoystick: data.expo_joystick,
             maxSpeedJoystick: data.max_speed_joystick,
             joystickOutputScale: data.joystick_output_scale,
+            // *** ZMIANA START *** Dodano nowe parametry do synchronizacji
+            turnFactor: data.turn_factor,
+            joystickAngleSensitivity: data.joystick_angle_sensitivity,
+            // *** ZMIANA KONIEC ***
             minPwmLeftFwd: data.min_pwm_left_fwd, 
             minPwmLeftBwd: data.min_pwm_left_bwd, 
             minPwmRightFwd: data.min_pwm_right_fwd, 
@@ -512,11 +520,13 @@
             const inputId = `${key}Input`;
             const input = document.getElementById(inputId);
             if (input && value !== undefined) {
-                 if (key === 'expoJoystick' || key === 'joystickOutputScale') {
+                 // *** ZMIANA START *** Dodano 'turnFactor' do konwersji na procenty
+                 if (key === 'expoJoystick' || key === 'joystickOutputScale' || key === 'turnFactor') {
                     input.value = value * 100;
                  } else {
                     input.value = value;
                  }
+                 // *** ZMIANA KONIEC ***
             }
         }
         addLogMessage("Parametry robota zsynchronizowane z panelem.", "info");
@@ -743,9 +753,11 @@
                             if (el) {
                                 let key = i.replace(/([A-Z])/g, "_$1").toLowerCase();
                                 let value = parseFloat(el.value);
-                                if (key === 'expo_joystick' || key === 'joystick_output_scale') {
+                                // *** ZMIANA START *** Dodano 'turn_factor' do konwersji
+                                if (key === 'expo_joystick' || key === 'joystick_output_scale' || key === 'turn_factor') {
                                     value = value / 100.0;
                                 }
+                                // *** ZMIANA KONIEC ***
                                 msg.params[key] = value;
                             }
                         });
@@ -770,7 +782,9 @@
             });
         };
         
-        setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick'], 'set_joystick_tuning');
+        // *** ZMIANA START *** Dodano nowe ID do obslugi
+        setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'], 'set_joystick_tuning');
+        // *** ZMIANA KONIEC ***
         setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'], 'lqr_update', true);
         setupGroupedInput(['mBody', 'mWheel', 'L'], 'physics_update');
         setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr'], 'calibration_update');
