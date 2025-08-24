@@ -84,7 +84,6 @@
         .lqr-info strong { color: #f7b731; }
         .parameter-group { background-color: #20232a; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
         .parameter-group h5 { color: #61dafb; margin: 0 0 8px 0; font-size: 1.1em; }
-        #syncConfigBtn { background-color: #f7b731; width: 100%; margin-top: 10px; }
         
         .help-icon { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: #61dafb; color: #282c34; font-size: 12px; font-weight: bold; text-align: center; line-height: 16px; margin-left: 8px; cursor: pointer; user-select: none; }
         .help-text { background-color: #20232a; color: #fff; border-radius: 6px; padding: 10px; border: 1px solid #61dafb; margin-top: 8px; text-align: left; font-size: 0.9em; line-height: 1.4; width: 100%; box-sizing: border-box; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease-out; padding-top: 0; padding-bottom: 0; grid-column: 1 / -1; }
@@ -110,6 +109,7 @@
                 <div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button id="maxSpeedJoystickMinus">-</button><input type="number" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button id="maxSpeedJoystickPlus">+</button></div></div>
                 <div class="setting-container"><label for="joystickAngleSensitivityInput">Czulosc Kata (st.)</label><div class="numeric-input-wrapper"><button id="joystickAngleSensitivityMinus">-</button><input type="number" id="joystickAngleSensitivityInput" min="1" max="30" step="0.5" value="10"><button id="joystickAngleSensitivityPlus">+</button></div></div>
                 <div class="setting-container"><label for="turnFactorInput">Czulosc Skretu (%)</label><div class="numeric-input-wrapper"><button id="turnFactorMinus">-</button><input type="number" id="turnFactorInput" min="0" max="100" step="5" value="25"><button id="turnFactorPlus">+</button></div></div>
+                <div class="setting-container"><label for="holdPositionMarginPulsesInput">Margines Trzymania Poz. (impulsy)</label><div class="numeric-input-wrapper"><button id="holdPositionMarginPulsesMinus">-</button><input type="number" id="holdPositionMarginPulsesInput" min="0" max="100" step="1" value="15"><button id="holdPositionMarginPulsesPlus">+</button></div></div>
             </fieldset>
             
             <hr style="border-color: #4a4f58; margin: 15px 0;">
@@ -140,7 +140,6 @@
                 <strong>Wolna Sterta (RAM):</strong> <span id="freeHeapVal" style="font-weight:bold; color: #f7b731;">0 B</span>
                 <strong>Stos Petli (min.):</strong> <span id="stackHwmVal" style="font-weight:bold; color: #f7b731;">0 B</span>
             </div>
-            <button id="syncConfigBtn" disabled>Synchronizuj Konfiguracje</button>
             <div class="info-grid">
                 <strong>Kat (Pitch):</strong> <div class="angle-display"><span id="angleVal">0.0 &deg;</span><div class="angle-indicator-wrapper"><div id="angleIndicator" class="angle-indicator-needle"></div></div></div>
                 <strong>Predkosc (imp/s):</strong> <span id="speedVal">0</span>
@@ -539,6 +538,7 @@
             joystickOutputScale: data.joystick_output_scale,
             turnFactor: data.turn_factor,
             joystickAngleSensitivity: data.joystick_angle_sensitivity,
+            holdPositionMarginPulses: data.hold_position_margin_pulses,
             minPwmLeftFwd: data.min_pwm_left_fwd, 
             minPwmLeftBwd: data.min_pwm_left_bwd, 
             minPwmRightFwd: data.min_pwm_right_fwd, 
@@ -715,17 +715,13 @@
     
     function setupControls() {
         document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
-        document.getElementById('syncConfigBtn').addEventListener('click', () => {
-            addLogMessage('Zadanie stanu poczatkowego...', 'info');
-            enqueueBleMessage({ type: 'request_state' });
-
-            if (configSyncTimeout) clearTimeout(configSyncTimeout);
-            
-            configSyncTimeout = setTimeout(() => {
-                addLogMessage('Blad: Timeout synchronizacji. Nie otrzymano danych od robota.', 'error');
-                configSyncTimeout = null;
-            }, 8000);
-        });
+        
+        // *** ZMIANA START *** Usunieto przycisk i logike synchronizacji
+        const syncButton = document.getElementById('syncConfigBtn');
+        if (syncButton) {
+            syncButton.parentElement.removeChild(syncButton);
+        }
+        // *** ZMIANA KONIEC ***
 
         document.getElementById('balanceSwitch').addEventListener('change', e => { lastUserInteraction['balanceSwitch'] = Date.now(); enqueueBleMessage({ type: 'balance_toggle', enabled: e.target.checked }); });
         document.getElementById('holdPositionSwitch').addEventListener('change', e => { 
@@ -822,7 +818,7 @@
         setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'], 'set_joystick_tuning');
         setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'], 'lqr_update', true);
         setupGroupedInput(['mBody', 'mWheel', 'L'], 'physics_update');
-        setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr'], 'calibration_update');
+        setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'holdPositionMarginPulses'], 'calibration_update');
         setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm');
         
         setupManualTuningControls();
@@ -846,8 +842,6 @@
             select.appendChild(option);
         }
         
-        select.value = 'balanced';
-
         document.getElementById('applyLqrPresetBtn').addEventListener('click', () => {
             const selectedKey = select.value;
             if (lqrPresets[selectedKey] && lqrPresets[selectedKey].values) {
@@ -971,13 +965,34 @@
         lastJoystickSendTime = 0;
     }
     
-    function setupStateSync() { 
-        document.addEventListener('visibilitychange', () => { 
-            if (document.visibilityState === 'visible' && bleDevice && bleDevice.gatt.connected) {
-                // Nie odswiezaj automatycznie, aby uniknac nadpisania zmian
-            } 
-        }); 
+    // *** ZMIANA START *** Nowe funkcje do obslugi pamieci w przegladarce
+    const SETTINGS_STORAGE_KEY = 'robotLqrSettings_v25.6';
+
+    function saveSettingsToBrowser() {
+        const settings = {};
+        document.querySelectorAll('#allSettings input[type=number], #controls-card input[type=number]').forEach(input => {
+            settings[input.id] = input.value;
+        });
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+        console.log("Zapisano ustawienia w przegladarce.");
     }
+
+    function loadSettingsFromBrowser() {
+        const savedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
+        if (savedSettings) {
+            const settings = JSON.parse(savedSettings);
+            for (const id in settings) {
+                const input = document.getElementById(id);
+                if (input) {
+                    input.value = settings[id];
+                }
+            }
+            addLogMessage("Zaladowano ostatnie ustawienia z pamieci przegladarki.", "info");
+        } else {
+            addLogMessage("Brak zapisanych ustawien w przegladarce, uzyto wartosci domyslnych.", "info");
+        }
+    }
+    // *** ZMIANA KONIEC ***
 
     function setupDiagnosticControls() { 
         const startBtn = document.getElementById('startDiagnosticBtn'), stopBtn = document.getElementById('stopDiagnosticBtn'); 
@@ -993,8 +1008,13 @@
         setupChartControls(); 
         setupLqrPresets();
         setupHelpIcons();
-        setupStateSync(); 
         setupDiagnosticControls(); 
+
+        // *** ZMIANA START *** Ladowanie ustawien i nasluchiwanie na zmiany
+        loadSettingsFromBrowser();
+        document.getElementById('allSettings').addEventListener('change', saveSettingsToBrowser);
+        document.getElementById('controls-card').addEventListener('change', saveSettingsToBrowser);
+        // *** ZMIANA KONIEC ***
 
         joystickCanvas.addEventListener('mousedown', startJoystickDrag);
         joystickCanvas.addEventListener('touchstart', startJoystickDrag, { passive: false });
@@ -1010,8 +1030,6 @@
             }
         });
         
-        // Ustaw domyslny preset po zaladowaniu
-        document.getElementById('applyLqrPresetBtn').click();
     });
 
     window.onresize = () => { resizeJoystick(); };
