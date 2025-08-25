@@ -314,6 +314,7 @@
                 <button id="saveBtn">Zapisz Ustawienia</button>
             </div>
         </div>
+        <!-- ZMIANA START: Dodano klasy .active do sekcji logow, aby byla domyslnie otwarta -->
         <div class="card">
             <button class="accordion-header active" onclick="toggleAccordion(this)">Logi Systemowe</button>
             <div class="accordion-content active">
@@ -332,6 +333,7 @@
                 </div>
             </div>
         </div>
+        <!-- ZMIANA KONIEC -->
     </div>
 
 <script>
@@ -424,17 +426,14 @@
             document.getElementById('connectionText').textContent = 'Polaczony';
             
             addLogMessage('Polaczono! Automatyczna synchronizacja stanu robota...', 'info');
-
-            // ZMIANA: Automatyczne zadanie o stan po polaczeniu
+            
             sendBleMessage({ type: 'request_state' });
 
-            // ZMIANA: Timeout dla synchronizacji
             if (configSyncTimeout) clearTimeout(configSyncTimeout);
             configSyncTimeout = setTimeout(() => {
                 addLogMessage('Blad: Timeout synchronizacji. Nie otrzymano danych od robota.', 'error');
                 configSyncTimeout = null;
-            }, 5000); // 5 sekund oczekiwania
-
+            }, 5000);
 
         } catch(error) {
             addLogMessage(`Blad polaczenia BLE: ${error}`, 'error');
@@ -481,7 +480,6 @@
                     updateChart(data);
                     break;
                 case 'full_config':
-                    // ZMIANA: Wylaczenie timera po otrzymaniu konfiguracji
                     if (configSyncTimeout) {
                         clearTimeout(configSyncTimeout);
                         configSyncTimeout = null;
@@ -508,7 +506,6 @@
         }
         try {
             const encoder = new TextEncoder();
-            // ZMIANA: Uzycie writeValueWithoutResponse dla wiekszej wydajnosci
             await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message)));
         } catch(error) { addLogMessage(`Blad wysylania danych BLE: ${error}`, 'error'); }
     }
@@ -1090,8 +1087,8 @@
         resizeJoystick(); 
         setupChartControls(); 
         setupHelpIcons();
-
         loadPresets();
+
         document.getElementById('applyLqrPresetBtn').addEventListener('click', debounceWrapper((e) => {
             applyPreset();
         }));
@@ -1103,20 +1100,23 @@
         }));
         document.getElementById('lqrPresetSelect').addEventListener('change', updateDeleteButtonState);
 
-
+        // <!-- ZMIANA START: Dodano brakujace listenery dla joysticka -->
         joystickCanvas.addEventListener('mousedown', startJoystickDrag);
         joystickCanvas.addEventListener('touchstart', startJoystickDrag, { passive: false });
         document.addEventListener('mousemove', handleJoystickMove); 
         document.addEventListener('touchmove', handleJoystickMove, { passive: false });
         document.addEventListener('mouseup', endJoystickDrag); 
         document.addEventListener('touchend', endJoystickDrag);
+        // <!-- ZMIANA KONIEC -->
 
-        document.querySelectorAll('.accordion-header').forEach(header => {
+        // <!-- ZMIANA START: Dodano logike otwierania domyslnych akordeonow -->
+        document.querySelectorAll('.accordion-header.active').forEach(header => {
             const content = header.nextElementSibling;
-            if (header.classList.contains('active')) {
+            if (content) {
                  setTimeout(() => { content.style.maxHeight = content.scrollHeight + 'px'; }, 100);
             }
         });
+        // <!-- ZMIANA KONIEC -->
         
     });
 
