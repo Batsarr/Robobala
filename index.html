@@ -363,6 +363,11 @@
     let joystickCenter, joystickRadius, knobRadius, isDragging = false;
     let lastJoystickSendTime = 0;
     const JOYSTICK_SEND_INTERVAL = 50;
+    
+    // =========================================================================
+    // === NOWA LOGIKA DO OBSLUGI FRAGMENTACJI PAKIETOW BLE ===
+    // =========================================================================
+    let chunkBuffers = {}; // Globalny obiekt do przechowywania fragmentow
 
     function toggleAccordion(header) {
         const content = header.nextElementSibling;
@@ -434,26 +439,81 @@
         document.getElementById('connectBleBtn').disabled = false;
         rxCharacteristic = null;
         txCharacteristic = null;
+        chunkBuffers = {}; // Resetuj bufor fragmentow po rozlaczeniu
     }
 
     function handleBleNotification(event) {
         const value = event.target.value;
         const decoder = new TextDecoder('utf-8');
         const jsonString = decoder.decode(value);
-        handleIncomingData({ data: jsonString });
+        handleIncomingData(jsonString);
     }
 
-    function handleIncomingData(event) {
+    // Glowna funkcja obslugujaca wszystkie przychodzace dane
+    function handleIncomingData(jsonString) {
         try {
-            const data = JSON.parse(event.data);
-            switch (data.type) {
-                case 'telemetry': updateUI(data); updateChart(data); break;
-                case 'full_config': if (configSyncTimeout) { clearTimeout(configSyncTimeout); configSyncTimeout = null; } applyInitialState(data); break;
-                case 'log': addLogMessage(`[ROBOT] ${data.message}`, data.level); break;
-                case 'memory_info': updateMemoryInfo(data); break;
+            const data = JSON.parse(jsonString);
+
+            // Sprawdz, czy to fragment wiekszej wiadomosci
+            if (data.type === 'chunk') {
+                if (data.i === 0) {
+                     addLogMessage(`Odbieram fragmentowana wiadomosc (ID: ${data.id}, ${data.total} czesci)...`, 'info');
+                }
+
+                // Inicjalizuj bufor dla tego ID wiadomosci, jesli nie istnieje
+                if (!chunkBuffers[data.id]) {
+                    chunkBuffers[data.id] = {
+                        chunks: new Array(data.total),
+                        receivedCount: 0,
+                        totalCount: data.total
+                    };
+                }
+
+                const buffer = chunkBuffers[data.id];
+                if (!buffer.chunks[data.i]) {
+                    buffer.chunks[data.i] = data.data;
+                    buffer.receivedCount++;
+                }
+                
+                // Jesli otrzymano wszystkie fragmenty, zloz wiadomosc
+                if (buffer.receivedCount === buffer.totalCount) {
+                    const completeMessageString = buffer.chunks.join('');
+                    addLogMessage(`Zlozono wiadomosc (ID: ${data.id}) z ${data.total} czesci. Rozmiar: ${completeMessageString.length} B.`, 'info');
+                    
+                    delete chunkBuffers[data.id];
+                    
+                    // Przetworz zlozona wiadomosc (wywolanie rekurencyjne)
+                    handleIncomingData(completeMessageString);
+                }
+            } else {
+                // To jest normalna, niepofragmentowana wiadomosc lub wlasnie zlozona
+                processCompleteMessage(data);
             }
         } catch (e) {
-            addLogMessage(`Blad parsowania JSON: ${e}. Dane: ${event.data}`, 'error');
+            addLogMessage(`Blad parsowania JSON: ${e}. Dane: ${jsonString}`, 'error');
+        }
+    }
+
+    // Funkcja do przetwarzania w pelni zlozonych wiadomosci
+    function processCompleteMessage(data) {
+        switch (data.type) {
+            case 'telemetry':
+                updateUI(data);
+                updateChart(data);
+                break;
+            case 'full_config':
+                if (configSyncTimeout) {
+                    clearTimeout(configSyncTimeout);
+                    configSyncTimeout = null;
+                }
+                applyInitialState(data);
+                break;
+            case 'log':
+                addLogMessage(`[ROBOT] ${data.message}`, data.level);
+                break;
+            case 'memory_info':
+                updateMemoryInfo(data);
+                break;
         }
     }
 
