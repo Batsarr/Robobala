@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Wersja 25.9-FINAL</title>
+    <title>Robot LQR - Wersja 25.10-FINAL</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -287,6 +287,10 @@
                             <label for="encoderPprInput">Impulsy na obrot (PPR)</label>
                             <div class="numeric-input-wrapper"><button id="encoderPprMinus">-</button><input type="number" class="config-value" id="encoderPprInput" min="100" max="5000" step="10" value="820"><button id="encoderPprPlus">+</button></div>
                         </div>
+                        <div class="setting-container">
+                            <label for="kiPosLqrInput">Wzmocnienie całki pozycji (Ki)</label>
+                            <div class="numeric-input-wrapper"><button id="kiPosLqrMinus">-</button><input type="number" class="config-value" id="kiPosLqrInput" min="0" max="1.0" step="0.01" value="0.1"><button id="kiPosLqrPlus">+</button></div>
+                        </div>
                     </div>
                 </div>
 
@@ -295,10 +299,10 @@
                     <div class="pwm-info">
                         <strong>Info:</strong> Minimalne wartosci PWM to prog, ponizej ktorego silnik nie kreci sie. Ustal je testujac kazdy silnik osobno.
                     </div>
-                    <div class="manual-tune-row" data-motor="left" data-direction="fwd"><label>Lewy (Przod)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="tune-input" id="minPwmLeftFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div></div>
-                    <div class="manual-tune-row" data-motor="left" data-direction="bwd"><label>Lewy (Tyl)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="tune-input" id="minPwmLeftBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div></div>
-                    <div class="manual-tune-row" data-motor="right" data-direction="fwd"><label>Prawy (Przod)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="tune-input" id="minPwmRightFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div></div>
-                    <div class="manual-tune-row" data-motor="right" data-direction="bwd"><label>Prawy (Tyl)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="tune-input" id="minPwmRightBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div></div>
+                    <div class="manual-tune-row" data-motor="left" data-direction="fwd"><label>Lewy (Przod)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div></div>
+                    <div class="manual-tune-row" data-motor="left" data-direction="bwd"><label>Lewy (Tyl)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div></div>
+                    <div class="manual-tune-row" data-motor="right" data-direction="fwd"><label>Prawy (Przod)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div></div>
+                    <div class="manual-tune-row" data-motor="right" data-direction="bwd"><label>Prawy (Tyl)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div></div>
                     <hr style="border-color: #4a4f58; margin: 15px 0;">
                     <div class="manual-tune-readout"><div>Enkoder L: <span id="manualEncoderL">0</span></div><div>Enkoder P: <span id="manualEncoderR">0</span></div></div>
                     <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKO</button>
@@ -331,7 +335,6 @@
     </div>
 
 <script>
-    // Stale presety wbudowane
     const lqrBuiltInPresets = {
         'balanced': { name: '1. Zbalansowany (Startowy)', values: { q1: 150, q2: 15, q3: 10, q4: 20, r: 0.08 } },
         'stiff': { name: '2. Bardzo Sztywny (Precyzja)', values: { q1: 500, q2: 25, q3: 5, q4: 10, r: 0.1 } },
@@ -369,14 +372,6 @@
     
     let lastJoystickSendTime = 0;
     const JOYSTICK_SEND_INTERVAL = 50;
-    let isSendingJoystick = false;
-
-    const debounceAction = (button) => {
-        button.disabled = true;
-        setTimeout(() => {
-            button.disabled = false;
-        }, 1000);
-    };
 
     function toggleAccordion(header) {
         const content = header.nextElementSibling;
@@ -505,6 +500,7 @@
         } catch(error) { addLogMessage(`Blad wysylania danych BLE: ${error}`, 'error'); }
     }
 
+
     function applyInitialState(data) {
         document.getElementById('balanceSwitch').checked = data.balancingEnabled;
         document.getElementById('holdPositionSwitch').checked = data.holdPositionEnabled;
@@ -534,6 +530,7 @@
             wheelDiameterCm: data.wheel_diameter_cm,
             trackWidthCm: data.track_width_cm,
             encoderPpr: data.encoder_ppr,
+            kiPosLqr: data.ki_pos_lqr
         };
         
         for (const [key, value] of Object.entries(params)) {
@@ -683,25 +680,43 @@
                 input.dispatchEvent(new Event('change'));
             }); 
             testBtn.addEventListener('click', (e) => {
-                debounceAction(e.target);
+                const button = e.currentTarget;
+                if(button.disabled) return;
+                button.disabled = true;
+                setTimeout(() => button.disabled = false, 500);
                 sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: parseInt(input.value) });
             }); 
             stopBtn.addEventListener('click', (e) => {
-                debounceAction(e.target);
+                const button = e.currentTarget;
+                if(button.disabled) return;
+                button.disabled = true;
+                setTimeout(() => button.disabled = false, 500);
                 sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: 0 });
             }); 
         }); 
         document.getElementById('manualTuneStopAll').addEventListener('click', (e) => {
-            debounceAction(e.target);
+            const button = e.currentTarget;
+            if(button.disabled) return;
+            button.disabled = true;
+            setTimeout(() => button.disabled = false, 1000);
             sendBleMessage({ type: 'set_direct_motor_control', motor: 'all', pwm: 0 });
         }); 
     }
     
     function setupControls() {
-        document.getElementById('connectBleBtn').addEventListener('click', (e) => {
-            debounceAction(e.target);
+        const debounceWrapper = (fn, delay = 1000) => {
+            return function(...args) {
+                const button = args[0].currentTarget;
+                if (button.disabled) return;
+                button.disabled = true;
+                setTimeout(() => { button.disabled = false; }, delay);
+                fn.apply(this, args);
+            };
+        };
+
+        document.getElementById('connectBleBtn').addEventListener('click', debounceWrapper((e) => {
             connectBLE();
-        });
+        }));
         
         document.getElementById('balanceSwitch').addEventListener('change', e => { lastUserInteraction['balanceSwitch'] = Date.now(); sendBleMessage({ type: 'balance_toggle', enabled: e.target.checked }); });
         document.getElementById('holdPositionSwitch').addEventListener('change', e => { 
@@ -727,36 +742,30 @@
         });
         document.getElementById('lqrEnabledSwitch').addEventListener('change', e => sendBleMessage({ type: 'lqr_enabled_toggle', enabled: e.target.checked }));
 
-        document.getElementById('resetZeroBtn').addEventListener('click', (e) => {
-            debounceAction(e.target);
+        document.getElementById('resetZeroBtn').addEventListener('click', debounceWrapper((e) => {
             sendBleMessage({ type: 'reset_zero' });
-        });
+        }));
         
         document.getElementById('trimPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 1 }));
         document.getElementById('trimMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -1 }));
         document.getElementById('trimRollPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: 1 }));
         document.getElementById('trimRollMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -1 }));
         
-        document.getElementById('saveBtn').addEventListener('click', (e) => {
-            debounceAction(e.target);
+        document.getElementById('saveBtn').addEventListener('click', debounceWrapper((e) => {
             if(confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")){ sendBleMessage({ type: 'save_tunings' }); addLogMessage('Wyslano polecenie ZAPISU do EEPROM.', 'info'); }
-        });
-        document.getElementById('loadBtn').addEventListener('click', (e) => {
-            debounceAction(e.target);
+        }));
+        document.getElementById('loadBtn').addEventListener('click', debounceWrapper((e) => {
             if(confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")){ sendBleMessage({ type: 'load_from_eeprom' }); addLogMessage('Wyslano polecenie ODCZYTU z EEPROM.', 'info'); }
-        });
-        document.getElementById('emergencyStopBtn').addEventListener('click', (e) => {
-            debounceAction(e.target);
+        }));
+        document.getElementById('emergencyStopBtn').addEventListener('click', debounceWrapper((e) => {
             sendBleMessage({ type: 'emergency_stop' });
-        });
-        document.getElementById('resetEncodersBtn').addEventListener('click', (e) => {
-            debounceAction(e.target);
+        }));
+        document.getElementById('resetEncodersBtn').addEventListener('click', debounceWrapper((e) => {
             sendBleMessage({ type: 'reset_encoders' });
-        });
-        document.getElementById('calibrateMpuBtn').addEventListener('click', (e) => {
-            debounceAction(e.target);
+        }));
+        document.getElementById('calibrateMpuBtn').addEventListener('click', debounceWrapper((e) => {
             sendBleMessage({ type: 'calibrate_mpu' });
-        });
+        }));
 
         let lqrUpdateTimeout;
         const DEBOUNCE_DELAY = 300;
@@ -818,7 +827,7 @@
         setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'], 'set_joystick_tuning');
         setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'], 'lqr_update', true);
         setupGroupedInput(['mBody', 'mWheel', 'L'], 'physics_update');
-        setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'holdPositionMarginPulses'], 'calibration_update');
+        setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'holdPositionMarginPulses', 'kiPosLqr'], 'calibration_update');
         setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm');
         
         setupManualTuningControls();
@@ -828,7 +837,11 @@
     function setupDpadControls() { 
         document.querySelectorAll('.dpad-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                debounceAction(e.target);
+                const button = e.currentTarget;
+                if(button.disabled) return;
+                button.disabled = true;
+                setTimeout(() => button.disabled = false, 500);
+
                 const id = e.target.id;
                 if (id === 'dpad-up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) }); 
                 else if (id === 'dpad-down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) }); 
@@ -841,7 +854,6 @@
 
     function loadPresets() {
         const select = document.getElementById('lqrPresetSelect');
-        const deleteBtn = document.getElementById('deletePresetBtn');
         select.innerHTML = ''; 
 
         const builtInGroup = document.createElement('optgroup');
@@ -952,7 +964,6 @@
 
         addLogMessage(`Zastosowano preset '${presetName}' do panelu.`, 'info');
         
-        // Czekamy krotka chwile, zeby wartosci w polach sie odswiezyly w DOM
         setTimeout(() => {
             document.querySelectorAll('.config-value, .lqr-input').forEach(input => {
                 input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -1068,18 +1079,15 @@
         setupHelpIcons();
 
         loadPresets();
-        document.getElementById('applyLqrPresetBtn').addEventListener('click', (e) => {
-            debounceAction(e.target);
+        document.getElementById('applyLqrPresetBtn').addEventListener('click', debounceWrapper((e) => {
             applyPreset();
-        });
-        document.getElementById('savePresetBtn').addEventListener('click', (e) => {
-            debounceAction(e.target);
+        }));
+        document.getElementById('savePresetBtn').addEventListener('click', debounceWrapper((e) => {
             savePreset();
-        });
-        document.getElementById('deletePresetBtn').addEventListener('click', (e) => {
-            debounceAction(e.target);
+        }));
+        document.getElementById('deletePresetBtn').addEventListener('click', debounceWrapper((e) => {
             deletePreset();
-        });
+        }));
         document.getElementById('lqrPresetSelect').addEventListener('change', updateDeleteButtonState);
 
 
