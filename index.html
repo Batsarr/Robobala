@@ -211,22 +211,22 @@
                         <h5>Wagi Stanow (Macierz Q)</h5>
                         <div class="setting-container">
                             <label for="q1AngleInput">Q1 - Kat (theta)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input config-value" id="q1AngleInput" min="0" max="1000" step="5" value="100"><button class="lqr-plus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="q1AngleMinus">-</button><input type="number" class="lqr-input config-value" id="q1AngleInput" min="0" max="1000" step="5" value="100"><button id="q1AnglePlus">+</button></div>
                             <div class="help-text"><strong>Wplyw:</strong> Kara za odchylenie od pionu. Wieksza wartosc = robot mocniej 'walczy' o utrzymanie pionu, jest sztywniejszy.</div>
                         </div>
                         <div class="setting-container">
                             <label for="q2AngularVelInput">Q2 - Predkosc katowa<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input config-value" id="q2AngularVelInput" min="0" max="100" step="1" value="10"><button class="lqr-plus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="q2AngularVelMinus">-</button><input type="number" class="lqr-input config-value" id="q2AngularVelInput" min="0" max="100" step="1" value="10"><button id="q2AngularVelPlus">+</button></div>
                             <div class="help-text"><strong>Wplyw:</strong> Kara za szybkie zmiany kata (oscylacje). Wieksza wartosc = lepsze tlumienie drgan, bardziej plynna reakcja.</div>
                         </div>
                         <div class="setting-container">
                             <label for="q3PositionInput">Q3 - Pozycja (s)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input config-value" id="q3PositionInput" min="0" max="100" step="0.1" value="1"><button class="lqr-plus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="q3PositionMinus">-</button><input type="number" class="lqr-input config-value" id="q3PositionInput" min="0" max="100" step="0.1" value="1"><button id="q3PositionPlus">+</button></div>
                             <div class="help-text"><strong>Wplyw:</strong> Kara za dryf pozycyjny. Wieksza wartosc = robot aktywniej wraca do pozycji wyjsciowej po zatrzymaniu.</div>
                         </div>
                         <div class="setting-container">
                             <label for="q4VelocityInput">Q4 - Predkosc (s_dot)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input config-value" id="q4VelocityInput" min="0" max="100" step="0.5" value="5"><button class="lqr-plus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="q4VelocityMinus">-</button><input type="number" class="lqr-input config-value" id="q4VelocityInput" min="0" max="100" step="0.5" value="5"><button id="q4VelocityPlus">+</button></div>
                             <div class="help-text"><strong>Wplyw:</strong> Kara za szybkie ruchy liniowe. Wieksza wartosc = plynniejsze, mniej gwaltowne przyspieszanie i hamowanie.</div>
                         </div>
                     </div>
@@ -235,7 +235,7 @@
                         <h5>Waga Sterowania (Skalar R)</h5>
                         <div class="setting-container">
                             <label for="rControlInput">R - Waga sterowania<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button class="lqr-minus">-</button><input type="number" class="lqr-input config-value" id="rControlInput" min="0.001" max="10" step="0.01" value="0.1"><button class="lqr-plus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="rControlMinus">-</button><input type="number" class="lqr-input config-value" id="rControlInput" min="0.001" max="10" step="0.01" value="0.1"><button id="rControlPlus">+</button></div>
                             <div class="help-text"><strong>Wplyw:</strong> Kara za zuzycie energii (PWM silnikow). Wieksza wartosc = slabsze, bardziej oszczedne sterowanie. Mniejsza wartosc = mocniejsza reakcja.</div>
                         </div>
                     </div>
@@ -363,11 +363,7 @@
     let joystickCenter, joystickRadius, knobRadius, isDragging = false;
     let lastJoystickSendTime = 0;
     const JOYSTICK_SEND_INTERVAL = 50;
-    
-    // =========================================================================
-    // === NOWA LOGIKA DO OBSLUGI FRAGMENTACJI PAKIETOW BLE ===
-    // =========================================================================
-    let chunkBuffers = {}; // Globalny obiekt do przechowywania fragmentow
+    let chunkBuffers = {};
 
     function toggleAccordion(header) {
         const content = header.nextElementSibling;
@@ -439,7 +435,7 @@
         document.getElementById('connectBleBtn').disabled = false;
         rxCharacteristic = null;
         txCharacteristic = null;
-        chunkBuffers = {}; // Resetuj bufor fragmentow po rozlaczeniu
+        chunkBuffers = {};
     }
 
     function handleBleNotification(event) {
@@ -449,18 +445,13 @@
         handleIncomingData(jsonString);
     }
 
-    // Glowna funkcja obslugujaca wszystkie przychodzace dane
     function handleIncomingData(jsonString) {
         try {
             const data = JSON.parse(jsonString);
-
-            // Sprawdz, czy to fragment wiekszej wiadomosci
             if (data.type === 'chunk') {
                 if (data.i === 0) {
                      addLogMessage(`Odbieram fragmentowana wiadomosc (ID: ${data.id}, ${data.total} czesci)...`, 'info');
                 }
-
-                // Inicjalizuj bufor dla tego ID wiadomosci, jesli nie istnieje
                 if (!chunkBuffers[data.id]) {
                     chunkBuffers[data.id] = {
                         chunks: new Array(data.total),
@@ -468,25 +459,18 @@
                         totalCount: data.total
                     };
                 }
-
                 const buffer = chunkBuffers[data.id];
                 if (!buffer.chunks[data.i]) {
                     buffer.chunks[data.i] = data.data;
                     buffer.receivedCount++;
                 }
-                
-                // Jesli otrzymano wszystkie fragmenty, zloz wiadomosc
                 if (buffer.receivedCount === buffer.totalCount) {
                     const completeMessageString = buffer.chunks.join('');
                     addLogMessage(`Zlozono wiadomosc (ID: ${data.id}) z ${data.total} czesci. Rozmiar: ${completeMessageString.length} B.`, 'info');
-                    
                     delete chunkBuffers[data.id];
-                    
-                    // Przetworz zlozona wiadomosc (wywolanie rekurencyjne)
                     handleIncomingData(completeMessageString);
                 }
             } else {
-                // To jest normalna, niepofragmentowana wiadomosc lub wlasnie zlozona
                 processCompleteMessage(data);
             }
         } catch (e) {
@@ -494,7 +478,6 @@
         }
     }
 
-    // Funkcja do przetwarzania w pelni zlozonych wiadomosci
     function processCompleteMessage(data) {
         switch (data.type) {
             case 'telemetry':
@@ -682,6 +665,61 @@
         });
     }
 
+    // <<< ZMODYFIKOWANA, ULEPSZONA FUNKCJA OBSŁUGI GRUP SUWAKÓW
+    const setupGroupedInput = (ids, msgType) => {
+        let debounceTimeout;
+        const DEBOUNCE_DELAY = 400;
+
+        const sendGroupUpdate = () => {
+            let msg = { type: msgType, params: {} };
+            let payload = {};
+            ids.forEach(i => {
+                const inputElement = document.getElementById(i + 'Input');
+                if (inputElement) {
+                    let key = i.replace(/([A-Z])/g, "_$1").toLowerCase();
+                    let value = parseFloat(inputElement.value);
+                    if (key === 'expo_joystick' || key === 'joystick_output_scale' || key === 'turn_factor') {
+                        value = value / 100.0;
+                    }
+                    payload[key] = value;
+                }
+            });
+            msg.params = payload;
+            sendBleMessage(msg);
+            addLogMessage(`Wyslano grupe parametrow '${msgType}'`, 'info');
+        };
+
+        ids.forEach(id => {
+            const input = document.getElementById(id + 'Input'),
+                minusBtn = document.getElementById(id + 'Minus'),
+                plusBtn = document.getElementById(id + 'Plus');
+            if (!input || !minusBtn || !plusBtn) return;
+
+            const handleInteraction = () => {
+                clearTimeout(debounceTimeout);
+                debounceTimeout = setTimeout(sendGroupUpdate, DEBOUNCE_DELAY);
+            };
+            
+            const step = parseFloat(input.step) || 1;
+            const isFloat = input.step.includes('.');
+            
+            const updateValue = (amount) => {
+                let current = parseFloat(input.value),
+                    newValue = current + amount;
+                if (isFloat) {
+                    const dp = (step.toString().split('.')[1] || '').length;
+                    newValue = parseFloat(newValue.toFixed(dp));
+                }
+                input.value = Math.max(parseFloat(input.min), Math.min(parseFloat(input.max), newValue));
+                handleInteraction();
+            };
+
+            minusBtn.addEventListener('click', () => updateValue(-step));
+            plusBtn.addEventListener('click', () => updateValue(step));
+            input.addEventListener('change', handleInteraction);
+        });
+    };
+
     function setupControls() {
         const debounceWrapper = (fn, delay = 1000) => {
             return function (...args) {
@@ -723,40 +761,8 @@
         document.getElementById('resetEncodersBtn').addEventListener('click', debounceWrapper((e) => { sendBleMessage({ type: 'reset_encoders' }); }));
         document.getElementById('calibrateMpuBtn').addEventListener('click', debounceWrapper((e) => { sendBleMessage({ type: 'calibrate_mpu' }); }));
         
-        let lqrUpdateTimeout;
-        const DEBOUNCE_DELAY = 300;
-        const setupGroupedInput = (ids, msgType, isLqrWeight = false) => {
-            ids.forEach(id => {
-                const input = document.getElementById(id + 'Input'), minusBtn = document.getElementById(id + 'Minus'), plusBtn = document.getElementById(id + 'Plus');
-                if (!input || !minusBtn || !plusBtn) return;
-                const updateAndSend = () => {
-                    if (isLqrWeight) {
-                        clearTimeout(lqrUpdateTimeout);
-                        lqrUpdateTimeout = setTimeout(() => {
-                            let msg = { type: msgType, params: {} };
-                            ids.forEach(i => { const el = document.getElementById(i + 'Input'); if (el) { let key = i.replace(/([A-Z])/g, "_$1").toLowerCase(); msg.params[key] = parseFloat(el.value); } });
-                            sendBleMessage(msg); addLogMessage('Wyslano nowe wagi LQR do przeliczenia.', 'info');
-                        }, DEBOUNCE_DELAY);
-                    } else {
-                        let msg = { type: msgType, params: {} };
-                        ids.forEach(i => { const el = document.getElementById(i + 'Input'); if (el) { let key = i.replace(/([A-Z])/g, "_$1").toLowerCase(); let value = parseFloat(el.value); if (key === 'expo_joystick' || key === 'joystick_output_scale' || key === 'turn_factor') { value = value / 100.0; } msg.params[key] = value; } });
-                        sendBleMessage(msg);
-                    }
-                };
-                const step = parseFloat(input.step) || 1, isFloat = input.step.includes('.');
-                const updateValue = (amount) => {
-                    let current = parseFloat(input.value), newValue = current + amount;
-                    if (isFloat) { const dp = (step.toString().split('.')[1] || '').length; newValue = parseFloat(newValue.toFixed(dp)); }
-                    input.value = Math.max(parseFloat(input.min), Math.min(parseFloat(input.max), newValue));
-                    updateAndSend();
-                };
-                minusBtn.addEventListener('click', () => updateValue(-step));
-                plusBtn.addEventListener('click', () => updateValue(step));
-                input.addEventListener('change', updateAndSend);
-            });
-        };
         setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor', 'holdPositionMarginPulses'], 'set_joystick_tuning');
-        setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'], 'lqr_update', true);
+        setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'], 'lqr_update');
         setupGroupedInput(['mBody', 'mWheel', 'L'], 'physics_update');
         setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr'], 'calibration_update');
         setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm');
