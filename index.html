@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Wersja 25.10-FINAL</title>
+    <title>Robot LQR - Wersja 25.10-FINAL (Poprawiona)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -423,7 +423,18 @@
             document.getElementById('connectionStatus').className = 'status-indicator status-ok';
             document.getElementById('connectionText').textContent = 'Polaczony';
             
-            addLogMessage('Polaczono! Mozesz teraz sterowac robotem.', 'info');
+            addLogMessage('Polaczono! Automatyczna synchronizacja stanu robota...', 'info');
+
+            // ZMIANA: Automatyczne zadanie o stan po polaczeniu
+            sendBleMessage({ type: 'request_state' });
+
+            // ZMIANA: Timeout dla synchronizacji
+            if (configSyncTimeout) clearTimeout(configSyncTimeout);
+            configSyncTimeout = setTimeout(() => {
+                addLogMessage('Blad: Timeout synchronizacji. Nie otrzymano danych od robota.', 'error');
+                configSyncTimeout = null;
+            }, 5000); // 5 sekund oczekiwania
+
 
         } catch(error) {
             addLogMessage(`Blad polaczenia BLE: ${error}`, 'error');
@@ -470,6 +481,7 @@
                     updateChart(data);
                     break;
                 case 'full_config':
+                    // ZMIANA: Wylaczenie timera po otrzymaniu konfiguracji
                     if (configSyncTimeout) {
                         clearTimeout(configSyncTimeout);
                         configSyncTimeout = null;
@@ -496,6 +508,7 @@
         }
         try {
             const encoder = new TextEncoder();
+            // ZMIANA: Uzycie writeValueWithoutResponse dla wiekszej wydajnosci
             await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message)));
         } catch(error) { addLogMessage(`Blad wysylania danych BLE: ${error}`, 'error'); }
     }
