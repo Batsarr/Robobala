@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Wersja 25.10-FINAL (Naprawiona)</title>
+    <title>Robot LQR - Wersja 29.0</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -103,13 +103,18 @@
             <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">LQR Aktywny</span><label class="switch"><input type="checkbox" id="lqrEnabledSwitch" checked><span class="slider round"></span></label></div>
             
-            <fieldset style="padding: 10px 10px 5px 10px;"><legend>Strojenie Joysticka</legend>
+            <fieldset style="padding: 10px 10px 5px 10px;"><legend>Strojenie Główne</legend>
                 <div class="setting-container"><label for="joystickOutputScaleInput">Skala Wyjscia (%)</label><div class="numeric-input-wrapper"><button id="joystickOutputScaleMinus">-</button><input type="number" class="config-value" id="joystickOutputScaleInput" min="10" max="100" step="5" value="100"><button id="joystickOutputScalePlus">+</button></div></div>
                 <div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)</label><div class="numeric-input-wrapper"><button id="expoJoystickMinus">-</button><input type="number" class="config-value" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button id="expoJoystickPlus">+</button></div></div>
                 <div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button id="maxSpeedJoystickMinus">-</button><input type="number" class="config-value" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button id="maxSpeedJoystickPlus">+</button></div></div>
                 <div class="setting-container"><label for="joystickAngleSensitivityInput">Czulosc Kata (st.)</label><div class="numeric-input-wrapper"><button id="joystickAngleSensitivityMinus">-</button><input type="number" class="config-value" id="joystickAngleSensitivityInput" min="1" max="30" step="0.5" value="10"><button id="joystickAngleSensitivityPlus">+</button></div></div>
                 <div class="setting-container"><label for="turnFactorInput">Czulosc Skretu (%)</label><div class="numeric-input-wrapper"><button id="turnFactorMinus">-</button><input type="number" class="config-value" id="turnFactorInput" min="0" max="100" step="5" value="25"><button id="turnFactorPlus">+</button></div></div>
-                <div class="setting-container"><label for="holdPositionMarginPulsesInput">Margines Trzymania Poz. (impulsy)</label><div class="numeric-input-wrapper"><button id="holdPositionMarginPulsesMinus">-</button><input type="number" class="config-value" id="holdPositionMarginPulsesInput" min="0" max="100" step="1" value="15"><button id="holdPositionMarginPulsesPlus">+</button></div></div>
+                
+                <hr style="border-color: #4a4f58; margin: 10px 0;">
+                <h5 style="color: #61dafb; margin: 0 0 8px 0; font-size: 1.1em; text-align: left;">Korekty Ruchu</h5>
+                <div class="setting-container"><label for="positionErrorGainInput">Wzmocnienie Bł. Pozycji</label><div class="numeric-input-wrapper"><button id="positionErrorGainMinus">-</button><input type="number" class="config-value" id="positionErrorGainInput" min="0" max="10" step="0.1" value="2.5"><button id="positionErrorGainPlus">+</button></div></div>
+                <div class="setting-container"><label for="headingCorrectionFactorInput">Siła Korekty Kursu</label><div class="numeric-input-wrapper"><button id="headingCorrectionFactorMinus">-</button><input type="number" class="config-value" id="headingCorrectionFactorInput" min="0" max="5" step="0.05" value="0.4"><button id="headingCorrectionFactorPlus">+</button></div></div>
+                
             </fieldset>
             
             <hr style="border-color: #4a4f58; margin: 15px 0;">
@@ -514,7 +519,13 @@
         document.getElementById('speedModeSwitch').checked = data.speedModeEnabled;
         document.getElementById('lqrEnabledSwitch').checked = data.lqrEnabled;
         const params = {
-            expoJoystick: data.expo_joystick, maxSpeedJoystick: data.max_speed_joystick, joystickOutputScale: data.joystick_output_scale, turnFactor: data.turn_factor, joystickAngleSensitivity: data.joystick_angle_sensitivity, holdPositionMarginPulses: data.hold_position_margin_pulses, minPwmLeftFwd: data.min_pwm_left_fwd, minPwmLeftBwd: data.min_pwm_left_bwd, minPwmRightFwd: data.min_pwm_right_fwd, minPwmRightBwd: data.min_pwm_right_bwd, q1Angle: data.q1_angle, q2AngularVel: data.q2_angular_vel, q3Position: data.q3_position, q4Velocity: data.q4_velocity, rControl: data.r_control, lqrOutputScalar: data.lqr_output_scalar, mBody: data.m_body, mWheel: data.m_wheel, L: data.L, wheelDiameterCm: data.wheel_diameter_cm, trackWidthCm: data.track_width_cm, encoderPpr: data.encoder_ppr
+            expoJoystick: data.expo_joystick, maxSpeedJoystick: data.max_speed_joystick, joystickOutputScale: data.joystick_output_scale, turnFactor: data.turn_factor, joystickAngleSensitivity: data.joystick_angle_sensitivity, 
+            minPwmLeftFwd: data.min_pwm_left_fwd, minPwmLeftBwd: data.min_pwm_left_bwd, minPwmRightFwd: data.min_pwm_right_fwd, minPwmRightBwd: data.min_pwm_right_bwd, 
+            q1Angle: data.q1_angle, q2AngularVel: data.q2_angular_vel, q3Position: data.q3_position, q4Velocity: data.q4_velocity, rControl: data.r_control, lqrOutputScalar: data.lqr_output_scalar, 
+            mBody: data.m_body, mWheel: data.m_wheel, L: data.L, 
+            wheelDiameterCm: data.wheel_diameter_cm, trackWidthCm: data.track_width_cm, encoderPpr: data.encoder_ppr,
+            headingCorrectionFactor: data.heading_correction_factor,
+            positionErrorGain: data.position_error_gain 
         };
         for (const [key, value] of Object.entries(params)) {
             const inputId = `${key}Input`;
@@ -737,8 +748,8 @@
         const commandGroups = {
             'lqr_update': ['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'],
             'physics_update': ['mBody', 'mWheel', 'L'],
-            'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr'],
-            'set_joystick_tuning': ['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor', 'holdPositionMarginPulses'],
+            'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'positionErrorGain'],
+            'set_joystick_tuning': ['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'],
             'set_min_pwm': ['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd']
         };
 
@@ -819,10 +830,10 @@
         document.getElementById('resetEncodersBtn').addEventListener('click', debounceWrapper((e) => { sendBleMessage({ type: 'reset_encoders' }); }));
         document.getElementById('calibrateMpuBtn').addEventListener('click', debounceWrapper((e) => { sendBleMessage({ type: 'calibrate_mpu' }); }));
         
-        setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor', 'holdPositionMarginPulses'], 'set_joystick_tuning');
+        setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'], 'set_joystick_tuning');
         setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'], 'lqr_update');
         setupGroupedInput(['mBody', 'mWheel', 'L'], 'physics_update');
-        setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr'], 'calibration_update');
+        setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'positionErrorGain'], 'calibration_update');
         setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm');
         setupManualTuningControls();
         setupDpadControls();
