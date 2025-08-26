@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Wersja 29.0</title>
+    <title>Robot LQR - Wersja 31.0</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -30,7 +30,7 @@
         legend { color: #61dafb; font-weight: bold; padding: 0 10px; font-size: 1.1em; }
         #joystickWrapper { position: relative; width: 180px; height: 180px; border-radius: 50%; background-color: #4a4f58; border: 3px solid #61dafb; margin: 15px auto; }
         #joystickCanvas { width: 100%; height: 100%; display: block; }
-        #chart-wrapper { position: relative; height: 320px; border-radius: 8px; overflow: hidden; background-color: #20232a; }
+        #chart-wrapper { position: relative; height: 320px; border-radius: 8px; overflow-hidden; background-color: #20232a; }
         #log-history { text-align: left; height: 350px; overflow-y: auto; background-color: #20232a; padding: 10px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; }
         .status-indicator { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
         .status-ok { background-color: #a2f279; }
@@ -88,6 +88,13 @@
         .help-icon { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: #61dafb; color: #282c34; font-size: 12px; font-weight: bold; text-align: center; line-height: 16px; margin-left: 8px; cursor: pointer; user-select: none; }
         .help-text { background-color: #20232a; color: #fff; border-radius: 6px; padding: 10px; border: 1px solid #61dafb; margin-top: 8px; text-align: left; font-size: 0.9em; line-height: 1.4; width: 100%; box-sizing: border-box; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease-out; padding-top: 0; padding-bottom: 0; grid-column: 1 / -1; }
         .help-text.visible { max-height: 200px; padding-top: 10px; padding-bottom: 10px; }
+        
+        /* Style dla sekwencera */
+        .sequence-step { display: grid; grid-template-columns: 1fr 100px auto; gap: 10px; align-items: center; background-color: #2a2f35; padding: 8px; border-radius: 6px; margin-bottom: 8px; transition: background-color 0.3s; }
+        .sequence-step.executing { background-color: #a2f279; color: #282c34; }
+        .sequence-step.executing select, .sequence-step.executing input { color: #282c34; border-color: #282c34; }
+        .sequence-step select, .sequence-step input { width: 100%; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 4px; padding: 5px; }
+        .sequence-step .remove-step-btn { background-color: #ff6347; padding: 5px 10px; }
     </style>
 </head>
 <body>
@@ -158,14 +165,14 @@
                 <strong>Enkoder P:</strong> <span id="encoderRightVal">0</span>
             </div>
         </div>
-
+        
         <div class="card">
-             <button class="accordion-header" onclick="toggleAccordion(this)">Sterowanie Precyzyjne</button>
+             <button class="accordion-header" onclick="toggleAccordion(this)">Sterowanie Autonomiczne</button>
              <div class="accordion-content">
                 <fieldset>
-                    <legend>Sterowanie Precyzyjne</legend>
+                    <legend>Sterowanie Precyzyjne (D-Pad)</legend>
                     <div class="dpad-input-group"><label for="dpadDistInput">Dystans (cm):</label><input type="number" id="dpadDistInput" value="20"></div>
-                    <div class="dpad-input-group"><label for="dpadAngleInput">Kat (st.):</label><input type="number" id="dpadAngleInput" value="10"></div>
+                    <div class="dpad-input-group"><label for="dpadAngleInput">Kat (st.):</label><input type="number" id="dpadAngleInput" value="90"></div>
                     <div class="dpad-container">
                         <button id="dpad-up" class="dpad-btn">&#8593;</button>
                         <button id="dpad-left" class="dpad-btn">&#8592;</button>
@@ -175,8 +182,18 @@
                     </div>
                 </fieldset>
                 <fieldset style="margin-top: 15px;">
+                    <legend>Kreator Sekwencji Ruchow</legend>
+                    <div id="sequence-list"></div>
+                    <button id="add-sequence-step-btn" style="width:100%; margin: 10px 0;">Dodaj Krok</button>
+                    <div style="display:flex; gap:10px; justify-content:center;">
+                        <button id="run-sequence-btn" style="background-color: #a2f279;">Uruchom</button>
+                        <button id="stop-sequence-btn" style="background-color: #ff6347;" disabled>Zatrzymaj</button>
+                        <button id="clear-sequence-btn" style="background-color: #f7b731;">Wyczysc</button>
+                    </div>
+                </fieldset>
+                <fieldset style="margin-top: 15px;">
                     <legend>Diagnostyka</legend>
-                     <button id="calibrateMpuBtn" style="width:100%; margin-top:10px; background-color:#f7b731;">Kalibruj MPU (DMP)</button>
+                     <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Kalibruj MPU (DMP)</button>
                 </fieldset>
             </div>
         </div>
@@ -226,12 +243,12 @@
                         </div>
                         <div class="setting-container">
                             <label for="q3PositionInput">Q3 - Pozycja (s)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="q3PositionMinus">-</button><input type="number" class="lqr-input config-value" id="q3PositionInput" min="0" max="100" step="0.1" value="1"><button id="q3PositionPlus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="q3PositionMinus">-</button><input type="number" class="lqr-input config-value" id="q3PositionInput" min="0" max="1000" step="10" value="1"><button id="q3PositionPlus">+</button></div>
                             <div class="help-text"><strong>Wplyw:</strong> Kara za dryf pozycyjny. Wieksza wartosc = robot aktywniej wraca do pozycji wyjsciowej po zatrzymaniu.</div>
                         </div>
                         <div class="setting-container">
                             <label for="q4VelocityInput">Q4 - Predkosc (s_dot)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="q4VelocityMinus">-</button><input type="number" class="lqr-input config-value" id="q4VelocityInput" min="0" max="100" step="0.5" value="5"><button id="q4VelocityPlus">+</button></div>
+                            <div class="numeric-input-wrapper"><button id="q4VelocityMinus">-</button><input type="number" class="lqr-input config-value" id="q4VelocityInput" min="0" max="100" step="1" value="5"><button id="q4VelocityPlus">+</button></div>
                             <div class="help-text"><strong>Wplyw:</strong> Kara za szybkie ruchy liniowe. Wieksza wartosc = plynniejsze, mniej gwaltowne przyspieszanie i hamowanie.</div>
                         </div>
                     </div>
@@ -344,7 +361,8 @@
         'slow_smooth': { name: '5. Powolna Jazda (Plynnosc)', values: { q1: 120, q2: 20, q3: 2, q4: 5, r: 0.3 } },
         'strong_hold': { name: '6. Mocne Trzymanie Pozycji', values: { q1: 150, q2: 15, q3: 80, q4: 20, r: 0.1 } },
         'balance_only': { name: '7. Minimalistyczny (Tylko Balans)', values: { q1: 200, q2: 20, q3: 0, q4: 0, r: 0.1 } },
-        'experimental_speed': { name: '8. Eksperymentalny (Wysokie Predkosci)', values: { q1: 70, q2: 5, q3: 0.1, q4: 50, r: 0.04 } }
+        'experimental_speed': { name: '8. Eksperymentalny (Wysokie Predkosci)', values: { q1: 70, q2: 5, q3: 0.1, q4: 50, r: 0.04 } },
+        'precise_auto': { name: '9. Precyzyjny Ruch Autonomiczny', values: { q1: 150, q2: 20, q3: 400, q4: 40, r: 0.08 } }
     };
     const CUSTOM_PRESET_PREFIX = 'lqr_custom_preset_';
     const availableTelemetry = {
@@ -369,6 +387,13 @@
     let lastJoystickSendTime = 0;
     const JOYSTICK_SEND_INTERVAL = 50;
     let chunkBuffers = {};
+
+    // --- NOWE ZMIENNE GLOBALNE DLA SEKWENCERA ---
+    let sequence = [];
+    let isSequenceRunning = false;
+    let currentSequenceStep = 0;
+    const MAX_SEQUENCE_STEPS = 4;
+    let lastKnownRobotState = 'IDLE';
 
     function toggleAccordion(header) {
         const content = header.nextElementSibling;
@@ -441,6 +466,11 @@
         rxCharacteristic = null;
         txCharacteristic = null;
         chunkBuffers = {};
+        // Zatrzymaj sekwencje jesli byla aktywna
+        if (isSequenceRunning) {
+            stopSequenceExecution();
+            addLogMessage('Sekwencja przerwana z powodu rozlaczenia.', 'warn');
+        }
     }
 
     function handleBleNotification(event) {
@@ -486,8 +516,14 @@
     function processCompleteMessage(data) {
         switch (data.type) {
             case 'telemetry':
+                let previousRobotState = lastKnownRobotState;
+                if(data.robot_state) {
+                    lastKnownRobotState = data.robot_state;
+                }
                 updateUI(data);
                 updateChart(data);
+                // Sprawdz czy mozna wykonac nastepny krok sekwencji
+                checkAndExecuteNextSequenceStep(previousRobotState);
                 break;
             case 'full_config':
                 if (configSyncTimeout) {
@@ -837,6 +873,7 @@
         setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm');
         setupManualTuningControls();
         setupDpadControls();
+        setupSequenceControls();
     }
 
     function setupDpadControls() {
@@ -853,6 +890,150 @@
             });
         });
     }
+
+    // --- NOWE FUNKCJE DLA SEKWENCERA ---
+
+    function setupSequenceControls() {
+        document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep);
+        document.getElementById('run-sequence-btn').addEventListener('click', runSequence);
+        document.getElementById('stop-sequence-btn').addEventListener('click', stopSequenceExecution);
+        document.getElementById('clear-sequence-btn').addEventListener('click', clearSequence);
+    }
+
+    function addSequenceStep() {
+        const list = document.getElementById('sequence-list');
+        if (list.children.length >= MAX_SEQUENCE_STEPS) {
+            addLogMessage(`Osiagnieto maksymalna liczbe krokow w sekwencji (${MAX_SEQUENCE_STEPS}).`, 'warn');
+            return;
+        }
+
+        const stepDiv = document.createElement('div');
+        stepDiv.className = 'sequence-step';
+        stepDiv.innerHTML = `
+            <select class="sequence-type">
+                <option value="move_fwd">Przod (cm)</option>
+                <option value="move_bwd">Tyl (cm)</option>
+                <option value="rotate_r">Obrot w Prawo (st.)</option>
+                <option value="rotate_l">Obrot w Lewo (st.)</option>
+            </select>
+            <input type="number" class="sequence-value" value="10">
+            <button class="remove-step-btn">&times;</button>
+        `;
+        
+        list.appendChild(stepDiv);
+        stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => {
+            stepDiv.remove();
+        });
+    }
+
+    function runSequence() {
+        if (isSequenceRunning) {
+            addLogMessage('Sekwencja jest juz w toku.', 'warn');
+            return;
+        }
+        if (lastKnownRobotState !== 'IDLE' && lastKnownRobotState !== 'HOLDING_POSITION') {
+            addLogMessage(`Nie mozna rozpoczac sekwencji. Robot jest w stanie '${lastKnownRobotState}'.`, 'error');
+            return;
+        }
+
+        sequence = [];
+        const steps = document.querySelectorAll('.sequence-step');
+        if (steps.length === 0) {
+            addLogMessage('Dodaj przynajmniej jeden krok do sekwencji.', 'warn');
+            return;
+        }
+
+        steps.forEach(step => {
+            sequence.push({
+                type: step.querySelector('.sequence-type').value,
+                value: parseFloat(step.querySelector('.sequence-value').value)
+            });
+        });
+
+        isSequenceRunning = true;
+        currentSequenceStep = 0;
+        updateSequenceUI();
+        addLogMessage(`Rozpoczeto sekwencje zlozoną z ${sequence.length} krokow.`, 'info');
+        executeNextSequenceStep();
+    }
+    
+    function stopSequenceExecution() {
+        if (!isSequenceRunning) return;
+        isSequenceRunning = false;
+        sendBleMessage({ type: 'command_stop' });
+        updateSequenceUI();
+        addLogMessage('Sekwencja zatrzymana przez uzytkownika.', 'warn');
+    }
+
+    function clearSequence() {
+        if (isSequenceRunning) {
+            stopSequenceExecution();
+        }
+        document.getElementById('sequence-list').innerHTML = '';
+        sequence = [];
+    }
+    
+    function updateSequenceUI() {
+        document.querySelectorAll('.sequence-step').forEach((step, index) => {
+            if (isSequenceRunning && index === currentSequenceStep) {
+                step.classList.add('executing');
+            } else {
+                step.classList.remove('executing');
+            }
+        });
+        document.getElementById('run-sequence-btn').disabled = isSequenceRunning;
+        document.getElementById('add-sequence-step-btn').disabled = isSequenceRunning;
+        document.getElementById('clear-sequence-btn').disabled = isSequenceRunning;
+        document.getElementById('stop-sequence-btn').disabled = !isSequenceRunning;
+    }
+
+    function checkAndExecuteNextSequenceStep(previousState) {
+        if (!isSequenceRunning) return;
+        
+        const isRobotIdle = lastKnownRobotState === 'IDLE' || lastKnownRobotState === 'HOLDING_POSITION';
+        const wasRobotWorking = previousState === 'EXECUTING_MOVE' || previousState === 'EXECUTING_ROTATE';
+
+        if (isRobotIdle && wasRobotWorking) {
+            addLogMessage(`Krok ${currentSequenceStep + 1} zakonczony.`, 'info');
+            currentSequenceStep++;
+            executeNextSequenceStep();
+        }
+    }
+
+    function executeNextSequenceStep() {
+        if (!isSequenceRunning || currentSequenceStep >= sequence.length) {
+            if (isSequenceRunning) { // Sekwencja sie wlasnie zakonczyla
+                isSequenceRunning = false;
+                addLogMessage('Sekwencja zostala pomyslnie ukonczona.', 'info');
+            }
+            updateSequenceUI();
+            return;
+        }
+
+        updateSequenceUI();
+        const step = sequence[currentSequenceStep];
+        let command = {};
+
+        switch (step.type) {
+            case 'move_fwd':
+                command = { type: 'execute_move', distance_cm: step.value };
+                break;
+            case 'move_bwd':
+                command = { type: 'execute_move', distance_cm: -step.value };
+                break;
+            case 'rotate_r':
+                command = { type: 'execute_rotate', angle_deg: step.value };
+                break;
+            case 'rotate_l':
+                command = { type: 'execute_rotate', angle_deg: -step.value };
+                break;
+        }
+        
+        addLogMessage(`Wysylanie kroku ${currentSequenceStep + 1}/${sequence.length}: ${command.type} (${step.value}).`, 'info');
+        sendBleMessage(command);
+    }
+    
+    // --- KONIEC FUNKCJI SEKWENCERA ---
 
     function loadPresets() {
         const select = document.getElementById('lqrPresetSelect');
