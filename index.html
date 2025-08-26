@@ -642,34 +642,24 @@
                 input.dispatchEvent(new Event('change'));
             });
             testBtn.addEventListener('click', (e) => {
-                const button = e.currentTarget;
-                if (button.disabled) return;
-                button.disabled = true;
-                setTimeout(() => button.disabled = false, 500);
+                const button = e.currentTarget; if (button.disabled) return;
+                button.disabled = true; setTimeout(() => button.disabled = false, 500);
                 sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: parseInt(input.value) });
             });
             stopBtn.addEventListener('click', (e) => {
-                const button = e.currentTarget;
-                if (button.disabled) return;
-                button.disabled = true;
-                setTimeout(() => button.disabled = false, 500);
+                const button = e.currentTarget; if (button.disabled) return;
+                button.disabled = true; setTimeout(() => button.disabled = false, 500);
                 sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: 0 });
             });
         });
         document.getElementById('manualTuneStopAll').addEventListener('click', (e) => {
-            const button = e.currentTarget;
-            if (button.disabled) return;
-            button.disabled = true;
-            setTimeout(() => button.disabled = false, 1000);
+            const button = e.currentTarget; if (button.disabled) return;
+            button.disabled = true; setTimeout(() => button.disabled = false, 1000);
             sendBleMessage({ type: 'set_direct_motor_control', motor: 'all', pwm: 0 });
         });
     }
 
-    // <<< ZMODYFIKOWANA, ULEPSZONA FUNKCJA OBSŁUGI GRUP SUWAKÓW
     const setupGroupedInput = (ids, msgType) => {
-        let debounceTimeout;
-        const DEBOUNCE_DELAY = 400;
-
         const sendGroupUpdate = () => {
             let msg = { type: msgType, params: {} };
             let payload = {};
@@ -686,23 +676,14 @@
             });
             msg.params = payload;
             sendBleMessage(msg);
-            addLogMessage(`Wyslano grupe parametrow '${msgType}'`, 'info');
         };
-
         ids.forEach(id => {
             const input = document.getElementById(id + 'Input'),
-                minusBtn = document.getElementById(id + 'Minus'),
-                plusBtn = document.getElementById(id + 'Plus');
+                  minusBtn = document.getElementById(id + 'Minus'),
+                  plusBtn = document.getElementById(id + 'Plus');
             if (!input || !minusBtn || !plusBtn) return;
-
-            const handleInteraction = () => {
-                clearTimeout(debounceTimeout);
-                debounceTimeout = setTimeout(sendGroupUpdate, DEBOUNCE_DELAY);
-            };
-            
             const step = parseFloat(input.step) || 1;
             const isFloat = input.step.includes('.');
-            
             const updateValue = (amount) => {
                 let current = parseFloat(input.value),
                     newValue = current + amount;
@@ -711,14 +692,91 @@
                     newValue = parseFloat(newValue.toFixed(dp));
                 }
                 input.value = Math.max(parseFloat(input.min), Math.min(parseFloat(input.max), newValue));
-                handleInteraction();
+                sendGroupUpdate();
             };
-
             minusBtn.addEventListener('click', () => updateValue(-step));
             plusBtn.addEventListener('click', () => updateValue(step));
-            input.addEventListener('change', handleInteraction);
+            input.addEventListener('change', sendGroupUpdate);
         });
     };
+
+    function applyPreset() {
+        const select = document.getElementById('lqrPresetSelect');
+        const key = select.value;
+        if (!key) return;
+        let presetName = '';
+
+        if (lqrBuiltInPresets[key]) {
+            const preset = lqrBuiltInPresets[key];
+            presetName = preset.name;
+            const mapping = { q1: 'q1AngleInput', q2: 'q2AngularVelInput', q3: 'q3PositionInput', q4: 'q4VelocityInput', r: 'rControlInput' };
+            for (const [param, id] of Object.entries(mapping)) {
+                const input = document.getElementById(id);
+                if (input && preset.values[param] !== undefined) {
+                    input.value = preset.values[param];
+                }
+            }
+        } else if (key.startsWith(CUSTOM_PRESET_PREFIX)) {
+            const presetDataString = localStorage.getItem(key);
+            if (presetDataString) {
+                const valuesToApply = JSON.parse(presetDataString);
+                presetName = key.replace(CUSTOM_PRESET_PREFIX, '');
+                for (const [id, value] of Object.entries(valuesToApply)) {
+                    const input = document.getElementById(id);
+                    if (input) {
+                        input.value = value;
+                    }
+                }
+            }
+        } else {
+            return;
+        }
+        
+        addLogMessage(`Zastosowano preset '${presetName}' do panelu. Rozpoczynam wysylanie sekwencyjne...`, 'info');
+
+        const commandGroups = {
+            'lqr_update': ['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'],
+            'physics_update': ['mBody', 'mWheel', 'L'],
+            'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr'],
+            'set_joystick_tuning': ['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor', 'holdPositionMarginPulses'],
+            'set_min_pwm': ['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd']
+        };
+
+        const commandsToSend = [];
+        Object.entries(commandGroups).forEach(([msgType, ids]) => {
+            let msg = { type: msgType, params: {} };
+            let payload = {};
+            ids.forEach(i => {
+                const inputElement = document.getElementById(i + 'Input');
+                if (inputElement) {
+                    let paramKey = i.replace(/([A-Z])/g, "_$1").toLowerCase();
+                    let value = parseFloat(inputElement.value);
+                    if (['expo_joystick', 'joystick_output_scale', 'turn_factor'].includes(paramKey)) {
+                        value = value / 100.0;
+                    }
+                    payload[paramKey] = value;
+                }
+            });
+            msg.params = payload;
+            commandsToSend.push(msg);
+        });
+
+        const delay = 250;
+        let commandIndex = 0;
+
+        function sendNextCommand() {
+            if (commandIndex >= commandsToSend.length) {
+                addLogMessage('Zakonczono wysylanie wszystkich grup parametrow z presetu.', 'info');
+                return;
+            }
+            const command = commandsToSend[commandIndex];
+            sendBleMessage(command);
+            addLogMessage(`Wyslano grupe [${commandIndex + 1}/${commandsToSend.length}]: ${command.type}`, 'info');
+            commandIndex++;
+            setTimeout(sendNextCommand, delay);
+        }
+        sendNextCommand();
+    }
 
     function setupControls() {
         const debounceWrapper = (fn, delay = 1000) => {
@@ -840,39 +898,7 @@
             loadPresets();
         }
     }
-
-    function applyPreset() {
-        const select = document.getElementById('lqrPresetSelect');
-        const key = select.value;
-        let presetName;
-        if (lqrBuiltInPresets[key]) {
-            const valuesToApply = lqrBuiltInPresets[key].values;
-            presetName = lqrBuiltInPresets[key].name;
-            const mapping = { q1: 'q1AngleInput', q2: 'q2AngularVelInput', q3: 'q3PositionInput', q4: 'q4VelocityInput', r: 'rControlInput' };
-            for (const [param, id] of Object.entries(mapping)) {
-                const input = document.getElementById(id);
-                if (input && valuesToApply[param] !== undefined) { input.value = valuesToApply[param]; }
-            }
-        } else if (key.startsWith(CUSTOM_PRESET_PREFIX)) {
-            const presetDataString = localStorage.getItem(key);
-            if (presetDataString) {
-                const valuesToApply = JSON.parse(presetDataString);
-                presetName = key.replace(CUSTOM_PRESET_PREFIX, '');
-                for (const [id, value] of Object.entries(valuesToApply)) {
-                    const input = document.getElementById(id);
-                    if (input) { input.value = value; }
-                }
-            }
-        } else { return; }
-        addLogMessage(`Zastosowano preset '${presetName}' do panelu.`, 'info');
-        setTimeout(() => {
-            document.querySelectorAll('.config-value, .lqr-input').forEach(input => {
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-            });
-            addLogMessage(`Wyslano wartosci z presetu '${presetName}' do robota.`, 'info');
-        }, 100);
-    }
-
+    
     function setupHelpIcons() {
         document.querySelectorAll('.help-icon').forEach(icon => {
             icon.addEventListener('click', (e) => {
