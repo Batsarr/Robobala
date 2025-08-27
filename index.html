@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Wersja 31.0</title>
+    <title>Robot LQR - Wersja 31.1</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -30,7 +30,7 @@
         legend { color: #61dafb; font-weight: bold; padding: 0 10px; font-size: 1.1em; }
         #joystickWrapper { position: relative; width: 180px; height: 180px; border-radius: 50%; background-color: #4a4f58; border: 3px solid #61dafb; margin: 15px auto; }
         #joystickCanvas { width: 100%; height: 100%; display: block; }
-        #chart-wrapper { position: relative; height: 320px; border-radius: 8px; overflow-hidden; background-color: #20232a; }
+        #chart-wrapper { position: relative; height: 320px; border-radius: 8px; overflow: hidden; background-color: #20232a; }
         #log-history { text-align: left; height: 350px; overflow-y: auto; background-color: #20232a; padding: 10px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; }
         .status-indicator { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
         .status-ok { background-color: #a2f279; }
@@ -353,6 +353,13 @@
     </div>
 
 <script>
+    // --- NOWA FUNKCJA POMOCNICZA DO AKTUALIZACJI WYSOKOSCI AKORDEONU ---
+    function updateAccordionHeight(contentElement) {
+        if (contentElement.style.maxHeight && contentElement.style.maxHeight !== '0px') {
+            contentElement.style.maxHeight = contentElement.scrollHeight + "px";
+        }
+    }
+
     const lqrBuiltInPresets = {
         'balanced': { name: '1. Zbalansowany (Startowy)', values: { q1: 150, q2: 15, q3: 10, q4: 20, r: 0.08 } },
         'stiff': { name: '2. Bardzo Sztywny (Precyzja)', values: { q1: 500, q2: 25, q3: 5, q4: 10, r: 0.1 } },
@@ -388,7 +395,6 @@
     const JOYSTICK_SEND_INTERVAL = 50;
     let chunkBuffers = {};
 
-    // --- NOWE ZMIENNE GLOBALNE DLA SEKWENCERA ---
     let sequence = [];
     let isSequenceRunning = false;
     let currentSequenceStep = 0;
@@ -466,7 +472,6 @@
         rxCharacteristic = null;
         txCharacteristic = null;
         chunkBuffers = {};
-        // Zatrzymaj sekwencje jesli byla aktywna
         if (isSequenceRunning) {
             stopSequenceExecution();
             addLogMessage('Sekwencja przerwana z powodu rozlaczenia.', 'warn');
@@ -518,11 +523,10 @@
             case 'telemetry':
                 let previousRobotState = lastKnownRobotState;
                 if(data.robot_state) {
-                    lastKnownRobotState = data.robot_state;
+                    lastKnownRobotState = data.robot_state.includes("BEZCZYN") ? "IDLE" : data.robot_state; // Normalizacja stanu
                 }
                 updateUI(data);
                 updateChart(data);
-                // Sprawdz czy mozna wykonac nastepny krok sekwencji
                 checkAndExecuteNextSequenceStep(previousRobotState);
                 break;
             case 'full_config':
@@ -891,8 +895,6 @@
         });
     }
 
-    // --- NOWE FUNKCJE DLA SEKWENCERA ---
-
     function setupSequenceControls() {
         document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep);
         document.getElementById('run-sequence-btn').addEventListener('click', runSequence);
@@ -921,8 +923,21 @@
         `;
         
         list.appendChild(stepDiv);
+
+        // --- KLUCZOWA POPRAWKA ---
+        // Aktualizujemy wysokosc akordeonu, aby zmiescil nowy element
+        const accordionContent = list.closest('.accordion-content');
+        if (accordionContent) {
+            updateAccordionHeight(accordionContent);
+        }
+        
         stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => {
             stepDiv.remove();
+            // --- KLUCZOWA POPRAWKA ---
+            // Aktualizujemy wysokosc takze po usunieciu elementu
+            if (accordionContent) {
+                updateAccordionHeight(accordionContent);
+            }
         });
     }
 
@@ -969,8 +984,15 @@
         if (isSequenceRunning) {
             stopSequenceExecution();
         }
-        document.getElementById('sequence-list').innerHTML = '';
+        const list = document.getElementById('sequence-list');
+        const accordionContent = list.closest('.accordion-content');
+        list.innerHTML = '';
         sequence = [];
+        // --- DODATKOWA POPRAWKA ---
+        // Aktualizujemy wysokosc po wyczyszczeniu listy
+        if (accordionContent) {
+            updateAccordionHeight(accordionContent);
+        }
     }
     
     function updateSequenceUI() {
@@ -990,8 +1012,12 @@
     function checkAndExecuteNextSequenceStep(previousState) {
         if (!isSequenceRunning) return;
         
-        const isRobotIdle = lastKnownRobotState === 'IDLE' || lastKnownRobotState === 'HOLDING_POSITION';
-        const wasRobotWorking = previousState === 'EXECUTING_MOVE' || previousState === 'EXECUTING_ROTATE';
+        // Normalizujemy stany przychodzace z robota na potrzeby logiki JS
+        const normalizedCurrentState = lastKnownRobotState.includes('UTRZYMUJE') ? 'HOLDING_POSITION' : lastKnownRobotState.includes('BEZCZYN') ? 'IDLE' : lastKnownRobotState;
+        const normalizedPreviousState = previousState.includes('RUCH') ? 'EXECUTING_MOVE' : previousState.includes('OBROT') ? 'EXECUTING_ROTATE' : previousState;
+
+        const isRobotIdle = normalizedCurrentState === 'IDLE' || normalizedCurrentState === 'HOLDING_POSITION';
+        const wasRobotWorking = normalizedPreviousState === 'EXECUTING_MOVE' || normalizedPreviousState === 'EXECUTING_ROTATE';
 
         if (isRobotIdle && wasRobotWorking) {
             addLogMessage(`Krok ${currentSequenceStep + 1} zakonczony.`, 'info');
@@ -1002,7 +1028,7 @@
 
     function executeNextSequenceStep() {
         if (!isSequenceRunning || currentSequenceStep >= sequence.length) {
-            if (isSequenceRunning) { // Sekwencja sie wlasnie zakonczyla
+            if (isSequenceRunning) { 
                 isSequenceRunning = false;
                 addLogMessage('Sekwencja zostala pomyslnie ukonczona.', 'info');
             }
@@ -1033,8 +1059,6 @@
         sendBleMessage(command);
     }
     
-    // --- KONIEC FUNKCJI SEKWENCERA ---
-
     function loadPresets() {
         const select = document.getElementById('lqrPresetSelect');
         select.innerHTML = '';
@@ -1101,7 +1125,7 @@
                     helpText.classList.toggle('visible');
                     const accordionContent = container.closest('.accordion-content');
                     if (accordionContent && accordionContent.classList.contains('active')) {
-                        accordionContent.style.maxHeight = accordionContent.scrollHeight + 'px';
+                        updateAccordionHeight(accordionContent);
                     }
                 }
             });
@@ -1217,4 +1241,4 @@
     window.onresize = () => { resizeJoystick(); };
 </script>
 </body>
-</html>
+</html>```
