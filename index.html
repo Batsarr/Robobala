@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Wersja 31.1</title>
+    <title>Robot LQR - Wersja 31.2</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -88,8 +88,6 @@
         .help-icon { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: #61dafb; color: #282c34; font-size: 12px; font-weight: bold; text-align: center; line-height: 16px; margin-left: 8px; cursor: pointer; user-select: none; }
         .help-text { background-color: #20232a; color: #fff; border-radius: 6px; padding: 10px; border: 1px solid #61dafb; margin-top: 8px; text-align: left; font-size: 0.9em; line-height: 1.4; width: 100%; box-sizing: border-box; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease-out; padding-top: 0; padding-bottom: 0; grid-column: 1 / -1; }
         .help-text.visible { max-height: 200px; padding-top: 10px; padding-bottom: 10px; }
-        
-        /* Style dla sekwencera */
         .sequence-step { display: grid; grid-template-columns: 1fr 100px auto; gap: 10px; align-items: center; background-color: #2a2f35; padding: 8px; border-radius: 6px; margin-bottom: 8px; transition: background-color 0.3s; }
         .sequence-step.executing { background-color: #a2f279; color: #282c34; }
         .sequence-step.executing select, .sequence-step.executing input { color: #282c34; border-color: #282c34; }
@@ -119,7 +117,6 @@
                 
                 <hr style="border-color: #4a4f58; margin: 10px 0;">
                 <h5 style="color: #61dafb; margin: 0 0 8px 0; font-size: 1.1em; text-align: left;">Korekty Ruchu</h5>
-                <div class="setting-container"><label for="positionErrorGainInput">Wzmocnienie Bł. Pozycji</label><div class="numeric-input-wrapper"><button id="positionErrorGainMinus">-</button><input type="number" class="config-value" id="positionErrorGainInput" min="0" max="10" step="0.1" value="2.5"><button id="positionErrorGainPlus">+</button></div></div>
                 <div class="setting-container"><label for="headingCorrectionFactorInput">Siła Korekty Kursu</label><div class="numeric-input-wrapper"><button id="headingCorrectionFactorMinus">-</button><input type="number" class="config-value" id="headingCorrectionFactorInput" min="0" max="5" step="0.05" value="0.4"><button id="headingCorrectionFactorPlus">+</button></div></div>
                 
             </fieldset>
@@ -353,13 +350,11 @@
     </div>
 
 <script>
-    // --- NOWA FUNKCJA POMOCNICZA DO AKTUALIZACJI WYSOKOSCI AKORDEONU ---
     function updateAccordionHeight(contentElement) {
         if (contentElement.style.maxHeight && contentElement.style.maxHeight !== '0px') {
             contentElement.style.maxHeight = contentElement.scrollHeight + "px";
         }
     }
-
     const lqrBuiltInPresets = {
         'balanced': { name: '1. Zbalansowany (Startowy)', values: { q1: 150, q2: 15, q3: 10, q4: 20, r: 0.08 } },
         'stiff': { name: '2. Bardzo Sztywny (Precyzja)', values: { q1: 500, q2: 25, q3: 5, q4: 10, r: 0.1 } },
@@ -394,7 +389,6 @@
     let lastJoystickSendTime = 0;
     const JOYSTICK_SEND_INTERVAL = 50;
     let chunkBuffers = {};
-
     let sequence = [];
     let isSequenceRunning = false;
     let currentSequenceStep = 0;
@@ -523,7 +517,7 @@
             case 'telemetry':
                 let previousRobotState = lastKnownRobotState;
                 if(data.robot_state) {
-                    lastKnownRobotState = data.robot_state.includes("BEZCZYN") ? "IDLE" : data.robot_state; // Normalizacja stanu
+                    lastKnownRobotState = data.robot_state;
                 }
                 updateUI(data);
                 updateChart(data);
@@ -564,8 +558,7 @@
             q1Angle: data.q1_angle, q2AngularVel: data.q2_angular_vel, q3Position: data.q3_position, q4Velocity: data.q4_velocity, rControl: data.r_control, lqrOutputScalar: data.lqr_output_scalar, 
             mBody: data.m_body, mWheel: data.m_wheel, L: data.L, 
             wheelDiameterCm: data.wheel_diameter_cm, trackWidthCm: data.track_width_cm, encoderPpr: data.encoder_ppr,
-            headingCorrectionFactor: data.heading_correction_factor,
-            positionErrorGain: data.position_error_gain 
+            headingCorrectionFactor: data.heading_correction_factor
         };
         for (const [key, value] of Object.entries(params)) {
             const inputId = `${key}Input`;
@@ -788,7 +781,7 @@
         const commandGroups = {
             'lqr_update': ['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'],
             'physics_update': ['mBody', 'mWheel', 'L'],
-            'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'positionErrorGain'],
+            'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor'],
             'set_joystick_tuning': ['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'],
             'set_min_pwm': ['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd']
         };
@@ -873,7 +866,7 @@
         setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'], 'set_joystick_tuning');
         setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'], 'lqr_update');
         setupGroupedInput(['mBody', 'mWheel', 'L'], 'physics_update');
-        setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'positionErrorGain'], 'calibration_update');
+        setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor'], 'calibration_update');
         setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm');
         setupManualTuningControls();
         setupDpadControls();
@@ -924,8 +917,6 @@
         
         list.appendChild(stepDiv);
 
-        // --- KLUCZOWA POPRAWKA ---
-        // Aktualizujemy wysokosc akordeonu, aby zmiescil nowy element
         const accordionContent = list.closest('.accordion-content');
         if (accordionContent) {
             updateAccordionHeight(accordionContent);
@@ -933,8 +924,6 @@
         
         stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => {
             stepDiv.remove();
-            // --- KLUCZOWA POPRAWKA ---
-            // Aktualizujemy wysokosc takze po usunieciu elementu
             if (accordionContent) {
                 updateAccordionHeight(accordionContent);
             }
@@ -946,7 +935,8 @@
             addLogMessage('Sekwencja jest juz w toku.', 'warn');
             return;
         }
-        if (lastKnownRobotState !== 'IDLE' && lastKnownRobotState !== 'HOLDING_POSITION') {
+        const normalizedState = lastKnownRobotState.includes("BEZCZYN") ? "IDLE" : lastKnownRobotState;
+        if (normalizedState !== 'IDLE' && normalizedState !== 'HOLDING_POSITION') {
             addLogMessage(`Nie mozna rozpoczac sekwencji. Robot jest w stanie '${lastKnownRobotState}'.`, 'error');
             return;
         }
@@ -988,8 +978,6 @@
         const accordionContent = list.closest('.accordion-content');
         list.innerHTML = '';
         sequence = [];
-        // --- DODATKOWA POPRAWKA ---
-        // Aktualizujemy wysokosc po wyczyszczeniu listy
         if (accordionContent) {
             updateAccordionHeight(accordionContent);
         }
@@ -1012,12 +1000,11 @@
     function checkAndExecuteNextSequenceStep(previousState) {
         if (!isSequenceRunning) return;
         
-        // Normalizujemy stany przychodzace z robota na potrzeby logiki JS
-        const normalizedCurrentState = lastKnownRobotState.includes('UTRZYMUJE') ? 'HOLDING_POSITION' : lastKnownRobotState.includes('BEZCZYN') ? 'IDLE' : lastKnownRobotState;
-        const normalizedPreviousState = previousState.includes('RUCH') ? 'EXECUTING_MOVE' : previousState.includes('OBROT') ? 'EXECUTING_ROTATE' : previousState;
+        const normalizedCurrent = lastKnownRobotState.includes('BEZCZYN') ? 'IDLE' : (lastKnownRobotState.includes('UTRZYMUJE') ? 'HOLDING_POSITION' : lastKnownRobotState);
+        const normalizedPrevious = previousState.includes('RUCH') ? 'EXECUTING_MOVE' : (previousState.includes('OBROT') ? 'EXECUTING_ROTATE' : previousState);
 
-        const isRobotIdle = normalizedCurrentState === 'IDLE' || normalizedCurrentState === 'HOLDING_POSITION';
-        const wasRobotWorking = normalizedPreviousState === 'EXECUTING_MOVE' || normalizedPreviousState === 'EXECUTING_ROTATE';
+        const isRobotIdle = normalizedCurrent === 'IDLE' || normalizedCurrent === 'HOLDING_POSITION';
+        const wasRobotWorking = normalizedPrevious === 'EXECUTING_MOVE' || normalizedPrevious === 'EXECUTING_ROTATE';
 
         if (isRobotIdle && wasRobotWorking) {
             addLogMessage(`Krok ${currentSequenceStep + 1} zakonczony.`, 'info');
