@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Wersja 31.2</title>
+    <title>Robot LQR - Wersja 31.2-ACK</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -350,6 +350,13 @@
     </div>
 
 <script>
+    // === POCZATEK ZMIAN: Logika do obslugi niezawodnej komunikacji ===
+    let isPresetSequenceRunning = false;
+    let presetAckResolver = null;
+    let presetAckTimeout = null;
+    const PRESET_ACK_TIMEOUT_MS = 2000; // Czas oczekiwania na potwierdzenie od robota
+    // === KONIEC ZMIAN ===
+
     function updateAccordionHeight(contentElement) {
         if (contentElement.style.maxHeight && contentElement.style.maxHeight !== '0px') {
             contentElement.style.maxHeight = contentElement.scrollHeight + "px";
@@ -415,36 +422,36 @@
     }
 
     async function connectBLE() {
-        addLogMessage('Prosze o wybranie urzadzenia Bluetooth...', 'info');
+        addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info');
         try {
             bleDevice = await navigator.bluetooth.requestDevice({
                 filters: [{ services: [SERVICE_UUID] }],
                 optionalServices: [SERVICE_UUID]
             });
-            addLogMessage(`Laczenie z ${bleDevice.name}...`, 'info');
+            addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info');
             document.getElementById('connectBleBtn').disabled = true;
             document.getElementById('connectionText').textContent = 'Laczenie...';
             bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
             const server = await bleDevice.gatt.connect();
-            addLogMessage('Pobieranie serwisu...', 'info');
+            addLogMessage('[UI] Pobieranie serwisu...', 'info');
             const service = await server.getPrimaryService(SERVICE_UUID);
-            addLogMessage('Pobieranie charakterystyk...', 'info');
+            addLogMessage('[UI] Pobieranie charakterystyk...', 'info');
             rxCharacteristic = await service.getCharacteristic(RX_UUID);
             txCharacteristic = await service.getCharacteristic(TX_UUID);
-            addLogMessage('Nasluchiwanie na powiadomienia...', 'info');
+            addLogMessage('[UI] Nasluchiwanie na powiadomienia...', 'info');
             await txCharacteristic.startNotifications();
             txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification);
             document.getElementById('connectionStatus').className = 'status-indicator status-ok';
             document.getElementById('connectionText').textContent = 'Polaczony';
-            addLogMessage('Polaczono! Automatyczna synchronizacja stanu robota...', 'info');
+            addLogMessage('[UI] Polaczono! Automatyczna synchronizacja stanu robota...', 'info');
             sendBleMessage({ type: 'request_state' });
             if (configSyncTimeout) clearTimeout(configSyncTimeout);
             configSyncTimeout = setTimeout(() => {
-                addLogMessage('Blad: Timeout synchronizacji. Nie otrzymano danych od robota.', 'error');
+                addLogMessage('[UI] Blad: Timeout synchronizacji. Nie otrzymano danych od robota.', 'error');
                 configSyncTimeout = null;
             }, 5000);
         } catch (error) {
-            addLogMessage(`Blad polaczenia BLE: ${error}`, 'error');
+            addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error');
             document.getElementById('connectionStatus').className = 'status-indicator status-error';
             document.getElementById('connectionText').textContent = 'Blad polaczenia';
             document.getElementById('connectBleBtn').disabled = false;
@@ -452,7 +459,7 @@
     }
 
     function onDisconnected() {
-        addLogMessage('Rozlaczono z robotem.', 'warn');
+        addLogMessage('[UI] Rozlaczono z robotem.', 'warn');
         if (configSyncTimeout) { clearTimeout(configSyncTimeout); configSyncTimeout = null; }
         document.getElementById('connectionStatus').className = 'status-indicator status-disconnected';
         document.getElementById('connectionText').textContent = 'Rozlaczony';
@@ -468,7 +475,7 @@
         chunkBuffers = {};
         if (isSequenceRunning) {
             stopSequenceExecution();
-            addLogMessage('Sekwencja przerwana z powodu rozlaczenia.', 'warn');
+            addLogMessage('[UI] Sekwencja przerwana z powodu rozlaczenia.', 'warn');
         }
     }
 
@@ -484,7 +491,7 @@
             const data = JSON.parse(jsonString);
             if (data.type === 'chunk') {
                 if (data.i === 0) {
-                     addLogMessage(`Odbieram fragmentowana wiadomosc (ID: ${data.id}, ${data.total} czesci)...`, 'info');
+                     addLogMessage(`[UI] Odbieram fragmentowana wiadomosc (ID: ${data.id}, ${data.total} czesci)...`, 'info');
                 }
                 if (!chunkBuffers[data.id]) {
                     chunkBuffers[data.id] = {
@@ -500,7 +507,7 @@
                 }
                 if (buffer.receivedCount === buffer.totalCount) {
                     const completeMessageString = buffer.chunks.join('');
-                    addLogMessage(`Zlozono wiadomosc (ID: ${data.id}) z ${data.total} czesci. Rozmiar: ${completeMessageString.length} B.`, 'info');
+                    addLogMessage(`[UI] Zlozono wiadomosc (ID: ${data.id}) z ${data.total} czesci. Rozmiar: ${completeMessageString.length} B.`, 'info');
                     delete chunkBuffers[data.id];
                     handleIncomingData(completeMessageString);
                 }
@@ -508,7 +515,7 @@
                 processCompleteMessage(data);
             }
         } catch (e) {
-            addLogMessage(`Blad parsowania JSON: ${e}. Dane: ${jsonString}`, 'error');
+            addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${jsonString}`, 'error');
         }
     }
 
@@ -532,6 +539,13 @@
                 break;
             case 'log':
                 addLogMessage(`[ROBOT] ${data.message}`, data.level);
+                // === POCZATEK ZMIAN: Logika nasluchiwania na potwierdzenia (ACK) ===
+                if (isPresetSequenceRunning && presetAckResolver && data.message.includes('POTWIERDZENIE:')) {
+                    if (presetAckTimeout) clearTimeout(presetAckTimeout); // Anuluj timeout
+                    presetAckResolver(); // Rozwiaz obietnice (Promise), co oznacza sukces i pozwala na wyslanie nastepnej paczki
+                    presetAckResolver = null; // Wyczysc resolver, aby nie uzyc go ponownie
+                }
+                // === KONIEC ZMIAN ===
                 break;
             case 'memory_info':
                 updateMemoryInfo(data);
@@ -540,11 +554,11 @@
     }
 
     async function sendBleMessage(message) {
-        if (!rxCharacteristic) { addLogMessage("Brak polaczenia z robotem!", "error"); return; }
+        if (!rxCharacteristic) { addLogMessage("[UI] Brak polaczenia z robotem!", "error"); return; }
         try {
             const encoder = new TextEncoder();
             await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message)));
-        } catch (error) { addLogMessage(`Blad wysylania danych BLE: ${error}`, 'error'); }
+        } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); }
     }
 
     function applyInitialState(data) {
@@ -571,7 +585,7 @@
                 }
             }
         }
-        addLogMessage("Parametry robota zsynchronizowane z panelem.", "info");
+        addLogMessage("[UI] Parametry robota zsynchronizowane z panelem.", "info");
     }
 
     function updateUI(data) {
@@ -650,8 +664,8 @@
         if (chartData.labels.length >= 100) chartData.labels.shift();
         chartData.labels.push('');
         let localData = { ...data, 'target_angle': finalTargetAngleForDisplay };
-        for (const key in localData) {
-            if (availableTelemetry[key] && localData[key] !== undefined) {
+        for (const [key, localDataValue] of Object.entries(localData)) {
+            if (availableTelemetry[key] && localDataValue !== undefined) {
                 let dataset = chartData.datasets.find(ds => ds.label === availableTelemetry[key].label);
                 if (!dataset) {
                     const axisId = (key.includes('output') || key.includes('motor')) ? 'y1' : 'y';
@@ -659,7 +673,7 @@
                     chartData.datasets.push(dataset);
                 }
                 if (dataset.data.length >= 100) dataset.data.shift();
-                dataset.data.push(localData[key]);
+                dataset.data.push(localDataValue);
             }
         }
         chartData.datasets.forEach(ds => {
@@ -743,16 +757,61 @@
             input.addEventListener('change', sendGroupUpdate);
         });
     };
+    
+    // === POCZATEK ZMIAN: Niezawodna, sekwencyjna funkcja do wysylania presetow ===
+    async function runPresetSequence(commands) {
+        if (isPresetSequenceRunning) {
+            addLogMessage('[UI] Sekwencja jest juz w toku.', 'warn');
+            return;
+        }
+
+        isPresetSequenceRunning = true;
+        const applyBtn = document.getElementById('applyLqrPresetBtn');
+        applyBtn.disabled = true;
+        applyBtn.textContent = 'Wysylanie...';
+
+        for (let i = 0; i < commands.length; i++) {
+            const command = commands[i];
+            addLogMessage(`[UI] Wysylanie grupy [${i + 1}/${commands.length}]: ${command.type}`, 'info');
+            sendBleMessage(command);
+
+            try {
+                // Czekaj na potwierdzenie (ACK) od robota
+                await new Promise((resolve, reject) => {
+                    presetAckResolver = resolve;
+                    presetAckTimeout = setTimeout(() => {
+                        reject(new Error(`Timeout oczekiwania na potwierdzenie dla ${command.type}`));
+                    }, PRESET_ACK_TIMEOUT_MS);
+                });
+                // Potwierdzenie otrzymane
+                addLogMessage(`[UI] Otrzymano potwierdzenie dla ${command.type}.`, 'info');
+
+            } catch (error) {
+                // Wystapil blad (timeout)
+                addLogMessage(`[UI] BLAD: ${error.message}`, 'error');
+                addLogMessage('[UI] Przerwano sekwencje presetow z powodu bledu.', 'error');
+                break; // Przerwij petle i zakoncz proces
+            }
+        }
+
+        // Czyszczenie i przywracanie stanu poczatkowego po zakonczeniu petli
+        isPresetSequenceRunning = false;
+        presetAckResolver = null;
+        if (presetAckTimeout) clearTimeout(presetAckTimeout);
+        applyBtn.disabled = false;
+        applyBtn.textContent = 'Zastosuj i Wczytaj do Panelu';
+        addLogMessage('[UI] Zakonczono proces wysylania presetu.', 'info');
+    }
 
     function applyPreset() {
         const select = document.getElementById('lqrPresetSelect');
         const key = select.value;
         if (!key) return;
-        let presetName = '';
+
+        let presetName = select.options[select.selectedIndex].text;
 
         if (lqrBuiltInPresets[key]) {
             const preset = lqrBuiltInPresets[key];
-            presetName = preset.name;
             const mapping = { q1: 'q1AngleInput', q2: 'q2AngularVelInput', q3: 'q3PositionInput', q4: 'q4VelocityInput', r: 'rControlInput' };
             for (const [param, id] of Object.entries(mapping)) {
                 const input = document.getElementById(id);
@@ -764,7 +823,6 @@
             const presetDataString = localStorage.getItem(key);
             if (presetDataString) {
                 const valuesToApply = JSON.parse(presetDataString);
-                presetName = key.replace(CUSTOM_PRESET_PREFIX, '');
                 for (const [id, value] of Object.entries(valuesToApply)) {
                     const input = document.getElementById(id);
                     if (input) {
@@ -776,7 +834,7 @@
             return;
         }
         
-        addLogMessage(`Zastosowano preset '${presetName}' do panelu. Rozpoczynam wysylanie sekwencyjne...`, 'info');
+        addLogMessage(`[UI] Zastosowano preset '${presetName}' do panelu. Rozpoczynam wysylanie sekwencyjne...`, 'info');
 
         const commandGroups = {
             'lqr_update': ['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'],
@@ -804,23 +862,11 @@
             msg.params = payload;
             commandsToSend.push(msg);
         });
-
-        const delay = 250;
-        let commandIndex = 0;
-
-        function sendNextCommand() {
-            if (commandIndex >= commandsToSend.length) {
-                addLogMessage('Zakonczono wysylanie wszystkich grup parametrow z presetu.', 'info');
-                return;
-            }
-            const command = commandsToSend[commandIndex];
-            sendBleMessage(command);
-            addLogMessage(`Wyslano grupe [${commandIndex + 1}/${commandsToSend.length}]: ${command.type}`, 'info');
-            commandIndex++;
-            setTimeout(sendNextCommand, delay);
-        }
-        sendNextCommand();
+        
+        // Uruchom nowa, niezawodna sekwencje
+        runPresetSequence(commandsToSend);
     }
+    // === KONIEC ZMIAN ===
 
     function setupControls() {
         const debounceWrapper = (fn, delay = 1000) => {
@@ -857,8 +903,8 @@
         document.getElementById('trimMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -1 }));
         document.getElementById('trimRollPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: 1 }));
         document.getElementById('trimRollMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -1 }));
-        document.getElementById('saveBtn').addEventListener('click', debounceWrapper((e) => { if (confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")) { sendBleMessage({ type: 'save_tunings' }); addLogMessage('Wyslano polecenie ZAPISU do EEPROM.', 'info'); } }));
-        document.getElementById('loadBtn').addEventListener('click', debounceWrapper((e) => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) { sendBleMessage({ type: 'load_from_eeprom' }); addLogMessage('Wyslano polecenie ODCZYTU z EEPROM.', 'info'); } }));
+        document.getElementById('saveBtn').addEventListener('click', debounceWrapper((e) => { if (confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")) { sendBleMessage({ type: 'save_tunings' }); addLogMessage('[UI] Wyslano polecenie ZAPISU do EEPROM.', 'info'); } }));
+        document.getElementById('loadBtn').addEventListener('click', debounceWrapper((e) => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) { sendBleMessage({ type: 'load_from_eeprom' }); addLogMessage('[UI] Wyslano polecenie ODCZYTU z EEPROM.', 'info'); } }));
         document.getElementById('emergencyStopBtn').addEventListener('click', debounceWrapper((e) => { sendBleMessage({ type: 'emergency_stop' }); }));
         document.getElementById('resetEncodersBtn').addEventListener('click', debounceWrapper((e) => { sendBleMessage({ type: 'reset_encoders' }); }));
         document.getElementById('calibrateMpuBtn').addEventListener('click', debounceWrapper((e) => { sendBleMessage({ type: 'calibrate_mpu' }); }));
@@ -898,7 +944,7 @@
     function addSequenceStep() {
         const list = document.getElementById('sequence-list');
         if (list.children.length >= MAX_SEQUENCE_STEPS) {
-            addLogMessage(`Osiagnieto maksymalna liczbe krokow w sekwencji (${MAX_SEQUENCE_STEPS}).`, 'warn');
+            addLogMessage(`[UI] Osiagnieto maksymalna liczbe krokow w sekwencji (${MAX_SEQUENCE_STEPS}).`, 'warn');
             return;
         }
 
@@ -932,19 +978,19 @@
 
     function runSequence() {
         if (isSequenceRunning) {
-            addLogMessage('Sekwencja jest juz w toku.', 'warn');
+            addLogMessage('[UI] Sekwencja jest juz w toku.', 'warn');
             return;
         }
         const normalizedState = lastKnownRobotState.includes("BEZCZYN") ? "IDLE" : lastKnownRobotState;
         if (normalizedState !== 'IDLE' && normalizedState !== 'HOLDING_POSITION') {
-            addLogMessage(`Nie mozna rozpoczac sekwencji. Robot jest w stanie '${lastKnownRobotState}'.`, 'error');
+            addLogMessage(`[UI] Nie mozna rozpoczac sekwencji. Robot jest w stanie '${lastKnownRobotState}'.`, 'error');
             return;
         }
 
         sequence = [];
         const steps = document.querySelectorAll('.sequence-step');
         if (steps.length === 0) {
-            addLogMessage('Dodaj przynajmniej jeden krok do sekwencji.', 'warn');
+            addLogMessage('[UI] Dodaj przynajmniej jeden krok do sekwencji.', 'warn');
             return;
         }
 
@@ -958,7 +1004,7 @@
         isSequenceRunning = true;
         currentSequenceStep = 0;
         updateSequenceUI();
-        addLogMessage(`Rozpoczeto sekwencje zlozoną z ${sequence.length} krokow.`, 'info');
+        addLogMessage(`[UI] Rozpoczeto sekwencje zlozoną z ${sequence.length} krokow.`, 'info');
         executeNextSequenceStep();
     }
     
@@ -967,7 +1013,7 @@
         isSequenceRunning = false;
         sendBleMessage({ type: 'command_stop' });
         updateSequenceUI();
-        addLogMessage('Sekwencja zatrzymana przez uzytkownika.', 'warn');
+        addLogMessage('[UI] Sekwencja zatrzymana przez uzytkownika.', 'warn');
     }
 
     function clearSequence() {
@@ -1007,7 +1053,7 @@
         const wasRobotWorking = normalizedPrevious === 'EXECUTING_MOVE' || normalizedPrevious === 'EXECUTING_ROTATE';
 
         if (isRobotIdle && wasRobotWorking) {
-            addLogMessage(`Krok ${currentSequenceStep + 1} zakonczony.`, 'info');
+            addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info');
             currentSequenceStep++;
             executeNextSequenceStep();
         }
@@ -1017,7 +1063,7 @@
         if (!isSequenceRunning || currentSequenceStep >= sequence.length) {
             if (isSequenceRunning) { 
                 isSequenceRunning = false;
-                addLogMessage('Sekwencja zostala pomyslnie ukonczona.', 'info');
+                addLogMessage('[UI] Sekwencja zostala pomyslnie ukonczona.', 'info');
             }
             updateSequenceUI();
             return;
@@ -1042,7 +1088,7 @@
                 break;
         }
         
-        addLogMessage(`Wysylanie kroku ${currentSequenceStep + 1}/${sequence.length}: ${command.type} (${step.value}).`, 'info');
+        addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${sequence.length}: ${command.type} (${step.value}).`, 'info');
         sendBleMessage(command);
     }
     
@@ -1086,7 +1132,7 @@
         const presetData = {};
         document.querySelectorAll('.config-value').forEach(input => { presetData[input.id] = input.value; });
         localStorage.setItem(CUSTOM_PRESET_PREFIX + name, JSON.stringify(presetData));
-        addLogMessage(`Zapisano nowy preset: '${name}'`, 'info');
+        addLogMessage(`[UI] Zapisano nowy preset: '${name}'`, 'info');
         nameInput.value = '';
         loadPresets();
     }
@@ -1094,10 +1140,10 @@
     function deletePreset() {
         const select = document.getElementById('lqrPresetSelect');
         const key = select.value;
-        if (!key.startsWith(CUSTOM_PRESET_PREFIX)) { addLogMessage('Nie mozna usunac wbudowanego presetu.', 'warn'); return; }
+        if (!key.startsWith(CUSTOM_PRESET_PREFIX)) { addLogMessage('[UI] Nie mozna usunac wbudowanego presetu.', 'warn'); return; }
         if (confirm(`Czy na pewno chcesz usunac preset '${key.replace(CUSTOM_PRESET_PREFIX, '')}'?`)) {
             localStorage.removeItem(key);
-            addLogMessage(`Usunieto preset: '${key.replace(CUSTOM_PRESET_PREFIX, '')}'`, 'info');
+            addLogMessage(`[UI] Usunieto preset: '${key.replace(CUSTOM_PRESET_PREFIX, '')}'`, 'info');
             loadPresets();
         }
     }
@@ -1208,7 +1254,10 @@
             setTimeout(() => btn.disabled = false, delay);
             fn(e);
         };
-        document.getElementById('applyLqrPresetBtn').addEventListener('click', debounceWrapper(applyPreset));
+        document.getElementById('applyLqrPresetBtn').addEventListener('click', (e) => {
+             // Usunieto debounce z tej funkcji, poniewaz wewnetrzna logika juz blokuje przycisk
+            applyPreset();
+        });
         document.getElementById('savePresetBtn').addEventListener('click', debounceWrapper(savePreset));
         document.getElementById('deletePresetBtn').addEventListener('click', debounceWrapper(deletePreset));
         document.getElementById('lqrPresetSelect').addEventListener('change', updateDeleteButtonState);
@@ -1228,4 +1277,4 @@
     window.onresize = () => { resizeJoystick(); };
 </script>
 </body>
-</html>```
+</html>
