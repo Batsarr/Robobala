@@ -537,16 +537,19 @@
                 }
                 applyInitialState(data);
                 break;
+            // ================== POCZATEK POPRAWKI ==================
+            case 'ack':
+                if (isPresetSequenceRunning && presetAckResolver) {
+                    if (presetAckTimeout) clearTimeout(presetAckTimeout);
+                    presetAckResolver();
+                    presetAckResolver = null;
+                }
+                break;
             case 'log':
                 addLogMessage(`[ROBOT] ${data.message}`, data.level);
-                // === POCZATEK ZMIAN: Logika nasluchiwania na potwierdzenia (ACK) ===
-                if (isPresetSequenceRunning && presetAckResolver && data.message.includes('POTWIERDZENIE:')) {
-                    if (presetAckTimeout) clearTimeout(presetAckTimeout); // Anuluj timeout
-                    presetAckResolver(); // Rozwiaz obietnice (Promise), co oznacza sukces i pozwala na wyslanie nastepnej paczki
-                    presetAckResolver = null; // Wyczysc resolver, aby nie uzyc go ponownie
-                }
-                // === KONIEC ZMIAN ===
+                // Usunieto stad bledna logike nasluchiwania na potwierdzenia
                 break;
+            // ================== KONIEC POPRAWKI ==================
             case 'memory_info':
                 updateMemoryInfo(data);
                 break;
