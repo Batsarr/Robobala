@@ -108,7 +108,7 @@
             <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">LQR Aktywny</span><label class="switch"><input type="checkbox" id="lqrEnabledSwitch" checked><span class="slider round"></span></label></div>
             
-            <fieldset style="padding: 10px 10px 5px 10px;"><legend>Strojenie Główne</legend>
+            <fieldset style="padding: 10px 10px 5px 10px;"><legend>Strojenie Glowne</legend>
                 <div class="setting-container"><label for="joystickOutputScaleInput">Skala Wyjscia (%)</label><div class="numeric-input-wrapper"><button id="joystickOutputScaleMinus">-</button><input type="number" class="config-value" id="joystickOutputScaleInput" min="10" max="100" step="5" value="100"><button id="joystickOutputScalePlus">+</button></div></div>
                 <div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)</label><div class="numeric-input-wrapper"><button id="expoJoystickMinus">-</button><input type="number" class="config-value" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button id="expoJoystickPlus">+</button></div></div>
                 <div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button id="maxSpeedJoystickMinus">-</button><input type="number" class="config-value" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button id="maxSpeedJoystickPlus">+</button></div></div>
@@ -117,8 +117,20 @@
                 
                 <hr style="border-color: #4a4f58; margin: 10px 0;">
                 <h5 style="color: #61dafb; margin: 0 0 8px 0; font-size: 1.1em; text-align: left;">Korekty Ruchu</h5>
-                <div class="setting-container"><label for="headingCorrectionFactorInput">Siła Korekty Kursu</label><div class="numeric-input-wrapper"><button id="headingCorrectionFactorMinus">-</button><input type="number" class="config-value" id="headingCorrectionFactorInput" min="0" max="5" step="0.05" value="0.4"><button id="headingCorrectionFactorPlus">+</button></div></div>
+                <div class="setting-container"><label for="headingCorrectionFactorInput">Sila Korekty Kursu</label><div class="numeric-input-wrapper"><button id="headingCorrectionFactorMinus">-</button><input type="number" class="config-value" id="headingCorrectionFactorInput" min="0" max="5" step="0.05" value="0.4"><button id="headingCorrectionFactorPlus">+</button></div></div>
                 
+                <!-- ================== POCZATEK NOWEGO KODU ================== -->
+                <div class="setting-container">
+                    <label for="speedToAngleFactorInput">Wsp. Predkosci na Kat<span class="help-icon">?</span></label>
+                    <div class="numeric-input-wrapper">
+                        <button id="speedToAngleFactorMinus">-</button>
+                        <input type="number" class="config-value" id="speedToAngleFactorInput" min="0.001" max="0.1" step="0.001" value="0.01">
+                        <button id="speedToAngleFactorPlus">+</button>
+                    </div>
+                    <div class="help-text"><strong>Wplyw:</strong> Kluczowy parametr dla trybu predkosci. Okresla, jak bardzo robot ma sie pochylac, aby osiagnac zadana predkosc. Wieksza wartosc = wieksza agresywnosc i szybsze przyspieszanie.</div>
+                </div>
+                 <!-- ================== KONIEC NOWEGO KODU =================== -->
+
             </fieldset>
             
             <hr style="border-color: #4a4f58; margin: 15px 0;">
@@ -188,6 +200,22 @@
                         <button id="clear-sequence-btn" style="background-color: #f7b731;">Wyczysc</button>
                     </div>
                 </fieldset>
+                
+                <!-- ================== POCZATEK NOWEGO KODU ================== -->
+                <fieldset style="margin-top: 15px;">
+                    <legend>Strojenie Autonomii</legend>
+                    <div class="setting-container">
+                        <label for="positionPGainInput">Agresywnosc Ruchu (P-Gain)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper">
+                            <button id="positionPGainMinus">-</button>
+                            <input type="number" class="config-value" id="positionPGainInput" min="0.001" max="0.1" step="0.001" value="0.005">
+                            <button id="positionPGainPlus">+</button>
+                        </div>
+                        <div class="help-text"><strong>Wplyw:</strong> Wzmacnia reakcje na blad pozycji. Wieksza wartosc = robot szybciej i bardziej agresywnie dojezdza do celu. Zbyt duza moze powodowac oscylacje.</div>
+                    </div>
+                </fieldset>
+                <!-- ================== KONIEC NOWEGO KODU =================== -->
+
                 <fieldset style="margin-top: 15px;">
                     <legend>Diagnostyka</legend>
                      <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Kalibruj MPU (DMP)</button>
@@ -537,7 +565,6 @@
                 }
                 applyInitialState(data);
                 break;
-            // ================== POCZATEK POPRAWKI ==================
             case 'ack':
                 if (isPresetSequenceRunning && presetAckResolver) {
                     if (presetAckTimeout) clearTimeout(presetAckTimeout);
@@ -547,9 +574,7 @@
                 break;
             case 'log':
                 addLogMessage(`[ROBOT] ${data.message}`, data.level);
-                // Usunieto stad bledna logike nasluchiwania na potwierdzenia
                 break;
-            // ================== KONIEC POPRAWKI ==================
             case 'memory_info':
                 updateMemoryInfo(data);
                 break;
@@ -575,7 +600,11 @@
             q1Angle: data.q1_angle, q2AngularVel: data.q2_angular_vel, q3Position: data.q3_position, q4Velocity: data.q4_velocity, rControl: data.r_control, lqrOutputScalar: data.lqr_output_scalar, 
             mBody: data.m_body, mWheel: data.m_wheel, L: data.L, 
             wheelDiameterCm: data.wheel_diameter_cm, trackWidthCm: data.track_width_cm, encoderPpr: data.encoder_ppr,
-            headingCorrectionFactor: data.heading_correction_factor
+            headingCorrectionFactor: data.heading_correction_factor,
+            // ================== POCZATEK NOWEGO KODU ==================
+            speedToAngleFactor: data.speed_to_angle_factor,
+            positionPGain: data.position_p_gain
+            // ================== KONIEC NOWEGO KODU ===================
         };
         for (const [key, value] of Object.entries(params)) {
             const inputId = `${key}Input`;
@@ -761,7 +790,6 @@
         });
     };
     
-    // === POCZATEK ZMIAN: Niezawodna, sekwencyjna funkcja do wysylania presetow ===
     async function runPresetSequence(commands) {
         if (isPresetSequenceRunning) {
             addLogMessage('[UI] Sekwencja jest juz w toku.', 'warn');
@@ -779,25 +807,21 @@
             sendBleMessage(command);
 
             try {
-                // Czekaj na potwierdzenie (ACK) od robota
                 await new Promise((resolve, reject) => {
                     presetAckResolver = resolve;
                     presetAckTimeout = setTimeout(() => {
                         reject(new Error(`Timeout oczekiwania na potwierdzenie dla ${command.type}`));
                     }, PRESET_ACK_TIMEOUT_MS);
                 });
-                // Potwierdzenie otrzymane
                 addLogMessage(`[UI] Otrzymano potwierdzenie dla ${command.type}.`, 'info');
 
             } catch (error) {
-                // Wystapil blad (timeout)
                 addLogMessage(`[UI] BLAD: ${error.message}`, 'error');
                 addLogMessage('[UI] Przerwano sekwencje presetow z powodu bledu.', 'error');
-                break; // Przerwij petle i zakoncz proces
+                break;
             }
         }
 
-        // Czyszczenie i przywracanie stanu poczatkowego po zakonczeniu petli
         isPresetSequenceRunning = false;
         presetAckResolver = null;
         if (presetAckTimeout) clearTimeout(presetAckTimeout);
@@ -842,7 +866,7 @@
         const commandGroups = {
             'lqr_update': ['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'],
             'physics_update': ['mBody', 'mWheel', 'L'],
-            'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor'],
+            'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'speedToAngleFactor', 'positionPGain'],
             'set_joystick_tuning': ['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'],
             'set_min_pwm': ['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd']
         };
@@ -866,10 +890,8 @@
             commandsToSend.push(msg);
         });
         
-        // Uruchom nowa, niezawodna sekwencje
         runPresetSequence(commandsToSend);
     }
-    // === KONIEC ZMIAN ===
 
     function setupControls() {
         const debounceWrapper = (fn, delay = 1000) => {
@@ -915,7 +937,9 @@
         setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'], 'set_joystick_tuning');
         setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'], 'lqr_update');
         setupGroupedInput(['mBody', 'mWheel', 'L'], 'physics_update');
-        setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor'], 'calibration_update');
+        // ================== POCZATEK NOWEGO KODU ==================
+        setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'speedToAngleFactor', 'positionPGain'], 'calibration_update');
+        // ================== KONIEC NOWEGO KODU ===================
         setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm');
         setupManualTuningControls();
         setupDpadControls();
