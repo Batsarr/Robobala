@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Wersja 31.2-ACK</title>
+    <title>Robot LQR - Panel Sterowania v32.6</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -119,7 +119,6 @@
                 <h5 style="color: #61dafb; margin: 0 0 8px 0; font-size: 1.1em; text-align: left;">Korekty Ruchu</h5>
                 <div class="setting-container"><label for="headingCorrectionFactorInput">Sila Korekty Kursu</label><div class="numeric-input-wrapper"><button id="headingCorrectionFactorMinus">-</button><input type="number" class="config-value" id="headingCorrectionFactorInput" min="0" max="5" step="0.05" value="0.4"><button id="headingCorrectionFactorPlus">+</button></div></div>
                 
-                <!-- ================== POCZATEK NOWEGO KODU ================== -->
                 <div class="setting-container">
                     <label for="speedToAngleFactorInput">Wsp. Predkosci na Kat<span class="help-icon">?</span></label>
                     <div class="numeric-input-wrapper">
@@ -129,7 +128,6 @@
                     </div>
                     <div class="help-text"><strong>Wplyw:</strong> Kluczowy parametr dla trybu predkosci. Okresla, jak bardzo robot ma sie pochylac, aby osiagnac zadana predkosc. Wieksza wartosc = wieksza agresywnosc i szybsze przyspieszanie.</div>
                 </div>
-                 <!-- ================== KONIEC NOWEGO KODU =================== -->
 
             </fieldset>
             
@@ -201,7 +199,6 @@
                     </div>
                 </fieldset>
                 
-                <!-- ================== POCZATEK NOWEGO KODU ================== -->
                 <fieldset style="margin-top: 15px;">
                     <legend>Strojenie Autonomii</legend>
                     <div class="setting-container">
@@ -213,8 +210,25 @@
                         </div>
                         <div class="help-text"><strong>Wplyw:</strong> Wzmacnia reakcje na blad pozycji. Wieksza wartosc = robot szybciej i bardziej agresywnie dojezdza do celu. Zbyt duza moze powodowac oscylacje.</div>
                     </div>
+                    <div class="setting-container">
+                        <label for="positionDGainInput">Hamowanie (D-Gain)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper">
+                            <button id="positionDGainMinus">-</button>
+                            <input type="number" class="config-value" id="positionDGainInput" min="0" max="0.5" step="0.001" value="0.01">
+                            <button id="positionDGainPlus">+</button>
+                        </div>
+                        <div class="help-text"><strong>Wplyw:</strong> Aktywne hamowanie robota. Wieksza wartosc = robot mocniej hamuje zblizajac sie do celu, zapobiega 'przestrzeleniu' pozycji. Zbyt duza moze powodowac drgania.</div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="rotationPGainInput">Agresywnosc Obrotu (P-Gain)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper">
+                            <button id="rotationPGainMinus">-</button>
+                            <input type="number" class="config-value" id="rotationPGainInput" min="0.1" max="10" step="0.1" value="2.5">
+                            <button id="rotationPGainPlus">+</button>
+                        </div>
+                        <div class="help-text"><strong>Wplyw:</strong> Sila, z jaka robot wykonuje obrot do celu. Wieksza wartosc = szybszy obrot. Zbyt duza spowoduje niestabilnosc i oscylacje.</div>
+                    </div>
                 </fieldset>
-                <!-- ================== KONIEC NOWEGO KODU =================== -->
 
                 <fieldset style="margin-top: 15px;">
                     <legend>Diagnostyka</legend>
@@ -378,18 +392,10 @@
     </div>
 
 <script>
-    // === POCZATEK ZMIAN: Logika do obslugi niezawodnej komunikacji ===
     let isPresetSequenceRunning = false;
     let presetAckResolver = null;
     let presetAckTimeout = null;
-    const PRESET_ACK_TIMEOUT_MS = 2000; // Czas oczekiwania na potwierdzenie od robota
-    // === KONIEC ZMIAN ===
-
-    function updateAccordionHeight(contentElement) {
-        if (contentElement.style.maxHeight && contentElement.style.maxHeight !== '0px') {
-            contentElement.style.maxHeight = contentElement.scrollHeight + "px";
-        }
-    }
+    const PRESET_ACK_TIMEOUT_MS = 2000;
     const lqrBuiltInPresets = {
         'balanced': { name: '1. Zbalansowany (Startowy)', values: { q1: 150, q2: 15, q3: 10, q4: 20, r: 0.08 } },
         'stiff': { name: '2. Bardzo Sztywny (Precyzja)', values: { q1: 500, q2: 25, q3: 5, q4: 10, r: 0.1 } },
@@ -430,22 +436,9 @@
     const MAX_SEQUENCE_STEPS = 4;
     let lastKnownRobotState = 'IDLE';
 
-    function toggleAccordion(header) {
-        const content = header.nextElementSibling;
-        const isActive = header.classList.contains('active');
-        const parentCard = header.closest('.card');
-        parentCard.querySelectorAll('.accordion-header.active').forEach(otherHeader => {
-            if (otherHeader !== header) {
-                otherHeader.classList.remove('active');
-                otherHeader.nextElementSibling.style.maxHeight = '0px';
-            }
-        });
-        if (!isActive) {
-            header.classList.add('active');
-            content.style.maxHeight = content.scrollHeight + "px";
-        } else {
-            header.classList.remove('active');
-            content.style.maxHeight = '0px';
+    function updateAccordionHeight(contentElement) {
+        if (contentElement.style.maxHeight && contentElement.style.maxHeight !== '0px') {
+            contentElement.style.maxHeight = contentElement.scrollHeight + "px";
         }
     }
 
@@ -601,10 +594,10 @@
             mBody: data.m_body, mWheel: data.m_wheel, L: data.L, 
             wheelDiameterCm: data.wheel_diameter_cm, trackWidthCm: data.track_width_cm, encoderPpr: data.encoder_ppr,
             headingCorrectionFactor: data.heading_correction_factor,
-            // ================== POCZATEK NOWEGO KODU ==================
             speedToAngleFactor: data.speed_to_angle_factor,
-            positionPGain: data.position_p_gain
-            // ================== KONIEC NOWEGO KODU ===================
+            positionPGain: data.position_p_gain,
+            positionDGain: data.position_d_gain,
+            rotationPGain: data.rotation_p_gain
         };
         for (const [key, value] of Object.entries(params)) {
             const inputId = `${key}Input`;
@@ -866,7 +859,7 @@
         const commandGroups = {
             'lqr_update': ['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'],
             'physics_update': ['mBody', 'mWheel', 'L'],
-            'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'speedToAngleFactor', 'positionPGain'],
+            'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'speedToAngleFactor', 'positionPGain', 'positionDGain', 'rotationPGain'],
             'set_joystick_tuning': ['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'],
             'set_min_pwm': ['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd']
         };
@@ -937,9 +930,7 @@
         setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'], 'set_joystick_tuning');
         setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'], 'lqr_update');
         setupGroupedInput(['mBody', 'mWheel', 'L'], 'physics_update');
-        // ================== POCZATEK NOWEGO KODU ==================
-        setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'speedToAngleFactor', 'positionPGain'], 'calibration_update');
-        // ================== KONIEC NOWEGO KODU ===================
+        setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'speedToAngleFactor', 'positionPGain', 'positionDGain', 'rotationPGain'], 'calibration_update');
         setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm');
         setupManualTuningControls();
         setupDpadControls();
@@ -1282,7 +1273,6 @@
             fn(e);
         };
         document.getElementById('applyLqrPresetBtn').addEventListener('click', (e) => {
-             // Usunieto debounce z tej funkcji, poniewaz wewnetrzna logika juz blokuje przycisk
             applyPreset();
         });
         document.getElementById('savePresetBtn').addEventListener('click', debounceWrapper(savePreset));
@@ -1304,4 +1294,4 @@
     window.onresize = () => { resizeJoystick(); };
 </script>
 </body>
-</html>
+</html>```
