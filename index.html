@@ -436,9 +436,22 @@
     const MAX_SEQUENCE_STEPS = 4;
     let lastKnownRobotState = 'IDLE';
 
-    function updateAccordionHeight(contentElement) {
-        if (contentElement.style.maxHeight && contentElement.style.maxHeight !== '0px') {
-            contentElement.style.maxHeight = contentElement.scrollHeight + "px";
+    function toggleAccordion(header) {
+        const content = header.nextElementSibling;
+        const isActive = header.classList.contains('active');
+        const parentCard = header.closest('.card');
+        parentCard.querySelectorAll('.accordion-header.active').forEach(otherHeader => {
+            if (otherHeader !== header) {
+                otherHeader.classList.remove('active');
+                otherHeader.nextElementSibling.style.maxHeight = '0px';
+            }
+        });
+        if (!isActive) {
+            header.classList.add('active');
+            content.style.maxHeight = content.scrollHeight + "px";
+        } else {
+            header.classList.remove('active');
+            content.style.maxHeight = '0px';
         }
     }
 
@@ -1294,4 +1307,4 @@
     window.onresize = () => { resizeJoystick(); };
 </script>
 </body>
-</html>```
+</html>
