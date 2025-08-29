@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v31.1</title>
+    <title>Robot LQR - Panel Sterowania v32.1</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -54,7 +54,6 @@
         .manual-tune-row label { text-align: left; font-weight: bold; color: #a2f279; }
         .manual-tune-row .test-btn { background-color: #a2f279; }
         .manual-tune-row .stop-btn { background-color: #ff6347; }
-        .manual-tune-readout { margin-top: 15px; font-size: 1.2em; font-weight: bold; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .trim-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
         .trim-controls span { font-weight: bold; }
         .trim-controls button { min-width: 40px; font-size: 1.2em; }
@@ -78,8 +77,6 @@
         .accordion-content.active { padding: 15px; }
         .pwm-info { background-color: #20232a; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #61dafb; }
         .pwm-info strong { color: #a2f279; }
-        .physics-section { background-color: #2a2f35; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #a2f279; }
-        .physics-section h4 { color: #a2f279; margin-top: 0; margin-bottom: 10px; }
         .parameter-group { background-color: #20232a; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
         .parameter-group h5 { color: #61dafb; margin: 0 0 8px 0; font-size: 1.1em; }
         .help-icon { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: #61dafb; color: #282c34; font-size: 12px; font-weight: bold; text-align: center; line-height: 16px; margin-left: 8px; cursor: pointer; user-select: none; }
@@ -130,7 +127,7 @@
                 <div class="setting-container"><label for="joystickAngleSensitivityInput">Czulosc Kata (st.)</label><div class="numeric-input-wrapper"><button id="joystickAngleSensitivityMinus">-</button><input type="number" class="config-value" id="joystickAngleSensitivityInput" min="1" max="30" step="0.5" value="10"><button id="joystickAngleSensitivityPlus">+</button></div></div>
                 <div class="setting-container"><label for="turnFactorInput">Czulosc Skretu (%)</label><div class="numeric-input-wrapper"><button id="turnFactorMinus">-</button><input type="number" class="config-value" id="turnFactorInput" min="0" max="100" step="5" value="25"><button id="turnFactorPlus">+</button></div></div>
             </fieldset>
-
+            
             <hr style="border-color: #4a4f58; margin: 15px 0;">
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731;">Mapowanie Przyciskow Gamepada</button>
             <button id="resetZeroBtn" style="margin-top:10px;">Resetuj Osie</button>
@@ -182,6 +179,11 @@
                         <button id="dpad-right" class="dpad-btn" data-dpad="right">&#8594;</button>
                         <button id="dpad-down" class="dpad-btn" data-dpad="down">&#8595;</button>
                     </div>
+                     <div class="setting-container">
+                        <label for="rotationPGainInput">Sila Obrotu<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><button id="rotationPGainMinus">-</button><input type="number" class="config-value" id="rotationPGainInput" min="0.1" max="10" step="0.1" value="1.5"><button id="rotationPGainPlus">+</button></div>
+                        <div class="help-text"><strong>Wplyw:</strong> Sila, z jaka robot wykonuje obrot do celu. Wieksza wartosc = szybszy obrot.</div>
+                    </div>
                 </fieldset>
                 <fieldset style="margin-top: 15px;">
                     <legend>Kreator Sekwencji Ruchow</legend>
@@ -231,7 +233,7 @@
                         <div class="numeric-input-wrapper"><button id="q1AngleMinus">-</button><input type="number" class="lqr-input config-value" id="q1AngleInput" min="0" max="1000" step="5" value="100"><button id="q1AnglePlus">+</button></div>
                     </div>
                     <div class="setting-container">
-                        <label for="q2AngularVelInput">Q2 - Kara za Predkosc Katowa</label>
+                        <label for="q2AngularVelInput">Q2 - Kara za Pred. Katowa</label>
                         <div class="numeric-input-wrapper"><button id="q2AngularVelMinus">-</button><input type="number" class="lqr-input config-value" id="q2AngularVelInput" min="0" max="100" step="1" value="10"><button id="q2AngularVelPlus">+</button></div>
                     </div>
                     <div class="setting-container">
@@ -526,11 +528,28 @@
         });
         
         const params = {
-            joystickOutputScale: data.joystick_output_scale * 100, expoJoystick: data.expo_joystick * 100, maxSpeedJoystick: data.max_speed_joystick, joystickAngleSensitivity: data.joystick_angle_sensitivity, turnFactor: data.turn_factor * 100,
-            positionErrorGain: data.position_error_gain, positionDampingGain: data.position_d_gain,
-            q1Angle: data.q1_angle, q2AngularVel: data.q2_angular_vel, q3Position: data.q3_position, q4Velocity: data.q4_velocity, rControl: data.r_control, lqrOutputScalar: data.lqr_output_scalar,
-            wheelDiameterCm: data.wheel_diameter_cm, trackWidthCm: data.track_width_cm, encoderPpr: data.encoder_ppr, headingCorrectionFactor: data.heading_correction_factor,
-            minPwmLeftFwd: data.min_pwm_left_fwd, minPwmLeftBwd: data.min_pwm_left_bwd, minPwmRightFwd: data.min_pwm_right_fwd, minPwmRightBwd: data.min_pwm_right_bwd,
+            joystickOutputScale: data.joystick_output_scale * 100,
+            expoJoystick: data.expo_joystick * 100,
+            maxSpeedJoystick: data.max_speed_joystick,
+            joystickAngleSensitivity: data.joystick_angle_sensitivity,
+            turnFactor: data.turn_factor * 100,
+            positionErrorGain: data.position_error_gain,
+            positionDampingGain: data.position_d_gain,
+            rotationPGain: data.rotation_p_gain,
+            q1Angle: data.q1_angle,
+            q2AngularVel: data.q2_angular_vel,
+            q3Position: data.q3_position,
+            q4Velocity: data.q4_velocity,
+            rControl: data.r_control,
+            lqrOutputScalar: data.lqr_output_scalar,
+            wheelDiameterCm: data.wheel_diameter_cm,
+            trackWidthCm: data.track_width_cm,
+            encoderPpr: data.encoder_ppr,
+            headingCorrectionFactor: data.heading_correction_factor,
+            minPwmLeftFwd: data.min_pwm_left_fwd,
+            minPwmLeftBwd: data.min_pwm_left_bwd,
+            minPwmRightFwd: data.min_pwm_right_fwd,
+            minPwmRightBwd: data.min_pwm_right_bwd,
         };
 
         for (const [key, value] of Object.entries(params)) {
@@ -769,7 +788,7 @@
         
         const configGroups = {
             'set_joystick_tuning': ['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'],
-            'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'positionErrorGain', 'positionDampingGain'],
+            'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'positionErrorGain', 'positionDampingGain', 'rotationPGain'],
             'set_min_pwm': ['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd']
         };
 
