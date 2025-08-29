@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v32.1</title>
+    <title>Robot LQR - Panel Sterowania v32.3</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -159,6 +159,7 @@
                 <strong>Kat (Pitch):</strong> <div class="angle-display"><span id="angleVal">0.0 &deg;</span><div class="angle-indicator-wrapper"><div id="angleIndicator" class="angle-indicator-needle"></div></div></div>
                 <strong>Predkosc (imp/s):</strong> <span id="speedVal">0</span>
                 <strong>Zadany Kat:</strong> <span id="targetAngleVal">0.0 &deg;</span>
+                <strong>Zadana Predkosc:</strong> <span id="speedSetpointVal">0</span>
                 <strong>LQR Wyjscie:</strong> <span id="lqrOutputVal">0</span>
                 <strong>Enkoder L:</strong> <span id="encoderLeftVal">0</span>
                 <strong>Enkoder P:</strong> <span id="encoderRightVal">0</span>
@@ -254,10 +255,10 @@
                     </div>
                 </div>
                 
-                <button class="accordion-header" onclick="toggleAccordion(this)">2. Strojenie Utrzymania Pozycji</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">2. Strojenie Kaskadowe (Pozycja/Predkosc)</button>
                 <div class="accordion-content">
                     <div class="setting-container">
-                        <label for="positionErrorGainInput">Sila Powrotu (P)<span class="help-icon">?</span></label>
+                        <label for="positionErrorGainInput">Sila Powrotu (P Pozycji)<span class="help-icon">?</span></label>
                         <div class="numeric-input-wrapper">
                             <button id="positionErrorGainMinus">-</button>
                             <input type="number" class="config-value" id="positionErrorGainInput" min="0" max="10" step="0.1" value="2.5">
@@ -266,13 +267,32 @@
                         <div class="help-text"><strong>Wplyw:</strong> Sila, z jaka robot wraca do celu. Wieksza wartosc = szybszy, bardziej agresywny ruch. Zbyt duza moze powodowac oscylacje.</div>
                     </div>
                     <div class="setting-container">
-                        <label for="positionDampingGainInput">Sila Hamowania (D)<span class="help-icon">?</span></label>
+                        <label for="positionDampingGainInput">Sila Hamowania (D Pozycji)<span class="help-icon">?</span></label>
                         <div class="numeric-input-wrapper">
                             <button id="positionDampingGainMinus">-</button>
                             <input type="number" class="config-value" id="positionDampingGainInput" min="0" max="15" step="0.1" value="0.5">
                             <button id="positionDampingGainPlus">+</button>
                         </div>
                         <div class="help-text"><strong>Wplyw:</strong> Tlumienie ruchu. Wieksza wartosc = robot mocniej hamuje, zblizajac sie do celu, co zapobiega 'przestrzeleniu' pozycji.</div>
+                    </div>
+                    <hr style="border-color: #4a4f58; margin: 10px 0;">
+                    <div class="setting-container">
+                        <label for="speedPGainInput">Sila Reakcji na Predkosc (P)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper">
+                            <button id="speedPGainMinus">-</button>
+                            <input type="number" class="config-value" id="speedPGainInput" min="0" max="0.1" step="0.001" value="0.005">
+                            <button id="speedPGainPlus">+</button>
+                        </div>
+                        <div class="help-text"><strong>Wplyw:</strong> Jak bardzo robot ma sie pochylac, aby skorygowac blad predkosci. Kluczowy parametr do plynnej jazdy.</div>
+                    </div>
+                    <hr style="border-color: #4a4f58; margin: 10px 0;">
+                    <div class="setting-container">
+                        <label for="maxSpeedFromPosInput">Max. Predkosc z Pozycji (imp/s)</label>
+                        <div class="numeric-input-wrapper"><button id="maxSpeedFromPosMinus">-</button><input type="number" class="config-value" id="maxSpeedFromPosInput" min="100" max="4000" step="50" value="1000"><button id="maxSpeedFromPosPlus">+</button></div>
+                    </div>
+                     <div class="setting-container">
+                        <label for="holdPositionMarginPulsesInput">Margines Bledu Pozycji (impulsy)</label>
+                        <div class="numeric-input-wrapper"><button id="holdPositionMarginPulsesMinus">-</button><input type="number" class="config-value" id="holdPositionMarginPulsesInput" min="0" max="100" step="1" value="15"><button id="holdPositionMarginPulsesPlus">+</button></div>
                     </div>
                      <div class="setting-container">
                         <label for="headingCorrectionFactorInput">Sila Korekty Kursu</label>
@@ -368,9 +388,8 @@
         'pitch': { label: 'Pitch (Kat)', color: '#61dafb' },
         'target_angle': { label: 'Zadany Kat', color: '#a2f279' },
         'speed': { label: 'Predkosc', color: '#f7b731' },
+        'speed_setpoint': { label: 'Zadana Predkosc', color: '#ff6347' },
         'lqr_output': { label: 'LQR Wyjscie', color: '#ff9ff3' },
-        'position_p_out': { label: 'Korekta P (Sila)', color: '#00d2d3' },
-        'position_d_out': { label: 'Korekta D (Hamowanie)', color: '#ff6347' },
     };
 
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -550,6 +569,10 @@
             minPwmLeftBwd: data.min_pwm_left_bwd,
             minPwmRightFwd: data.min_pwm_right_fwd,
             minPwmRightBwd: data.min_pwm_right_bwd,
+            // Nowe parametry
+            speedPGain: data.speed_p_gain,
+            maxSpeedFromPos: data.max_speed_from_pos,
+            holdPositionMarginPulses: data.hold_position_margin_pulses
         };
 
         for (const [key, value] of Object.entries(params)) {
@@ -568,6 +591,7 @@
             document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`;
         }
         if (data.speed !== undefined) document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0);
+        if (data.speed_setpoint !== undefined) document.getElementById('speedSetpointVal').textContent = parseFloat(data.speed_setpoint).toFixed(0);
         if (data.target_angle !== undefined) document.getElementById('targetAngleVal').textContent = parseFloat(data.target_angle).toFixed(1) + ' \u00B0';
         if (data.lqr_output !== undefined) document.getElementById('lqrOutputVal').textContent = parseFloat(data.lqr_output).toFixed(2);
         if (data.loop_time !== undefined) document.getElementById('loopTimeVal').textContent = data.loop_time + ' \u00B5s';
@@ -788,7 +812,7 @@
         
         const configGroups = {
             'set_joystick_tuning': ['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'],
-            'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'positionErrorGain', 'positionDampingGain', 'rotationPGain'],
+            'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'positionErrorGain', 'positionDampingGain', 'rotationPGain', 'speedPGain', 'maxSpeedFromPos', 'holdPositionMarginPulses'],
             'set_min_pwm': ['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd']
         };
 
@@ -800,7 +824,14 @@
                     if(input) {
                         let value = parseFloat(input.value);
                         if (key === 'turnFactor' || key === 'joystickOutputScale' || key === 'expoJoystick') value /= 100;
-                        params[key.replace(/([A-Z])/g, "_$1").toLowerCase()] = value;
+
+                        // Konwersja z camelCase na snake_case
+                        let snakeKey = key.replace(/([A-Z])/g, "_$1").toLowerCase();
+                        // Specjalny przypadek dla klucza oczekiwanego przez robota
+                        if(key === 'maxSpeedFromPos') {
+                            snakeKey = 'max_speed_from_pos';
+                        }
+                        params[snakeKey] = value;
                     }
                 });
                 sendBleMessage({ type, params });
