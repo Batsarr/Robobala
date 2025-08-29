@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v32.3</title>
+    <title>Robot LQR - Panel Sterowania v32.4</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -569,7 +569,6 @@
             minPwmLeftBwd: data.min_pwm_left_bwd,
             minPwmRightFwd: data.min_pwm_right_fwd,
             minPwmRightBwd: data.min_pwm_right_bwd,
-            // Nowe parametry
             speedPGain: data.speed_p_gain,
             maxSpeedFromPos: data.max_speed_from_pos,
             holdPositionMarginPulses: data.hold_position_margin_pulses
@@ -813,7 +812,9 @@
         const configGroups = {
             'set_joystick_tuning': ['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'],
             'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'positionErrorGain', 'positionDampingGain', 'rotationPGain', 'speedPGain', 'maxSpeedFromPos', 'holdPositionMarginPulses'],
-            'set_min_pwm': ['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd']
+            'set_min_pwm': ['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'],
+            // [POPRAWKA INZYNIERA] Dodano brakujacy wpis dla parametrow LQR
+            'lqr_update': ['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar']
         };
 
         for (const [type, keys] of Object.entries(configGroups)) {
@@ -825,9 +826,7 @@
                         let value = parseFloat(input.value);
                         if (key === 'turnFactor' || key === 'joystickOutputScale' || key === 'expoJoystick') value /= 100;
 
-                        // Konwersja z camelCase na snake_case
                         let snakeKey = key.replace(/([A-Z])/g, "_$1").toLowerCase();
-                        // Specjalny przypadek dla klucza oczekiwanego przez robota
                         if(key === 'maxSpeedFromPos') {
                             snakeKey = 'max_speed_from_pos';
                         }
