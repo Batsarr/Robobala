@@ -13,9 +13,10 @@
         .card { background-color: #3a3f47; border-radius: 8px; padding: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
         .info-grid, .status-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px; text-align: left; font-size: 1em; margin-top: 10px; align-items: center;}
         .info-grid strong, .status-grid strong { color: #a2f279; }
-        button { background-color: #61dafb; color: #282c34; border: none; padding: 8px 12px; border-radius: 5px; font-weight: bold; cursor: pointer; transition: background-color 0.3s, opacity 0.3s; font-size: 0.9em; }
+        button { background-color: #61dafb; color: #282c34; border: none; padding: 8px 12px; border-radius: 5px; font-weight: bold; cursor: pointer; transition: background-color 0.3s, opacity 0.3s, box-shadow 0.2s; font-size: 0.9em; }
         button:hover { background-color: #a2f279; }
         button:disabled { background-color: #4a4f58; color: #888; cursor: not-allowed; opacity: 0.6; }
+        .gamepad-flash { box-shadow: 0 0 10px 3px #a2f279 !important; }
         #emergencyStopBtn { background-color: #ff6347; color: white; width: 100%; margin-top: 15px; }
         .control-row { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 10px; }
         .control-label { font-size: 1.1em; font-weight: bold; }
@@ -41,8 +42,6 @@
         .angle-display { display: flex; align-items: center; justify-content: space-between; }
         .angle-indicator-wrapper { position: relative; width: 34px; height: 34px; background-color: #20232a; border-radius: 50%; border: 1px solid #61dafb; }
         .angle-indicator-needle { position: absolute; bottom: 50%; left: calc(50% - 1px); width: 2px; height: 50%; background-color: #ff6347; transform-origin: bottom center; transition: transform 0.1s linear; }
-        .profile-controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
-        .profile-controls > * { flex: 1 1 auto; }
         .chart-controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 10px; font-size: 0.9em; }
         .chart-controls label { color: #fff; }
         .setting-container { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin: 8px 0; }
@@ -81,8 +80,6 @@
         .pwm-info strong { color: #a2f279; }
         .physics-section { background-color: #2a2f35; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #a2f279; }
         .physics-section h4 { color: #a2f279; margin-top: 0; margin-bottom: 10px; }
-        .lqr-info { background-color: #2a2f35; padding: 12px; border-radius: 6px; margin-top: 15px; border-left: 4px solid #f7b731; }
-        .lqr-info strong { color: #f7b731; }
         .parameter-group { background-color: #20232a; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
         .parameter-group h5 { color: #61dafb; margin: 0 0 8px 0; font-size: 1.1em; }
         .help-icon { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: #61dafb; color: #282c34; font-size: 12px; font-weight: bold; text-align: center; line-height: 16px; margin-left: 8px; cursor: pointer; user-select: none; }
@@ -99,6 +96,10 @@
         .mapping-label { text-align: left; font-weight: bold; }
         .mapping-button { font-size: 0.8em; padding: 6px 8px; }
         .mapping-display { background-color: #20232a; padding: 6px; border-radius: 4px; font-family: monospace; }
+        .preset-actions { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 10px; }
+        #applySelectedPresetBtn { background-color: #a2f279; }
+        #sendCurrentSettingsBtn { background-color: #f7b731; }
+        #saveCurrentAsPresetBtn { background-color: #61dafb; }
     </style>
 </head>
 <body>
@@ -108,7 +109,7 @@
         <div class="modal-content">
             <h2>Mapowanie Przyciskow Gamepada</h2>
             <div id="gamepad-mapping-list"></div>
-            <button id="close-modal-btn" style="margin-top: 20px; background-color: #a2f279;">Zapisz i Zamknij</button>
+            <button id="close-modal-btn" style="margin-top: 20px;">Zamknij</button>
         </div>
     </div>
 
@@ -117,9 +118,9 @@
         <div class="card" id="controls-card">
             <h2>Sterowanie</h2>
             <div id="joystickWrapper"><canvas id="joystickCanvas"></canvas></div>
-            <div class="control-row"><span class="control-label">Balansowanie</span><label class="switch"><input type="checkbox" id="balanceSwitch" data-action="toggle_balance"><span class="slider round"></span></label></div>
-            <div class="control-row"><span class="control-label">Trzymaj Pozycje</span><label class="switch"><input type="checkbox" id="holdPositionSwitch" data-action="toggle_hold_position"><span class="slider round"></span></label></div>
-            <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch" data-action="toggle_speed_mode"><span class="slider round"></span></label></div>
+            <div class="control-row"><span class="control-label">Balansowanie</span><label class="switch"><input type="checkbox" id="balanceSwitch"><span class="slider round"></span></label></div>
+            <div class="control-row"><span class="control-label">Trzymaj Pozycje</span><label class="switch"><input type="checkbox" id="holdPositionSwitch"><span class="slider round"></span></label></div>
+            <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">LQR Aktywny</span><label class="switch"><input type="checkbox" id="lqrEnabledSwitch" checked><span class="slider round"></span></label></div>
             
             <fieldset style="padding: 10px 10px 5px 10px;"><legend>Strojenie Glowne</legend>
@@ -147,7 +148,7 @@
             
             <hr style="border-color: #4a4f58; margin: 15px 0;">
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731;">Mapowanie Przyciskow Gamepada</button>
-            <button id="resetZeroBtn" data-action="reset_zero" style="margin-top:10px;">Resetuj Osie</button>
+            <button id="resetZeroBtn" style="margin-top:10px;">Resetuj Osie</button>
             <div class="trim-controls">
                 <button id="trimMinusBtn">-</button>
                 <span>Korekta Pionu (Pitch)</span>
@@ -158,8 +159,8 @@
                 <span>Korekta Przechylu (Roll)</span>
                 <button id="trimRollPlusBtn">+</button>
             </div>
-            <button id="resetEncodersBtn" data-action="reset_encoders" style="margin-top:10px; background-color:#f7b731;">Resetuj Enkodery</button>
-            <button id="emergencyStopBtn" data-action="emergency_stop">STOP AWARYJNY</button>
+            <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731;">Resetuj Enkodery</button>
+            <button id="emergencyStopBtn">STOP AWARYJNY</button>
         </div>
         
         <div class="card">
@@ -167,23 +168,16 @@
             <button id="connectBleBtn" style="width: 100%; margin-bottom: 15px;">POLACZ Z ROBOTEM</button>
             <div class="status-grid">
                 <strong>Polaczenie:</strong> <div><span id="connectionStatus" class="status-indicator status-disconnected"></span> <span id="connectionText">Rozlaczony</span></div>
-                <strong>Status Systemu:</strong> <div><span id="systemStatus" class="status-indicator status-disconnected"></span> <span id="systemText">Nieznany</span></div>
                 <strong>Gamepad:</strong> <span id="gamepadStatus" style="font-weight:bold; color: #f7b731;">Brak</span>
                 <strong>Tryb Pracy:</strong> <span id="robotStateVal" style="font-weight:bold; color: #61dafb;">IDLE</span>
                 <strong>Czas Petli:</strong> <span id="loopTimeVal">0 &micro;s</span>
-                <hr style="grid-column: 1 / -1; border-color: #4a4f58; margin: 5px 0;">
                 <strong>Wolna Sterta (RAM):</strong> <span id="freeHeapVal" style="font-weight:bold; color: #f7b731;">0 B</span>
-                <strong>Stos Petli (min.):</strong> <span id="stackHwmVal" style="font-weight:bold; color: #f7b731;">0 B</span>
             </div>
             <div class="info-grid">
                 <strong>Kat (Pitch):</strong> <div class="angle-display"><span id="angleVal">0.0 &deg;</span><div class="angle-indicator-wrapper"><div id="angleIndicator" class="angle-indicator-needle"></div></div></div>
                 <strong>Predkosc (imp/s):</strong> <span id="speedVal">0</span>
                 <strong>Zadany Kat:</strong> <span id="targetAngleVal">0.0 &deg;</span>
-                <hr style="grid-column: 1 / -1; border-color: #4a4f58; margin: 5px 0;">
                 <strong>LQR Wyjscie:</strong> <span id="lqrOutputVal">0</span>
-                <strong>Lewy Silnik:</strong> <span id="leftMotorVal">0</span>
-                <strong>Prawy Silnik:</strong> <span id="rightMotorVal">0</span>
-                <hr style="grid-column: 1 / -1; border-color: #4a4f58; margin: 5px 0;">
                 <strong>Enkoder L:</strong> <span id="encoderLeftVal">0</span>
                 <strong>Enkoder P:</strong> <span id="encoderRightVal">0</span>
             </div>
@@ -218,31 +212,31 @@
                 <fieldset style="margin-top: 15px;">
                     <legend>Strojenie Autonomii</legend>
                     <div class="setting-container">
-                        <label for="positionPGainInput">Agresywnosc Ruchu (P-Gain)<span class="help-icon">?</span></label>
+                        <label for="positionPGainInput">Agresywnosc Ruchu (P)<span class="help-icon">?</span></label>
                         <div class="numeric-input-wrapper">
                             <button id="positionPGainMinus">-</button>
                             <input type="number" class="config-value" id="positionPGainInput" min="0.001" max="0.1" step="0.001" value="0.005">
                             <button id="positionPGainPlus">+</button>
                         </div>
-                        <div class="help-text"><strong>Wplyw:</strong> Wzmacnia reakcje na blad pozycji. Wieksza wartosc = robot szybciej i bardziej agresywnie dojezdza do celu. Zbyt duza moze powodowac oscylacje.</div>
+                        <div class="help-text"><strong>Wplyw:</strong> Sila, z jaka robot wraca do celu. Wieksza wartosc = szybszy, bardziej agresywny ruch. Zbyt duza moze powodowac oscylacje.</div>
                     </div>
                     <div class="setting-container">
-                        <label for="positionDGainInput">Hamowanie (D-Gain)<span class="help-icon">?</span></label>
+                        <label for="positionDGainInput">Hamowanie (D)<span class="help-icon">?</span></label>
                         <div class="numeric-input-wrapper">
                             <button id="positionDGainMinus">-</button>
                             <input type="number" class="config-value" id="positionDGainInput" min="0" max="0.5" step="0.001" value="0.01">
                             <button id="positionDGainPlus">+</button>
                         </div>
-                        <div class="help-text"><strong>Wplyw:</strong> Aktywne hamowanie robota. Wieksza wartosc = robot mocniej hamuje zblizajac sie do celu, zapobiega 'przestrzeleniu' pozycji. Zbyt duza moze powodowac drgania.</div>
+                        <div class="help-text"><strong>Wplyw:</strong> Tlumienie ruchu. Wieksza wartosc = robot mocniej hamuje, zblizajac sie do celu, co zapobiega 'przestrzeleniu' pozycji.</div>
                     </div>
                     <div class="setting-container">
-                        <label for="rotationPGainInput">Agresywnosc Obrotu (P-Gain)<span class="help-icon">?</span></label>
+                        <label for="rotationPGainInput">Agresywnosc Obrotu<span class="help-icon">?</span></label>
                         <div class="numeric-input-wrapper">
                             <button id="rotationPGainMinus">-</button>
                             <input type="number" class="config-value" id="rotationPGainInput" min="0.1" max="10" step="0.1" value="2.5">
                             <button id="rotationPGainPlus">+</button>
                         </div>
-                        <div class="help-text"><strong>Wplyw:</strong> Sila, z jaka robot wykonuje obrot do celu. Wieksza wartosc = szybszy obrot. Zbyt duza spowoduje niestabilnosc i oscylacje.</div>
+                        <div class="help-text"><strong>Wplyw:</strong> Sila, z jaka robot wykonuje obrot do celu. Wieksza wartosc = szybszy obrot.</div>
                     </div>
                 </fieldset>
 
@@ -264,61 +258,43 @@
         <div class="card">
             <h2>Konfiguracja</h2>
             <fieldset>
-                <legend>Profile Ustawien LQR (wbudowane)</legend>
+                <legend>Profile Ustawien LQR</legend>
                 <div class="profile-controls">
                     <select id="lqrPresetSelect" style="width: 100%; padding: 5px;"></select>
                 </div>
-                 <div class="profile-controls">
-                    <button id="applyLqrPresetBtn" style="width: 100%;">Zastosuj Wybrany Preset</button>
+                 <div class="preset-actions">
+                    <button id="applySelectedPresetBtn">Zastosuj Wybrany Preset</button>
+                    <button id="sendCurrentSettingsBtn">Wyslij Aktualne Ustawienia (sekwencyjnie)</button>
+                    <button id="saveCurrentAsPresetBtn">Zapisz Aktualne jako Nowy Preset</button>
                 </div>
             </fieldset>
             
             <div id="allSettings">
-                <button class="accordion-header" onclick="toggleAccordion(this)">1. Wagi LQR (Macierz Q i R)</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">1. Wagi LQR (Strojenie Niestandardowe)</button>
                 <div class="accordion-content">
-                    <div class="parameter-group">
-                        <h5>Wagi Stanow (Macierz Q)</h5>
-                        <div class="setting-container">
-                            <label for="q1AngleInput">Q1 - Kat (theta)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="q1AngleMinus">-</button><input type="number" class="lqr-input config-value" id="q1AngleInput" min="0" max="1000" step="5" value="100"><button id="q1AnglePlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kara za odchylenie od pionu. Wieksza wartosc = robot mocniej 'walczy' o utrzymanie pionu, jest sztywniejszy.</div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="q2AngularVelInput">Q2 - Predkosc katowa<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="q2AngularVelMinus">-</button><input type="number" class="lqr-input config-value" id="q2AngularVelInput" min="0" max="100" step="1" value="10"><button id="q2AngularVelPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kara za szybkie zmiany kata (oscylacje). Wieksza wartosc = lepsze tlumienie drgan, bardziej plynna reakcja.</div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="q3PositionInput">Q3 - Pozycja (s)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="q3PositionMinus">-</button><input type="number" class="lqr-input config-value" id="q3PositionInput" min="0" max="1000" step="10" value="1"><button id="q3PositionPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kara za dryf pozycyjny. Wieksza wartosc = robot aktywniej wraca do pozycji wyjsciowej po zatrzymaniu.</div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="q4VelocityInput">Q4 - Predkosc (s_dot)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="q4VelocityMinus">-</button><input type="number" class="lqr-input config-value" id="q4VelocityInput" min="0" max="100" step="1" value="5"><button id="q4VelocityPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kara za szybkie ruchy liniowe. Wieksza wartosc = plynniejsze, mniej gwaltowne przyspieszanie i hamowanie.</div>
-                        </div>
+                    <div class="setting-container">
+                        <label for="q1AngleInput">Q1 - Kara za Kat</label>
+                        <div class="numeric-input-wrapper"><button id="q1AngleMinus">-</button><input type="number" class="lqr-input config-value" id="q1AngleInput" min="0" max="1000" step="5" value="100"><button id="q1AnglePlus">+</button></div>
                     </div>
-                    
-                    <div class="parameter-group">
-                        <h5>Waga Sterowania (Skalar R)</h5>
-                        <div class="setting-container">
-                            <label for="rControlInput">R - Waga sterowania<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="rControlMinus">-</button><input type="number" class="lqr-input config-value" id="rControlInput" min="0.001" max="10" step="0.01" value="0.1"><button id="rControlPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kara za zuzycie energii (PWM silnikow). Wieksza wartosc = slabsze, bardziej oszczedne sterowanie. Mniejsza wartosc = mocniejsza reakcja.</div>
-                        </div>
+                    <div class="setting-container">
+                        <label for="q2AngularVelInput">Q2 - Kara za Predkosc Katowa</label>
+                        <div class="numeric-input-wrapper"><button id="q2AngularVelMinus">-</button><input type="number" class="lqr-input config-value" id="q2AngularVelInput" min="0" max="100" step="1" value="10"><button id="q2AngularVelPlus">+</button></div>
                     </div>
-
-                    <div class="parameter-group">
-                        <h5>Wzmocnienie Glowne</h5>
-                        <div class="setting-container">
-                            <label for="lqrOutputScalarInput">Skala Wyjscia LQR<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="lqrOutputScalarMinus">-</button><input type="number" class="config-value" id="lqrOutputScalarInput" min="0.1" max="50.0" step="0.1" value="20.0"><button id="lqrOutputScalarPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Glowny mnoznik dla calego sygnalu sterujacego. Zwiekszaj, jesli robot jest 'slaby', zmniejszaj, jesli jest zbyt agresywny lub wpada w oscylacje. To Twoje glowne pokretlo do strojenia!</div>
-                        </div>
+                    <div class="setting-container">
+                        <label for="q3PositionInput">Q3 - Kara za Pozycje</label>
+                        <div class="numeric-input-wrapper"><button id="q3PositionMinus">-</button><input type="number" class="lqr-input config-value" id="q3PositionInput" min="0" max="1000" step="10" value="1"><button id="q3PositionPlus">+</button></div>
                     </div>
-                    <div class="lqr-info">
-                        <strong>Teoria LQR:</strong> Kontroler minimalizuje wskaznik jakosci J = integral(x'Qx + u'Ru)dt. Wieksze wagi Q = wieksza kara za odchylenia stanu, wieksze R = wieksza kara za sterowanie (energie).
+                    <div class="setting-container">
+                        <label for="q4VelocityInput">Q4 - Kara za Predkosc</label>
+                        <div class="numeric-input-wrapper"><button id="q4VelocityMinus">-</button><input type="number" class="lqr-input config-value" id="q4VelocityInput" min="0" max="100" step="1" value="5"><button id="q4VelocityPlus">+</button></div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="rControlInput">R - Kara za Sterowanie</label>
+                        <div class="numeric-input-wrapper"><button id="rControlMinus">-</button><input type="number" class="lqr-input config-value" id="rControlInput" min="0.001" max="10" step="0.01" value="0.1"><button id="rControlPlus">+</button></div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="lqrOutputScalarInput">Skala Wyjscia LQR</label>
+                        <div class="numeric-input-wrapper"><button id="lqrOutputScalarMinus">-</button><input type="number" class="config-value" id="lqrOutputScalarInput" min="0.1" max="50.0" step="0.1" value="20.0"><button id="lqrOutputScalarPlus">+</button></div>
                     </div>
                 </div>
                 
@@ -327,19 +303,19 @@
                     <div class="physics-section">
                         <h4>Parametry Fizyczne Robota</h4>
                         <div class="setting-container">
-                            <label for="mBodyInput">Masa korpusu (kg)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="mBodyMinus">-</button><input type="number" class="config-value" id="mBodyInput" min="0.1" max="5.0" step="0.01" value="0.150"><button id="mBodyPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Laczna masa robota bez kol i silnikow. Wplywa na moment bezwladnosci. Zmien, jesli dodasz lub usuniesz komponenty.</div>
+                            <label for="mBodyInput">Masa korpusu (kg)</label>
+                            <div class="numeric-input-wrapper"><button id="mBodyMinus" disabled>-</button><input type="number" class="config-value" id="mBodyInput" value="0.150" disabled><button id="mBodyPlus" disabled>+</button></div>
                         </div>
                         <div class="setting-container">
-                            <label for="mWheelInput">Masa kola (kg)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="mWheelMinus">-</button><input type="number" class="config-value" id="mWheelInput" min="0.01" max="1.0" step="0.005" value="0.055"><button id="mWheelPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Masa jednego kola razem z silnikiem. Wplywa na bezwladnosc calego ukladu.</div>
+                            <label for="mWheelInput">Masa kola (kg)</label>
+                            <div class="numeric-input-wrapper"><button id="mWheelMinus" disabled>-</button><input type="number" class="config-value" id="mWheelInput" value="0.055" disabled><button id="mWheelPlus" disabled>+</button></div>
                         </div>
                         <div class="setting-container">
-                            <label for="LInput">Wysokosc srodka masy (m)<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper"><button id="LMinus">-</button><input type="number" class="config-value" id="LInput" min="0.01" max="0.5" step="0.001" value="0.087"><button id="LPlus">+</button></div>
-                            <div class="help-text"><strong>Wplyw:</strong> Kluczowy parametr! Odleglosc od osi kol do srodka masy korpusu. Wieksze L = wieksza niestabilnosc, ale potencjalnie wolniejsza reakcja.</div>
+                            <label for="LInput">Wys. srodka masy (m)</label>
+                            <div class="numeric-input-wrapper"><button id="LMinus" disabled>-</button><input type="number" class="config-value" id="LInput" value="0.087" disabled><button id="LPlus" disabled>+</button></div>
+                        </div>
+                        <div style="background-color: #20232a; padding: 10px; border-radius: 5px; margin-top: 10px; border-left: 4px solid #f7b731; text-align: left;">
+                            <strong>INFO:</strong> Te parametry nie sa uzywane przy obecnym, statycznym modelu LQR wgranym na robota.
                         </div>
                     </div>
                     <div class="parameter-group">
@@ -369,14 +345,13 @@
                     <div class="manual-tune-row" data-motor="right" data-direction="fwd"><label>Prawy (Przod)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div></div>
                     <div class="manual-tune-row" data-motor="right" data-direction="bwd"><label>Prawy (Tyl)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div></div>
                     <hr style="border-color: #4a4f58; margin: 15px 0;">
-                    <div class="manual-tune-readout"><div>Enkoder L: <span id="manualEncoderL">0</span></div><div>Enkoder P: <span id="manualEncoderR">0</span></div></div>
                     <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKO</button>
                 </div>
             </div>
             
             <div class="button-group" style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
                 <button id="loadBtn">Wczytaj z EEPROM</button>
-                <button id="saveBtn">Zapisz Ustawienia</button>
+                <button id="saveBtn">Zapisz na Robocie</button>
             </div>
         </div>
         <div class="card">
@@ -385,82 +360,99 @@
                 <div id="log-history"></div>
                 <div style="margin-top: 10px; display: flex; gap: 10px; justify-content: center; align-items: center;">
                     <button onclick="clearLogs()" style="background-color: #f7b731;">Wyczysc Logi</button>
-                    <label>
-                        Poziom: 
-                        <select id="logLevelFilter" onchange="filterLogs()">
-                            <option value="all">Wszystkie</option>
-                            <option value="error">Bledy</option>
-                            <option value="warn">Ostrzezenia</option>
-                            <option value="info">Info</option>
-                        </select>
-                    </label>
                 </div>
             </div>
         </div>
     </div>
 
 <script>
-    // CAŁY, KOMPLETNY KOD JAVASCRIPT
-    let isPresetSequenceRunning = false;
-    let presetAckResolver = null;
-    let presetAckTimeout = null;
-    const PRESET_ACK_TIMEOUT_MS = 2000;
-    const lqrBuiltInPresets = {
-        'balanced': { name: '1. Zbalansowany (Startowy)', values: { q1: 150, q2: 15, q3: 10, q4: 20, r: 0.08 } },
-        'stiff': { name: '2. Bardzo Sztywny (Precyzja)', values: { q1: 500, q2: 25, q3: 5, q4: 10, r: 0.1 } },
-        'soft': { name: '3. Miekki (Tlumienie)', values: { q1: 80, q2: 40, q3: 1, q4: 25, r: 0.2 } },
-        'fast_aggressive': { name: '4. Szybka Jazda (Agresywny)', values: { q1: 100, q2: 10, q3: 0.5, q4: 30, r: 0.05 } },
-        'slow_smooth': { name: '5. Powolna Jazda (Plynnosc)', values: { q1: 120, q2: 20, q3: 2, q4: 5, r: 0.3 } },
-        'strong_hold': { name: '6. Mocne Trzymanie Pozycji', values: { q1: 150, q2: 15, q3: 80, q4: 20, r: 0.1 } },
-        'balance_only': { name: '7. Minimalistyczny (Tylko Balans)', values: { q1: 200, q2: 20, q3: 0, q4: 0, r: 0.1 } },
-        'experimental_speed': { name: '8. Eksperymentalny (Wysokie Predkosci)', values: { q1: 70, q2: 5, q3: 0.1, q4: 50, r: 0.04 } },
-        'precise_auto': { name: '9. Precyzyjny Ruch Autonomiczny', values: { q1: 150, q2: 20, q3: 400, q4: 40, r: 0.08 } }
-    };
     const CUSTOM_PRESET_PREFIX = 'lqr_custom_preset_';
+    let bleDevice, rxCharacteristic, txCharacteristic;
+    const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+    const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
+    const TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+    let chunkBuffers = {};
+    let isSequenceRunning = false;
+    let currentSequenceStep = 0;
+    const MAX_SEQUENCE_STEPS = 10;
+    let lastKnownRobotState = 'IDLE';
+
+    const joystickCanvas = document.getElementById('joystickCanvas');
+    const joystickCtx = joystickCanvas.getContext('2d');
+    let joystickCenter, joystickRadius, knobRadius, isDragging = false;
+    let lastJoystickSendTime = 0;
+    const JOYSTICK_SEND_INTERVAL = 50;
+    
+    let gamepadIndex = null;
+    let lastGamepadState = [];
+    let lastGamepadAxes = { x: 0, y: 0 };
+    let gamepadMappings = {};
+    const GAMEPAD_MAPPING_KEY = 'lqr_gamepad_mappings';
+    const GAMEPAD_AXIS_THRESHOLD = 0.15;
+    
+    const availableActions = {
+        'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' },
+        'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' },
+        'toggle_speed_mode': { label: 'Wlacz/Wylacz Tryb Predkosci', elementId: 'speedModeSwitch' },
+        'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyStopBtn' },
+        'reset_zero': { label: 'Resetuj Osie (Pion)', elementId: 'resetZeroBtn' },
+        'trim_plus': { label: 'Korekta Pionu (+)', elementId: 'trimPlusBtn' },
+        'trim_minus': { label: 'Korekta Pionu (-)', elementId: 'trimMinusBtn' },
+    };
+    
+    // [UZUPELNIONY BLOK 1/4] Definicja zmiennych do wykresu
     const availableTelemetry = {
         'pitch': { label: 'Pitch (Kat)', color: '#61dafb' },
         'target_angle': { label: 'Zadany Kat', color: '#a2f279' },
         'speed': { label: 'Predkosc', color: '#f7b731' },
         'lqr_output': { label: 'LQR Wyjscie', color: '#ff9ff3' },
     };
-    let lastUserInteraction = {};
-    const INTERACTION_TIMEOUT = 500;
-    let finalTargetAngleForDisplay = 0.0;
-    let bleDevice, rxCharacteristic, txCharacteristic;
-    let configSyncTimeout = null;
-    let logBuffer = [];
-    const MAX_LOG_LINES = 200;
-    const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
-    const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
-    const TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
-    const joystickCanvas = document.getElementById('joystickCanvas');
-    const joystickCtx = joystickCanvas.getContext('2d');
-    let joystickCenter, joystickRadius, knobRadius, isDragging = false;
-    let lastJoystickSendTime = 0;
-    const JOYSTICK_SEND_INTERVAL = 50;
-    let chunkBuffers = {};
-    let sequence = [];
-    let isSequenceRunning = false;
-    let currentSequenceStep = 0;
-    const MAX_SEQUENCE_STEPS = 4;
-    let lastKnownRobotState = 'IDLE';
+
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const debounce = (func, delay) => {
+        let timeout;
+        return function(...args) {
+            const context = this;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(context, args), delay);
+        };
+    };
+
+    function addLogMessage(message, level = 'info') {
+        const logHistory = document.getElementById('log-history');
+        if (!logHistory) return;
+        const timestamp = new Date().toLocaleTimeString();
+        let color = '#fff';
+        if (level === 'error') color = '#ff6347';
+        else if (level === 'warn') color = '#f7b731';
+        const logEntry = document.createElement('div');
+        logEntry.style.color = color;
+        logEntry.textContent = `[${timestamp}] ${message}`;
+        logHistory.prepend(logEntry);
+        while (logHistory.children.length > 200) {
+            logHistory.removeChild(logHistory.lastChild);
+        }
+    }
+    
+    function clearLogs() {
+        document.getElementById('log-history').innerHTML = '';
+    }
 
     function toggleAccordion(header) {
         const content = header.nextElementSibling;
         const isActive = header.classList.contains('active');
-        const parentCard = header.closest('.card');
-        parentCard.querySelectorAll('.accordion-header.active').forEach(otherHeader => {
-            if (otherHeader !== header) {
-                otherHeader.classList.remove('active');
-                otherHeader.nextElementSibling.style.maxHeight = '0px';
-            }
-        });
         if (!isActive) {
             header.classList.add('active');
             content.style.maxHeight = content.scrollHeight + "px";
         } else {
             header.classList.remove('active');
             content.style.maxHeight = '0px';
+        }
+    }
+    
+    function updateAccordionHeight(content) {
+        if (content && content.style.maxHeight !== '0px') {
+            content.style.maxHeight = content.scrollHeight + 'px';
         }
     }
 
@@ -476,20 +468,15 @@
             document.getElementById('connectionText').textContent = 'Laczenie...';
             bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
             const server = await bleDevice.gatt.connect();
-            addLogMessage('[UI] Pobieranie serwisu...', 'info');
             const service = await server.getPrimaryService(SERVICE_UUID);
-            addLogMessage('[UI] Pobieranie charakterystyk...', 'info');
             rxCharacteristic = await service.getCharacteristic(RX_UUID);
             txCharacteristic = await service.getCharacteristic(TX_UUID);
-            addLogMessage('[UI] Nasluchiwanie na powiadomienia...', 'info');
             await txCharacteristic.startNotifications();
             txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification);
             document.getElementById('connectionStatus').className = 'status-indicator status-ok';
             document.getElementById('connectionText').textContent = 'Polaczony';
             addLogMessage('[UI] Polaczono! Automatyczna synchronizacja za 1s...', 'info');
-            setTimeout(() => {
-                 sendBleMessage({ type: 'request_state' });
-            }, 1000);
+            setTimeout(() => sendBleMessage({ type: 'request_state' }), 1000);
         } catch (error) {
             addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error');
             document.getElementById('connectionStatus').className = 'status-indicator status-error';
@@ -500,45 +487,27 @@
 
     function onDisconnected() {
         addLogMessage('[UI] Rozlaczono z robotem.', 'warn');
-        if (configSyncTimeout) { clearTimeout(configSyncTimeout); configSyncTimeout = null; }
         document.getElementById('connectionStatus').className = 'status-indicator status-disconnected';
         document.getElementById('connectionText').textContent = 'Rozlaczony';
-        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'lqrEnabledSwitch'].forEach(id => {
+        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.checked = false;
         });
-        document.getElementById('systemStatus').className = 'status-indicator status-disconnected';
-        document.getElementById('systemText').textContent = 'Nieznany';
         document.getElementById('connectBleBtn').disabled = false;
         rxCharacteristic = null;
         txCharacteristic = null;
         chunkBuffers = {};
-        if (isSequenceRunning) {
-            stopSequenceExecution();
-            addLogMessage('[UI] Sekwencja przerwana z powodu rozlaczenia.', 'warn');
-        }
     }
 
     function handleBleNotification(event) {
         const value = event.target.value;
         const decoder = new TextDecoder('utf-8');
         const jsonString = decoder.decode(value);
-        handleIncomingData(jsonString);
-    }
-
-    function handleIncomingData(jsonString) {
         try {
             const data = JSON.parse(jsonString);
             if (data.type === 'chunk') {
-                if (data.i === 0) {
-                     addLogMessage(`[UI] Odbieram fragmentowana wiadomosc (ID: ${data.id}, ${data.total} czesci)...`, 'info');
-                }
                 if (!chunkBuffers[data.id]) {
-                    chunkBuffers[data.id] = {
-                        chunks: new Array(data.total),
-                        receivedCount: 0,
-                        totalCount: data.total
-                    };
+                    chunkBuffers[data.id] = { chunks: new Array(data.total), receivedCount: 0, totalCount: data.total };
                 }
                 const buffer = chunkBuffers[data.id];
                 if (!buffer.chunks[data.i]) {
@@ -547,45 +516,14 @@
                 }
                 if (buffer.receivedCount === buffer.totalCount) {
                     const completeMessageString = buffer.chunks.join('');
-                    addLogMessage(`[UI] Zlozono wiadomosc (ID: ${data.id}) z ${data.total} czesci. Rozmiar: ${completeMessageString.length} B.`, 'info');
                     delete chunkBuffers[data.id];
-                    handleIncomingData(completeMessageString);
+                    processCompleteMessage(JSON.parse(completeMessageString));
                 }
             } else {
                 processCompleteMessage(data);
             }
         } catch (e) {
             addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${jsonString}`, 'error');
-        }
-    }
-
-    function processCompleteMessage(data) {
-        switch (data.type) {
-            case 'telemetry':
-                let previousRobotState = lastKnownRobotState;
-                if(data.robot_state) {
-                    lastKnownRobotState = data.robot_state;
-                }
-                updateUI(data);
-                updateChart(data);
-                checkAndExecuteNextSequenceStep(previousRobotState);
-                break;
-            case 'full_config':
-                applyInitialState(data);
-                break;
-            case 'ack':
-                if (isPresetSequenceRunning && presetAckResolver) {
-                    if (presetAckTimeout) clearTimeout(presetAckTimeout);
-                    presetAckResolver();
-                    presetAckResolver = null;
-                }
-                break;
-            case 'log':
-                addLogMessage(`[ROBOT] ${data.message}`, data.level);
-                break;
-            case 'memory_info':
-                updateMemoryInfo(data);
-                break;
         }
     }
 
@@ -597,104 +535,74 @@
         } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); }
     }
 
-    function applyInitialState(data) {
-        document.getElementById('balanceSwitch').checked = data.balancingEnabled;
-        document.getElementById('holdPositionSwitch').checked = data.holdPositionEnabled;
-        document.getElementById('speedModeSwitch').checked = data.speedModeEnabled;
-        document.getElementById('lqrEnabledSwitch').checked = data.lqrEnabled;
+    function processCompleteMessage(data) {
+        let previousRobotState = lastKnownRobotState;
+        switch (data.type) {
+            case 'telemetry':
+                if(data.robot_state) lastKnownRobotState = data.robot_state;
+                updateTelemetryUI(data);
+                updateChart(data); // [UZUPELNIONY BLOK 2/4] Wywolanie funkcji aktualizacji wykresu
+                checkAndExecuteNextSequenceStep(previousRobotState);
+                break;
+            case 'full_config':
+                applyFullConfig(data);
+                break;
+            case 'log':
+                addLogMessage(`[ROBOT] ${data.message}`, data.level);
+                break;
+            case 'memory_info':
+                if (data.free_heap !== undefined) document.getElementById('freeHeapVal').textContent = `${data.free_heap} B`;
+                break;
+        }
+    }
+    
+    function applyFullConfig(data) {
+        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'lqrEnabledSwitch'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.checked = data[id.replace('Switch', 'Enabled')];
+        });
+        
         const params = {
-            expoJoystick: data.expo_joystick, maxSpeedJoystick: data.max_speed_joystick, joystickOutputScale: data.joystick_output_scale, turnFactor: data.turn_factor, joystickAngleSensitivity: data.joystick_angle_sensitivity, 
-            minPwmLeftFwd: data.min_pwm_left_fwd, minPwmLeftBwd: data.min_pwm_left_bwd, minPwmRightFwd: data.min_pwm_right_fwd, minPwmRightBwd: data.min_pwm_right_bwd, 
-            q1Angle: data.q1_angle, q2AngularVel: data.q2_angular_vel, q3Position: data.q3_position, q4Velocity: data.q4_velocity, rControl: data.r_control, lqrOutputScalar: data.lqr_output_scalar, 
-            mBody: data.m_body, mWheel: data.m_wheel, L: data.L, 
+            joystickOutputScale: data.joystick_output_scale * 100, expoJoystick: data.expo_joystick * 100, maxSpeedJoystick: data.max_speed_joystick, joystickAngleSensitivity: data.joystick_angle_sensitivity, turnFactor: data.turn_factor * 100,
+            headingCorrectionFactor: data.heading_correction_factor, speedToAngleFactor: data.speed_to_angle_factor,
+            positionPGain: data.position_p_gain, positionDGain: data.position_d_gain, rotationPGain: data.rotation_p_gain,
+            q1Angle: data.q1_angle, q2AngularVel: data.q2_angular_vel, q3Position: data.q3_position, q4Velocity: data.q4_velocity, rControl: data.r_control, lqrOutputScalar: data.lqr_output_scalar,
+            mBody: data.m_body, mWheel: data.m_wheel, L: data.L,
             wheelDiameterCm: data.wheel_diameter_cm, trackWidthCm: data.track_width_cm, encoderPpr: data.encoder_ppr,
-            headingCorrectionFactor: data.heading_correction_factor,
-            speedToAngleFactor: data.speed_to_angle_factor,
-            positionPGain: data.position_p_gain,
-            positionDGain: data.position_d_gain,
-            rotationPGain: data.rotation_p_gain
+            minPwmLeftFwd: data.min_pwm_left_fwd, minPwmLeftBwd: data.min_pwm_left_bwd, minPwmRightFwd: data.min_pwm_right_fwd, minPwmRightBwd: data.min_pwm_right_bwd,
         };
+
         for (const [key, value] of Object.entries(params)) {
-            const inputId = `${key}Input`;
-            const input = document.getElementById(inputId);
+            const input = document.getElementById(key + 'Input');
             if (input && value !== undefined) {
-                if (key === 'expoJoystick' || key === 'joystickOutputScale' || key === 'turnFactor' || key === 'joystickDeadzone') {
-                    input.value = value * 100;
-                } else {
-                    input.value = value;
-                }
+                input.value = value;
             }
         }
         addLogMessage("[UI] Parametry robota zsynchronizowane z panelem.", "info");
     }
 
-    function updateUI(data) {
+    function updateTelemetryUI(data) {
         if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
         if (data.pitch !== undefined) {
-            const displayPitch = data.pitch;
-            document.getElementById('angleVal').textContent = displayPitch.toFixed(1) + ' \u00B0';
-            document.getElementById('angleIndicator').style.transform = 'rotate(' + displayPitch + 'deg)';
+            document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0';
+            document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`;
         }
         if (data.speed !== undefined) document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0);
-        if (data.target_angle !== undefined) {
-            finalTargetAngleForDisplay = data.target_angle;
-            document.getElementById('targetAngleVal').textContent = parseFloat(data.target_angle).toFixed(1) + ' \u00B0';
-        }
+        if (data.target_angle !== undefined) document.getElementById('targetAngleVal').textContent = parseFloat(data.target_angle).toFixed(1) + ' \u00B0';
         if (data.lqr_output !== undefined) document.getElementById('lqrOutputVal').textContent = parseFloat(data.lqr_output).toFixed(2);
-        if (data.left_motor !== undefined) document.getElementById('leftMotorVal').textContent = Math.round(data.left_motor);
-        if (data.right_motor !== undefined) document.getElementById('rightMotorVal').textContent = Math.round(data.right_motor);
         if (data.loop_time !== undefined) document.getElementById('loopTimeVal').textContent = data.loop_time + ' \u00B5s';
         if (data.encoder_left !== undefined) document.getElementById('encoderLeftVal').textContent = data.encoder_left;
         if (data.encoder_right !== undefined) document.getElementById('encoderRightVal').textContent = data.encoder_right;
-        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => {
-            const el = document.getElementById(id);
-            if (!lastUserInteraction[id] || (Date.now() - lastUserInteraction[id] > INTERACTION_TIMEOUT)) {
-                if (data[id.replace('Switch', 'Enabled')] !== undefined) {
-                    el.checked = data[id.replace('Switch', 'Enabled')];
-                }
-            }
-        });
-        const systemStatus = document.getElementById('systemStatus'), systemText = document.getElementById('systemText'), emergencyBanner = document.getElementById('emergency-banner');
+        
+        const emergencyBanner = document.getElementById('emergency-banner');
         if (data.emergency_stop) {
-            systemStatus.className = 'status-indicator status-error';
-            systemText.textContent = 'STOP AWARYJNY';
             emergencyBanner.style.display = 'block';
         } else {
-            systemStatus.className = 'status-indicator status-ok';
-            systemText.textContent = 'OK';
             emergencyBanner.style.display = 'none';
         }
     }
 
-    function updateMemoryInfo(data) {
-        if (data.free_heap !== undefined) document.getElementById('freeHeapVal').textContent = `${data.free_heap} B`;
-        if (data.ctrl_stack_hwm !== undefined) document.getElementById('stackHwmVal').textContent = `${data.ctrl_stack_hwm} B`;
-    }
-
-    function addLogMessage(message, level = 'info') {
-        const entry = { message, level, timestamp: new Date().toLocaleTimeString() };
-        logBuffer.unshift(entry);
-        if (logBuffer.length > MAX_LOG_LINES) logBuffer.pop();
-        filterLogs();
-    }
-
-    function filterLogs() {
-        const logHistory = document.getElementById('log-history');
-        const filterLevel = document.getElementById('logLevelFilter').value;
-        const filtered = logBuffer.filter(entry => filterLevel === 'all' || entry.level === filterLevel);
-        logHistory.innerHTML = filtered.map(entry => {
-            let color = '#fff';
-            if (entry.level === 'error') color = '#ff6347';
-            else if (entry.level === 'warn') color = '#f7b731';
-            return `<div style="color:${color};">[${entry.timestamp}] ${entry.message}</div>`;
-        }).join('');
-    }
-
-    function clearLogs() {
-        logBuffer = [];
-        filterLogs();
-    }
-
+    // [UZUPELNIONY BLOK 3/4] Inicjalizacja, aktualizacja i kontrola wykresu
     const telemetryChart = new Chart(document.getElementById('telemetryChart'), {
         type: 'line', data: { labels: Array(100).fill(''), datasets: [] }, options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { type: 'linear', display: true, position: 'left', ticks: { color: '#61dafb' }, title: { display: true, text: 'Wartosc', color: '#61dafb' } }, y1: { type: 'linear', display: true, position: 'right', ticks: { color: '#a2f279' }, title: { display: true, text: 'Wyjscie LQR / PWM', color: '#a2f279' }, grid: { drawOnChartArea: false }, } }, plugins: { legend: { labels: { color: '#fff' } } } }
     });
@@ -703,17 +611,13 @@
         const chartData = telemetryChart.data;
         if (chartData.labels.length >= 100) chartData.labels.shift();
         chartData.labels.push('');
-        let localData = { ...data, 'target_angle': finalTargetAngleForDisplay };
-        for (const [key, localDataValue] of Object.entries(localData)) {
-            if (availableTelemetry[key] && localDataValue !== undefined) {
+        
+        for (const [key, value] of Object.entries(data)) {
+            if (availableTelemetry[key] && value !== undefined) {
                 let dataset = chartData.datasets.find(ds => ds.label === availableTelemetry[key].label);
-                if (!dataset) {
-                    const axisId = (key.includes('output') || key.includes('motor')) ? 'y1' : 'y';
-                    dataset = { label: availableTelemetry[key].label, data: Array(chartData.labels.length).fill(null), borderColor: availableTelemetry[key].color, fill: false, tension: 0.1, pointRadius: 0, yAxisID: axisId };
-                    chartData.datasets.push(dataset);
-                }
+                if (!dataset) continue; 
                 if (dataset.data.length >= 100) dataset.data.shift();
-                dataset.data.push(localDataValue);
+                dataset.data.push(value);
             }
         }
         chartData.datasets.forEach(ds => {
@@ -724,327 +628,215 @@
         });
         telemetryChart.update('none');
     }
-
-    function setupManualTuningControls() {
-        document.querySelectorAll('.manual-tune-row').forEach(row => {
-            const input = row.querySelector('.tune-input');
-            const step = 10;
-            const testBtn = row.querySelector('.test-btn');
-            const stopBtn = row.querySelector('.stop-btn');
-            row.querySelector('.tune-plus').addEventListener('click', () => {
-                input.value = Math.min(parseInt(input.value) + step, 1023);
-                input.dispatchEvent(new Event('change'));
-            });
-            row.querySelector('.tune-minus').addEventListener('click', () => {
-                input.value = Math.max(parseInt(input.value) - step, 0);
-                input.dispatchEvent(new Event('change'));
-            });
-            testBtn.addEventListener('click', (e) => {
-                const button = e.currentTarget; if (button.disabled) return;
-                button.disabled = true; setTimeout(() => button.disabled = false, 500);
-                sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: parseInt(input.value) });
-            });
-            stopBtn.addEventListener('click', (e) => {
-                const button = e.currentTarget; if (button.disabled) return;
-                button.disabled = true; setTimeout(() => button.disabled = false, 500);
-                sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: 0 });
-            });
-        });
-        document.getElementById('manualTuneStopAll').addEventListener('click', (e) => {
-            const button = e.currentTarget; if (button.disabled) return;
-            button.disabled = true; setTimeout(() => button.disabled = false, 1000);
-            sendBleMessage({ type: 'set_direct_motor_control', motor: 'all', pwm: 0 });
-        });
-    }
-
-    const setupGroupedInput = (ids, msgType) => {
-        const sendGroupUpdate = () => {
-            let msg = { type: msgType, params: {} };
-            let payload = {};
-            ids.forEach(i => {
-                const inputElement = document.getElementById(i + 'Input');
-                if (inputElement) {
-                    let key = i.replace(/([A-Z])/g, "_$1").toLowerCase();
-                    let value = parseFloat(inputElement.value);
-                    if (['expo_joystick', 'joystick_output_scale', 'turn_factor', 'joystick_deadzone'].includes(key)) {
-                        value = value / 100.0;
+    
+    function setupChartControls() {
+        const container = document.getElementById('chartControls');
+        container.innerHTML = '';
+        Object.keys(availableTelemetry).forEach((key) => {
+            const label = document.createElement('label'), checkbox = document.createElement('input');
+            checkbox.type = 'checkbox'; checkbox.value = key;
+            checkbox.checked = (key === 'pitch' || key === 'target_angle');
+            checkbox.addEventListener('change', (e) => {
+                const varName = e.target.value;
+                sendBleMessage({ type: e.target.checked ? 'subscribe_variable' : 'unsubscribe_variable', name: varName });
+                if (e.target.checked) {
+                    const chartData = telemetryChart.data;
+                    if (!chartData.datasets.find(ds => ds.label === availableTelemetry[varName].label)) {
+                         const axisId = (varName.includes('output')) ? 'y1' : 'y';
+                         chartData.datasets.push({ label: availableTelemetry[varName].label, data: Array(chartData.labels.length).fill(null), borderColor: availableTelemetry[varName].color, fill: false, tension: 0.1, pointRadius: 0, yAxisID: axisId });
                     }
-                    payload[key] = value;
+                } else {
+                    const chartData = telemetryChart.data;
+                    const datasetIndex = chartData.datasets.findIndex(ds => ds.label === availableTelemetry[varName].label);
+                    if (datasetIndex > -1) { 
+                        chartData.datasets.splice(datasetIndex, 1);
+                    }
                 }
+                telemetryChart.update();
             });
-            msg.params = payload;
-            sendBleMessage(msg);
-        };
-        ids.forEach(id => {
-            const input = document.getElementById(id + 'Input'),
-                  minusBtn = document.getElementById(id + 'Minus'),
-                  plusBtn = document.getElementById(id + 'Plus');
-            if (!input || !minusBtn || !plusBtn) return;
-            const step = parseFloat(input.step) || 1;
-            const isFloat = input.step.includes('.');
-            const updateValue = (amount) => {
-                let current = parseFloat(input.value),
-                    newValue = current + amount;
-                if (isFloat) {
-                    const dp = (step.toString().split('.')[1] || '').length;
-                    newValue = parseFloat(newValue.toFixed(dp));
-                }
-                input.value = Math.max(parseFloat(input.min), Math.min(parseFloat(input.max), newValue));
-                sendGroupUpdate();
-            };
-            minusBtn.addEventListener('click', () => updateValue(-step));
-            plusBtn.addEventListener('click', () => updateValue(step));
-            input.addEventListener('change', sendGroupUpdate);
-        });
-    };
-    
-    function applyPreset() {
-        const select = document.getElementById('lqrPresetSelect');
-        const index = select.value;
-        if (!index) return;
-        addLogMessage(`[UI] Wysylanie polecenia zastosowania presetu #${index}...`, 'info');
-        sendBleMessage({ type: 'apply_preset', index: parseInt(index) });
-    }
-
-    function setupControls() {
-        const debounceWrapper = (fn, delay = 1000) => (e) => {
-            const btn = e.currentTarget;
-            if (btn.disabled) return;
-            btn.disabled = true;
-            setTimeout(() => btn.disabled = false, delay);
-            fn(e);
-        };
-        document.getElementById('connectBleBtn').addEventListener('click', debounceWrapper(connectBLE));
-        document.getElementById('balanceSwitch').addEventListener('change', e => { lastUserInteraction['balanceSwitch'] = Date.now(); sendBleMessage({ type: 'balance_toggle', enabled: e.target.checked }); });
-        document.getElementById('holdPositionSwitch').addEventListener('change', e => {
-            lastUserInteraction['holdPositionSwitch'] = Date.now();
-            sendBleMessage({ type: 'hold_position_toggle', enabled: e.target.checked });
-            document.getElementById('speedModeSwitch').disabled = e.target.checked;
-            if (e.target.checked) {
-                document.getElementById('speedModeSwitch').checked = false;
-                sendBleMessage({ type: 'speed_mode_toggle', enabled: false });
-            }
-        });
-        document.getElementById('speedModeSwitch').addEventListener('change', e => {
-            sendBleMessage({ type: 'speed_mode_toggle', enabled: e.target.checked });
-            document.getElementById('holdPositionSwitch').disabled = e.target.checked;
-            if (e.target.checked) {
-                document.getElementById('holdPositionSwitch').checked = false;
-                sendBleMessage({ type: 'hold_position_toggle', enabled: false });
-            }
-        });
-        document.getElementById('lqrEnabledSwitch').addEventListener('change', e => sendBleMessage({ type: 'lqr_enabled_toggle', enabled: e.target.checked }));
-        document.getElementById('resetZeroBtn').addEventListener('click', debounceWrapper((e) => { sendBleMessage({ type: 'reset_zero' }); }));
-        document.getElementById('trimPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 1 }));
-        document.getElementById('trimMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -1 }));
-        document.getElementById('trimRollPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: 1 }));
-        document.getElementById('trimRollMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -1 }));
-        document.getElementById('saveBtn').addEventListener('click', debounceWrapper((e) => { if (confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")) { sendBleMessage({ type: 'save_tunings' }); addLogMessage('[UI] Wyslano polecenie ZAPISU do EEPROM.', 'info'); } }));
-        document.getElementById('loadBtn').addEventListener('click', debounceWrapper((e) => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) { sendBleMessage({ type: 'load_from_eeprom' }); addLogMessage('[UI] Wyslano polecenie ODCZYTU z EEPROM.', 'info'); } }));
-        document.getElementById('emergencyStopBtn').addEventListener('click', debounceWrapper((e) => { sendBleMessage({ type: 'emergency_stop' }); }));
-        document.getElementById('resetEncodersBtn').addEventListener('click', debounceWrapper((e) => { sendBleMessage({ type: 'reset_encoders' }); }));
-        document.getElementById('calibrateMpuBtn').addEventListener('click', debounceWrapper((e) => { sendBleMessage({ type: 'calibrate_mpu' }); }));
-        
-        setupGroupedInput(['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor', 'joystickDeadzone'], 'set_joystick_tuning');
-        setupGroupedInput(['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'], 'lqr_update');
-        setupGroupedInput(['mBody', 'mWheel', 'L'], 'physics_update');
-        setupGroupedInput(['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'speedToAngleFactor', 'positionPGain', 'positionDGain', 'rotationPGain'], 'calibration_update');
-        setupGroupedInput(['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'set_min_pwm');
-        setupManualTuningControls();
-        setupDpadControls();
-        setupSequenceControls();
-    }
-
-    function setupDpadControls() {
-        document.querySelectorAll('.dpad-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const button = e.currentTarget; if (button.disabled) return;
-                button.disabled = true; setTimeout(() => button.disabled = false, 500);
-                const action = e.currentTarget.dataset.dpad;
-                if (action === 'up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) });
-                else if (action === 'down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) });
-                else if (action === 'left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) });
-                else if (action === 'right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) });
-                else if (action === 'stop') sendBleMessage({ type: 'command_stop' });
-            });
-        });
-    }
-
-    function setupSequenceControls() {
-        document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep);
-        document.getElementById('run-sequence-btn').addEventListener('click', runSequence);
-        document.getElementById('stop-sequence-btn').addEventListener('click', stopSequenceExecution);
-        document.getElementById('clear-sequence-btn').addEventListener('click', clearSequence);
-    }
-
-    function addSequenceStep() {
-        const list = document.getElementById('sequence-list');
-        if (list.children.length >= MAX_SEQUENCE_STEPS) {
-            addLogMessage(`[UI] Osiagnieto maksymalna liczbe krokow w sekwencji (${MAX_SEQUENCE_STEPS}).`, 'warn');
-            return;
-        }
-
-        const stepDiv = document.createElement('div');
-        stepDiv.className = 'sequence-step';
-        stepDiv.innerHTML = `
-            <select class="sequence-type">
-                <option value="move_fwd">Przod (cm)</option>
-                <option value="move_bwd">Tyl (cm)</option>
-                <option value="rotate_r">Obrot w Prawo (st.)</option>
-                <option value="rotate_l">Obrot w Lewo (st.)</option>
-            </select>
-            <input type="number" class="sequence-value" value="10">
-            <button class="remove-step-btn">&times;</button>
-        `;
-        
-        list.appendChild(stepDiv);
-
-        const accordionContent = list.closest('.accordion-content');
-        if (accordionContent) {
-            updateAccordionHeight(accordionContent);
-        }
-        
-        stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => {
-            stepDiv.remove();
-            if (accordionContent) {
-                updateAccordionHeight(accordionContent);
+            label.appendChild(checkbox);
+            label.append(` ${availableTelemetry[key].label}`);
+            container.appendChild(label);
+            
+            if (checkbox.checked) {
+                checkbox.dispatchEvent(new Event('change'));
             }
         });
     }
 
-    function runSequence() {
-        if (isSequenceRunning) {
-            addLogMessage('[UI] Sekwencja jest juz w toku.', 'warn');
-            return;
-        }
-        const normalizedState = lastKnownRobotState.includes("BEZCZYN") ? "IDLE" : lastKnownRobotState;
-        if (normalizedState !== 'IDLE' && normalizedState !== 'HOLDING_POSITION') {
-            addLogMessage(`[UI] Nie mozna rozpoczac sekwencji. Robot jest w stanie '${lastKnownRobotState}'.`, 'error');
-            return;
-        }
-
-        sequence = [];
-        const steps = document.querySelectorAll('.sequence-step');
-        if (steps.length === 0) {
-            addLogMessage('[UI] Dodaj przynajmniej jeden krok do sekwencji.', 'warn');
-            return;
-        }
-
-        steps.forEach(step => {
-            sequence.push({
-                type: step.querySelector('.sequence-type').value,
-                value: parseFloat(step.querySelector('.sequence-value').value)
-            });
-        });
-
-        isSequenceRunning = true;
-        currentSequenceStep = 0;
-        updateSequenceUI();
-        addLogMessage(`[UI] Rozpoczeto sekwencje zlozoną z ${sequence.length} krokow.`, 'info');
-        executeNextSequenceStep();
-    }
-    
-    function stopSequenceExecution() {
-        if (!isSequenceRunning) return;
-        isSequenceRunning = false;
-        sendBleMessage({ type: 'command_stop' });
-        updateSequenceUI();
-        addLogMessage('[UI] Sekwencja zatrzymana przez uzytkownika.', 'warn');
-    }
-
-    function clearSequence() {
-        if (isSequenceRunning) {
-            stopSequenceExecution();
-        }
-        const list = document.getElementById('sequence-list');
-        const accordionContent = list.closest('.accordion-content');
-        list.innerHTML = '';
-        sequence = [];
-        if (accordionContent) {
-            updateAccordionHeight(accordionContent);
-        }
-    }
-    
-    function updateSequenceUI() {
-        document.querySelectorAll('.sequence-step').forEach((step, index) => {
-            if (isSequenceRunning && index === currentSequenceStep) {
-                step.classList.add('executing');
-            } else {
-                step.classList.remove('executing');
-            }
-        });
-        document.getElementById('run-sequence-btn').disabled = isSequenceRunning;
-        document.getElementById('add-sequence-step-btn').disabled = isSequenceRunning;
-        document.getElementById('clear-sequence-btn').disabled = isSequenceRunning;
-        document.getElementById('stop-sequence-btn').disabled = !isSequenceRunning;
-    }
-
-    function checkAndExecuteNextSequenceStep(previousState) {
-        if (!isSequenceRunning) return;
-        
-        const normalizedCurrent = lastKnownRobotState.includes('BEZCZYN') ? 'IDLE' : (lastKnownRobotState.includes('UTRZYMUJE') ? 'HOLDING_POSITION' : lastKnownRobotState);
-        const normalizedPrevious = previousState.includes('RUCH') ? 'EXECUTING_MOVE' : (previousState.includes('OBROT') ? 'EXECUTING_ROTATE' : previousState);
-
-        const isRobotIdle = normalizedCurrent === 'IDLE' || normalizedCurrent === 'HOLDING_POSITION';
-        const wasRobotWorking = normalizedPrevious === 'EXECUTING_MOVE' || normalizedPrevious === 'EXECUTING_ROTATE';
-
-        if (isRobotIdle && wasRobotWorking) {
-            addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info');
-            currentSequenceStep++;
-            executeNextSequenceStep();
-        }
-    }
-
-    function executeNextSequenceStep() {
-        if (!isSequenceRunning || currentSequenceStep >= sequence.length) {
-            if (isSequenceRunning) { 
-                isSequenceRunning = false;
-                addLogMessage('[UI] Sekwencja zostala pomyslnie ukonczona.', 'info');
-            }
-            updateSequenceUI();
-            return;
-        }
-
-        updateSequenceUI();
-        const step = sequence[currentSequenceStep];
-        let command = {};
-
-        switch (step.type) {
-            case 'move_fwd':
-                command = { type: 'execute_move', distance_cm: step.value };
-                break;
-            case 'move_bwd':
-                command = { type: 'execute_move', distance_cm: -step.value };
-                break;
-            case 'rotate_r':
-                command = { type: 'execute_rotate', angle_deg: step.value };
-                break;
-            case 'rotate_l':
-                command = { type: 'execute_rotate', angle_deg: -step.value };
-                break;
-        }
-        
-        addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${sequence.length}: ${command.type} (${step.value}).`, 'info');
-        sendBleMessage(command);
-    }
-    
-    function loadPresets() {
+    function populatePresetSelect() {
         const select = document.getElementById('lqrPresetSelect');
         select.innerHTML = '';
+        
         const builtInPresets = {
-            1: '1. Zbalansowany (Startowy)', 2: '2. Bardzo Sztywny (Precyzja)', 3: '3. Miekki (Tlumienie)',
-            4: '4. Szybka Jazda (Agresywny)', 5: '5. Powolna Jazda (Plynnosc)', 6: '6. Mocne Trzymanie Pozycji',
-            7: '7. Minimalistyczny (Tylko Balans)', 8: '8. Eksperymentalny (Wys. Predkosci)', 9: '9. Precyzyjny Ruch Autonomiczny'
+            1: '1. Wbudowany: Zbalansowany', 2: '2. Wbudowany: Bardzo Sztywny', 3: '3. Wbudowany: Miekki',
+            4: '4. Wbudowany: Szybka Jazda', 5: '5. Wbudowany: Powolna Jazda', 6: '6. Wbudowany: Mocne Trzymanie Pozycji',
+            7: '7. Wbudowany: Tylko Balans', 8: '8. Wbudowany: Eksperymentalny', 9: '9. Wbudowany: Precyzja Autonomiczna'
         };
+
         for (const [index, name] of Object.entries(builtInPresets)) {
             const option = document.createElement('option');
             option.value = index;
             option.textContent = name;
             select.appendChild(option);
         }
+
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith(CUSTOM_PRESET_PREFIX)) {
+                const presetName = key.substring(CUSTOM_PRESET_PREFIX.length);
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = `Wlasny: ${presetName}`;
+                select.appendChild(option);
+            }
+        }
     }
-    
-    function setupHelpIcons() {
+
+    async function applySelectedPreset() {
+        const select = document.getElementById('lqrPresetSelect');
+        const selectedValue = select.value;
+
+        if (selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) {
+            const presetData = JSON.parse(localStorage.getItem(selectedValue));
+            if (presetData) {
+                addLogMessage(`[UI] Ladowanie wlasnego presetu '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}' do pol.`, 'info');
+                for (const [key, value] of Object.entries(presetData)) {
+                    const input = document.getElementById(key + 'Input');
+                    if (input) input.value = value;
+                }
+                await sendLqrSettingsSequentially();
+            } else {
+                addLogMessage(`[UI] Blad: nie znaleziono danych dla presetu '${selectedValue}'.`, 'error');
+            }
+        } else {
+            const index = parseInt(selectedValue);
+            addLogMessage(`[UI] Wysylanie polecenia zastosowania wbudowanego presetu #${index}...`, 'info');
+            await sendBleMessage({ type: 'apply_preset', index: index });
+        }
+    }
+
+    function saveCurrentAsPreset() {
+        const presetName = prompt("Podaj nazwe dla nowego presetu:", "");
+        if (presetName && presetName.trim() !== "") {
+            const presetData = {};
+            const keysToSave = ['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'];
+            keysToSave.forEach(key => {
+                const input = document.getElementById(key + 'Input');
+                if(input) presetData[key] = parseFloat(input.value);
+            });
+            localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData));
+            addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'info');
+            populatePresetSelect();
+        } else {
+            addLogMessage('[UI] Anulowano zapisywanie presetu.', 'warn');
+        }
+    }
+
+    async function sendLqrSettingsSequentially() {
+        const btn = document.getElementById('sendCurrentSettingsBtn');
+        btn.disabled = true;
+        const paramsToSend = [
+            { id: 'q1AngleInput', key: 'q1_angle' }, { id: 'q2AngularVelInput', key: 'q2_angular_vel' },
+            { id: 'q3PositionInput', key: 'q3_position' }, { id: 'q4VelocityInput', key: 'q4_velocity' },
+            { id: 'rControlInput', key: 'r_control' }, { id: 'lqrOutputScalarInput', key: 'lqr_output_scalar' }
+        ];
+        for (let i = 0; i < paramsToSend.length; i++) {
+            const param = paramsToSend[i];
+            const input = document.getElementById(param.id);
+            if (input) {
+                const value = parseFloat(input.value);
+                const message = { type: 'lqr_update', params: { [param.key]: value } };
+                btn.textContent = `Wysylanie ${i + 1}/${paramsToSend.length}...`;
+                await sendBleMessage(message);
+                await sleep(50);
+            }
+        }
+        btn.textContent = 'Wyslij Aktualne Ustawienia (sekwencyjnie)';
+        btn.disabled = false;
+        addLogMessage('[UI] Zakonczono sekwencyjne wysylanie parametrow LQR.', 'info');
+    }
+
+    function setupNumericInputs() {
+        document.querySelectorAll('.setting-container').forEach(container => {
+            const input = container.querySelector('input[type=number]');
+            const minusBtn = container.querySelector('.numeric-input-wrapper button:first-child');
+            const plusBtn = container.querySelector('.numeric-input-wrapper button:last-child');
+            if (!input || !minusBtn || !plusBtn || input.disabled) return;
+
+            const step = parseFloat(input.step) || 1;
+            const isFloat = input.step.includes('.');
+            
+            const updateValue = (amount) => {
+                let current = parseFloat(input.value);
+                let newValue = current + amount;
+                if (isFloat) {
+                    const dp = (step.toString().split('.')[1] || '').length;
+                    newValue = parseFloat(newValue.toFixed(dp));
+                }
+                input.value = Math.max(parseFloat(input.min), Math.min(parseFloat(input.max), newValue));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+            minusBtn.addEventListener('click', () => updateValue(-step));
+            plusBtn.addEventListener('click', () => updateValue(step));
+        });
+    }
+
+    const debouncedSenders = {};
+    function setupEventListeners() {
+        document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
+        
+        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'lqrEnabledSwitch'].forEach(id => {
+            document.getElementById(id).addEventListener('change', (e) => {
+                const typeMap = {
+                    'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 
+                    'speedModeSwitch': 'speed_mode_toggle', 'lqrEnabledSwitch': 'lqr_enabled_toggle'
+                };
+                sendBleMessage({ type: typeMap[id], enabled: e.target.checked });
+            });
+        });
+
+        document.getElementById('resetZeroBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_zero' }));
+        document.getElementById('trimPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 1 }));
+        document.getElementById('trimMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -1 }));
+        document.getElementById('trimRollPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: 1 }));
+        document.getElementById('trimRollMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -1 }));
+        document.getElementById('emergencyStopBtn').addEventListener('click', () => sendBleMessage({ type: 'emergency_stop' }));
+        document.getElementById('saveBtn').addEventListener('click', () => { if (confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")) sendBleMessage({ type: 'save_tunings' }); });
+        document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) sendBleMessage({ type: 'load_from_eeprom' }); });
+        document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' }));
+        document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
+        
+        const configGroups = {
+            'set_joystick_tuning': ['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'],
+            'calibration_update': ['positionPGain', 'positionDGain', 'rotationPGain', 'wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'speedToAngleFactor'],
+            'set_min_pwm': ['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd']
+        };
+
+        for (const [type, keys] of Object.entries(configGroups)) {
+            debouncedSenders[type] = debounce(() => {
+                const params = {};
+                keys.forEach(key => {
+                    const input = document.getElementById(key + 'Input');
+                    if(input) {
+                        let value = parseFloat(input.value);
+                        if (key === 'turnFactor' || key === 'joystickOutputScale' || key === 'expoJoystick') value /= 100;
+                        params[key.replace(/([A-Z])/g, "_$1").toLowerCase()] = value;
+                    }
+                });
+                sendBleMessage({ type, params });
+            }, 300);
+
+            keys.forEach(key => {
+                const input = document.getElementById(key + 'Input');
+                if(input) input.addEventListener('change', debouncedSenders[type]);
+            });
+        }
+
+        document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset);
+        document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset);
+        document.getElementById('sendCurrentSettingsBtn').addEventListener('click', sendLqrSettingsSequentially);
+
         document.querySelectorAll('.help-icon').forEach(icon => {
             icon.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -1053,35 +845,141 @@
                 if (helpText) {
                     helpText.classList.toggle('visible');
                     const accordionContent = container.closest('.accordion-content');
-                    if (accordionContent && accordionContent.classList.contains('active')) {
-                        updateAccordionHeight(accordionContent);
+                    if (accordionContent) updateAccordionHeight(accordionContent);
+                }
+            });
+        });
+    }
+    
+    function flashElement(element) {
+        if (!element) return;
+        const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element;
+        target.classList.add('gamepad-flash');
+        setTimeout(() => target.classList.remove('gamepad-flash'), 300);
+    }
+
+    function loadGamepadMappings() {
+        const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY);
+        gamepadMappings = saved ? JSON.parse(saved) : {};
+    }
+
+    function saveGamepadMappings() {
+        localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings));
+    }
+
+    function renderMappingModal() {
+        const list = document.getElementById('gamepad-mapping-list');
+        list.innerHTML = '';
+        for (const [action, config] of Object.entries(availableActions)) {
+            const row = document.createElement('div');
+            row.className = 'mapping-row';
+            const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action);
+            row.innerHTML = `
+                <span class="mapping-label">${config.label}</span>
+                <span class="mapping-display">${buttonIndex ? `Przycisk ${buttonIndex}` : 'Brak'}</span>
+                <button class="mapping-button" data-action="${action}">Przypisz</button>
+            `;
+            list.appendChild(row);
+        }
+    }
+
+    function pollGamepad() {
+        if (gamepadIndex === null) return;
+        const gp = navigator.getGamepads()[gamepadIndex];
+        if (!gp) return;
+
+        let x = gp.axes[0], y = gp.axes[1];
+        if (Math.abs(x) < GAMEPAD_AXIS_THRESHOLD) x = 0;
+        if (Math.abs(y) < GAMEPAD_AXIS_THRESHOLD) y = 0;
+        if (x !== lastGamepadAxes.x || y !== lastGamepadAxes.y) {
+            if (Date.now() - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) {
+                sendBleMessage({ type: 'joystick', x: x, y: -y });
+                drawJoystick(x * joystickRadius, y * joystickRadius);
+                lastJoystickSendTime = Date.now();
+            }
+        }
+        lastGamepadAxes = { x, y };
+
+        gp.buttons.forEach((button, i) => {
+            if (button.pressed && !lastGamepadState[i]) {
+                const action = gamepadMappings[i];
+                if (action && availableActions[action]) {
+                    const config = availableActions[action];
+                    const element = document.getElementById(config.elementId);
+                    if (element) {
+                        element.click();
+                        flashElement(element);
+                        addLogMessage(`[Gamepad] Akcja: ${config.label}`, 'info');
                     }
                 }
-            });
+            }
+            lastGamepadState[i] = button.pressed;
         });
     }
 
-    function setupChartControls() {
-        const container = document.getElementById('chartControls');
-        container.innerHTML = '';
-        Object.keys(availableTelemetry).forEach((key) => {
-            const label = document.createElement('label'), checkbox = document.createElement('input');
-            checkbox.type = 'checkbox'; checkbox.value = key;
-            checkbox.checked = (key === 'pitch' || key === 'target_angle' || key === 'lqr_output');
-            checkbox.addEventListener('change', (e) => {
-                const varName = e.target.value;
-                sendBleMessage({ type: e.target.checked ? 'subscribe_variable' : 'unsubscribe_variable', name: varName });
-                if (!e.target.checked) {
-                    const chartData = telemetryChart.data, datasetIndex = chartData.datasets.findIndex(ds => ds.label === availableTelemetry[varName].label);
-                    if (datasetIndex > -1) { chartData.datasets.splice(datasetIndex, 1); telemetryChart.update(); }
+    function setupGamepad() {
+        loadGamepadMappings();
+        const modal = document.getElementById('gamepad-mapping-modal');
+        document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => {
+            renderMappingModal();
+            modal.style.display = 'flex';
+        });
+        document.getElementById('close-modal-btn').addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+        document.getElementById('gamepad-mapping-list').addEventListener('click', (e) => {
+            if (e.target.classList.contains('mapping-button')) {
+                const action = e.target.dataset.action;
+                e.target.textContent = 'Nacisnij...';
+                e.target.disabled = true;
+
+                const listener = (event) => {
+                    const buttonIndex = event.detail;
+                    Object.keys(gamepadMappings).forEach(key => {
+                        if (gamepadMappings[key] === action) delete gamepadMappings[key];
+                    });
+                    gamepadMappings[buttonIndex] = action;
+                    saveGamepadMappings();
+                    renderMappingModal();
+                    window.removeEventListener('gamepadbuttonpress', listener);
+                };
+                window.addEventListener('gamepadbuttonpress', listener, { once: true });
+            }
+        });
+        
+        let lastGpStateForEvent = [];
+        const gamepadEventLoop = () => {
+            if(gamepadIndex !== null){
+                const gp = navigator.getGamepads()[gamepadIndex];
+                if (gp) {
+                    gp.buttons.forEach((button, i) => {
+                        if(button.pressed && !lastGpStateForEvent[i]){
+                            window.dispatchEvent(new CustomEvent('gamepadbuttonpress', { detail: i }));
+                        }
+                    });
+                    lastGpStateForEvent = gp.buttons.map(b => b.pressed);
                 }
-            });
-            label.appendChild(checkbox);
-            label.append(` ${availableTelemetry[key].label}`);
-            container.appendChild(label);
-        });
-    }
+            }
+            requestAnimationFrame(gamepadEventLoop);
+        };
 
+        window.addEventListener("gamepadconnected", (e) => {
+            gamepadIndex = e.gamepad.index;
+            document.getElementById('gamepadStatus').textContent = 'Polaczony';
+            addLogMessage(`[UI] Kontroler podlaczony: ${e.gamepad.id}`, 'info');
+            lastGamepadState = Array(e.gamepad.buttons.length).fill(false);
+            lastGpStateForEvent = Array(e.gamepad.buttons.length).fill(false);
+        });
+        window.addEventListener("gamepaddisconnected", (e) => {
+            if (gamepadIndex === e.gamepad.index) {
+                gamepadIndex = null;
+                document.getElementById('gamepadStatus').textContent = 'Brak';
+                addLogMessage('[UI] Kontroler odlaczony.', 'warn');
+            }
+        });
+        gamepadEventLoop();
+    }
+    
     function resizeJoystick() {
         const wrapper = document.getElementById('joystickWrapper');
         joystickCanvas.width = wrapper.offsetWidth;
@@ -1136,191 +1034,152 @@
         sendBleMessage({ type: 'joystick', x: 0, y: 0 });
         lastJoystickSendTime = 0;
     }
-    
-    // ================== GAMEPAD API ==================
-    let gamepadIndex = null;
-    let gamepadPollInterval = null;
-    let gamepadMappings = {};
-    const GAMEPAD_MAPPING_KEY = 'lqr_gamepad_mappings';
-    const GAMEPAD_AXIS_THRESHOLD = 0.15;
-    
-    const availableActions = {
-        'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch', type: 'toggle' },
-        'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch', type: 'toggle' },
-        'toggle_speed_mode': { label: 'Wlacz/Wylacz Tryb Predkosci', elementId: 'speedModeSwitch', type: 'toggle' },
-        'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyStopBtn', type: 'click' },
-        'reset_zero': { label: 'Resetuj Osie (Pion)', elementId: 'resetZeroBtn', type: 'click' },
-        'reset_encoders': { label: 'Resetuj Enkodery', elementId: 'resetEncodersBtn', type: 'click' },
-    };
 
-    function loadGamepadMappings() {
-        const savedMappings = localStorage.getItem(GAMEPAD_MAPPING_KEY);
-        if (savedMappings) {
-            gamepadMappings = JSON.parse(savedMappings);
-        } else {
-            gamepadMappings = {};
+    function setupDpadControls() {
+        document.querySelectorAll('.dpad-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const action = e.currentTarget.dataset.dpad;
+                if (action === 'up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) });
+                else if (action === 'down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) });
+                else if (action === 'left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) });
+                else if (action === 'right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) });
+                else if (action === 'stop') sendBleMessage({ type: 'command_stop' });
+            });
+        });
+    }
+
+    function setupSequenceControls() {
+        document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep);
+        document.getElementById('run-sequence-btn').addEventListener('click', runSequence);
+        document.getElementById('stop-sequence-btn').addEventListener('click', stopSequenceExecution);
+        document.getElementById('clear-sequence-btn').addEventListener('click', clearSequence);
+    }
+
+    function addSequenceStep() {
+        const list = document.getElementById('sequence-list');
+        if (list.children.length >= MAX_SEQUENCE_STEPS) return;
+        const stepDiv = document.createElement('div');
+        stepDiv.className = 'sequence-step';
+        stepDiv.innerHTML = `
+            <select class="sequence-type">
+                <option value="move_fwd">Przod (cm)</option><option value="move_bwd">Tyl (cm)</option>
+                <option value="rotate_r">Obrot Prawo (st.)</option><option value="rotate_l">Obrot Lewo (st.)</option>
+            </select>
+            <input type="number" class="sequence-value" value="10">
+            <button class="remove-step-btn">&times;</button>
+        `;
+        list.appendChild(stepDiv);
+        updateAccordionHeight(list.closest('.accordion-content'));
+        stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => {
+            stepDiv.remove();
+            updateAccordionHeight(list.closest('.accordion-content'));
+        });
+    }
+
+    function runSequence() {
+        if (isSequenceRunning) return;
+        const normalizedState = lastKnownRobotState.includes("BEZCZYN") ? "IDLE" : lastKnownRobotState;
+        if (normalizedState !== 'IDLE' && normalizedState !== 'UTRZYMUJE POZYCJE') {
+            addLogMessage(`[UI] Nie mozna rozpoczac sekwencji. Robot w stanie '${lastKnownRobotState}'.`, 'error');
+            return;
         }
+        const steps = document.querySelectorAll('.sequence-step');
+        if (steps.length === 0) return;
+        isSequenceRunning = true;
+        currentSequenceStep = 0;
+        updateSequenceUI();
+        addLogMessage(`[UI] Rozpoczeto sekwencje z ${steps.length} krokow.`, 'info');
+        executeNextSequenceStep();
+    }
+    
+    function stopSequenceExecution() {
+        if (!isSequenceRunning) return;
+        isSequenceRunning = false;
+        sendBleMessage({ type: 'command_stop' });
+        updateSequenceUI();
+        addLogMessage('[UI] Sekwencja zatrzymana.', 'warn');
     }
 
-    function saveGamepadMappings() {
-        localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings));
-        addLogMessage('[UI] Zapisano mapowanie przyciskow.', 'info');
-    }
-
-    function renderMappingModal() {
-        const list = document.getElementById('gamepad-mapping-list');
+    function clearSequence() {
+        if (isSequenceRunning) stopSequenceExecution();
+        const list = document.getElementById('sequence-list');
         list.innerHTML = '';
-        for (const [action, config] of Object.entries(availableActions)) {
-            const row = document.createElement('div');
-            row.className = 'mapping-row';
-            const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action);
-            
-            row.innerHTML = `
-                <span class="mapping-label">${config.label}</span>
-                <span class="mapping-display">${buttonIndex ? `Przycisk ${buttonIndex}` : 'Brak'}</span>
-                <button class="mapping-button" data-action="${action}">Przypisz</button>
-            `;
-            list.appendChild(row);
-        }
+        updateAccordionHeight(list.closest('.accordion-content'));
     }
     
-    function handleGamepadButtonPress(buttonIndex) {
-        const action = gamepadMappings[buttonIndex];
-        if (action && availableActions[action]) {
-            const config = availableActions[action];
-            const element = document.getElementById(config.elementId);
-            if (element) {
-                element.click();
-                 addLogMessage(`[Gamepad] Akcja: ${config.label}`, 'info');
-            }
+    function updateSequenceUI() {
+        document.querySelectorAll('.sequence-step').forEach((step, index) => {
+            step.classList.toggle('executing', isSequenceRunning && index === currentSequenceStep);
+        });
+        document.getElementById('run-sequence-btn').disabled = isSequenceRunning;
+        document.getElementById('add-sequence-step-btn').disabled = isSequenceRunning;
+        document.getElementById('clear-sequence-btn').disabled = isSequenceRunning;
+        document.getElementById('stop-sequence-btn').disabled = !isSequenceRunning;
+    }
+
+    function checkAndExecuteNextSequenceStep(previousState) {
+        if (!isSequenceRunning) return;
+        const isRobotIdle = lastKnownRobotState.includes('BEZCZYN') || lastKnownRobotState.includes('UTRZYMUJE');
+        const wasRobotWorking = previousState.includes('RUCH') || previousState.includes('OBROT');
+        if (isRobotIdle && wasRobotWorking) {
+            addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info');
+            currentSequenceStep++;
+            executeNextSequenceStep();
         }
     }
 
-    function handleGamepadDpad(buttonIndex) {
-        const dpadActions = { 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
-        const action = dpadActions[buttonIndex];
-        if (action) {
-            const btn = document.querySelector(`.dpad-btn[data-dpad="${action}"]`);
-            if (btn) btn.click();
-        }
-    }
-    
-    function pollGamepad() {
-        if (gamepadIndex === null) return;
-        const gp = navigator.getGamepads()[gamepadIndex];
-        if (!gp) return;
-
-        let x = gp.axes[0];
-        let y = gp.axes[1];
-
-        if (Math.abs(x) < GAMEPAD_AXIS_THRESHOLD) x = 0;
-        if (Math.abs(y) < GAMEPAD_AXIS_THRESHOLD) y = 0;
-        
-        if (x !== lastGamepadAxes.x || y !== lastGamepadAxes.y) {
-            const now = Date.now();
-            if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) {
-                 sendBleMessage({ type: 'joystick', x: x, y: -y }); 
-                 drawJoystick(x * joystickRadius, y * joystickRadius);
-                 lastJoystickSendTime = now;
+    function executeNextSequenceStep() {
+        const steps = document.querySelectorAll('.sequence-step');
+        if (!isSequenceRunning || currentSequenceStep >= steps.length) {
+            if (isSequenceRunning) { 
+                isSequenceRunning = false;
+                addLogMessage('[UI] Sekwencja ukonczona.', 'info');
             }
+            updateSequenceUI();
+            return;
         }
-        lastGamepadAxes = {x, y};
-
-        gp.buttons.forEach((button, i) => {
-            if (button.pressed && !lastGamepadState[i]) {
-                handleGamepadButtonPress(i);
-                handleGamepadDpad(i);
-            }
-            lastGamepadState[i] = button.pressed;
-        });
+        updateSequenceUI();
+        const stepNode = steps[currentSequenceStep];
+        const type = stepNode.querySelector('.sequence-type').value;
+        const value = parseFloat(stepNode.querySelector('.sequence-value').value);
+        let command = {};
+        switch (type) {
+            case 'move_fwd': command = { type: 'execute_move', distance_cm: value }; break;
+            case 'move_bwd': command = { type: 'execute_move', distance_cm: -value }; break;
+            case 'rotate_r': command = { type: 'execute_rotate', angle_deg: value }; break;
+            case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -value }; break;
+        }
+        addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info');
+        sendBleMessage(command);
     }
 
-    function setupGamepad() {
-        loadGamepadMappings();
-        const modal = document.getElementById('gamepad-mapping-modal');
-        document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => {
-            renderMappingModal();
-            modal.style.display = 'flex';
+    function setupManualTuningControls() {
+        document.querySelectorAll('.manual-tune-row').forEach(row => {
+            const input = row.querySelector('.tune-input');
+            const testBtn = row.querySelector('.test-btn');
+            const stopBtn = row.querySelector('.stop-btn');
+            testBtn.addEventListener('click', () => {
+                sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: parseInt(input.value) });
+            });
+            stopBtn.addEventListener('click', () => {
+                sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: 'fwd', pwm: 0 });
+            });
         });
-        document.getElementById('close-modal-btn').addEventListener('click', () => {
-            modal.style.display = 'none';
+        document.getElementById('manualTuneStopAll').addEventListener('click', () => {
+            sendBleMessage({ type: 'set_direct_motor_control', motor: 'all', pwm: 0 });
         });
-
-        document.getElementById('gamepad-mapping-list').addEventListener('click', (e) => {
-            if (e.target.classList.contains('mapping-button')) {
-                const action = e.target.dataset.action;
-                e.target.textContent = 'Nacisnij...';
-                e.target.disabled = true;
-
-                const listener = (event) => {
-                    const buttonIndex = event.detail;
-                    
-                    // Usun stare mapowanie jesli istnieje
-                    Object.keys(gamepadMappings).forEach(key => {
-                        if (gamepadMappings[key] === action) {
-                            delete gamepadMappings[key];
-                        }
-                    });
-
-                    gamepadMappings[buttonIndex] = action;
-                    saveGamepadMappings();
-                    renderMappingModal();
-                    window.removeEventListener('gamepadbuttonpress', listener);
-                };
-                window.addEventListener('gamepadbuttonpress', listener, { once: true });
-            }
-        });
-
-        let lastGamepadState = [];
-        function gamepadPollingLoop() {
-            if (gamepadIndex !== null) {
-                const gp = navigator.getGamepads()[gamepadIndex];
-                if (gp) {
-                    gp.buttons.forEach((button, i) => {
-                        if (button.pressed && !lastGamepadState[i]) {
-                            window.dispatchEvent(new CustomEvent('gamepadbuttonpress', { detail: i }));
-                        }
-                    });
-                    lastGamepadState = gp.buttons.map(b => b.pressed);
-                    pollGamepad();
-                }
-            }
-            requestAnimationFrame(gamepadPollingLoop);
-        }
-        
-        window.addEventListener("gamepadconnected", (e) => {
-            gamepadIndex = e.gamepad.index;
-            document.getElementById('gamepadStatus').textContent = 'Polaczony';
-            addLogMessage(`[UI] Kontroler podlaczony: ${e.gamepad.id}`, 'info');
-            lastGamepadState = Array(e.gamepad.buttons.length).fill(false);
-        });
-        window.addEventListener("gamepaddisconnected", (e) => {
-            if (gamepadIndex === e.gamepad.index) {
-                gamepadIndex = null;
-                document.getElementById('gamepadStatus').textContent = 'Brak';
-                addLogMessage('[UI] Kontroler odlaczony.', 'warn');
-            }
-        });
-        
-        gamepadPollingLoop();
     }
-    
+
     document.addEventListener('DOMContentLoaded', () => {
-        setupControls();
+        setupEventListeners();
         resizeJoystick();
-        setupChartControls();
-        setupHelpIcons();
-        loadPresets();
+        setupNumericInputs();
         setupGamepad();
-        
-        document.getElementById('applyLqrPresetBtn').addEventListener('click', applyPreset);
-
-        joystickCanvas.addEventListener('mousedown', startJoystickDrag);
-        joystickCanvas.addEventListener('touchstart', startJoystickDrag, { passive: false });
-        document.addEventListener('mousemove', handleJoystickMove);
-        document.addEventListener('touchmove', handleJoystickMove, { passive: false });
-        document.addEventListener('mouseup', endJoystickDrag);
-        document.addEventListener('touchend', endJoystickDrag);
+        populatePresetSelect();
+        setupDpadControls();
+        setupSequenceControls();
+        setupManualTuningControls();
+        setupChartControls(); // [UZUPELNIONY BLOK 4/4] Wywolanie funkcji tworzacej kontrolki wykresu
         
         document.querySelectorAll('.accordion-header').forEach(header => {
             const content = header.nextElementSibling;
@@ -1330,8 +1189,22 @@
                 if(content) content.style.maxHeight = '0px';
             }
         });
+
+        const gamepadPollingLoop = () => {
+            pollGamepad();
+            requestAnimationFrame(gamepadPollingLoop);
+        };
+        gamepadPollingLoop();
+        
+        joystickCanvas.addEventListener('mousedown', startJoystickDrag);
+        joystickCanvas.addEventListener('touchstart', startJoystickDrag, { passive: false });
+        document.addEventListener('mousemove', handleJoystickMove);
+        document.addEventListener('touchmove', handleJoystickMove, { passive: false });
+        document.addEventListener('mouseup', endJoystickDrag);
+        document.addEventListener('touchend', endJoystickDrag);
     });
-    window.onresize = () => { resizeJoystick(); };
+    window.onresize = resizeJoystick;
+
 </script>
 </body>
 </html>
