@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v32.9</title>
+    <title>Robot LQR - Panel Sterowania v31.1</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -123,29 +123,14 @@
             <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">LQR Aktywny</span><label class="switch"><input type="checkbox" id="lqrEnabledSwitch" checked><span class="slider round"></span></label></div>
             
-            <fieldset style="padding: 10px 10px 5px 10px;"><legend>Strojenie Glowne</legend>
+            <fieldset style="padding: 10px 10px 5px 10px;"><legend>Strojenie Joysticka</legend>
                 <div class="setting-container"><label for="joystickOutputScaleInput">Skala Wyjscia (%)</label><div class="numeric-input-wrapper"><button id="joystickOutputScaleMinus">-</button><input type="number" class="config-value" id="joystickOutputScaleInput" min="10" max="100" step="5" value="100"><button id="joystickOutputScalePlus">+</button></div></div>
                 <div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)</label><div class="numeric-input-wrapper"><button id="expoJoystickMinus">-</button><input type="number" class="config-value" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button id="expoJoystickPlus">+</button></div></div>
                 <div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button id="maxSpeedJoystickMinus">-</button><input type="number" class="config-value" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button id="maxSpeedJoystickPlus">+</button></div></div>
                 <div class="setting-container"><label for="joystickAngleSensitivityInput">Czulosc Kata (st.)</label><div class="numeric-input-wrapper"><button id="joystickAngleSensitivityMinus">-</button><input type="number" class="config-value" id="joystickAngleSensitivityInput" min="1" max="30" step="0.5" value="10"><button id="joystickAngleSensitivityPlus">+</button></div></div>
                 <div class="setting-container"><label for="turnFactorInput">Czulosc Skretu (%)</label><div class="numeric-input-wrapper"><button id="turnFactorMinus">-</button><input type="number" class="config-value" id="turnFactorInput" min="0" max="100" step="5" value="25"><button id="turnFactorPlus">+</button></div></div>
-                
-                <hr style="border-color: #4a4f58; margin: 10px 0;">
-                <h5 style="color: #61dafb; margin: 0 0 8px 0; font-size: 1.1em; text-align: left;">Korekty Ruchu</h5>
-                <div class="setting-container"><label for="headingCorrectionFactorInput">Sila Korekty Kursu</label><div class="numeric-input-wrapper"><button id="headingCorrectionFactorMinus">-</button><input type="number" class="config-value" id="headingCorrectionFactorInput" min="0" max="5" step="0.05" value="0.4"><button id="headingCorrectionFactorPlus">+</button></div></div>
-                
-                <div class="setting-container">
-                    <label for="speedToAngleFactorInput">Wsp. Predkosci na Kat<span class="help-icon">?</span></label>
-                    <div class="numeric-input-wrapper">
-                        <button id="speedToAngleFactorMinus">-</button>
-                        <input type="number" class="config-value" id="speedToAngleFactorInput" min="0.001" max="0.1" step="0.001" value="0.01">
-                        <button id="speedToAngleFactorPlus">+</button>
-                    </div>
-                    <div class="help-text"><strong>Wplyw:</strong> Kluczowy parametr dla trybu predkosci. Okresla, jak bardzo robot ma sie pochylac, aby osiagnac zadana predkosc. Wieksza wartosc = wieksza agresywnosc i szybsze przyspieszanie.</div>
-                </div>
-
             </fieldset>
-            
+
             <hr style="border-color: #4a4f58; margin: 15px 0;">
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731;">Mapowanie Przyciskow Gamepada</button>
             <button id="resetZeroBtn" style="margin-top:10px;">Resetuj Osie</button>
@@ -210,37 +195,6 @@
                 </fieldset>
                 
                 <fieldset style="margin-top: 15px;">
-                    <legend>Strojenie Autonomii</legend>
-                    <div class="setting-container">
-                        <label for="positionPGainInput">Agresywnosc Ruchu (P)<span class="help-icon">?</span></label>
-                        <div class="numeric-input-wrapper">
-                            <button id="positionPGainMinus">-</button>
-                            <input type="number" class="config-value" id="positionPGainInput" min="0.001" max="0.1" step="0.001" value="0.005">
-                            <button id="positionPGainPlus">+</button>
-                        </div>
-                        <div class="help-text"><strong>Wplyw:</strong> Sila, z jaka robot wraca do celu. Wieksza wartosc = szybszy, bardziej agresywny ruch. Zbyt duza moze powodowac oscylacje.</div>
-                    </div>
-                    <div class="setting-container">
-                        <label for="positionDGainInput">Hamowanie (D)<span class="help-icon">?</span></label>
-                        <div class="numeric-input-wrapper">
-                            <button id="positionDGainMinus">-</button>
-                            <input type="number" class="config-value" id="positionDGainInput" min="0" max="0.5" step="0.001" value="0.01">
-                            <button id="positionDGainPlus">+</button>
-                        </div>
-                        <div class="help-text"><strong>Wplyw:</strong> Tlumienie ruchu. Wieksza wartosc = robot mocniej hamuje, zblizajac sie do celu, co zapobiega 'przestrzeleniu' pozycji.</div>
-                    </div>
-                    <div class="setting-container">
-                        <label for="rotationPGainInput">Agresywnosc Obrotu<span class="help-icon">?</span></label>
-                        <div class="numeric-input-wrapper">
-                            <button id="rotationPGainMinus">-</button>
-                            <input type="number" class="config-value" id="rotationPGainInput" min="0.1" max="10" step="0.1" value="2.5">
-                            <button id="rotationPGainPlus">+</button>
-                        </div>
-                        <div class="help-text"><strong>Wplyw:</strong> Sila, z jaka robot wykonuje obrot do celu. Wieksza wartosc = szybszy obrot.</div>
-                    </div>
-                </fieldset>
-
-                <fieldset style="margin-top: 15px;">
                     <legend>Diagnostyka</legend>
                      <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Kalibruj MPU (DMP)</button>
                 </fieldset>
@@ -298,26 +252,34 @@
                     </div>
                 </div>
                 
-                <button class="accordion-header" onclick="toggleAccordion(this)">2. Parametry Sprzetowe</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">2. Strojenie Utrzymania Pozycji</button>
                 <div class="accordion-content">
-                    <div class="physics-section">
-                        <h4>Parametry Fizyczne Robota</h4>
-                        <div class="setting-container">
-                            <label for="mBodyInput">Masa korpusu (kg)</label>
-                            <div class="numeric-input-wrapper"><button id="mBodyMinus" disabled>-</button><input type="number" class="config-value" id="mBodyInput" value="0.150" disabled><button id="mBodyPlus" disabled>+</button></div>
+                    <div class="setting-container">
+                        <label for="positionErrorGainInput">Sila Powrotu (P)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper">
+                            <button id="positionErrorGainMinus">-</button>
+                            <input type="number" class="config-value" id="positionErrorGainInput" min="0" max="10" step="0.1" value="2.5">
+                            <button id="positionErrorGainPlus">+</button>
                         </div>
-                        <div class="setting-container">
-                            <label for="mWheelInput">Masa kola (kg)</label>
-                            <div class="numeric-input-wrapper"><button id="mWheelMinus" disabled>-</button><input type="number" class="config-value" id="mWheelInput" value="0.055" disabled><button id="mWheelPlus" disabled>+</button></div>
-                        </div>
-                        <div class="setting-container">
-                            <label for="LInput">Wys. srodka masy (m)</label>
-                            <div class="numeric-input-wrapper"><button id="LMinus" disabled>-</button><input type="number" class="config-value" id="LInput" value="0.087" disabled><button id="LPlus" disabled>+</button></div>
-                        </div>
-                        <div style="background-color: #20232a; padding: 10px; border-radius: 5px; margin-top: 10px; border-left: 4px solid #f7b731; text-align: left;">
-                            <strong>INFO:</strong> Te parametry nie sa uzywane przy obecnym, statycznym modelu LQR wgranym na robota.
-                        </div>
+                        <div class="help-text"><strong>Wplyw:</strong> Sila, z jaka robot wraca do celu. Wieksza wartosc = szybszy, bardziej agresywny ruch. Zbyt duza moze powodowac oscylacje.</div>
                     </div>
+                    <div class="setting-container">
+                        <label for="positionDampingGainInput">Sila Hamowania (D)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper">
+                            <button id="positionDampingGainMinus">-</button>
+                            <input type="number" class="config-value" id="positionDampingGainInput" min="0" max="15" step="0.1" value="0.5">
+                            <button id="positionDampingGainPlus">+</button>
+                        </div>
+                        <div class="help-text"><strong>Wplyw:</strong> Tlumienie ruchu. Wieksza wartosc = robot mocniej hamuje, zblizajac sie do celu, co zapobiega 'przestrzeleniu' pozycji.</div>
+                    </div>
+                     <div class="setting-container">
+                        <label for="headingCorrectionFactorInput">Sila Korekty Kursu</label>
+                        <div class="numeric-input-wrapper"><button id="headingCorrectionFactorMinus">-</button><input type="number" class="config-value" id="headingCorrectionFactorInput" min="0" max="5" step="0.05" value="0.4"><button id="headingCorrectionFactorPlus">+</button></div>
+                    </div>
+                </div>
+                
+                <button class="accordion-header" onclick="toggleAccordion(this)">3. Parametry Sprzetowe</button>
+                <div class="accordion-content">
                     <div class="parameter-group">
                         <h5>Kalibracja Mechaniczna</h5>
                         <div class="setting-container">
@@ -335,7 +297,7 @@
                     </div>
                 </div>
 
-                <button class="accordion-header" onclick="toggleAccordion(this)">3. Kalibracja PWM Silnikow</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">4. Kalibracja PWM Silnikow</button>
                 <div class="accordion-content">
                     <div class="pwm-info">
                         <strong>Info:</strong> Minimalne wartosci PWM to prog, ponizej ktorego silnik nie kreci sie. Ustal je testujac kazdy silnik osobno.
@@ -400,12 +362,13 @@
         'trim_minus': { label: 'Korekta Pionu (-)', elementId: 'trimMinusBtn' },
     };
     
-    // [UZUPELNIONY BLOK 1/4] Definicja zmiennych do wykresu
     const availableTelemetry = {
         'pitch': { label: 'Pitch (Kat)', color: '#61dafb' },
         'target_angle': { label: 'Zadany Kat', color: '#a2f279' },
         'speed': { label: 'Predkosc', color: '#f7b731' },
         'lqr_output': { label: 'LQR Wyjscie', color: '#ff9ff3' },
+        'position_p_out': { label: 'Korekta P (Sila)', color: '#00d2d3' },
+        'position_d_out': { label: 'Korekta D (Hamowanie)', color: '#ff6347' },
     };
 
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -541,7 +504,7 @@
             case 'telemetry':
                 if(data.robot_state) lastKnownRobotState = data.robot_state;
                 updateTelemetryUI(data);
-                updateChart(data); // [UZUPELNIONY BLOK 2/4] Wywolanie funkcji aktualizacji wykresu
+                updateChart(data);
                 checkAndExecuteNextSequenceStep(previousRobotState);
                 break;
             case 'full_config':
@@ -564,11 +527,9 @@
         
         const params = {
             joystickOutputScale: data.joystick_output_scale * 100, expoJoystick: data.expo_joystick * 100, maxSpeedJoystick: data.max_speed_joystick, joystickAngleSensitivity: data.joystick_angle_sensitivity, turnFactor: data.turn_factor * 100,
-            headingCorrectionFactor: data.heading_correction_factor, speedToAngleFactor: data.speed_to_angle_factor,
-            positionPGain: data.position_p_gain, positionDGain: data.position_d_gain, rotationPGain: data.rotation_p_gain,
+            positionErrorGain: data.position_error_gain, positionDampingGain: data.position_d_gain,
             q1Angle: data.q1_angle, q2AngularVel: data.q2_angular_vel, q3Position: data.q3_position, q4Velocity: data.q4_velocity, rControl: data.r_control, lqrOutputScalar: data.lqr_output_scalar,
-            mBody: data.m_body, mWheel: data.m_wheel, L: data.L,
-            wheelDiameterCm: data.wheel_diameter_cm, trackWidthCm: data.track_width_cm, encoderPpr: data.encoder_ppr,
+            wheelDiameterCm: data.wheel_diameter_cm, trackWidthCm: data.track_width_cm, encoderPpr: data.encoder_ppr, headingCorrectionFactor: data.heading_correction_factor,
             minPwmLeftFwd: data.min_pwm_left_fwd, minPwmLeftBwd: data.min_pwm_left_bwd, minPwmRightFwd: data.min_pwm_right_fwd, minPwmRightBwd: data.min_pwm_right_bwd,
         };
 
@@ -602,9 +563,8 @@
         }
     }
 
-    // [UZUPELNIONY BLOK 3/4] Inicjalizacja, aktualizacja i kontrola wykresu
     const telemetryChart = new Chart(document.getElementById('telemetryChart'), {
-        type: 'line', data: { labels: Array(100).fill(''), datasets: [] }, options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { type: 'linear', display: true, position: 'left', ticks: { color: '#61dafb' }, title: { display: true, text: 'Wartosc', color: '#61dafb' } }, y1: { type: 'linear', display: true, position: 'right', ticks: { color: '#a2f279' }, title: { display: true, text: 'Wyjscie LQR / PWM', color: '#a2f279' }, grid: { drawOnChartArea: false }, } }, plugins: { legend: { labels: { color: '#fff' } } } }
+        type: 'line', data: { labels: Array(100).fill(''), datasets: [] }, options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { type: 'linear', display: true, position: 'left', ticks: { color: '#61dafb' }, title: { display: true, text: 'Wartosc', color: '#61dafb' } }, y1: { type: 'linear', display: true, position: 'right', ticks: { color: '#a2f279' }, title: { display: true, text: 'Sila / Wyjscie', color: '#a2f279' }, grid: { drawOnChartArea: false }, } }, plugins: { legend: { labels: { color: '#fff' } } } }
     });
 
     function updateChart(data) {
@@ -642,7 +602,7 @@
                 if (e.target.checked) {
                     const chartData = telemetryChart.data;
                     if (!chartData.datasets.find(ds => ds.label === availableTelemetry[varName].label)) {
-                         const axisId = (varName.includes('output')) ? 'y1' : 'y';
+                         const axisId = (varName.includes('output') || varName.includes('out')) ? 'y1' : 'y';
                          chartData.datasets.push({ label: availableTelemetry[varName].label, data: Array(chartData.labels.length).fill(null), borderColor: availableTelemetry[varName].color, fill: false, tension: 0.1, pointRadius: 0, yAxisID: axisId });
                     }
                 } else {
@@ -809,7 +769,7 @@
         
         const configGroups = {
             'set_joystick_tuning': ['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'],
-            'calibration_update': ['positionPGain', 'positionDGain', 'rotationPGain', 'wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'speedToAngleFactor'],
+            'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'positionErrorGain', 'positionDampingGain'],
             'set_min_pwm': ['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd']
         };
 
@@ -1179,7 +1139,7 @@
         setupDpadControls();
         setupSequenceControls();
         setupManualTuningControls();
-        setupChartControls(); // [UZUPELNIONY BLOK 4/4] Wywolanie funkcji tworzacej kontrolki wykresu
+        setupChartControls();
         
         document.querySelectorAll('.accordion-header').forEach(header => {
             const content = header.nextElementSibling;
