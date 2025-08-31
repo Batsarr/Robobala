@@ -184,15 +184,6 @@
                     <legend>Diagnostyka</legend>
                      <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Kalibruj MPU (DMP)</button>
                      <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
-                     <!-- NOWY ELEMENT INTERFEJSU -->
-                     <div class="control-row" style="margin-top:10px;">
-                        <span class="control-label">Test Diody ESP B</span>
-                        <label class="switch">
-                            <input type="checkbox" id="testEspBlinkSwitch">
-                            <span class="slider round"></span>
-                        </label>
-                    </div>
-                    <!-- KONIEC NOWEGO ELEMENTU -->
                 </fieldset>
             </div>
         </div>
@@ -710,13 +701,15 @@
         }
 
         if (presetData) {
+            // [KRYTYCZNA POPRAWKA] Po ustawieniu wartosci, recznie wywolaj zdarzenie 'change', aby wymusic wyslanie danych
             for (const [key, value] of Object.entries(presetData)) {
                 const input = document.getElementById(key + 'Input');
                 if (input) {
                     input.value = value;
-                    input.dispatchEvent(new Event('change', { bubbles: true })); 
+                    input.dispatchEvent(new Event('change', { bubbles: true })); // To jest kluczowa zmiana
                 }
             }
+            // Sekwencyjne wysylanie nie jest juz potrzebne, bo 'change' event to obsluguje
             addLogMessage('[UI] Zastosowano i wyslano wartosci presetu do robota.', 'info');
         } else {
             addLogMessage(`[UI] Blad: nie znaleziono danych dla presetu '${selectedValue}'.`, 'error');
@@ -787,13 +780,6 @@
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) sendBleMessage({ type: 'load_from_eeprom' }); });
         document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' }));
         document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
-        
-        // NOWA LOGIKA OBSLUGI PRZYCISKU
-        document.getElementById('testEspBlinkSwitch').addEventListener('change', (e) => {
-            addLogMessage(`[UI] Test diody ESP B: ${e.target.checked ? 'WLACZONY' : 'WYLACZONY'}`, 'info');
-            sendBleMessage({ type: 'uart_led_toggle', state: e.target.checked });
-        });
-        // KONIEC NOWEJ LOGIKI
         
         const configGroups = {
             'set_joystick_tuning': ['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'],
@@ -913,15 +899,11 @@
 
     function setupGamepad() {
         loadGamepadMappings();
-        // Sprawdzmy, czy przycisk do otwierania modalu istnieje, bo go nie widac w HTML
-        const openModalBtn = document.getElementById('open-gamepad-modal-btn');
-        if (openModalBtn) {
-            openModalBtn.addEventListener('click', () => {
-                renderMappingModal();
-                modal.style.display = 'flex';
-            });
-        }
         const modal = document.getElementById('gamepad-mapping-modal');
+        document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => {
+            renderMappingModal();
+            modal.style.display = 'flex';
+        });
         document.getElementById('close-modal-btn').addEventListener('click', () => {
             modal.style.display = 'none';
         });
@@ -1046,15 +1028,110 @@
         });
     }
 
-    // Puste funkcje dla sekwencji, poniewaz nie ma ich w HTML
-    function setupSequenceControls() {}
-    function addSequenceStep() {}
-    function runSequence() {}
-    function stopSequenceExecution() {}
-    function clearSequence() {}
-    function updateSequenceUI() {}
-    function checkAndExecuteNextSequenceStep(previousState) {}
-    function executeNextSequenceStep() {}
+    function setupSequenceControls() {
+        document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep);
+        document.getElementById('run-sequence-btn').addEventListener('click', runSequence);
+        document.getElementById('stop-sequence-btn').addEventListener('click', stopSequenceExecution);
+        document.getElementById('clear-sequence-btn').addEventListener('click', clearSequence);
+    }
+
+    function addSequenceStep() {
+        const list = document.getElementById('sequence-list');
+        if (list.children.length >= MAX_SEQUENCE_STEPS) return;
+        const stepDiv = document.createElement('div');
+        stepDiv.className = 'sequence-step';
+        stepDiv.innerHTML = `
+            <select class="sequence-type">
+                <option value="move_fwd">Przod (cm)</option><option value="move_bwd">Tyl (cm)</option>
+                <option value="rotate_r">Obrot Prawo (st.)</option><option value="rotate_l">Obrot Lewo (st.)</option>
+            </select>
+            <input type="number" class="sequence-value" value="10">
+            <button class="remove-step-btn">&times;</button>
+        `;
+        list.appendChild(stepDiv);
+        updateAccordionHeight(list.closest('.accordion-content'));
+        stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => {
+            stepDiv.remove();
+            updateAccordionHeight(list.closest('.accordion-content'));
+        });
+    }
+
+    function runSequence() {
+        if (isSequenceRunning) return;
+        const normalizedState = lastKnownRobotState.includes("BEZCZYN") ? "IDLE" : lastKnownRobotState;
+        if (normalizedState !== 'IDLE' && normalizedState !== 'UTRZYMUJE POZYCJE') {
+            addLogMessage(`[UI] Nie mozna rozpoczac sekwencji. Robot w stanie '${lastKnownRobotState}'.`, 'error');
+            return;
+        }
+        const steps = document.querySelectorAll('.sequence-step');
+        if (steps.length === 0) return;
+        isSequenceRunning = true;
+        currentSequenceStep = 0;
+        updateSequenceUI();
+        addLogMessage(`[UI] Rozpoczeto sekwencje z ${steps.length} krokow.`, 'info');
+        executeNextSequenceStep();
+    }
+    
+    function stopSequenceExecution() {
+        if (!isSequenceRunning) return;
+        isSequenceRunning = false;
+        sendBleMessage({ type: 'command_stop' });
+        updateSequenceUI();
+        addLogMessage('[UI] Sekwencja zatrzymana.', 'warn');
+    }
+
+    function clearSequence() {
+        if (isSequenceRunning) stopSequenceExecution();
+        const list = document.getElementById('sequence-list');
+        list.innerHTML = '';
+        updateAccordionHeight(list.closest('.accordion-content'));
+    }
+    
+    function updateSequenceUI() {
+        document.querySelectorAll('.sequence-step').forEach((step, index) => {
+            step.classList.toggle('executing', isSequenceRunning && index === currentSequenceStep);
+        });
+        document.getElementById('run-sequence-btn').disabled = isSequenceRunning;
+        document.getElementById('add-sequence-step-btn').disabled = isSequenceRunning;
+        document.getElementById('clear-sequence-btn').disabled = isSequenceRunning;
+        document.getElementById('stop-sequence-btn').disabled = !isSequenceRunning;
+    }
+
+    function checkAndExecuteNextSequenceStep(previousState) {
+        if (!isSequenceRunning) return;
+        const isRobotIdle = lastKnownRobotState.includes('BEZCZYN') || lastKnownRobotState.includes('UTRZYMUJE');
+        const wasRobotWorking = previousState.includes('RUCH') || previousState.includes('OBROT');
+        if (isRobotIdle && wasRobotWorking) {
+            addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info');
+            currentSequenceStep++;
+            executeNextSequenceStep();
+        }
+    }
+
+    function executeNextSequenceStep() {
+        const steps = document.querySelectorAll('.sequence-step');
+        if (!isSequenceRunning || currentSequenceStep >= steps.length) {
+            if (isSequenceRunning) { 
+                isSequenceRunning = false;
+                addLogMessage('[UI] Sekwencja ukonczona.', 'info');
+            }
+            updateSequenceUI();
+            return;
+        }
+        updateSequenceUI();
+        const stepNode = steps[currentSequenceStep];
+        const type = stepNode.querySelector('.sequence-type').value;
+        const value = parseFloat(stepNode.querySelector('.sequence-value').value);
+        let command = {};
+        switch (type) {
+            case 'move_fwd': command = { type: 'execute_move', distance_cm: value }; break;
+            case 'move_bwd': command = { type: 'execute_move', distance_cm: -value }; break;
+            case 'rotate_r': command = { type: 'execute_rotate', angle_deg: value }; break;
+            case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -value }; break;
+        }
+        addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info');
+        sendBleMessage(command);
+    }
 
     function setupManualTuningControls() {
         document.querySelectorAll('.manual-tune-row').forEach(row => {
