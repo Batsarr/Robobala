@@ -184,9 +184,15 @@
                     <legend>Diagnostyka</legend>
                      <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Kalibruj MPU (DMP)</button>
                      <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
-                     <!-- ### POCZATEK NOWEGO KODU ### -->
-                     <button id="uartTestBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Testuj Diode UART</button>
-                     <!-- ### KONIEC NOWEGO KODU ### -->
+                     <!-- NOWY ELEMENT INTERFEJSU -->
+                     <div class="control-row" style="margin-top:10px;">
+                        <span class="control-label">Test Diody ESP B</span>
+                        <label class="switch">
+                            <input type="checkbox" id="testEspBlinkSwitch">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <!-- KONIEC NOWEGO ELEMENTU -->
                 </fieldset>
             </div>
         </div>
@@ -704,15 +710,13 @@
         }
 
         if (presetData) {
-            // [KRYTYCZNA POPRAWKA] Po ustawieniu wartosci, recznie wywolaj zdarzenie 'change', aby wymusic wyslanie danych
             for (const [key, value] of Object.entries(presetData)) {
                 const input = document.getElementById(key + 'Input');
                 if (input) {
                     input.value = value;
-                    input.dispatchEvent(new Event('change', { bubbles: true })); // To jest kluczowa zmiana
+                    input.dispatchEvent(new Event('change', { bubbles: true })); 
                 }
             }
-            // Sekwencyjne wysylanie nie jest juz potrzebne, bo 'change' event to obsluguje
             addLogMessage('[UI] Zastosowano i wyslano wartosci presetu do robota.', 'info');
         } else {
             addLogMessage(`[UI] Blad: nie znaleziono danych dla presetu '${selectedValue}'.`, 'error');
@@ -783,26 +787,13 @@
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) sendBleMessage({ type: 'load_from_eeprom' }); });
         document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' }));
         document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
-
-        // ### POCZATEK NOWEGO KODU ###
-        const uartTestBtn = document.getElementById('uartTestBtn');
-        uartTestBtn.dataset.active = 'false'; // Inicjalizacja stanu
-        uartTestBtn.addEventListener('click', () => {
-            const isActive = uartTestBtn.dataset.active === 'true';
-            const newState = !isActive;
-            
-            sendBleMessage({ type: 'uart_led_toggle', state: newState });
-            
-            uartTestBtn.dataset.active = newState.toString();
-            if (newState) {
-                uartTestBtn.textContent = 'ZATRZYMAJ TEST DIODY';
-                uartTestBtn.style.backgroundColor = '#ff6347'; // Czerwony - 'aktywny/stop'
-            } else {
-                uartTestBtn.textContent = 'Testuj Diode UART';
-                uartTestBtn.style.backgroundColor = '#f7b731'; // Zółty - 'start'
-            }
+        
+        // NOWA LOGIKA OBSLUGI PRZYCISKU
+        document.getElementById('testEspBlinkSwitch').addEventListener('change', (e) => {
+            addLogMessage(`[UI] Test diody ESP B: ${e.target.checked ? 'WLACZONY' : 'WYLACZONY'}`, 'info');
+            sendBleMessage({ type: 'uart_led_toggle', state: e.target.checked });
         });
-        // ### KONIEC NOWEGO KODU ###
+        // KONIEC NOWEJ LOGIKI
         
         const configGroups = {
             'set_joystick_tuning': ['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'],
@@ -922,19 +913,18 @@
 
     function setupGamepad() {
         loadGamepadMappings();
-        // Sprawdzamy czy przycisk istnieje, aby uniknac bledu jesli zostanie usuniety
+        // Sprawdzmy, czy przycisk do otwierania modalu istnieje, bo go nie widac w HTML
         const openModalBtn = document.getElementById('open-gamepad-modal-btn');
         if (openModalBtn) {
             openModalBtn.addEventListener('click', () => {
                 renderMappingModal();
-                document.getElementById('gamepad-mapping-modal').style.display = 'flex';
+                modal.style.display = 'flex';
             });
         }
-        
+        const modal = document.getElementById('gamepad-mapping-modal');
         document.getElementById('close-modal-btn').addEventListener('click', () => {
-            document.getElementById('gamepad-mapping-modal').style.display = 'none';
+            modal.style.display = 'none';
         });
-
         document.getElementById('gamepad-mapping-list').addEventListener('click', (e) => {
             if (e.target.classList.contains('mapping-button')) {
                 const action = e.target.dataset.action;
@@ -1056,10 +1046,15 @@
         });
     }
 
-    function setupSequenceControls() {
-        // Ta funkcja jest pusta, poniewaz usunieto sekwencje z HTML, ale zostawiamy ja
-        // dla ewentualnej przyszlej rozbudowy, aby uniknac bledow.
-    }
+    // Puste funkcje dla sekwencji, poniewaz nie ma ich w HTML
+    function setupSequenceControls() {}
+    function addSequenceStep() {}
+    function runSequence() {}
+    function stopSequenceExecution() {}
+    function clearSequence() {}
+    function updateSequenceUI() {}
+    function checkAndExecuteNextSequenceStep(previousState) {}
+    function executeNextSequenceStep() {}
 
     function setupManualTuningControls() {
         document.querySelectorAll('.manual-tune-row').forEach(row => {
