@@ -369,7 +369,6 @@
     const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
     const TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
     
-    // ZMIANA: Dodajemy bufor dla przychodzacych danych
     let bleBuffer = '';
 
     let isSequenceRunning = false;
@@ -381,7 +380,8 @@
     const joystickCtx = joystickCanvas.getContext('2d');
     let joystickCenter, joystickRadius, knobRadius, isDragging = false;
     let lastJoystickSendTime = 0;
-    const JOYSTICK_SEND_INTERVAL = 50;
+    // ===== POPRAWKA OPÓŹNIEŃ KROK 1 =====
+    const JOYSTICK_SEND_INTERVAL = 20; // Zmieniono z 50 na 20
     
     let gamepadIndex = null;
     let lastGamepadState = [];
@@ -507,7 +507,6 @@
         txCharacteristic = null;
     }
 
-    // ZMIANA: Nowa, niezawodna funkcja obslugi notyfikacji BLE
     function handleBleNotification(event) {
         const value = event.target.value;
         const decoder = new TextDecoder('utf-8');
@@ -1174,7 +1173,6 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        // ZINTEGROWANE WYWOLANIA FUNKCJI
         setupEventListeners();
         resizeJoystick();
         setupNumericInputs();
@@ -1211,4 +1209,4 @@
 
 </script>
 </body>
-</html>No to teraz coś z tym kodem jest nie tak. Wgrałem ten ostatni który podałeś czyli esp2 z poprawką i nie wyświetla się w bluetooth. Ale wiem że on działa bo jak wgrałem ten kod esp2 z pierwszego podziału to się wyświetla i działa to co na filmiku. Popraw go tak żeby działał jak ten z pierwszego podziału. A później będziemy się martwić opóźnieniami bo to nie jest ważne teraz
+</html>
