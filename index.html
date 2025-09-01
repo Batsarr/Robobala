@@ -415,7 +415,14 @@
     const joystickCtx = joystickCanvas.getContext('2d');
     let joystickCenter, joystickRadius, knobRadius, isDragging = false;
     let lastJoystickSendTime = 0;
-    const JOYSTICK_SEND_INTERVAL = 20;
+    
+    // =================================================================================
+    // === POPRAWKA OPÓŹNIEŃ I BŁĘDÓW GATT ===
+    // Zwiekszono interwal wysylania danych z joysticka. 20ms (50Hz) to zbyt czesto
+    // dla Web Bluetooth, co powoduje odrzucanie pakietow i lagi. 40ms (25Hz) jest
+    // wartoscia bezpieczna i zapewnia plynne sterowanie bez bledow.
+    // =================================================================================
+    const JOYSTICK_SEND_INTERVAL = 40; 
     
     let gamepadIndex = null;
     let lastGamepadState = [];
