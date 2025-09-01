@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v33.2</title>
+    <title>Robot LQR - Panel Sterowania v34.0 (Zintegrowany)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -96,6 +96,12 @@
         .preset-actions { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 10px; }
         #applySelectedPresetBtn { background-color: #a2f279; }
         #saveCurrentAsPresetBtn { background-color: #61dafb; }
+        /* Style dla GA */
+        #ga-progress-bar-container { width: 100%; background-color: #20232a; border-radius: 5px; overflow: hidden; margin: 10px 0; border: 1px solid #61dafb;}
+        #ga-progress-bar { width: 0%; height: 20px; background-color: #a2f279; transition: width 0.5s ease; }
+        .ga-status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 15px; text-align: left; margin-bottom: 15px; }
+        .ga-status-grid strong { color: #61dafb; }
+        #ga-best-params-display { background-color: #20232a; border-radius: 5px; padding: 10px; font-family: monospace; text-align: left; white-space: pre; font-size: 0.9em; line-height: 1.5; }
     </style>
 </head>
 <body>
@@ -351,6 +357,34 @@
                 <button id="saveBtn">Zapisz na Robocie</button>
             </div>
         </div>
+        
+        <div class="card">
+             <button class="accordion-header" onclick="toggleAccordion(this)">Automatyczne Strojenie LQR (Algorytm Genetyczny)</button>
+             <div class="accordion-content">
+                <fieldset>
+                    <legend>Ustawienia Optymalizacji</legend>
+                    <div class="setting-container"><label for="gaGenerationsInput">Liczba Pokolen</label><input type="number" id="gaGenerationsInput" value="20" min="5" max="100"></div>
+                    <div class="setting-container"><label for="gaPopulationInput">Rozmiar Populacji</label><input type="number" id="gaPopulationInput" value="20" min="10" max="30"></div>
+                    <div class="setting-container"><label for="gaEarlyStopCheckbox">Wczesne zatrzymanie</label><input type="checkbox" id="gaEarlyStopCheckbox" checked></div>
+                    <div class="setting-container" id="gaPatienceContainer"><label for="gaPatienceInput">Zatrzymaj po (pokoleniach)</label><input type="number" id="gaPatienceInput" value="3" min="2" max="10"></div>
+                </fieldset>
+                <div style="display:flex; gap:10px; justify-content:center; margin: 15px 0;">
+                    <button id="startGaBtn" style="background-color: #a2f279;">START OPTYMALIZACJI</button>
+                    <button id="stopGaBtn" style="background-color: #ff6347;" disabled>ZATRZYMAJ</button>
+                </div>
+                 <fieldset>
+                    <legend>Postep</legend>
+                    <div id="ga-progress-bar-container"><div id="ga-progress-bar"></div></div>
+                    <div class="ga-status-grid">
+                        <strong>Pokolenie:</strong> <span id="gaGenerationStatus">-- / --</span>
+                        <strong>Osobnik:</strong> <span id="gaIndividualStatus">-- / --</span>
+                        <strong>Najlepszy Fitness:</strong> <span id="gaBestFitnessStatus">-.----</span>
+                    </div>
+                    <div id="ga-best-params-display">Najlepsze parametry pojawia sie tutaj...</div>
+                </fieldset>
+            </div>
+        </div>
+
         <div class="card">
             <button class="accordion-header active" onclick="toggleAccordion(this)">Logi Systemowe</button>
             <div class="accordion-content active">
@@ -370,6 +404,7 @@
     const TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
     
     let bleBuffer = '';
+    let isGaRunning = false;
 
     let isSequenceRunning = false;
     let currentSequenceStep = 0;
@@ -380,8 +415,7 @@
     const joystickCtx = joystickCanvas.getContext('2d');
     let joystickCenter, joystickRadius, knobRadius, isDragging = false;
     let lastJoystickSendTime = 0;
-    // ===== POPRAWKA OPÓŹNIEŃ KROK 1 =====
-    const JOYSTICK_SEND_INTERVAL = 20; // Zmieniono z 50 na 20
+    const JOYSTICK_SEND_INTERVAL = 20;
     
     let gamepadIndex = null;
     let lastGamepadState = [];
@@ -434,6 +468,7 @@
         let color = '#fff';
         if (level === 'error') color = '#ff6347';
         else if (level === 'warn') color = '#f7b731';
+        else if (level === 'success') color = '#a2f279';
         const logEntry = document.createElement('div');
         logEntry.style.color = color;
         logEntry.textContent = `[${timestamp}] ${message}`;
@@ -484,7 +519,7 @@
             txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification);
             document.getElementById('connectionStatus').className = 'status-indicator status-ok';
             document.getElementById('connectionText').textContent = 'Polaczony';
-            addLogMessage('[UI] Polaczono! Automatyczna synchronizacja za 1s...', 'info');
+            addLogMessage('[UI] Polaczono! Automatyczna synchronizacja za 1s...', 'success');
             setTimeout(() => sendBleMessage({ type: 'request_state' }), 1000);
         } catch (error) {
             addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error');
@@ -505,6 +540,7 @@
         document.getElementById('connectBleBtn').disabled = false;
         rxCharacteristic = null;
         txCharacteristic = null;
+        if(isGaRunning) stopGA(false);
     }
 
     function handleBleNotification(event) {
@@ -555,6 +591,14 @@
                 break;
             case 'memory_info':
                 if (data.free_heap !== undefined) document.getElementById('freeHeapVal').textContent = `${data.free_heap} B`;
+                break;
+            case 'ga_progress':
+                updateGaProgress(data);
+                break;
+            case 'ga_finished':
+                addLogMessage(`Optymalizacja zakonczona! Powod: ${data.reason}`, 'success');
+                stopGA(false);
+                setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 500);
                 break;
         }
     }
@@ -625,6 +669,19 @@
         } else {
             emergencyBanner.style.display = 'none';
         }
+    }
+    
+    function updateGaProgress(data) {
+        const progress = (data.gen - 1) * data.total_ind + data.ind;
+        const total = data.total_gen * data.total_ind;
+        document.getElementById('ga-progress-bar').style.width = `${(progress / total) * 100}%`;
+        document.getElementById('gaGenerationStatus').textContent = `${data.gen} / ${data.total_gen}`;
+        document.getElementById('gaIndividualStatus').textContent = `${data.ind} / ${data.total_ind}`;
+        document.getElementById('gaBestFitnessStatus').textContent = data.best_fit.toFixed(4);
+        
+        const params = data.best_params;
+        const paramsText = ` q1: ${params.q1.toFixed(2)}\n q2: ${params.q2.toFixed(2)}\n q3: ${params.q3.toFixed(2)}\n q4: ${params.q4.toFixed(2)}\n  r: ${params.r.toFixed(4)}\n sc: ${params.scalar.toFixed(2)}`;
+        document.getElementById('ga-best-params-display').textContent = paramsText;
     }
 
     const telemetryChart = new Chart(document.getElementById('telemetryChart'), {
@@ -851,6 +908,42 @@
                 }
             });
         });
+
+        // Event Listeners for Genetic Algorithm
+        document.getElementById('startGaBtn').addEventListener('click', startGA);
+        document.getElementById('stopGaBtn').addEventListener('click', () => stopGA(true));
+        document.getElementById('gaEarlyStopCheckbox').addEventListener('change', (e) => {
+            document.getElementById('gaPatienceContainer').style.display = e.target.checked ? 'grid' : 'none';
+        });
+    }
+
+    function startGA() {
+        if (!bleDevice) { addLogMessage('Polacz z robotem przed rozpoczeciem optymalizacji.', 'warn'); return; }
+        const config = {
+            gens: parseInt(document.getElementById('gaGenerationsInput').value),
+            pop: parseInt(document.getElementById('gaPopulationInput').value),
+            early_stop: document.getElementById('gaEarlyStopCheckbox').checked,
+            patience: parseInt(document.getElementById('gaPatienceInput').value)
+        };
+        sendBleMessage({ type: 'start_ga', config: config });
+        isGaRunning = true;
+        document.getElementById('startGaBtn').disabled = true;
+        document.getElementById('stopGaBtn').disabled = false;
+        document.querySelectorAll('.card:not(:has(#stopGaBtn)) button, .card:not(:has(#stopGaBtn)) input, .card:not(:has(#stopGaBtn)) select').forEach(el => el.disabled = true);
+        addLogMessage('Wysylanie polecenia rozpoczecia optymalizacji...', 'info');
+    }
+
+    function stopGA(sendCmd) {
+        if (sendCmd && isGaRunning) sendBleMessage({ type: 'stop_ga' });
+        isGaRunning = false;
+        document.getElementById('startGaBtn').disabled = false;
+        document.getElementById('stopGaBtn').disabled = true;
+        document.querySelectorAll('button, input, select').forEach(el => el.disabled = false);
+        if(!bleDevice) {
+            document.getElementById('connectBleBtn').disabled = false;
+        } else {
+             document.getElementById('connectBleBtn').disabled = true;
+        }
     }
     
     function flashElement(element) {
@@ -886,7 +979,7 @@
     }
 
     function pollGamepad() {
-        if (gamepadIndex === null) return;
+        if (gamepadIndex === null || isGaRunning) return;
         const gp = navigator.getGamepads()[gamepadIndex];
         if (!gp) return;
 
@@ -1005,7 +1098,7 @@
     }
 
     function handleJoystickMove(e) {
-        if (!isDragging) return;
+        if (!isDragging || isGaRunning) return;
         e.preventDefault();
         const rect = joystickCanvas.getBoundingClientRect();
         const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
