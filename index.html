@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v34.0 (Zintegrowany)</title>
+    <title>Robot LQR - Panel Sterowania v34.1 (Pol-Automatyczny)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -96,17 +96,16 @@
         .preset-actions { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 10px; }
         #applySelectedPresetBtn { background-color: #a2f279; }
         #saveCurrentAsPresetBtn { background-color: #61dafb; }
-        /* Style dla GA */
         #ga-progress-bar-container { width: 100%; background-color: #20232a; border-radius: 5px; overflow: hidden; margin: 10px 0; border: 1px solid #61dafb;}
         #ga-progress-bar { width: 0%; height: 20px; background-color: #a2f279; transition: width 0.5s ease; }
         .ga-status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 15px; text-align: left; margin-bottom: 15px; }
         .ga-status-grid strong { color: #61dafb; }
         #ga-best-params-display { background-color: #20232a; border-radius: 5px; padding: 10px; font-family: monospace; text-align: left; white-space: pre; font-size: 0.9em; line-height: 1.5; }
+        #gaTriggerBtn { width: 100%; margin-top: 15px; padding: 12px; font-size: 1.1em; background-color: #f7b731; }
     </style>
 </head>
 <body>
     <div id="emergency-banner">ZATRZYMANIE AWARYJNE</div>
-
     <div id="gamepad-mapping-modal" class="modal-backdrop">
         <div class="modal-content">
             <h2>Mapowanie Przyciskow Gamepada</h2>
@@ -369,7 +368,7 @@
                     <div class="setting-container" id="gaPatienceContainer"><label for="gaPatienceInput">Zatrzymaj po (pokoleniach)</label><input type="number" id="gaPatienceInput" value="3" min="2" max="10"></div>
                 </fieldset>
                 <div style="display:flex; gap:10px; justify-content:center; margin: 15px 0;">
-                    <button id="startGaBtn" style="background-color: #a2f279;">START OPTYMALIZACJI</button>
+                    <button id="startGaBtn" style="background-color: #a2f279;">START</button>
                     <button id="stopGaBtn" style="background-color: #ff6347;" disabled>ZATRZYMAJ</button>
                 </div>
                  <fieldset>
@@ -381,6 +380,7 @@
                         <strong>Najlepszy Fitness:</strong> <span id="gaBestFitnessStatus">-.----</span>
                     </div>
                     <div id="ga-best-params-display">Najlepsze parametry pojawia sie tutaj...</div>
+                    <button id="gaTriggerBtn" disabled>URUCHOM IMPULS TESTOWY</button>
                 </fieldset>
             </div>
         </div>
@@ -415,14 +415,7 @@
     const joystickCtx = joystickCanvas.getContext('2d');
     let joystickCenter, joystickRadius, knobRadius, isDragging = false;
     let lastJoystickSendTime = 0;
-    
-    // =================================================================================
-    // === POPRAWKA OPÓŹNIEŃ I BŁĘDÓW GATT ===
-    // Zwiekszono interwal wysylania danych z joysticka. 20ms (50Hz) to zbyt czesto
-    // dla Web Bluetooth, co powoduje odrzucanie pakietow i lagi. 40ms (25Hz) jest
-    // wartoscia bezpieczna i zapewnia plynne sterowanie bez bledow.
-    // =================================================================================
-    const JOYSTICK_SEND_INTERVAL = 40; 
+    const JOYSTICK_SEND_INTERVAL = 40;
     
     let gamepadIndex = null;
     let lastGamepadState = [];
@@ -439,6 +432,7 @@
         'reset_zero': { label: 'Resetuj Osie (Pion)', elementId: 'resetZeroBtn' },
         'trim_plus': { label: 'Korekta Pionu (+)', elementId: 'trimPlusBtn' },
         'trim_minus': { label: 'Korekta Pionu (-)', elementId: 'trimMinusBtn' },
+        'ga_trigger_test': { label: 'Wyzwalacz Testu GA', elementId: 'gaTriggerBtn' },
     };
     
     const availableTelemetry = {
@@ -527,7 +521,7 @@
             document.getElementById('connectionStatus').className = 'status-indicator status-ok';
             document.getElementById('connectionText').textContent = 'Polaczony';
             addLogMessage('[UI] Polaczono! Automatyczna synchronizacja za 1s...', 'success');
-            setTimeout(() => sendBleMessage({ type: 'request_state' }), 1000);
+            setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 1000);
         } catch (error) {
             addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error');
             document.getElementById('connectionStatus').className = 'status-indicator status-error';
@@ -596,9 +590,6 @@
             case 'log':
                 addLogMessage(`[ROBOT] ${data.message}`, data.level);
                 break;
-            case 'memory_info':
-                if (data.free_heap !== undefined) document.getElementById('freeHeapVal').textContent = `${data.free_heap} B`;
-                break;
             case 'ga_progress':
                 updateGaProgress(data);
                 break;
@@ -606,6 +597,12 @@
                 addLogMessage(`Optymalizacja zakonczona! Powod: ${data.reason}`, 'success');
                 stopGA(false);
                 setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 500);
+                break;
+            case 'ga_ready_for_trigger':
+                document.getElementById('gaTriggerBtn').disabled = !data.ready;
+                if(data.ready) {
+                     addLogMessage('[UI] Robot gotowy. Ustaw go i uruchom impuls testowy.', 'info');
+                }
                 break;
         }
     }
@@ -726,7 +723,6 @@
             checkbox.checked = (key === 'pitch' || key === 'target_angle');
             checkbox.addEventListener('change', (e) => {
                 const varName = e.target.value;
-                sendBleMessage({ type: e.target.checked ? 'subscribe_variable' : 'unsubscribe_variable', name: varName });
                 if (e.target.checked) {
                     const chartData = telemetryChart.data;
                     if (!chartData.datasets.find(ds => ds.label === availableTelemetry[varName].label)) {
@@ -919,6 +915,10 @@
         // Event Listeners for Genetic Algorithm
         document.getElementById('startGaBtn').addEventListener('click', startGA);
         document.getElementById('stopGaBtn').addEventListener('click', () => stopGA(true));
+        document.getElementById('gaTriggerBtn').addEventListener('click', () => {
+            sendBleMessage({ type: 'ga_trigger_test' });
+            document.getElementById('gaTriggerBtn').disabled = true;
+        });
         document.getElementById('gaEarlyStopCheckbox').addEventListener('change', (e) => {
             document.getElementById('gaPatienceContainer').style.display = e.target.checked ? 'grid' : 'none';
         });
@@ -934,8 +934,8 @@
         };
         sendBleMessage({ type: 'start_ga', config: config });
         isGaRunning = true;
-        document.getElementById('startGaBtn').disabled = true;
         document.getElementById('stopGaBtn').disabled = false;
+        document.querySelectorAll('#gaGenerationsInput, #gaPopulationInput, #gaEarlyStopCheckbox, #gaPatienceInput, #startGaBtn').forEach(el => el.disabled = true);
         document.querySelectorAll('.card:not(:has(#stopGaBtn)) button, .card:not(:has(#stopGaBtn)) input, .card:not(:has(#stopGaBtn)) select').forEach(el => el.disabled = true);
         addLogMessage('Wysylanie polecenia rozpoczecia optymalizacji...', 'info');
     }
@@ -943,8 +943,8 @@
     function stopGA(sendCmd) {
         if (sendCmd && isGaRunning) sendBleMessage({ type: 'stop_ga' });
         isGaRunning = false;
-        document.getElementById('startGaBtn').disabled = false;
         document.getElementById('stopGaBtn').disabled = true;
+        document.getElementById('gaTriggerBtn').disabled = true;
         document.querySelectorAll('button, input, select').forEach(el => el.disabled = false);
         if(!bleDevice) {
             document.getElementById('connectBleBtn').disabled = false;
@@ -1306,7 +1306,6 @@
         document.addEventListener('touchend', endJoystickDrag);
     });
     window.onresize = resizeJoystick;
-
 </script>
 </body>
 </html>
