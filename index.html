@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v34.1 (Pol-Automatyczny)</title>
+    <title>Robot LQR - Panel Sterowania v34.3 (Zoptymalizowany)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -29,7 +29,7 @@
         input:disabled + .slider { background-color: #4a4f58; cursor: not-allowed; }
         fieldset { border: 1px solid #4a4f58; border-radius: 8px; margin-top: 15px; padding: 10px 15px; }
         legend { color: #61dafb; font-weight: bold; padding: 0 10px; font-size: 1.1em; }
-        #joystickWrapper { position: relative; width: 180px; height: 180px; border-radius: 50%; background-color: #4a4f58; border: 3px solid #61dafb; margin: 15px auto; }
+        #joystickWrapper { position: relative; width: 180px; height: 180px; border-radius: 50%; background-color: #4a4f58; border: 3px solid #61dafb; margin: 15px auto; touch-action: none; }
         #joystickCanvas { width: 100%; height: 100%; display: block; }
         #chart-wrapper { position: relative; height: 320px; border-radius: 8px; overflow: hidden; background-color: #20232a; }
         #log-history { text-align: left; height: 350px; overflow-y: auto; background-color: #20232a; padding: 10px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; }
@@ -397,7 +397,7 @@
     </div>
 
 <script>
-    const CUSTOM_PRESET_PREFIX = 'lqr_custom_preset_v33.0_';
+    const CUSTOM_PRESET_PREFIX = 'lqr_custom_preset_v34.1_';
     let bleDevice, rxCharacteristic, txCharacteristic;
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
     const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
@@ -415,13 +415,13 @@
     const joystickCtx = joystickCanvas.getContext('2d');
     let joystickCenter, joystickRadius, knobRadius, isDragging = false;
     let lastJoystickSendTime = 0;
-    const JOYSTICK_SEND_INTERVAL = 40;
+    const JOYSTICK_SEND_INTERVAL = 10;
     
     let gamepadIndex = null;
     let lastGamepadState = [];
     let lastGamepadAxes = { x: 0, y: 0 };
     let gamepadMappings = {};
-    const GAMEPAD_MAPPING_KEY = 'lqr_gamepad_mappings';
+    const GAMEPAD_MAPPING_KEY = 'lqr_gamepad_mappings_v34';
     const GAMEPAD_AXIS_THRESHOLD = 0.15;
     
     const availableActions = {
@@ -479,9 +479,7 @@
         }
     }
     
-    function clearLogs() {
-        document.getElementById('log-history').innerHTML = '';
-    }
+    function clearLogs() { document.getElementById('log-history').innerHTML = ''; }
 
     function toggleAccordion(header) {
         const content = header.nextElementSibling;
@@ -548,31 +546,22 @@
         const value = event.target.value;
         const decoder = new TextDecoder('utf-8');
         const chunk = decoder.decode(value);
-        
         bleBuffer += chunk;
-
         let newlineIndex;
         while ((newlineIndex = bleBuffer.indexOf('\n')) !== -1) {
             const line = bleBuffer.substring(0, newlineIndex).trim();
             bleBuffer = bleBuffer.substring(newlineIndex + 1);
-
             if (line) {
-                try {
-                    const data = JSON.parse(line);
-                    processCompleteMessage(data);
-                } catch (e) {
-                    addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error');
-                }
+                try { const data = JSON.parse(line); processCompleteMessage(data); } 
+                catch (e) { addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error'); }
             }
         }
     }
 
     async function sendBleMessage(message) {
         if (!rxCharacteristic) { return; }
-        try {
-            const encoder = new TextEncoder();
-            await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message)));
-        } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); }
+        try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } 
+        catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); }
     }
 
     function processCompleteMessage(data) {
@@ -580,29 +569,18 @@
         switch (data.type) {
             case 'telemetry':
                 if(data.robot_state) lastKnownRobotState = data.robot_state;
-                updateTelemetryUI(data);
-                updateChart(data);
-                checkAndExecuteNextSequenceStep(previousRobotState);
+                updateTelemetryUI(data); updateChart(data); checkAndExecuteNextSequenceStep(previousRobotState);
                 break;
-            case 'full_config':
-                applyFullConfig(data);
-                break;
-            case 'log':
-                addLogMessage(`[ROBOT] ${data.message}`, data.level);
-                break;
-            case 'ga_progress':
-                updateGaProgress(data);
-                break;
+            case 'full_config': applyFullConfig(data); break;
+            case 'log': addLogMessage(`[ROBOT] ${data.message}`, data.level); break;
+            case 'ga_progress': updateGaProgress(data); break;
             case 'ga_finished':
                 addLogMessage(`Optymalizacja zakonczona! Powod: ${data.reason}`, 'success');
-                stopGA(false);
-                setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 500);
+                stopGA(false); setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 500);
                 break;
             case 'ga_ready_for_trigger':
                 document.getElementById('gaTriggerBtn').disabled = !data.ready;
-                if(data.ready) {
-                     addLogMessage('[UI] Robot gotowy. Ustaw go i uruchom impuls testowy.', 'info');
-                }
+                if(data.ready) { addLogMessage('[UI] Robot gotowy. Ustaw go i uruchom impuls testowy.', 'info'); }
                 break;
         }
     }
@@ -610,45 +588,20 @@
     function applyFullConfig(data) {
         ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'lqrEnabledSwitch'].forEach(id => {
             const el = document.getElementById(id);
-            if (el && data[id.replace('Switch', 'Enabled')] !== undefined) {
-                 el.checked = data[id.replace('Switch', 'Enabled')];
-            }
+            if (el && data[id.replace('Switch', 'Enabled')] !== undefined) { el.checked = data[id.replace('Switch', 'Enabled')]; }
         });
-        
         const params = {
-            joystickOutputScale: data.joystick_output_scale !== undefined ? data.joystick_output_scale * 100 : undefined,
-            expoJoystick: data.expo_joystick !== undefined ? data.expo_joystick * 100 : undefined,
-            maxSpeedJoystick: data.max_speed_joystick,
-            joystickAngleSensitivity: data.joystick_angle_sensitivity,
-            turnFactor: data.turn_factor !== undefined ? data.turn_factor * 100 : undefined,
-            positionErrorGain: data.position_error_gain,
-            positionDampingGain: data.position_d_gain,
-            rotationPGain: data.rotation_p_gain,
-            q1Angle: data.q1_angle,
-            q2AngularVel: data.q2_angular_vel,
-            q3Position: data.q3_position,
-            q4Velocity: data.q4_velocity,
-            rControl: data.r_control,
-            lqrOutputScalar: data.lqr_output_scalar,
-            wheelDiameterCm: data.wheel_diameter_cm,
-            trackWidthCm: data.track_width_cm,
-            encoderPpr: data.encoder_ppr,
-            headingCorrectionFactor: data.heading_correction_factor,
-            minPwmLeftFwd: data.min_pwm_left_fwd,
-            minPwmLeftBwd: data.min_pwm_left_bwd,
-            minPwmRightFwd: data.min_pwm_right_fwd,
-            minPwmRightBwd: data.min_pwm_right_bwd,
-            speedPGain: data.speed_p_gain,
-            maxSpeedFromPos: data.max_speed_from_pos,
-            holdPositionMarginPulses: data.hold_position_margin_pulses,
-            globalPowerLimit: data.global_power_limit !== undefined ? data.global_power_limit * 100 / 1023 : undefined
+            joystickOutputScale: data.joystick_output_scale !== undefined ? data.joystick_output_scale * 100 : undefined, expoJoystick: data.expo_joystick !== undefined ? data.expo_joystick * 100 : undefined,
+            maxSpeedJoystick: data.max_speed_joystick, joystickAngleSensitivity: data.joystick_angle_sensitivity, turnFactor: data.turn_factor !== undefined ? data.turn_factor * 100 : undefined,
+            positionErrorGain: data.position_error_gain, positionDampingGain: data.position_d_gain, rotationPGain: data.rotation_p_gain, q1Angle: data.q1_angle, q2AngularVel: data.q2_angular_vel,
+            q3Position: data.q3_position, q4Velocity: data.q4_velocity, rControl: data.r_control, lqrOutputScalar: data.lqr_output_scalar, wheelDiameterCm: data.wheel_diameter_cm,
+            trackWidthCm: data.track_width_cm, encoderPpr: data.encoder_ppr, headingCorrectionFactor: data.heading_correction_factor, minPwmLeftFwd: data.min_pwm_left_fwd,
+            minPwmLeftBwd: data.min_pwm_left_bwd, minPwmRightFwd: data.min_pwm_right_fwd, minPwmRightBwd: data.min_pwm_right_bwd, speedPGain: data.speed_p_gain,
+            maxSpeedFromPos: data.max_speed_from_pos, holdPositionMarginPulses: data.hold_position_margin_pulses, globalPowerLimit: data.global_power_limit !== undefined ? data.global_power_limit * 100 / 1023 : undefined
         };
-
         for (const [key, value] of Object.entries(params)) {
             const input = document.getElementById(key + 'Input');
-            if (input && value !== undefined) {
-                input.value = value;
-            }
+            if (input && value !== undefined) { input.value = value; }
         }
         addLogMessage("[UI] Parametry robota zsynchronizowane z panelem.", "info");
     }
@@ -663,16 +616,10 @@
         if (data.speed_setpoint !== undefined) document.getElementById('speedSetpointVal').textContent = parseFloat(data.speed_setpoint).toFixed(0);
         if (data.target_angle !== undefined) document.getElementById('targetAngleVal').textContent = parseFloat(data.target_angle).toFixed(1) + ' \u00B0';
         if (data.lqr_output !== undefined) document.getElementById('lqrOutputVal').textContent = parseFloat(data.lqr_output).toFixed(2);
-        if (data.loop_time !== undefined) document.getElementById('loopTimeVal').textContent = data.loop_time + ' \u00B5s';
         if (data.encoder_left !== undefined) document.getElementById('encoderLeftVal').textContent = data.encoder_left;
         if (data.encoder_right !== undefined) document.getElementById('encoderRightVal').textContent = data.encoder_right;
-        
         const emergencyBanner = document.getElementById('emergency-banner');
-        if (data.emergency_stop) {
-            emergencyBanner.style.display = 'block';
-        } else {
-            emergencyBanner.style.display = 'none';
-        }
+        if(emergencyBanner) emergencyBanner.style.display = data.emergency_stop ? 'block' : 'none';
     }
     
     function updateGaProgress(data) {
@@ -682,21 +629,17 @@
         document.getElementById('gaGenerationStatus').textContent = `${data.gen} / ${data.total_gen}`;
         document.getElementById('gaIndividualStatus').textContent = `${data.ind} / ${data.total_ind}`;
         document.getElementById('gaBestFitnessStatus').textContent = data.best_fit.toFixed(4);
-        
         const params = data.best_params;
         const paramsText = ` q1: ${params.q1.toFixed(2)}\n q2: ${params.q2.toFixed(2)}\n q3: ${params.q3.toFixed(2)}\n q4: ${params.q4.toFixed(2)}\n  r: ${params.r.toFixed(4)}\n sc: ${params.scalar.toFixed(2)}`;
         document.getElementById('ga-best-params-display').textContent = paramsText;
     }
 
-    const telemetryChart = new Chart(document.getElementById('telemetryChart'), {
-        type: 'line', data: { labels: Array(100).fill(''), datasets: [] }, options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { type: 'linear', display: true, position: 'left', ticks: { color: '#61dafb' }, title: { display: true, text: 'Wartosc', color: '#61dafb' } }, y1: { type: 'linear', display: true, position: 'right', ticks: { color: '#a2f279' }, title: { display: true, text: 'Sila / Wyjscie', color: '#a2f279' }, grid: { drawOnChartArea: false }, } }, plugins: { legend: { labels: { color: '#fff' } } } }
-    });
+    const telemetryChart = new Chart(document.getElementById('telemetryChart'), { type: 'line', data: { labels: Array(100).fill(''), datasets: [] }, options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { type: 'linear', display: true, position: 'left', ticks: { color: '#61dafb' }, title: { display: true, text: 'Wartosc', color: '#61dafb' } }, y1: { type: 'linear', display: true, position: 'right', ticks: { color: '#a2f279' }, title: { display: true, text: 'Sila / Wyjscie', color: '#a2f279' }, grid: { drawOnChartArea: false }, } }, plugins: { legend: { labels: { color: '#fff' } } } } });
 
     function updateChart(data) {
         const chartData = telemetryChart.data;
         if (chartData.labels.length >= 100) chartData.labels.shift();
         chartData.labels.push('');
-        
         for (const [key, value] of Object.entries(data)) {
             if (availableTelemetry[key] && value !== undefined) {
                 let dataset = chartData.datasets.find(ds => ds.label === availableTelemetry[key].label);
@@ -705,12 +648,7 @@
                 dataset.data.push(value);
             }
         }
-        chartData.datasets.forEach(ds => {
-            if (ds.data.length < chartData.labels.length) {
-                if (ds.data.length >= 100) ds.data.shift();
-                ds.data.push(null);
-            }
-        });
+        chartData.datasets.forEach(ds => { if (ds.data.length < chartData.labels.length) { if (ds.data.length >= 100) ds.data.shift(); ds.data.push(null); } });
         telemetryChart.update('none');
     }
     
@@ -719,8 +657,7 @@
         container.innerHTML = '';
         Object.keys(availableTelemetry).forEach((key) => {
             const label = document.createElement('label'), checkbox = document.createElement('input');
-            checkbox.type = 'checkbox'; checkbox.value = key;
-            checkbox.checked = (key === 'pitch' || key === 'target_angle');
+            checkbox.type = 'checkbox'; checkbox.value = key; checkbox.checked = (key === 'pitch' || key === 'target_angle');
             checkbox.addEventListener('change', (e) => {
                 const varName = e.target.value;
                 if (e.target.checked) {
@@ -732,128 +669,23 @@
                 } else {
                     const chartData = telemetryChart.data;
                     const datasetIndex = chartData.datasets.findIndex(ds => ds.label === availableTelemetry[varName].label);
-                    if (datasetIndex > -1) { 
-                        chartData.datasets.splice(datasetIndex, 1);
-                    }
+                    if (datasetIndex > -1) { chartData.datasets.splice(datasetIndex, 1); }
                 }
                 telemetryChart.update();
             });
-            label.appendChild(checkbox);
-            label.append(` ${availableTelemetry[key].label}`);
-            container.appendChild(label);
-            
-            if (checkbox.checked) {
-                checkbox.dispatchEvent(new Event('change'));
-            }
+            label.appendChild(checkbox); label.append(` ${availableTelemetry[key].label}`); container.appendChild(label);
+            if (checkbox.checked) { checkbox.dispatchEvent(new Event('change')); }
         });
     }
 
-    function populatePresetSelect() {
-        const select = document.getElementById('lqrPresetSelect');
-        select.innerHTML = '';
-        
-        for (const [index, preset] of Object.entries(builtInPresetsData)) {
-            const option = document.createElement('option');
-            option.value = index;
-            option.textContent = preset.name;
-            select.appendChild(option);
-        }
-
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key.startsWith(CUSTOM_PRESET_PREFIX)) {
-                const presetName = key.substring(CUSTOM_PRESET_PREFIX.length);
-                const option = document.createElement('option');
-                option.value = key;
-                option.textContent = `Wlasny: ${presetName}`;
-                select.appendChild(option);
-            }
-        }
-    }
-
-    async function applySelectedPreset() {
-        const select = document.getElementById('lqrPresetSelect');
-        const selectedValue = select.value;
-        let presetData;
-
-        if (selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) {
-            presetData = JSON.parse(localStorage.getItem(selectedValue));
-            if(presetData) addLogMessage(`[UI] Ladowanie wlasnego presetu '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'.`, 'info');
-        } else {
-            presetData = builtInPresetsData[selectedValue]?.params;
-            if(presetData) addLogMessage(`[UI] Ladowanie wbudowanego presetu '${builtInPresetsData[selectedValue].name}'.`, 'info');
-        }
-
-        if (presetData) {
-            for (const [key, value] of Object.entries(presetData)) {
-                const input = document.getElementById(key + 'Input');
-                if (input) {
-                    input.value = value;
-                    input.dispatchEvent(new Event('change', { bubbles: true })); 
-                }
-            }
-            addLogMessage('[UI] Zastosowano i wyslano wartosci presetu do robota.', 'info');
-        } else {
-            addLogMessage(`[UI] Blad: nie znaleziono danych dla presetu '${selectedValue}'.`, 'error');
-        }
-    }
-
-    function saveCurrentAsPreset() {
-        const presetName = prompt("Podaj nazwe dla nowego presetu:", "");
-        if (presetName && presetName.trim() !== "") {
-            const presetData = {};
-            const keysToSave = ['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'];
-            keysToSave.forEach(key => {
-                const input = document.getElementById(key + 'Input');
-                if(input) presetData[key] = parseFloat(input.value);
-            });
-            localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData));
-            addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'info');
-            populatePresetSelect();
-        } else {
-            addLogMessage('[UI] Anulowano zapisywanie presetu.', 'warn');
-        }
-    }
-
-    function setupNumericInputs() {
-        document.querySelectorAll('.setting-container').forEach(container => {
-            const input = container.querySelector('input[type=number]');
-            const minusBtn = container.querySelector('.numeric-input-wrapper button:first-child');
-            const plusBtn = container.querySelector('.numeric-input-wrapper button:last-child');
-            if (!input || !minusBtn || !plusBtn || input.disabled) return;
-
-            const step = parseFloat(input.step) || 1;
-            const isFloat = input.step.includes('.');
-            
-            const updateValue = (amount) => {
-                let current = parseFloat(input.value);
-                let newValue = current + amount;
-                if (isFloat) {
-                    const dp = (step.toString().split('.')[1] || '').length;
-                    newValue = parseFloat(newValue.toFixed(dp));
-                }
-                input.value = Math.max(parseFloat(input.min), Math.min(parseFloat(input.max), newValue));
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-            };
-            minusBtn.addEventListener('click', () => updateValue(-step));
-            plusBtn.addEventListener('click', () => updateValue(step));
-        });
-    }
-
-    const debouncedSenders = {};
+    function populatePresetSelect() { const select = document.getElementById('lqrPresetSelect'); select.innerHTML = ''; for (const [index, preset] of Object.entries(builtInPresetsData)) { const option = document.createElement('option'); option.value = index; option.textContent = preset.name; select.appendChild(option); } for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key.startsWith(CUSTOM_PRESET_PREFIX)) { const presetName = key.substring(CUSTOM_PRESET_PREFIX.length); const option = document.createElement('option'); option.value = key; option.textContent = `Wlasny: ${presetName}`; select.appendChild(option); } } }
+    async function applySelectedPreset() { const select = document.getElementById('lqrPresetSelect'); const selectedValue = select.value; let presetData; if (selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { presetData = JSON.parse(localStorage.getItem(selectedValue)); if(presetData) addLogMessage(`[UI] Ladowanie wlasnego presetu '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'.`, 'info'); } else { presetData = builtInPresetsData[selectedValue]?.params; if(presetData) addLogMessage(`[UI] Ladowanie wbudowanego presetu '${builtInPresetsData[selectedValue].name}'.`, 'info'); } if (presetData) { for (const [key, value] of Object.entries(presetData)) { const input = document.getElementById(key + 'Input'); if (input) { input.value = value; input.dispatchEvent(new Event('change', { bubbles: true })); } } addLogMessage('[UI] Zastosowano i wyslano wartosci presetu do robota.', 'info'); } else { addLogMessage(`[UI] Blad: nie znaleziono danych dla presetu '${selectedValue}'.`, 'error'); } }
+    function saveCurrentAsPreset() { const presetName = prompt("Podaj nazwe dla nowego presetu:", ""); if (presetName && presetName.trim() !== "") { const presetData = {}; const keysToSave = ['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar']; keysToSave.forEach(key => { const input = document.getElementById(key + 'Input'); if(input) presetData[key] = parseFloat(input.value); }); localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData)); addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'info'); populatePresetSelect(); } else { addLogMessage('[UI] Anulowano zapisywanie presetu.', 'warn'); } }
+    function setupNumericInputs() { document.querySelectorAll('.setting-container').forEach(container => { const input = container.querySelector('input[type=number]'); const minusBtn = container.querySelector('.numeric-input-wrapper button:first-child'); const plusBtn = container.querySelector('.numeric-input-wrapper button:last-child'); if (!input || !minusBtn || !plusBtn || input.disabled) return; const step = parseFloat(input.step) || 1; const isFloat = input.step.includes('.'); const updateValue = (amount) => { let current = parseFloat(input.value); let newValue = current + amount; if (isFloat) { const dp = (step.toString().split('.')[1] || '').length; newValue = parseFloat(newValue.toFixed(dp)); } input.value = Math.max(parseFloat(input.min), Math.min(parseFloat(input.max), newValue)); input.dispatchEvent(new Event('change', { bubbles: true })); }; minusBtn.addEventListener('click', () => updateValue(-step)); plusBtn.addEventListener('click', () => updateValue(step)); }); }
+    
     function setupEventListeners() {
         document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
-        
-        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'lqrEnabledSwitch'].forEach(id => {
-            document.getElementById(id).addEventListener('change', (e) => {
-                const typeMap = {
-                    'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 
-                    'speedModeSwitch': 'speed_mode_toggle', 'lqrEnabledSwitch': 'lqr_enabled_toggle'
-                };
-                sendBleMessage({ type: typeMap[id], enabled: e.target.checked });
-            });
-        });
-
+        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'lqrEnabledSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle', 'lqrEnabledSwitch': 'lqr_enabled_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
         document.getElementById('resetZeroBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_zero' }));
         document.getElementById('trimPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 1 }));
         document.getElementById('trimMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -1 }));
@@ -864,14 +696,12 @@
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) sendBleMessage({ type: 'load_from_eeprom' }); });
         document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' }));
         document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
-        
         const configGroups = {
             'set_joystick_tuning': ['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'],
             'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'positionErrorGain', 'positionDampingGain', 'rotationPGain', 'speedPGain', 'maxSpeedFromPos', 'holdPositionMarginPulses', 'globalPowerLimit'],
             'set_min_pwm': ['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'],
             'lqr_update': ['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar']
         };
-
         for (const [type, keys] of Object.entries(configGroups)) {
             debouncedSenders[type] = debounce(() => {
                 const params = {};
@@ -881,57 +711,28 @@
                         let value = parseFloat(input.value);
                         if (key === 'turnFactor' || key === 'joystickOutputScale' || key === 'expoJoystick') value /= 100;
                         if (key === 'globalPowerLimit') value = Math.round(value * 1023 / 100);
-
                         let snakeKey = key.replace(/([A-Z])/g, "_$1").toLowerCase();
                         if(key === 'maxSpeedFromPos') { snakeKey = 'max_speed_from_pos'; }
+                        if(key === 'positionDampingGain') { snakeKey = 'position_d_gain'; }
                         params[snakeKey] = value;
                     }
                 });
                 sendBleMessage({ type, params });
             }, 300);
-
-            keys.forEach(key => {
-                const input = document.getElementById(key + 'Input');
-                if(input) input.addEventListener('change', debouncedSenders[type]);
-            });
+            keys.forEach(key => { const input = document.getElementById(key + 'Input'); if(input) input.addEventListener('change', debouncedSenders[type]); });
         }
-
         document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset);
         document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset);
-        
-        document.querySelectorAll('.help-icon').forEach(icon => {
-            icon.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const container = icon.closest('.setting-container');
-                const helpText = container.querySelector('.help-text');
-                if (helpText) {
-                    helpText.classList.toggle('visible');
-                    const accordionContent = container.closest('.accordion-content');
-                    if (accordionContent) updateAccordionHeight(accordionContent);
-                }
-            });
-        });
-
-        // Event Listeners for Genetic Algorithm
+        document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); });
         document.getElementById('startGaBtn').addEventListener('click', startGA);
         document.getElementById('stopGaBtn').addEventListener('click', () => stopGA(true));
-        document.getElementById('gaTriggerBtn').addEventListener('click', () => {
-            sendBleMessage({ type: 'ga_trigger_test' });
-            document.getElementById('gaTriggerBtn').disabled = true;
-        });
-        document.getElementById('gaEarlyStopCheckbox').addEventListener('change', (e) => {
-            document.getElementById('gaPatienceContainer').style.display = e.target.checked ? 'grid' : 'none';
-        });
+        document.getElementById('gaTriggerBtn').addEventListener('click', () => { sendBleMessage({ type: 'ga_trigger_test' }); document.getElementById('gaTriggerBtn').disabled = true; });
+        document.getElementById('gaEarlyStopCheckbox').addEventListener('change', (e) => { document.getElementById('gaPatienceContainer').style.display = e.target.checked ? 'grid' : 'none'; });
     }
 
     function startGA() {
         if (!bleDevice) { addLogMessage('Polacz z robotem przed rozpoczeciem optymalizacji.', 'warn'); return; }
-        const config = {
-            gens: parseInt(document.getElementById('gaGenerationsInput').value),
-            pop: parseInt(document.getElementById('gaPopulationInput').value),
-            early_stop: document.getElementById('gaEarlyStopCheckbox').checked,
-            patience: parseInt(document.getElementById('gaPatienceInput').value)
-        };
+        const config = { gens: parseInt(document.getElementById('gaGenerationsInput').value), pop: parseInt(document.getElementById('gaPopulationInput').value), early_stop: document.getElementById('gaEarlyStopCheckbox').checked, patience: parseInt(document.getElementById('gaPatienceInput').value) };
         sendBleMessage({ type: 'start_ga', config: config });
         isGaRunning = true;
         document.getElementById('stopGaBtn').disabled = false;
@@ -946,332 +747,31 @@
         document.getElementById('stopGaBtn').disabled = true;
         document.getElementById('gaTriggerBtn').disabled = true;
         document.querySelectorAll('button, input, select').forEach(el => el.disabled = false);
-        if(!bleDevice) {
-            document.getElementById('connectBleBtn').disabled = false;
-        } else {
-             document.getElementById('connectBleBtn').disabled = true;
-        }
+        if(!bleDevice) { document.getElementById('connectBleBtn').disabled = false; } 
+        else { document.getElementById('connectBleBtn').disabled = true; }
     }
     
-    function flashElement(element) {
-        if (!element) return;
-        const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element;
-        target.classList.add('gamepad-flash');
-        setTimeout(() => target.classList.remove('gamepad-flash'), 300);
-    }
-
-    function loadGamepadMappings() {
-        const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY);
-        gamepadMappings = saved ? JSON.parse(saved) : {};
-    }
-
-    function saveGamepadMappings() {
-        localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings));
-    }
-
-    function renderMappingModal() {
-        const list = document.getElementById('gamepad-mapping-list');
-        list.innerHTML = '';
-        for (const [action, config] of Object.entries(availableActions)) {
-            const row = document.createElement('div');
-            row.className = 'mapping-row';
-            const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action);
-            row.innerHTML = `
-                <span class="mapping-label">${config.label}</span>
-                <span class="mapping-display">${buttonIndex ? `Przycisk ${buttonIndex}` : 'Brak'}</span>
-                <button class="mapping-button" data-action="${action}">Przypisz</button>
-            `;
-            list.appendChild(row);
-        }
-    }
-
-    function pollGamepad() {
-        if (gamepadIndex === null || isGaRunning) return;
-        const gp = navigator.getGamepads()[gamepadIndex];
-        if (!gp) return;
-
-        let x = gp.axes[0], y = gp.axes[1];
-        if (Math.abs(x) < GAMEPAD_AXIS_THRESHOLD) x = 0;
-        if (Math.abs(y) < GAMEPAD_AXIS_THRESHOLD) y = 0;
-        if (x !== lastGamepadAxes.x || y !== lastGamepadAxes.y) {
-            if (Date.now() - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) {
-                sendBleMessage({ type: 'joystick', x: x, y: -y });
-                drawJoystick(x * joystickRadius, y * joystickRadius);
-                lastJoystickSendTime = Date.now();
-            }
-        }
-        lastGamepadAxes = { x, y };
-
-        gp.buttons.forEach((button, i) => {
-            if (button.pressed && !lastGamepadState[i]) {
-                const action = gamepadMappings[i];
-                if (action && availableActions[action]) {
-                    const config = availableActions[action];
-                    const element = document.getElementById(config.elementId);
-                    if (element) {
-                        element.click();
-                        flashElement(element);
-                        addLogMessage(`[Gamepad] Akcja: ${config.label}`, 'info');
-                    }
-                }
-            }
-            lastGamepadState[i] = button.pressed;
-        });
-    }
-
-    function setupGamepad() {
-        loadGamepadMappings();
-        const modal = document.getElementById('gamepad-mapping-modal');
-        document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => {
-            renderMappingModal();
-            modal.style.display = 'flex';
-        });
-        document.getElementById('close-modal-btn').addEventListener('click', () => {
-            modal.style.display = 'none';
-        });
-        document.getElementById('gamepad-mapping-list').addEventListener('click', (e) => {
-            if (e.target.classList.contains('mapping-button')) {
-                const action = e.target.dataset.action;
-                e.target.textContent = 'Nacisnij...';
-                e.target.disabled = true;
-
-                const listener = (event) => {
-                    const buttonIndex = event.detail;
-                    Object.keys(gamepadMappings).forEach(key => {
-                        if (gamepadMappings[key] === action) delete gamepadMappings[key];
-                    });
-                    gamepadMappings[buttonIndex] = action;
-                    saveGamepadMappings();
-                    renderMappingModal();
-                    window.removeEventListener('gamepadbuttonpress', listener);
-                };
-                window.addEventListener('gamepadbuttonpress', listener, { once: true });
-            }
-        });
-        
-        let lastGpStateForEvent = [];
-        const gamepadEventLoop = () => {
-            if(gamepadIndex !== null){
-                const gp = navigator.getGamepads()[gamepadIndex];
-                if (gp) {
-                    gp.buttons.forEach((button, i) => {
-                        if(button.pressed && !lastGpStateForEvent[i]){
-                            window.dispatchEvent(new CustomEvent('gamepadbuttonpress', { detail: i }));
-                        }
-                    });
-                    lastGpStateForEvent = gp.buttons.map(b => b.pressed);
-                }
-            }
-            requestAnimationFrame(gamepadEventLoop);
-        };
-
-        window.addEventListener("gamepadconnected", (e) => {
-            gamepadIndex = e.gamepad.index;
-            document.getElementById('gamepadStatus').textContent = 'Polaczony';
-            addLogMessage(`[UI] Kontroler podlaczony: ${e.gamepad.id}`, 'info');
-            lastGamepadState = Array(e.gamepad.buttons.length).fill(false);
-            lastGpStateForEvent = Array(e.gamepad.buttons.length).fill(false);
-        });
-        window.addEventListener("gamepaddisconnected", (e) => {
-            if (gamepadIndex === e.gamepad.index) {
-                gamepadIndex = null;
-                document.getElementById('gamepadStatus').textContent = 'Brak';
-                addLogMessage('[UI] Kontroler odlaczony.', 'warn');
-            }
-        });
-        gamepadEventLoop();
-    }
-    
-    function resizeJoystick() {
-        const wrapper = document.getElementById('joystickWrapper');
-        joystickCanvas.width = wrapper.offsetWidth;
-        joystickCanvas.height = wrapper.offsetHeight;
-        joystickCenter = { x: joystickCanvas.width / 2, y: joystickCanvas.height / 2 };
-        joystickRadius = Math.min(joystickCanvas.width, joystickCanvas.height) / 2 * 0.9;
-        knobRadius = joystickRadius / 3;
-        drawJoystick(0, 0);
-    }
-
-    function drawJoystick(x, y) {
-        joystickCtx.clearRect(0, 0, joystickCanvas.width, joystickCanvas.height);
-        joystickCtx.beginPath();
-        joystickCtx.arc(joystickCenter.x, joystickCenter.y, joystickRadius, 0, Math.PI * 2);
-        joystickCtx.fillStyle = '#4a4f58';
-        joystickCtx.fill();
-        joystickCtx.beginPath();
-        joystickCtx.arc(joystickCenter.x + x, joystickCenter.y + y, knobRadius, 0, Math.PI * 2);
-        joystickCtx.fillStyle = '#a2f279';
-        joystickCtx.fill();
-    }
-
-    function handleJoystickMove(e) {
-        if (!isDragging || isGaRunning) return;
-        e.preventDefault();
-        const rect = joystickCanvas.getBoundingClientRect();
-        const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
-        const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
-        const x = clientX - rect.left - joystickCenter.x;
-        const y = clientY - rect.top - joystickCenter.y;
-        const distance = Math.sqrt(x * x + y * y);
-        let finalX = x, finalY = y;
-        if (distance > joystickRadius) {
-            const angle = Math.atan2(y, x);
-            finalX = joystickRadius * Math.cos(angle);
-            finalY = joystickRadius * Math.sin(angle);
-        }
-        drawJoystick(finalX, finalY);
-        const now = Date.now();
-        if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) {
-            sendBleMessage({ type: 'joystick', x: finalX / joystickRadius, y: -finalY / joystickRadius });
-            lastJoystickSendTime = now;
-        }
-    }
-
+    function flashElement(element) { if (!element) return; const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element; target.classList.add('gamepad-flash'); setTimeout(() => target.classList.remove('gamepad-flash'), 300); }
+    function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
+    function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
+    function renderMappingModal() { const list = document.getElementById('gamepad-mapping-list'); list.innerHTML = ''; for (const [action, config] of Object.entries(availableActions)) { const row = document.createElement('div'); row.className = 'mapping-row'; const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action); row.innerHTML = ` <span class="mapping-label">${config.label}</span> <span class="mapping-display">${buttonIndex ? `Przycisk ${buttonIndex}` : 'Brak'}</span> <button class="mapping-button" data-action="${action}">Przypisz</button> `; list.appendChild(row); } }
+    function pollGamepad() { if (gamepadIndex === null || isGaRunning) return; const gp = navigator.getGamepads()[gamepadIndex]; if (!gp) return; let x = gp.axes[0], y = gp.axes[1]; if (Math.abs(x) < GAMEPAD_AXIS_THRESHOLD) x = 0; if (Math.abs(y) < GAMEPAD_AXIS_THRESHOLD) y = 0; if (x !== lastGamepadAxes.x || y !== lastGamepadAxes.y) { if (Date.now() - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) { sendBleMessage({ type: 'joystick', x: x, y: -y }); drawJoystick(x * joystickRadius, y * joystickRadius); lastJoystickSendTime = Date.now(); } } lastGamepadAxes = { x, y }; gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { const action = gamepadMappings[i]; if (action && availableActions[action]) { const config = availableActions[action]; const element = document.getElementById(config.elementId); if (element) { element.click(); flashElement(element); addLogMessage(`[Gamepad] Akcja: ${config.label}`, 'info'); } } } lastGamepadState[i] = button.pressed; }); }
+    function setupGamepad() { loadGamepadMappings(); const modal = document.getElementById('gamepad-mapping-modal'); document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { renderMappingModal(); modal.style.display = 'flex'; }); document.getElementById('close-modal-btn').addEventListener('click', () => { modal.style.display = 'none'; }); document.getElementById('gamepad-mapping-list').addEventListener('click', (e) => { if (e.target.classList.contains('mapping-button')) { const action = e.target.dataset.action; e.target.textContent = 'Nacisnij...'; e.target.disabled = true; const listener = (event) => { const buttonIndex = event.detail; Object.keys(gamepadMappings).forEach(key => { if (gamepadMappings[key] === action) delete gamepadMappings[key]; }); gamepadMappings[buttonIndex] = action; saveGamepadMappings(); renderMappingModal(); window.removeEventListener('gamepadbuttonpress', listener); }; window.addEventListener('gamepadbuttonpress', listener, { once: true }); } }); let lastGpStateForEvent = []; const gamepadEventLoop = () => { if(gamepadIndex !== null){ const gp = navigator.getGamepads()[gamepadIndex]; if (gp) { gp.buttons.forEach((button, i) => { if(button.pressed && !lastGpStateForEvent[i]){ window.dispatchEvent(new CustomEvent('gamepadbuttonpress', { detail: i })); } }); lastGpStateForEvent = gp.buttons.map(b => b.pressed); } } requestAnimationFrame(gamepadEventLoop); }; window.addEventListener("gamepadconnected", (e) => { gamepadIndex = e.gamepad.index; document.getElementById('gamepadStatus').textContent = 'Polaczony'; addLogMessage(`[UI] Kontroler podlaczony: ${e.gamepad.id}`, 'info'); lastGamepadState = Array(e.gamepad.buttons.length).fill(false); lastGpStateForEvent = Array(e.gamepad.buttons.length).fill(false); }); window.addEventListener("gamepaddisconnected", (e) => { if (gamepadIndex === e.gamepad.index) { gamepadIndex = null; document.getElementById('gamepadStatus').textContent = 'Brak'; addLogMessage('[UI] Kontroler odlaczony.', 'warn'); } }); gamepadEventLoop(); }
+    function resizeJoystick() { const wrapper = document.getElementById('joystickWrapper'); joystickCanvas.width = wrapper.offsetWidth; joystickCanvas.height = wrapper.offsetHeight; joystickCenter = { x: joystickCanvas.width / 2, y: joystickCanvas.height / 2 }; joystickRadius = Math.min(joystickCanvas.width, joystickCanvas.height) / 2 * 0.9; knobRadius = joystickRadius / 3; drawJoystick(0, 0); }
+    function drawJoystick(x, y) { joystickCtx.clearRect(0, 0, joystickCanvas.width, joystickCanvas.height); joystickCtx.beginPath(); joystickCtx.arc(joystickCenter.x, joystickCenter.y, joystickRadius, 0, Math.PI * 2); joystickCtx.fillStyle = '#4a4f58'; joystickCtx.fill(); joystickCtx.beginPath(); joystickCtx.arc(joystickCenter.x + x, joystickCenter.y + y, knobRadius, 0, Math.PI * 2); joystickCtx.fillStyle = '#a2f279'; joystickCtx.fill(); }
+    function handleJoystickMove(e) { if (!isDragging || isGaRunning) return; e.preventDefault(); const rect = joystickCanvas.getBoundingClientRect(); const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0); const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0); const x = clientX - rect.left - joystickCenter.x; const y = clientY - rect.top - joystickCenter.y; const distance = Math.sqrt(x * x + y * y); let finalX = x, finalY = y; if (distance > joystickRadius) { const angle = Math.atan2(y, x); finalX = joystickRadius * Math.cos(angle); finalY = joystickRadius * Math.sin(angle); } drawJoystick(finalX, finalY); const now = Date.now(); if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) { sendBleMessage({ type: 'joystick', x: finalX / joystickRadius, y: -finalY / joystickRadius }); lastJoystickSendTime = now; } }
     function startJoystickDrag(e) { isDragging = true; handleJoystickMove(e); }
-
-    function endJoystickDrag(e) {
-        if (!isDragging) return;
-        isDragging = false;
-        drawJoystick(0, 0);
-        sendBleMessage({ type: 'joystick', x: 0, y: 0 });
-        lastJoystickSendTime = 0;
-    }
-
-    function setupDpadControls() {
-        document.querySelectorAll('.dpad-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const action = e.currentTarget.dataset.dpad;
-                if (action === 'up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) });
-                else if (action === 'down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) });
-                else if (action === 'left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) });
-                else if (action === 'right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) });
-                else if (action === 'stop') sendBleMessage({ type: 'command_stop' });
-            });
-        });
-    }
-
-    function setupSequenceControls() {
-        document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep);
-        document.getElementById('run-sequence-btn').addEventListener('click', runSequence);
-        document.getElementById('stop-sequence-btn').addEventListener('click', stopSequenceExecution);
-        document.getElementById('clear-sequence-btn').addEventListener('click', clearSequence);
-    }
-
-    function addSequenceStep() {
-        const list = document.getElementById('sequence-list');
-        if (list.children.length >= MAX_SEQUENCE_STEPS) return;
-        const stepDiv = document.createElement('div');
-        stepDiv.className = 'sequence-step';
-        stepDiv.innerHTML = `
-            <select class="sequence-type">
-                <option value="move_fwd">Przod (cm)</option><option value="move_bwd">Tyl (cm)</option>
-                <option value="rotate_r">Obrot Prawo (st.)</option><option value="rotate_l">Obrot Lewo (st.)</option>
-            </select>
-            <input type="number" class="sequence-value" value="10">
-            <button class="remove-step-btn">&times;</button>
-        `;
-        list.appendChild(stepDiv);
-        updateAccordionHeight(list.closest('.accordion-content'));
-        stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => {
-            stepDiv.remove();
-            updateAccordionHeight(list.closest('.accordion-content'));
-        });
-    }
-
-    function runSequence() {
-        if (isSequenceRunning) return;
-        const normalizedState = lastKnownRobotState.includes("BEZCZYN") ? "IDLE" : lastKnownRobotState;
-        if (normalizedState !== 'IDLE' && normalizedState !== 'UTRZYMUJE POZYCJE') {
-            addLogMessage(`[UI] Nie mozna rozpoczac sekwencji. Robot w stanie '${lastKnownRobotState}'.`, 'error');
-            return;
-        }
-        const steps = document.querySelectorAll('.sequence-step');
-        if (steps.length === 0) return;
-        isSequenceRunning = true;
-        currentSequenceStep = 0;
-        updateSequenceUI();
-        addLogMessage(`[UI] Rozpoczeto sekwencje z ${steps.length} krokow.`, 'info');
-        executeNextSequenceStep();
-    }
-    
-    function stopSequenceExecution() {
-        if (!isSequenceRunning) return;
-        isSequenceRunning = false;
-        sendBleMessage({ type: 'command_stop' });
-        updateSequenceUI();
-        addLogMessage('[UI] Sekwencja zatrzymana.', 'warn');
-    }
-
-    function clearSequence() {
-        if (isSequenceRunning) stopSequenceExecution();
-        const list = document.getElementById('sequence-list');
-        list.innerHTML = '';
-        updateAccordionHeight(list.closest('.accordion-content'));
-    }
-    
-    function updateSequenceUI() {
-        document.querySelectorAll('.sequence-step').forEach((step, index) => {
-            step.classList.toggle('executing', isSequenceRunning && index === currentSequenceStep);
-        });
-        document.getElementById('run-sequence-btn').disabled = isSequenceRunning;
-        document.getElementById('add-sequence-step-btn').disabled = isSequenceRunning;
-        document.getElementById('clear-sequence-btn').disabled = isSequenceRunning;
-        document.getElementById('stop-sequence-btn').disabled = !isSequenceRunning;
-    }
-
-    function checkAndExecuteNextSequenceStep(previousState) {
-        if (!isSequenceRunning) return;
-        const isRobotIdle = lastKnownRobotState.includes('BEZCZYN') || lastKnownRobotState.includes('UTRZYMUJE');
-        const wasRobotWorking = previousState.includes('RUCH') || previousState.includes('OBROT');
-        if (isRobotIdle && wasRobotWorking) {
-            addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info');
-            currentSequenceStep++;
-            executeNextSequenceStep();
-        }
-    }
-
-    function executeNextSequenceStep() {
-        const steps = document.querySelectorAll('.sequence-step');
-        if (!isSequenceRunning || currentSequenceStep >= steps.length) {
-            if (isSequenceRunning) { 
-                isSequenceRunning = false;
-                addLogMessage('[UI] Sekwencja ukonczona.', 'info');
-            }
-            updateSequenceUI();
-            return;
-        }
-        updateSequenceUI();
-        const stepNode = steps[currentSequenceStep];
-        const type = stepNode.querySelector('.sequence-type').value;
-        const value = parseFloat(stepNode.querySelector('.sequence-value').value);
-        let command = {};
-        switch (type) {
-            case 'move_fwd': command = { type: 'execute_move', distance_cm: value }; break;
-            case 'move_bwd': command = { type: 'execute_move', distance_cm: -value }; break;
-            case 'rotate_r': command = { type: 'execute_rotate', angle_deg: value }; break;
-            case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -value }; break;
-        }
-        addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info');
-        sendBleMessage(command);
-    }
-
-    function setupManualTuningControls() {
-        document.querySelectorAll('.manual-tune-row').forEach(row => {
-            const input = row.querySelector('.tune-input');
-            const testBtn = row.querySelector('.test-btn');
-            const stopBtn = row.querySelector('.stop-btn');
-            testBtn.addEventListener('click', () => {
-                sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: parseInt(input.value) });
-            });
-            stopBtn.addEventListener('click', () => {
-                sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: 'fwd', pwm: 0 });
-            });
-        });
-        document.getElementById('manualTuneStopAll').addEventListener('click', () => {
-            sendBleMessage({ type: 'set_direct_motor_control', motor: 'all', pwm: 0 });
-        });
-    }
-
+    function endJoystickDrag(e) { if (!isDragging) return; isDragging = false; drawJoystick(0, 0); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); lastJoystickSendTime = 0; }
+    function setupDpadControls() { document.querySelectorAll('.dpad-btn').forEach(btn => { btn.addEventListener('click', (e) => { const action = e.currentTarget.dataset.dpad; if (action === 'up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'stop') sendBleMessage({ type: 'command_stop' }); }); }); }
+    function setupSequenceControls() { document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep); document.getElementById('run-sequence-btn').addEventListener('click', runSequence); document.getElementById('stop-sequence-btn').addEventListener('click', stopSequenceExecution); document.getElementById('clear-sequence-btn').addEventListener('click', clearSequence); }
+    function addSequenceStep() { const list = document.getElementById('sequence-list'); if (list.children.length >= MAX_SEQUENCE_STEPS) return; const stepDiv = document.createElement('div'); stepDiv.className = 'sequence-step'; stepDiv.innerHTML = ` <select class="sequence-type"> <option value="move_fwd">Przod (cm)</option><option value="move_bwd">Tyl (cm)</option> <option value="rotate_r">Obrot Prawo (st.)</option><option value="rotate_l">Obrot Lewo (st.)</option> </select> <input type="number" class="sequence-value" value="10"> <button class="remove-step-btn">&times;</button> `; list.appendChild(stepDiv); updateAccordionHeight(list.closest('.accordion-content')); stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => { stepDiv.remove(); updateAccordionHeight(list.closest('.accordion-content')); }); }
+    function runSequence() { if (isSequenceRunning) return; const normalizedState = lastKnownRobotState.includes("BEZCZYN") ? "IDLE" : lastKnownRobotState; if (normalizedState !== 'IDLE' && normalizedState !== 'UTRZYMUJE POZYCJE') { addLogMessage(`[UI] Nie mozna rozpoczac sekwencji. Robot w stanie '${lastKnownRobotState}'.`, 'error'); return; } const steps = document.querySelectorAll('.sequence-step'); if (steps.length === 0) return; isSequenceRunning = true; currentSequenceStep = 0; updateSequenceUI(); addLogMessage(`[UI] Rozpoczeto sekwencje z ${steps.length} krokow.`, 'info'); executeNextSequenceStep(); }
+    function stopSequenceExecution() { if (!isSequenceRunning) return; isSequenceRunning = false; sendBleMessage({ type: 'command_stop' }); updateSequenceUI(); addLogMessage('[UI] Sekwencja zatrzymana.', 'warn'); }
+    function clearSequence() { if (isSequenceRunning) stopSequenceExecution(); const list = document.getElementById('sequence-list'); list.innerHTML = ''; updateAccordionHeight(list.closest('.accordion-content')); }
+    function updateSequenceUI() { document.querySelectorAll('.sequence-step').forEach((step, index) => { step.classList.toggle('executing', isSequenceRunning && index === currentSequenceStep); }); document.getElementById('run-sequence-btn').disabled = isSequenceRunning; document.getElementById('add-sequence-step-btn').disabled = isSequenceRunning; document.getElementById('clear-sequence-btn').disabled = isSequenceRunning; document.getElementById('stop-sequence-btn').disabled = !isSequenceRunning; }
+    function checkAndExecuteNextSequenceStep(previousState) { if (!isSequenceRunning) return; const isRobotIdle = lastKnownRobotState.includes('BEZCZYN') || lastKnownRobotState.includes('UTRZYMUJE'); const wasRobotWorking = previousState.includes('RUCH') || previousState.includes('OBROT'); if (isRobotIdle && wasRobotWorking) { addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info'); currentSequenceStep++; executeNextSequenceStep(); } }
+    function executeNextSequenceStep() { const steps = document.querySelectorAll('.sequence-step'); if (!isSequenceRunning || currentSequenceStep >= steps.length) { if (isSequenceRunning) { isSequenceRunning = false; addLogMessage('[UI] Sekwencja ukonczona.', 'info'); } updateSequenceUI(); return; } updateSequenceUI(); const stepNode = steps[currentSequenceStep]; const type = stepNode.querySelector('.sequence-type').value; const value = parseFloat(stepNode.querySelector('.sequence-value').value); let command = {}; switch (type) { case 'move_fwd': command = { type: 'execute_move', distance_cm: value }; break; case 'move_bwd': command = { type: 'execute_move', distance_cm: -value }; break; case 'rotate_r': command = { type: 'execute_rotate', angle_deg: value }; break; case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -value }; break; } addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info'); sendBleMessage(command); }
+    function setupManualTuningControls() { document.querySelectorAll('.manual-tune-row').forEach(row => { const input = row.querySelector('.tune-input'); const testBtn = row.querySelector('.test-btn'); const stopBtn = row.querySelector('.stop-btn'); testBtn.addEventListener('click', () => { sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: row.dataset.direction, pwm: parseInt(input.value) }); }); stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, direction: 'fwd', pwm: 0 }); }); }); document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'set_direct_motor_control', motor: 'all', pwm: 0 }); }); }
     document.addEventListener('DOMContentLoaded', () => {
         setupEventListeners();
         resizeJoystick();
@@ -1282,22 +782,9 @@
         setupSequenceControls();
         setupManualTuningControls();
         setupChartControls();
-        
-        document.querySelectorAll('.accordion-header').forEach(header => {
-            const content = header.nextElementSibling;
-            if (header.classList.contains('active')) {
-                 setTimeout(() => { if(content) content.style.maxHeight = content.scrollHeight + 'px'; }, 100);
-            } else {
-                if(content) content.style.maxHeight = '0px';
-            }
-        });
-
-        const gamepadPollingLoop = () => {
-            pollGamepad();
-            requestAnimationFrame(gamepadPollingLoop);
-        };
+        document.querySelectorAll('.accordion-header').forEach(header => { const content = header.nextElementSibling; if (header.classList.contains('active')) { setTimeout(() => { if(content) content.style.maxHeight = content.scrollHeight + 'px'; }, 100); } else { if(content) content.style.maxHeight = '0px'; } });
+        const gamepadPollingLoop = () => { pollGamepad(); requestAnimationFrame(gamepadPollingLoop); };
         gamepadPollingLoop();
-        
         joystickCanvas.addEventListener('mousedown', startJoystickDrag);
         joystickCanvas.addEventListener('touchstart', startJoystickDrag, { passive: false });
         document.addEventListener('mousemove', handleJoystickMove);
