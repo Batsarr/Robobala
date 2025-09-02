@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v34.3 (Naprawiony)</title>
+    <title>Robot LQR - Panel Sterowania v34.4 (Stabilny)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -405,7 +405,6 @@
     
     let bleBuffer = '';
     let isGaRunning = false;
-
     let isSequenceRunning = false;
     let currentSequenceStep = 0;
     const MAX_SEQUENCE_STEPS = 10;
@@ -772,6 +771,7 @@
     function checkAndExecuteNextSequenceStep(previousState) { if (!isSequenceRunning) return; const isRobotIdle = lastKnownRobotState.includes('BEZCZYN') || lastKnownRobotState.includes('UTRZYMUJE'); const wasRobotWorking = previousState.includes('RUCH') || previousState.includes('OBROT'); if (isRobotIdle && wasRobotWorking) { addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info'); currentSequenceStep++; executeNextSequenceStep(); } }
     function executeNextSequenceStep() { const steps = document.querySelectorAll('.sequence-step'); if (!isSequenceRunning || currentSequenceStep >= steps.length) { if (isSequenceRunning) { isSequenceRunning = false; addLogMessage('[UI] Sekwencja ukonczona.', 'info'); } updateSequenceUI(); return; } updateSequenceUI(); const stepNode = steps[currentSequenceStep]; const type = stepNode.querySelector('.sequence-type').value; const value = parseFloat(stepNode.querySelector('.sequence-value').value); let command = {}; switch (type) { case 'move_fwd': command = { type: 'execute_move', distance_cm: value }; break; case 'move_bwd': command = { type: 'execute_move', distance_cm: -value }; break; case 'rotate_r': command = { type: 'execute_rotate', angle_deg: value }; break; case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -value }; break; } addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info'); sendBleMessage(command); }
     function setupManualTuningControls() { document.querySelectorAll('.manual-tune-row').forEach(row => { const input = row.querySelector('.tune-input'); const testBtn = row.querySelector('.test-btn'); const stopBtn = row.querySelector('.stop-btn'); testBtn.addEventListener('click', () => { const pwm = parseInt(input.value) * (row.dataset.direction === 'bwd' ? -1 : 1); sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, pwm: pwm }); }); stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'set_direct_motor_control', motor: row.dataset.motor, pwm: 0 }); }); }); document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'set_direct_motor_control', motor: 'all', pwm: 0 }); }); }
+    
     document.addEventListener('DOMContentLoaded', () => {
         setupEventListeners();
         resizeJoystick();
@@ -782,9 +782,22 @@
         setupSequenceControls();
         setupManualTuningControls();
         setupChartControls();
-        document.querySelectorAll('.accordion-header').forEach(header => { const content = header.nextElementSibling; if (header.classList.contains('active')) { setTimeout(() => { if(content) content.style.maxHeight = content.scrollHeight + 'px'; }, 100); } else { if(content) content.style.maxHeight = '0px'; } });
-        const gamepadPollingLoop = () => { pollGamepad(); requestAnimationFrame(gamepadPollingLoop); };
+        
+        document.querySelectorAll('.accordion-header').forEach(header => {
+            const content = header.nextElementSibling;
+            if (header.classList.contains('active')) {
+                 setTimeout(() => { if(content) content.style.maxHeight = content.scrollHeight + 'px'; }, 100);
+            } else {
+                if(content) content.style.maxHeight = '0px';
+            }
+        });
+
+        const gamepadPollingLoop = () => {
+            pollGamepad();
+            requestAnimationFrame(gamepadPollingLoop);
+        };
         gamepadPollingLoop();
+        
         joystickCanvas.addEventListener('mousedown', startJoystickDrag);
         joystickCanvas.addEventListener('touchstart', startJoystickDrag, { passive: false });
         document.addEventListener('mousemove', handleJoystickMove);
