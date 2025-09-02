@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v34.6 (Finalny)</title>
+    <title>Robot LQR - Panel Sterowania v34.6 (Finalny Poprawiony)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -395,6 +395,7 @@
             </div>
         </div>
     </div>
+
 <script>
     const debouncedSenders = {};
     let isMappingButton = false;
@@ -439,6 +440,12 @@
     const GAMEPAD_MAPPING_KEY = 'lqr_gamepad_mappings_v34';
     const GAMEPAD_AXIS_THRESHOLD = 0.15;
     
+    // Zmienne dla Kreatora Sekwencji (przywrocone)
+    let isSequenceRunning = false;
+    let currentSequenceStep = 0;
+    const MAX_SEQUENCE_STEPS = 10;
+    let lastKnownRobotState = 'IDLE';
+
     const availableActions = {
         'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' },
         'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' },
@@ -482,19 +489,48 @@
     function addLogMessage(message, level = 'info') { const logHistory = document.getElementById('log-history'); if (!logHistory) return; const timestamp = new Date().toLocaleTimeString(); let color = '#fff'; if (level === 'error') color = '#ff6347'; else if (level === 'warn') color = '#f7b731'; else if (level === 'success') color = '#a2f279'; const logEntry = document.createElement('div'); logEntry.style.color = color; logEntry.textContent = `[${timestamp}] ${message}`; logHistory.prepend(logEntry); while (logHistory.children.length > 200) { logHistory.removeChild(logHistory.lastChild); } }
     function clearLogs() { document.getElementById('log-history').innerHTML = ''; }
     function toggleAccordion(header) { const content = header.nextElementSibling; const isActive = header.classList.contains('active'); if (!isActive) { header.classList.add('active'); content.style.maxHeight = content.scrollHeight + "px"; } else { header.classList.remove('active'); content.style.maxHeight = '0px'; } }
+    function updateAccordionHeight(content) { if (content && content.style.maxHeight !== '0px') { content.style.maxHeight = content.scrollHeight + 'px'; } }
     async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono! Automatyczna synchronizacja za 1s...', 'success'); setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 1000); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
     function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; if (isGaRunning) stopGA(false); }
     function handleBleNotification(event) { const value = event.target.value; const decoder = new TextDecoder('utf-8'); const chunk = decoder.decode(value); bleBuffer += chunk; let newlineIndex; while ((newlineIndex = bleBuffer.indexOf('\n')) !== -1) { const line = bleBuffer.substring(0, newlineIndex).trim(); bleBuffer = bleBuffer.substring(newlineIndex + 1); if (line) { try { const data = JSON.parse(line); processCompleteMessage(data); } catch (e) { addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error'); } } } }
     async function sendBleMessage(message) { if (!rxCharacteristic) { return; } try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
     function processCompleteMessage(data) {
+        let previousRobotState = lastKnownRobotState;
+        if (data.type === 'telemetry' && data.robot_state) {
+            lastKnownRobotState = data.robot_state;
+        }
+
         switch (data.type) {
-            case 'telemetry': updateTelemetryUI(data); updateChart(data); break;
-            case 'full_config': applyFullConfig(data); break;
-            case 'log': addLogMessage(`[ROBOT] ${data.message}`, data.level); break;
-            case 'ga_progress': updateGaProgress(data); break;
-            case 'ga_finished': addLogMessage(`Optymalizacja zakonczona! Powod: ${data.reason}`, 'success'); stopGA(false); setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 500); break;
-            case 'ga_ready_for_trigger': setGaUiLock(true); document.getElementById('gaTriggerBtn').disabled = !data.ready; if (data.ready) { addLogMessage('[UI] Robot gotowy. Uruchom impuls testowy.', 'info'); } break;
-            case 'ga_fall_detected': addLogMessage("[SYSTEM] Wykryto upadek! Postaw robota, wlacz balansowanie i poczekaj na gotowosc do nastepnego testu.", "warn"); setGaUiLock(false); break;
+            case 'telemetry':
+                updateTelemetryUI(data);
+                updateChart(data);
+                checkAndExecuteNextSequenceStep(previousRobotState);
+                break;
+            case 'full_config':
+                applyFullConfig(data);
+                break;
+            case 'log':
+                addLogMessage(`[ROBOT] ${data.message}`, data.level);
+                break;
+            case 'ga_progress':
+                updateGaProgress(data);
+                break;
+            case 'ga_finished':
+                addLogMessage(`Optymalizacja zakonczona! Powod: ${data.reason}`, 'success');
+                stopGA(false);
+                setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 500);
+                break;
+            case 'ga_ready_for_trigger':
+                setGaUiLock(true);
+                document.getElementById('gaTriggerBtn').disabled = !data.ready;
+                if (data.ready) {
+                    addLogMessage('[UI] Robot gotowy. Uruchom impuls testowy.', 'info');
+                }
+                break;
+            case 'ga_fall_detected':
+                addLogMessage("[SYSTEM] Wykryto upadek! Postaw robota, wlacz balansowanie i poczekaj na gotowosc do nastepnego testu.", "warn");
+                setGaUiLock(false);
+                break;
         }
     }
     function applyFullConfig(data) { ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'lqrEnabledSwitch'].forEach(id => { const el = document.getElementById(id); if (el && data[id.replace('Switch', 'Enabled')] !== undefined) { el.checked = data[id.replace('Switch', 'Enabled')]; } }); const params = { joystickOutputScale: data.joystick_output_scale !== undefined ? data.joystick_output_scale * 100 : undefined, expoJoystick: data.expo_joystick !== undefined ? data.expo_joystick * 100 : undefined, maxSpeedJoystick: data.max_speed_joystick, joystickAngleSensitivity: data.joystick_angle_sensitivity, turnFactor: data.turn_factor !== undefined ? data.turn_factor * 100 : undefined, positionErrorGain: data.position_error_gain, positionDampingGain: data.position_d_gain, rotationPGain: data.rotation_p_gain, q1Angle: data.q1_angle, q2AngularVel: data.q2_angular_vel, q3Position: data.q3_position, q4Velocity: data.q4_velocity, rControl: data.r_control, lqrOutputScalar: data.lqr_output_scalar, wheelDiameterCm: data.wheel_diameter_cm, trackWidthCm: data.track_width_cm, encoderPpr: data.encoder_ppr, headingCorrectionFactor: data.heading_correction_factor, minPwmLeftFwd: data.min_pwm_left_fwd, minPwmLeftBwd: data.min_pwm_left_bwd, minPwmRightFwd: data.min_pwm_right_fwd, minPwmRightBwd: data.min_pwm_right_bwd, speedPGain: data.speed_p_gain, maxSpeedFromPos: data.max_speed_from_pos, holdPositionMarginPulses: data.hold_position_margin_pulses, globalPowerLimit: data.global_power_limit !== undefined ? Math.round(data.global_power_limit * 100 / 1023) : undefined }; for (const [key, value] of Object.entries(params)) { const input = document.getElementById(key + 'Input'); if (input && value !== undefined) { input.value = value; } } addLogMessage("[UI] Parametry robota zsynchronizowane z panelem.", "info"); }
@@ -509,8 +545,127 @@
     function setupNumericInputs() { document.querySelectorAll('.numeric-input-wrapper').forEach(wrapper => { const container = wrapper.closest('.setting-container') || wrapper.closest('.manual-tune-row'); if (!container) return; const input = container.querySelector('input[type=number]'); const minusBtn = wrapper.querySelector('button:first-child'); const plusBtn = wrapper.querySelector('button:last-child'); if (!input || !minusBtn || !plusBtn || input.disabled) return; const step = parseFloat(input.step) || 1; const isFloat = input.step.includes('.'); const updateValue = (amount) => { let current = parseFloat(input.value); if (isNaN(current)) current = 0; let newValue = current + amount; if (isFloat) { const dp = (step.toString().split('.')[1] || '').length; newValue = parseFloat(newValue.toFixed(dp)); } const min = parseFloat(input.min); const max = parseFloat(input.max); if (!isNaN(min)) newValue = Math.max(min, newValue); if (!isNaN(max)) newValue = Math.min(max, newValue); input.value = newValue; input.dispatchEvent(new Event('change', { bubbles: true })); }; minusBtn.addEventListener('click', () => updateValue(-step)); plusBtn.addEventListener('click', () => updateValue(step)); }); }
     function setupEventListeners() { joystickCanvas.addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); joystickCanvas.addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd); document.getElementById('connectBleBtn').addEventListener('click', connectBLE); ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'lqrEnabledSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle', 'lqrEnabledSwitch': 'lqr_enabled_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); }); document.getElementById('resetZeroBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_zero' })); document.getElementById('trimPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 1 })); document.getElementById('trimMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -1 })); document.getElementById('trimRollPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: 1 })); document.getElementById('trimRollMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -1 })); document.getElementById('emergencyStopBtn').addEventListener('click', () => sendBleMessage({ type: 'emergency_stop' })); document.getElementById('saveBtn').addEventListener('click', () => { if (confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")) sendBleMessage({ type: 'save_tunings' }); }); document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) sendBleMessage({ type: 'load_from_eeprom' }); }); document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' })); document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' })); const configGroups = { 'set_joystick_tuning': ['joystickOutputScale', 'expoJoystick', 'maxSpeedJoystick', 'joystickAngleSensitivity', 'turnFactor'], 'calibration_update': ['wheelDiameterCm', 'trackWidthCm', 'encoderPpr', 'headingCorrectionFactor', 'positionErrorGain', 'positionDampingGain', 'rotationPGain', 'speedPGain', 'maxSpeedFromPos', 'holdPositionMarginPulses', 'globalPowerLimit'], 'set_min_pwm': ['minPwmLeftFwd', 'minPwmLeftBwd', 'minPwmRightFwd', 'minPwmRightBwd'], 'lqr_update': ['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar'] }; for (const [type, keys] of Object.entries(configGroups)) { debouncedSenders[type] = debounce(() => { const params = {}; keys.forEach(key => { const input = document.getElementById(key + 'Input'); if (input) { let value = parseFloat(input.value); if (key === 'turnFactor' || key === 'joystickOutputScale' || key === 'expoJoystick') value /= 100; if (key === 'globalPowerLimit') value = Math.round(value * 1023 / 100); let snakeKey = key.replace(/([A-Z])/g, "_$1").toLowerCase(); if (key === 'maxSpeedFromPos') { snakeKey = 'max_speed_from_pos'; } if (key === 'positionDampingGain') { snakeKey = 'position_d_gain'; } params[snakeKey] = value; } }); sendBleMessage({ type, params }); }, 350); keys.forEach(key => { const input = document.getElementById(key + 'Input'); if (input) input.addEventListener('change', debouncedSenders[type]); }); } document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); }); document.getElementById('startGaBtn').addEventListener('click', startGA); document.getElementById('stopGaBtn').addEventListener('click', () => stopGA(true)); document.getElementById('gaTriggerBtn').addEventListener('click', () => { sendBleMessage({ type: 'ga_trigger_test' }); document.getElementById('gaTriggerBtn').disabled = true; }); document.getElementById('gaEarlyStopCheckbox').addEventListener('change', (e) => { document.getElementById('gaPatienceContainer').style.display = e.target.checked ? 'grid' : 'none'; }); }
     function setupManualTuneButtons() { document.querySelectorAll('.manual-tune-row').forEach(row => { const motor = row.dataset.motor; const direction = row.dataset.direction; const input = row.querySelector('.tune-input'); row.querySelector('.test-btn').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: parseInt(input.value) }); }); row.querySelector('.stop-btn').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); }); }); document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); }); }
-    function setupSequenceControls() { document.getElementById('add-sequence-step-btn').addEventListener('click', () => addLogMessage("Funkcja 'Dodaj Krok' nie jest jeszcze zaimplementowana.", "warn")); document.getElementById('run-sequence-btn').addEventListener('click', () => addLogMessage("Funkcja 'Uruchom Sekwencje' nie jest jeszcze zaimplementowana.", "warn")); document.getElementById('stop-sequence-btn').addEventListener('click', () => addLogMessage("Funkcja 'Zatrzymaj Sekwencje' nie jest jeszcze zaimplementowana.", "warn")); document.getElementById('clear-sequence-btn').addEventListener('click', () => addLogMessage("Funkcja 'Wyczysc Sekwencje' nie jest jeszcze zaimplementowana.", "warn")); }
-    function setupDpadControls() { document.querySelectorAll('.dpad-btn').forEach(btn => { btn.addEventListener('click', () => { const command = btn.dataset.dpad; const distance = document.getElementById('dpadDistInput').value; const angle = document.getElementById('dpadAngleInput').value; addLogMessage(`D-PAD: ${command}, dist: ${distance}, angle: ${angle}`, 'info'); sendBleMessage({ type: 'dpad_command', command, distance, angle }); }); }); }
+    
+    // --- POCZATEK: Przywrocony kod Kreatora Sekwencji ---
+    function setupSequenceControls() {
+        document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep);
+        document.getElementById('run-sequence-btn').addEventListener('click', runSequence);
+        document.getElementById('stop-sequence-btn').addEventListener('click', stopSequenceExecution);
+        document.getElementById('clear-sequence-btn').addEventListener('click', clearSequence);
+    }
+
+    function addSequenceStep() {
+        const list = document.getElementById('sequence-list');
+        if (list.children.length >= MAX_SEQUENCE_STEPS) return;
+        const stepDiv = document.createElement('div');
+        stepDiv.className = 'sequence-step';
+        stepDiv.innerHTML = `
+            <select class="sequence-type">
+                <option value="move_fwd">Przod (cm)</option><option value="move_bwd">Tyl (cm)</option>
+                <option value="rotate_r">Obrot Prawo (st.)</option><option value="rotate_l">Obrot Lewo (st.)</option>
+            </select>
+            <input type="number" class="sequence-value" value="10">
+            <button class="remove-step-btn">&times;</button>
+        `;
+        list.appendChild(stepDiv);
+        updateAccordionHeight(list.closest('.accordion-content'));
+        stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => {
+            stepDiv.remove();
+            updateAccordionHeight(list.closest('.accordion-content'));
+        });
+    }
+
+    function runSequence() {
+        if (isSequenceRunning) return;
+        const normalizedState = lastKnownRobotState.includes("BEZCZYN") ? "IDLE" : lastKnownRobotState;
+        if (normalizedState !== 'IDLE' && normalizedState !== 'UTRZYMUJE POZYCJE') {
+            addLogMessage(`[UI] Nie mozna rozpoczac sekwencji. Robot w stanie '${lastKnownRobotState}'.`, 'error');
+            return;
+        }
+        const steps = document.querySelectorAll('.sequence-step');
+        if (steps.length === 0) return;
+        isSequenceRunning = true;
+        currentSequenceStep = 0;
+        updateSequenceUI();
+        addLogMessage(`[UI] Rozpoczeto sekwencje z ${steps.length} krokow.`, 'info');
+        executeNextSequenceStep();
+    }
+    
+    function stopSequenceExecution() {
+        if (!isSequenceRunning) return;
+        isSequenceRunning = false;
+        sendBleMessage({ type: 'command_stop' });
+        updateSequenceUI();
+        addLogMessage('[UI] Sekwencja zatrzymana.', 'warn');
+    }
+
+    function clearSequence() {
+        if (isSequenceRunning) stopSequenceExecution();
+        const list = document.getElementById('sequence-list');
+        list.innerHTML = '';
+        updateAccordionHeight(list.closest('.accordion-content'));
+    }
+    
+    function updateSequenceUI() {
+        document.querySelectorAll('.sequence-step').forEach((step, index) => {
+            step.classList.toggle('executing', isSequenceRunning && index === currentSequenceStep);
+        });
+        document.getElementById('run-sequence-btn').disabled = isSequenceRunning;
+        document.getElementById('add-sequence-step-btn').disabled = isSequenceRunning;
+        document.getElementById('clear-sequence-btn').disabled = isSequenceRunning;
+        document.getElementById('stop-sequence-btn').disabled = !isSequenceRunning;
+    }
+
+    function checkAndExecuteNextSequenceStep(previousState) {
+        if (!isSequenceRunning) return;
+        const isRobotIdle = lastKnownRobotState.includes('BEZCZYN') || lastKnownRobotState.includes('UTRZYMUJE');
+        const wasRobotWorking = previousState.includes('RUCH') || previousState.includes('OBROT');
+        if (isRobotIdle && wasRobotWorking) {
+            addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info');
+            currentSequenceStep++;
+            executeNextSequenceStep();
+        }
+    }
+
+    function executeNextSequenceStep() {
+        const steps = document.querySelectorAll('.sequence-step');
+        if (!isSequenceRunning || currentSequenceStep >= steps.length) {
+            if (isSequenceRunning) { 
+                isSequenceRunning = false;
+                addLogMessage('[UI] Sekwencja ukonczona.', 'info');
+            }
+            updateSequenceUI();
+            return;
+        }
+        updateSequenceUI();
+        const stepNode = steps[currentSequenceStep];
+        const type = stepNode.querySelector('.sequence-type').value;
+        const value = parseFloat(stepNode.querySelector('.sequence-value').value);
+        let command = {};
+        switch (type) {
+            case 'move_fwd': command = { type: 'execute_move', distance_cm: value }; break;
+            case 'move_bwd': command = { type: 'execute_move', distance_cm: -value }; break;
+            case 'rotate_r': command = { type: 'execute_rotate', angle_deg: value }; break;
+            case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -value }; break;
+        }
+        addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info');
+        sendBleMessage(command);
+    }
+    // --- KONIEC: Przywrocony kod Kreatora Sekwencji ---
+
+    function setupDpadControls() {
+        document.querySelectorAll('.dpad-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const action = e.currentTarget.dataset.dpad;
+                if (action === 'up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) });
+                else if (action === 'down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) });
+                else if (action === 'left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) });
+                else if (action === 'right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) });
+                else if (action === 'stop') sendBleMessage({ type: 'command_stop' });
+            });
+        });
+    }
+    
     function setupGamepadMappingModal() { document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; }); document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; }); }
     
     function setGaUiLock(isLocked) {
@@ -530,6 +685,8 @@
     function flashElement(element) { if (!element) return; const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element; target.classList.add('gamepad-flash'); setTimeout(() => target.classList.remove('gamepad-flash'), 300); }
     function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
     function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
+
 </script>
+
 </body>
 </html>
