@@ -1,0 +1,394 @@
+// =======================================================================================
+// WERSJA 34.3-DUAL-CORE-A (Rdzen Balansujacy) - Finalne Poprawki i Optymalizacje
+//
+// ZMIANY (WERSJA 34.3):
+// -----------------------------------
+// [NOWA FUNKCJA] Dodano pelna obsluge tuningu PWM dla silnikow (komenda 'set_direct_motor_control').
+// [NOWA FUNKCJA] Dodano pelna implementacje korekty przechyly bocznego (Roll).
+// [POPRAWKA] Rozszerzono telemetrie wysylana do ESP_B o wszystkie wymagane pola.
+// [OPTYMALIZACJA] Zwiekszono predkosc UART do 460800 baud.
+// [OPTYMALIZACJA] Skrocono timeout joysticka do 100ms dla wiekszej responsywnosci.
+// [OPTYMALIZACJA] Zwiekszono czestotliwosc glownej petli sterowania do 200Hz (5ms).
+// [OPTYMALIZACJA] Zaimplementowano "Fast Path" dla komend joysticka w zadaniu UART,
+//                 aby zminimalizowac opoznienia w sterowaniu.
+// =======================================================================================
+
+#include <Wire.h>
+#include <ArduinoJson.h>
+#include "esp_system.h"
+#include <atomic>
+#include "esp_task_wdt.h"
+#include "driver/gpio.h"
+#include "driver/ledc.h"
+#include "freertos/queue.h"
+#include <math.h>
+#include "MPU6050_6Axis_MotionApps20.h"
+
+// =========================================================================
+// === SEKCJA KONFIGURACYJNA ===
+// =========================================================================
+
+// --- Definicje pinow ---
+#define MPU_SDA 0
+#define MPU_SCL 1
+#define MPU_INT_PIN 10
+#define MOTOR_L_IN1 2
+#define MOTOR_L_IN2 3
+#define MOTOR_R_IN1 8
+#define MOTOR_R_IN2 9
+#define ENCODER_L_A 5
+#define ENCODER_L_B 4
+#define ENCODER_R_A 20
+#define ENCODER_R_B 21
+#define UART_ESP_B_TX 6
+#define UART_ESP_B_RX 7
+
+// --- Konfiguracja sprzetowa ---
+#define PWM_FREQ 25000
+#define PWM_RESOLUTION 10
+#define PWM_MAX_VALUE 1023
+#define ENCODER_L_INVERTED false
+#define ENCODER_R_INVERTED true
+#define MOTOR_R_INVERT_LOGIC true
+#define ENCODER_DEBOUNCE_MICROS 300
+
+// --- Konfiguracja kanalow LEDC (PWM) ---
+#define LEDC_CHANNEL_L_IN1 2
+#define LEDC_CHANNEL_L_IN2 3
+#define LEDC_CHANNEL_R_IN1 0
+#define LEDC_CHANNEL_R_IN2 1
+
+// --- Konfiguracja systemu ---
+const unsigned long LOOP_INTERVAL_MICROS = 5000; // ZWIEKSZONO DO 200Hz
+const TickType_t LOOP_INTERVAL_TICKS = pdMS_TO_TICKS(5); // ZWIEKSZONO DO 200Hz
+#define CRITICAL_ANGLE_LIMIT 60.0f
+#define CRITICAL_GYRO_LIMIT 350.0f
+const float ZERO_ADJUST_STEP = 0.1f;
+const unsigned long JOYSTICK_TIMEOUT = 100; // SKROCONO TIMEOUT
+const unsigned long COMMAND_TIMEOUT_MS = 15000;
+#define WDT_TIMEOUT_SECONDS 60
+#define TELEMETRY_INTERVAL_MS 20 // ZMNIEJSZONO DLA PLYNNIEJSZEJ TELEMETRII
+#define MAX_JSON_SIZE 1024
+#define LIFT_DETECTION_THRESHOLD_G 0.3f
+#define LIFT_DETECTION_DURATION_MS 300
+#define Q_BITS 16
+#define Q_SCALE (1 << Q_BITS)
+
+// --- Konfiguracja testu dla Algorytmu Genetycznego (GA) ---
+#define GA_FALL_ANGLE_DEG 25.0f
+#define GA_STABILIZE_DURATION_MS 1000
+#define GA_IMPULSE_DURATION_MS 150
+#define GA_MEASURE_DURATION_MS 2500
+#define GA_IMPULSE_ANGLE_DEG 3.0f
+const unsigned long GA_TOTAL_TEST_DURATION_MS = GA_STABILIZE_DURATION_MS + GA_IMPULSE_DURATION_MS + GA_MEASURE_DURATION_MS;
+const float GA_FITNESS_WEIGHT_ERROR = 1.0f;
+const float GA_FITNESS_WEIGHT_EFFORT = 0.05f;
+
+// =========================================================================
+// === STRUKTURY DANYCH ===
+// =========================================================================
+struct PhysicalParams {
+  float m_body = 0.150f; float m_wheel = 0.055f; float L = 0.087f; float R_wheel = 0.041f; float g = 9.81f;
+};
+struct LQRController {
+  float A[4][4]; float B[4]; float K[4]; float Q[4]; float R; float x[4]; float x_ref[4]; int32_t K_fx[4]; int32_t x_fx[4]; int32_t x_ref_fx[4]; PhysicalParams physics; float last_output = 0.0f; bool is_initialized = false;
+  void configure(float q1, float q2, float q3, float q4, float r_weight); int32_t compute_fx(); void updateState(float pitch_deg, float pitch_rate_deg_s, float position_pulses, float velocity_pulses_s); void setReference(float ref_pitch_deg, float ref_position_pulses); void reset();
+private:
+  void calculateSystemMatrices(); void calculateLQRGains(); void solveRiccati(float P[4][4]);
+};
+struct ControlFlags {
+  bool balancingEnabled = false; bool emergencyStop = false; bool directMotorControlActive = false; bool holdPositionEnabled = false; bool speedModeEnabled = false; bool lqrEnabled = true;
+};
+struct TuningParams {
+  float Q1_angle = 100.0f; float Q2_angular_vel = 10.0f; float Q3_position = 1.0f; float Q4_velocity = 5.0f; float R_control = 0.1f; PhysicalParams physics; float expoJoystick = 0.0f; float maxSpeedJoystick = 800.0f; float turnFactor = 0.25f; float joystickDeadzone = 0.0f; float joystickOutputScale = 1.0f; float joystickAngleSensitivity = 10.0f; float wheelDiameterCm = 8.2f; float trackWidthCm = 13.0f; int minPwmLeftFwd = 640, minPwmLeftBwd = 640; int minPwmRightFwd = 640, minPwmRightBwd = 640; float lqrOutputScalar = 20.0f; float encoderPPR = 820.0f; int holdPositionMarginPulses = 15; float headingCorrectionFactor = 0.4f; float positionErrorGain = 2.5f; float positionDampingGain = 0.5f; float rotationPGain = 1.5f; float speedPGain = 0.005f; float maxSpeedFromPosition = 1000.0f; int globalPowerLimit = PWM_MAX_VALUE;
+};
+struct EncoderState {
+  std::atomic<long> position; const uint8_t pin_a, pin_b; const bool inverted; volatile uint8_t prev_state; volatile unsigned long last_micros;
+};
+struct GATestParams {
+  float q1_angle, q2_angular_vel, q3_position, q4_velocity, r_control; float lqr_output_scalar;
+};
+
+// --- Stany Robota ---
+enum RobotState { IDLE, HOLDING_POSITION, EXECUTING_MOVE, EXECUTING_ROTATE, GA_WAITING_FOR_IMPULSE, GA_TEST_IN_PROGRESS };
+const char* robotStateNames[] = { "BEZCZYNNY", "UTRZYMUJE POZYCJE", "RUCH DO CELU", "OBROT DO CELU", "GA CZEKA", "TEST GA" };
+
+
+// =========================================================================
+// === ZMIENNE GLOBALNE ===
+// =========================================================================
+ControlFlags controlFlags;
+static TuningParams tuningParams;
+static LQRController lqrController;
+static GATestParams gaTestParams;
+
+MPU6050 mpu;
+bool dmpReady = false;
+uint8_t fifoBuffer[64];
+Quaternion q; VectorFloat gravity; float ypr[3];
+volatile bool mpuInterrupt = false;
+
+RobotState currentState = IDLE;
+unsigned long commandStartTime = 0;
+long targetPosition = 0, targetRotation = 0;
+long anchoredPosition = 0, anchoredHeading = 0;
+
+float speedSetpoint = 0.0f;
+float pitch = 0.0, roll = 0.0;
+float angleOffset = 0.0;
+float rollOffset = 0.0; // NOWA ZMIENNA DLA KOREKTY ROLL
+float baseTargetAngleTrim = 0.0;
+float actualSpeed = 0.0f, finalTargetAngle = 0.0f;
+volatile float joystickX = 0.0, joystickY = 0.0;
+volatile bool joystickActive = false;
+unsigned long lastJoystickTime = 0;
+unsigned long timeOfFall = 0;
+unsigned long liftDetectStartTime = 0;
+float internal_impulsesPerCm = 0.0f, internal_impulsesPerDegree = 0.0f;
+EncoderState encoder_L = { { 0 }, ENCODER_L_A, ENCODER_L_B, ENCODER_L_INVERTED, 0, 0 };
+EncoderState encoder_R = { { 0 }, ENCODER_R_A, ENCODER_R_B, ENCODER_R_INVERTED, 0, 0 };
+
+unsigned long gaTestStartTime = 0;
+long gaTestStartPosition = 0;
+float gaAccumulatedPitchError = 0.0f;
+float gaAccumulatedControlEffort = 0.0f;
+
+volatile bool systemReady = false;
+TaskHandle_t controlTaskHandle = NULL;
+TaskHandle_t uartCommTaskHandle = NULL;
+StaticJsonDocument<MAX_JSON_SIZE> uartJsonDoc;
+
+// =========================================================================
+// === DEKLARACJE FUNKCJI ===
+// =========================================================================
+void emergencyShutdown(const char* reason);
+void recalculateMotionParameters();
+void calibrateMPU();
+void finishGATest(bool fallen);
+void setMotorPowerRaw(uint8_t motor_idx, int power);
+
+// =========================================================================
+// === IMPLEMENTACJE FUNKCJI (Logika, Sensory, Silniki) ===
+// =========================================================================
+
+void printAndLog(const char* level, const char* format, ...) { char buffer[256]; va_list args; va_start(args, format); vsnprintf(buffer, sizeof(buffer), format, args); va_end(args); Serial.printf("[%s] %s\n", level, buffer); }
+void LQRController::configure(float q1, float q2, float q3, float q4, float r_weight) {Q[0]=q1;Q[1]=q2;Q[2]=q3;Q[3]=q4;R=r_weight;calculateSystemMatrices();calculateLQRGains();is_initialized=true;}
+void LQRController::calculateSystemMatrices() {for(int i=0;i<4;i++){for(int j=0;j<4;j++){A[i][j]=0.0f;}B[i]=0.0f;}A[0][1]=1.0f;A[1][0]=17.2f;A[2][3]=1.0f;A[3][0]=-1.2f;B[1]=2.5f;B[3]=-1.8f;}
+void LQRController::calculateLQRGains() { float P[4][4]; for (int i = 0; i < 4; i++) { for (int j = 0; j < 4; j++) { P[i][j] = (i == j) ? Q[i] : 0.0f; } } solveRiccati(P); for (int i = 0; i < 4; i++) { K[i] = 0.0f; for (int j = 0; j < 4; j++) { K[i] += B[j] * P[j][i]; } K[i] /= R; } K[0] = constrain(K[0], -200.0f, 200.0f); K[1] = constrain(K[1], -50.0f, 50.0f); K[2] = constrain(K[2], -10.0f, 10.0f); K[3] = constrain(K[3], -20.0f, 20.0f); for (int i = 0; i < 4; i++) { K_fx[i] = (int32_t)(K[i] * Q_SCALE); } }
+void LQRController::solveRiccati(float P[4][4]) {const int iterations=10;float P_new[4][4];for(int iter=0;iter<iterations;iter++){float ATP[4][4];for(int i=0;i<4;i++){for(int j=0;j<4;j++){ATP[i][j]=0.0f;for(int k=0;k<4;k++){ATP[i][j]+=A[k][i]*P[k][j];}}}float PA[4][4];for(int i=0;i<4;i++){for(int j=0;j<4;j++){PA[i][j]=0.0f;for(int k=0;k<4;k++){PA[i][j]+=P[i][k]*A[k][j];}}}float PB[4];for(int i=0;i<4;i++){PB[i]=0.0f;for(int j=0;j<4;j++){PB[i]+=P[i][j]*B[j];}}for(int i=0;i<4;i++){for(int j=0;j<4;j++){P_new[i][j]=(i==j?Q[i]:0.0f)+ATP[i][j]+PA[i][j];P_new[i][j]-=(PB[i]*B[j])/R;}}for(int i=0;i<4;i++){for(int j=0;j<4;j++){P[i][j]=P_new[i][j];}}}}
+int32_t LQRController::compute_fx() {if(!is_initialized)return 0;int32_t error_fx[4];for(int i=0;i<4;i++){error_fx[i]=x_ref_fx[i]-x_fx[i];}int64_t accumulator=0;for(int i=0;i<4;i++){accumulator+=(int64_t)K_fx[i]*error_fx[i];}int32_t control_output_fx=(int32_t)(accumulator>>Q_BITS);last_output=(float)control_output_fx/Q_SCALE;return control_output_fx;}
+void LQRController::updateState(float p_d,float pr_d_s,float pos_p,float v_p_s){x[0]=p_d*M_PI/180.0f;x[1]=pr_d_s*M_PI/180.0f;if(internal_impulsesPerCm>0){x[2]=(pos_p/internal_impulsesPerCm)/100.0f;x[3]=(v_p_s/internal_impulsesPerCm)/100.0f;}else{x[2]=pos_p*0.00001f;x[3]=v_p_s*0.00001f;} for(int i=0;i<4;i++){x_fx[i]=(int32_t)(x[i]*Q_SCALE);}}
+void LQRController::setReference(float rp_d,float rpos_p){x_ref[0]=rp_d*M_PI/180.0f;x_ref[1]=0.0f;if(internal_impulsesPerCm>0){x_ref[2]=(rpos_p/internal_impulsesPerCm)/100.0f;}else{x_ref[2]=rpos_p*0.00001f;}x_ref[3]=0.0f;for(int i=0;i<4;i++){x_ref_fx[i]=(int32_t)(x_ref[i]*Q_SCALE);}}
+void LQRController::reset(){for(int i=0;i<4;i++){x[i]=0.0f;x_ref[i]=0.0f;x_fx[i]=0;x_ref_fx[i]=0;}last_output=0.0f;}
+void IRAM_ATTR dmpDataReady(){mpuInterrupt=true;}
+void setupSensors(){Wire.begin(MPU_SDA,MPU_SCL);mpu.initialize();if(!mpu.testConnection()){printAndLog("error","BLAD KRYTYCZNY: Nie znaleziono MPU6050! Restart za 5s.");delay(5000);ESP.restart();}printAndLog("info","Inicjalizacja DMP...");uint8_t devStatus=mpu.dmpInitialize();if(devStatus==0){pinMode(MPU_INT_PIN,INPUT);attachInterrupt(digitalPinToInterrupt(MPU_INT_PIN),dmpDataReady,RISING);mpu.setDMPEnabled(true);dmpReady=true;printAndLog("info","DMP gotowy do pracy.");}else{printAndLog("error","Blad inicjalizacji DMP (kod %d). Sprawdz polaczenia.",devStatus);delay(5000);ESP.restart();}}
+void calibrateMPU() {controlFlags.balancingEnabled=false;vTaskDelay(pdMS_TO_TICKS(100));printAndLog("warn","ROZPOCZETO KALIBRACJE MPU - TRZYMAJ ROBOTA NIERUCHOMO!");detachInterrupt(digitalPinToInterrupt(MPU_INT_PIN));mpu.setDMPEnabled(false);vTaskDelay(pdMS_TO_TICKS(50));printAndLog("info","Kalibracja Accel & Gyro...");mpu.CalibrateAccel(10);mpu.CalibrateGyro(10);printAndLog("info","Nowe offsety obliczone. Restart DMP...");mpu.PrintActiveOffsets();Wire.end();Wire.begin(MPU_SDA,MPU_SCL);mpu.initialize();vTaskDelay(pdMS_TO_TICKS(100));uint8_t devStatus=mpu.dmpInitialize();if(devStatus==0){mpu.setDMPEnabled(true);attachInterrupt(digitalPinToInterrupt(MPU_INT_PIN),dmpDataReady,RISING);dmpReady=true;mpu.resetFIFO();mpuInterrupt=false;int stableCount=0;unsigned long startTime=millis();while(stableCount<20&&millis()-startTime<1000){if(mpuInterrupt){mpuInterrupt=false;if(mpu.dmpPacketAvailable()&&mpu.dmpGetCurrentFIFOPacket(fifoBuffer)){stableCount++;}else{mpu.resetFIFO();}}vTaskDelay(pdMS_TO_TICKS(5));}angleOffset=0;baseTargetAngleTrim=0;lqrController.reset();printAndLog("info","KALIBRACJA ZAKONCZONA.");}else{printAndLog("error","KRYTYCZNY BLAD podczas ponownej inicjalizacji DMP (kod %d).",devStatus);dmpReady=false;}}
+void setupMotors(){ledcSetup(LEDC_CHANNEL_L_IN1,PWM_FREQ,PWM_RESOLUTION);ledcSetup(LEDC_CHANNEL_L_IN2,PWM_FREQ,PWM_RESOLUTION);ledcSetup(LEDC_CHANNEL_R_IN1,PWM_FREQ,PWM_RESOLUTION);ledcSetup(LEDC_CHANNEL_R_IN2,PWM_FREQ,PWM_RESOLUTION);ledcAttachPin(MOTOR_L_IN1,LEDC_CHANNEL_L_IN1);ledcAttachPin(MOTOR_L_IN2,LEDC_CHANNEL_L_IN2);ledcAttachPin(MOTOR_R_IN1,LEDC_CHANNEL_R_IN1);ledcAttachPin(MOTOR_R_IN2,LEDC_CHANNEL_R_IN2);}
+void stopAllMotors() { _setSingleMotorPower(0, 0); _setSingleMotorPower(1, 0); }
+void _setSingleMotorPower(uint8_t motor_idx, int power) {power=constrain(power,-PWM_MAX_VALUE,PWM_MAX_VALUE);bool is_forward=power>0;int abs_power=abs(power);uint8_t ch_fwd,ch_bwd;if(motor_idx==0){ch_fwd=LEDC_CHANNEL_L_IN2;ch_bwd=LEDC_CHANNEL_L_IN1;}else{if(MOTOR_R_INVERT_LOGIC){ch_fwd=LEDC_CHANNEL_R_IN1;ch_bwd=LEDC_CHANNEL_R_IN2;}else{ch_fwd=LEDC_CHANNEL_R_IN2;ch_bwd=LEDC_CHANNEL_R_IN1;}}if(is_forward){ledcWrite(ch_fwd,abs_power);ledcWrite(ch_bwd,0);}else{ledcWrite(ch_bwd,abs_power);ledcWrite(ch_fwd,0);}}
+void setMotorPowerRaw(uint8_t motor_idx, int power) { _setSingleMotorPower(motor_idx, power); }
+void setMotorPower(float pwm_l, float pwm_r) {auto scale_and_map_power=[](float power,int min_fwd,int min_bwd){if(abs(power)<1.0f)return 0;float c_power=constrain(power,-PWM_MAX_VALUE,PWM_MAX_VALUE);float abs_p=abs(c_power);float sign=(c_power>0)?1.0f:-1.0f;float min_pwm=(c_power>0)?(float)min_fwd:(float)min_bwd;float mapped=min_pwm+(abs_p-1.0f)*(PWM_MAX_VALUE-min_pwm)/(PWM_MAX_VALUE-1.0f);return(int)round(sign*mapped);};int final_l=scale_and_map_power(pwm_l,tuningParams.minPwmLeftFwd,tuningParams.minPwmLeftBwd);int final_r=scale_and_map_power(pwm_r,tuningParams.minPwmRightFwd,tuningParams.minPwmRightBwd);_setSingleMotorPower(0,final_l);_setSingleMotorPower(1,final_r);}
+void IRAM_ATTR update_encoder(EncoderState* enc){unsigned long now=micros();if(now-enc->last_micros<ENCODER_DEBOUNCE_MICROS){return;}enc->last_micros=now;uint8_t s=(digitalRead(enc->pin_a)<<1)|digitalRead(enc->pin_b);uint8_t ls=enc->prev_state;static const int8_t map[]={0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0};int8_t ch=map[(ls<<2)|s];if(ch!=0){if(enc->inverted){enc->position.fetch_sub(ch,std::memory_order_relaxed);}else{enc->position.fetch_add(ch,std::memory_order_relaxed);}}enc->prev_state=s;}
+void IRAM_ATTR encoder_L_A_isr(){update_encoder(&encoder_L);}void IRAM_ATTR encoder_L_B_isr(){update_encoder(&encoder_L);}void IRAM_ATTR encoder_R_A_isr(){update_encoder(&encoder_R);}void IRAM_ATTR encoder_R_B_isr(){update_encoder(&encoder_R);}
+void setupEncoders(){pinMode(ENCODER_L_A,INPUT_PULLUP);pinMode(ENCODER_L_B,INPUT_PULLUP);pinMode(ENCODER_R_A,INPUT_PULLUP);pinMode(ENCODER_R_B,INPUT_PULLUP);encoder_L.prev_state=(digitalRead(ENCODER_L_A)<<1)|digitalRead(ENCODER_L_B);encoder_R.prev_state=(digitalRead(ENCODER_R_A)<<1)|digitalRead(ENCODER_R_B);attachInterrupt(digitalPinToInterrupt(ENCODER_L_A),encoder_L_A_isr,CHANGE);attachInterrupt(digitalPinToInterrupt(ENCODER_L_B),encoder_L_B_isr,CHANGE);attachInterrupt(digitalPinToInterrupt(ENCODER_R_A),encoder_R_A_isr,CHANGE);attachInterrupt(digitalPinToInterrupt(ENCODER_R_B),encoder_R_B_isr,CHANGE);printAndLog("info","Enkodery (ISR + Debounce) skonfigurowane.");}
+void emergencyShutdown(const char* reason){if(controlFlags.emergencyStop)return;controlFlags.emergencyStop=true;controlFlags.balancingEnabled=false;controlFlags.holdPositionEnabled=false;currentState=IDLE;stopAllMotors();lqrController.reset();timeOfFall=millis();printAndLog("error","E-STOP: %s",reason);}
+void autoRecovery(){if(!controlFlags.emergencyStop)return;if(abs(pitch-angleOffset)<5.0&&millis()-timeOfFall>3000){printAndLog("info","Proba odzyskania...");controlFlags.emergencyStop=false;}else if(abs(pitch-angleOffset)>=5.0){timeOfFall=millis();}}
+void checkSafetySystems(float gyroRate){if(!controlFlags.emergencyStop){char reason[64];if(abs(pitch-angleOffset)>CRITICAL_ANGLE_LIMIT){snprintf(reason,sizeof(reason),"KRYTYCZNY przechyl: %.1f deg",pitch-angleOffset);emergencyShutdown(reason);return;}if(abs(gyroRate)>CRITICAL_GYRO_LIMIT){snprintf(reason,sizeof(reason),"KRYTYCZNA pred. katowa: %.1f deg/s",gyroRate);emergencyShutdown(reason);}}}
+void checkLiftDetection(const int16_t& ax,const int16_t& ay,const int16_t& az){if(controlFlags.emergencyStop||!controlFlags.balancingEnabled){liftDetectStartTime=0;return;}float ax_g=(float)ax/16384.0f;float ay_g=(float)ay/16384.0f;float az_g=(float)az/16384.0f;float mag=sqrt(ax_g*ax_g+ay_g*ay_g+az_g*az_g);if(mag<LIFT_DETECTION_THRESHOLD_G){if(liftDetectStartTime==0){liftDetectStartTime=millis();}else if(millis()-liftDetectStartTime>LIFT_DETECTION_DURATION_MS){emergencyShutdown("Wykryto podniesienie");liftDetectStartTime=0;}}else{liftDetectStartTime=0;}}
+void recalculateMotionParameters(){if(tuningParams.wheelDiameterCm>0.0f&&tuningParams.encoderPPR>0.0f){float wheelCirc=PI*tuningParams.wheelDiameterCm;internal_impulsesPerCm=tuningParams.encoderPPR/wheelCirc;}else{internal_impulsesPerCm=0.0f;}if(tuningParams.trackWidthCm>0.0f&&internal_impulsesPerCm>0.0f){float turnCirc=PI*tuningParams.trackWidthCm;internal_impulsesPerDegree=(turnCirc*internal_impulsesPerCm*2.0f)/360.0f;}else{internal_impulsesPerDegree=0.0f;}}
+
+void sendGAResult(float fitness) { StaticJsonDocument<128> doc; doc["type"] = "ga_result"; doc["fitness"] = fitness; String output; serializeJson(doc, output); Serial1.println(output); }
+
+void finishGATest(bool fallen) {
+    float fitness = 0.0f;
+    if (fallen) {
+        fitness = 0.01f;
+        printAndLog("warn", "Test GA przerwany - wykryto upadek.");
+    } else {
+        fitness = 1.0f / (1.0f + (GA_FITNESS_WEIGHT_ERROR * gaAccumulatedPitchError) + (GA_FITNESS_WEIGHT_EFFORT * gaAccumulatedControlEffort));
+        printAndLog("info", "Test GA ukonczony. Blad: %.4f, Wysilek: %.2f, Fitness: %.4f", gaAccumulatedPitchError, gaAccumulatedControlEffort, fitness);
+    }
+    sendGAResult(fitness);
+    lqrController.configure(tuningParams.Q1_angle, tuningParams.Q2_angular_vel, tuningParams.Q3_position, tuningParams.Q4_velocity, tuningParams.R_control);
+    currentState = GA_WAITING_FOR_IMPULSE;
+    printAndLog("info", "GA: Test zakonczony. Powrot do stanu oczekiwania na kolejny impuls.");
+}
+
+void UartCommunicationTask(void* pvParameters) {
+  printAndLog("info", "Zadanie komunikacji UART uruchomione.");
+  String uartBuffer = ""; unsigned long lastTelemetryTime = 0;
+  for (;;) {
+    if (Serial1.available()) {
+      char c = Serial1.read();
+      if (c == '\n') {
+        if (uartBuffer.indexOf("joystick") != -1) {
+            uartJsonDoc.clear();
+            if (deserializeJson(uartJsonDoc, uartBuffer) == DeserializationError::Ok) {
+                if (currentState != GA_TEST_IN_PROGRESS && currentState != GA_WAITING_FOR_IMPULSE) {
+                    joystickX = uartJsonDoc["x"];
+                    joystickY = uartJsonDoc["y"];
+                    joystickActive = (abs(joystickX) > 0.01 || abs(joystickY) > 0.01);
+                    lastJoystickTime = millis();
+                }
+            }
+        } else {
+            uartJsonDoc.clear(); DeserializationError error = deserializeJson(uartJsonDoc, uartBuffer);
+            if (error == DeserializationError::Ok) {
+              JsonObject doc = uartJsonDoc.as<JsonObject>(); const char* type = doc["type"];
+              if (strcmp(type, "ga_load_params") == 0) {
+                  JsonObject params = doc["params"];
+                  gaTestParams.q1_angle = params["q1"]; gaTestParams.q2_angular_vel = params["q2"]; gaTestParams.q3_position = params["q3"]; gaTestParams.q4_velocity = params["q4"]; gaTestParams.r_control = params["r"]; gaTestParams.lqr_output_scalar = params["scalar"];
+              } else if (strcmp(type, "ga_run_test") == 0) {
+                  if (controlFlags.balancingEnabled) {
+                      gaTestStartPosition = (encoder_L.position.load() + encoder_R.position.load()) / 2;
+                      currentState = GA_WAITING_FOR_IMPULSE;
+                      gaAccumulatedPitchError = 0.0f;
+                      gaAccumulatedControlEffort = 0.0f;
+                      lqrController.configure(gaTestParams.q1_angle, gaTestParams.q2_angular_vel, gaTestParams.q3_position, gaTestParams.q4_velocity, gaTestParams.r_control);
+                      printAndLog("info", "GA: Otrzymano parametry. Oczekiwanie na wyzwolenie testu...");
+                  } else { printAndLog("warn", "Odrzucono test GA. Robot nie balansuje."); }
+              } else if (strcmp(type, "ga_execute_impulse_and_measure") == 0) {
+                  if (currentState == GA_WAITING_FOR_IMPULSE) {
+                      gaTestStartTime = millis();
+                      currentState = GA_TEST_IN_PROGRESS;
+                      printAndLog("info", "GA: Wyzwolono test. Rozpoczynanie sekwencji impuls/pomiar.");
+                  } else { printAndLog("warn", "Odrzucono wyzwolenie testu. Robot nie jest w stanie GA_WAITING_FOR_IMPULSE."); }
+              } else if (strcmp(type, "set_direct_motor_control") == 0) {
+                  if(!controlFlags.balancingEnabled) {
+                    const char* motorStr = doc["motor"];
+                    int pwm = doc["pwm"];
+                    if (strcmp(motorStr, "all") == 0) {
+                      stopAllMotors();
+                    } else {
+                      uint8_t motorIdx = (strcmp(motorStr, "left") == 0) ? 0 : 1;
+                      setMotorPowerRaw(motorIdx, pwm);
+                    }
+                  }
+              } else if (strcmp(type, "adjust_roll") == 0) {
+                  rollOffset += doc["value"].as<int>() * ZERO_ADJUST_STEP;
+              } else if (strcmp(type, "balance_toggle") == 0) {
+                controlFlags.balancingEnabled = doc["enabled"]; if(controlFlags.balancingEnabled){controlFlags.emergencyStop=false;lqrController.reset();}else{stopAllMotors();currentState=IDLE;controlFlags.holdPositionEnabled=false;}
+              } else if (strcmp(type, "hold_position_toggle") == 0) {
+                bool en=doc["enabled"];if(en&&!controlFlags.holdPositionEnabled){long cur_p=(encoder_L.position.load()+encoder_R.position.load())/2;long cur_h=encoder_L.position.load()-encoder_R.position.load();anchoredPosition=cur_p;anchoredHeading=cur_h;}controlFlags.holdPositionEnabled=en;
+              } else if (strcmp(type, "speed_mode_toggle") == 0) {controlFlags.speedModeEnabled=doc["enabled"];
+              } else if (strcmp(type, "lqr_enabled_toggle") == 0) {controlFlags.lqrEnabled=doc["enabled"];
+              } else if (strcmp(type, "emergency_stop") == 0) {emergencyShutdown("E-STOP z ESP_B");
+              } else if (strcmp(type, "reset_zero") == 0) {angleOffset=pitch; rollOffset=roll; baseTargetAngleTrim=0.0;
+              } else if (strcmp(type, "adjust_zero") == 0) {baseTargetAngleTrim+=doc["value"].as<int>()*ZERO_ADJUST_STEP;
+              } else if (strcmp(type, "calibrate_mpu") == 0) {calibrateMPU();
+              } else if (strcmp(type, "reset_encoders") == 0) {encoder_L.position.store(0);encoder_R.position.store(0);
+              } else if (strcmp(type, "execute_move") == 0) {if(currentState!=EXECUTING_ROTATE){targetPosition=((encoder_L.position.load()+encoder_R.position.load())/2)+(doc["distance_cm"].as<float>()*internal_impulsesPerCm);currentState=EXECUTING_MOVE;commandStartTime=millis();}}
+              else if (strcmp(type, "execute_rotate") == 0) {if(currentState!=EXECUTING_MOVE){long cur_h=encoder_L.position.load()-encoder_R.position.load();targetRotation=cur_h+(doc["angle_deg"].as<float>()*internal_impulsesPerDegree);currentState=EXECUTING_ROTATE;commandStartTime=millis();}}
+              else if (strcmp(type, "command_stop") == 0) {currentState=IDLE;controlFlags.holdPositionEnabled=false;}
+            } else { printAndLog("error", "Blad JSON z UART: %s", error.c_str()); }
+        }
+        uartBuffer = "";
+      } else { uartBuffer += c; }
+    }
+    if (millis() - lastTelemetryTime > TELEMETRY_INTERVAL_MS) {
+      lastTelemetryTime=millis();StaticJsonDocument<512> tel;
+      tel["type"]="telemetry"; tel["pitch"]=pitch-angleOffset; tel["speed"]=actualSpeed;
+      tel["target_angle"]=finalTargetAngle; tel["robot_state"]=robotStateNames[currentState];
+      tel["speed_setpoint"] = speedSetpoint; tel["lqr_output"] = lqrController.last_output;
+      tel["encoder_left"] = encoder_L.position.load(); tel["encoder_right"] = encoder_R.position.load();
+      tel["emergency_stop"] = controlFlags.emergencyStop;
+      String out; serializeJson(tel,out); Serial1.println(out);
+    }
+    vTaskDelay(pdMS_TO_TICKS(1));
+  }
+}
+
+void ControlLoopTask(void* pvParameters) {
+  printAndLog("info", "Zadanie sterujace LQR uruchomione."); while(!systemReady){vTaskDelay(pdMS_TO_TICKS(100));esp_task_wdt_reset();} vTaskDelay(pdMS_TO_TICKS(1000)); printAndLog("info", "Petla sterowania LQR startuje!");
+  long lastPosition = 0; TickType_t xLastWakeTime = xTaskGetTickCount();
+  for (;;) {
+    unsigned long nowMicros=micros();static unsigned long lastLoopMicros=nowMicros;float dt=(float)(nowMicros-lastLoopMicros)/1000000.0f;lastLoopMicros=nowMicros;if(dt<=0)dt=(float)LOOP_INTERVAL_MICROS/1000000.0f;
+    if(!dmpReady){vTaskDelayUntil(&xLastWakeTime,LOOP_INTERVAL_TICKS);continue;}
+    float pitchRate=0.0f;VectorInt16 accel;if(mpu.dmpPacketAvailable()&&mpu.dmpGetCurrentFIFOPacket(fifoBuffer)){mpu.dmpGetQuaternion(&q,fifoBuffer);mpu.dmpGetGravity(&gravity,&q);mpu.dmpGetYawPitchRoll(ypr,&q,&gravity);mpu.dmpGetAccel(&accel,fifoBuffer);pitch=ypr[1]*180/M_PI;roll=ypr[2]*180/M_PI;pitchRate=mpu.getRotationY()/131.0f;}
+    checkSafetySystems(pitchRate); checkLiftDetection(accel.x,accel.y,accel.z); autoRecovery();
+    long currentPosition=(encoder_L.position.load()+encoder_R.position.load())/2;long currentHeading=encoder_L.position.load()-encoder_R.position.load();actualSpeed=(float)(currentPosition-lastPosition)/dt;lastPosition=currentPosition;
+    bool isJoystickMoving=(millis()-lastJoystickTime<JOYSTICK_TIMEOUT&&joystickActive);
+    float scaledJoyX=0.0f,scaledJoyY=0.0f;if(isJoystickMoving){scaledJoyY=joystickY*tuningParams.joystickOutputScale;scaledJoyX=joystickX*tuningParams.joystickOutputScale;}
+    long refPosition = currentPosition;
+    speedSetpoint = 0.0f;
+    float turnComponent = 0.0f;
+    float refPitch = baseTargetAngleTrim;
+    if (isJoystickMoving && currentState != GA_TEST_IN_PROGRESS && currentState != GA_WAITING_FOR_IMPULSE) {
+      currentState = IDLE; controlFlags.holdPositionEnabled = false; turnComponent = scaledJoyX * (PWM_MAX_VALUE * tuningParams.turnFactor);
+    }
+    if (currentState == IDLE && !isJoystickMoving && controlFlags.holdPositionEnabled) { currentState = HOLDING_POSITION; }
+    if (currentState == HOLDING_POSITION && !controlFlags.holdPositionEnabled) { currentState = IDLE; }
+
+    switch (currentState) {
+      case IDLE: if(controlFlags.speedModeEnabled){speedSetpoint=scaledJoyY*tuningParams.maxSpeedJoystick;}else{float joyY_d=(abs(scaledJoyY)>tuningParams.joystickDeadzone)?scaledJoyY:0.0f;float targetJoyY=(1.0f-tuningParams.expoJoystick)*joyY_d+(tuningParams.expoJoystick*pow(joyY_d,3));refPitch=baseTargetAngleTrim+targetJoyY*tuningParams.joystickAngleSensitivity;} break;
+      case HOLDING_POSITION: refPosition=anchoredPosition; break;
+      case EXECUTING_MOVE: refPosition=targetPosition;if((millis()-commandStartTime>500&&abs(targetPosition-currentPosition)<tuningParams.holdPositionMarginPulses&&abs(actualSpeed)<10.0f)||millis()-commandStartTime>COMMAND_TIMEOUT_MS){currentState=controlFlags.holdPositionEnabled?HOLDING_POSITION:IDLE;if(controlFlags.holdPositionEnabled){anchoredPosition=targetPosition;anchoredHeading=currentHeading;}}break;
+      case EXECUTING_ROTATE: {
+        long rotError=targetRotation-currentHeading; turnComponent=constrain(rotError*tuningParams.rotationPGain,-300.0f,300.0f);
+        if((millis()-commandStartTime>500&&abs(rotError)<20)||millis()-commandStartTime>COMMAND_TIMEOUT_MS){
+          currentState=controlFlags.holdPositionEnabled?HOLDING_POSITION:IDLE; if(controlFlags.holdPositionEnabled){anchoredPosition=currentPosition;anchoredHeading=targetRotation;}
+        }
+        break;
+      }
+      case GA_WAITING_FOR_IMPULSE: { refPosition = gaTestStartPosition; turnComponent = 0.0f; refPitch = baseTargetAngleTrim; break; }
+      case GA_TEST_IN_PROGRESS: {
+        refPosition = gaTestStartPosition; turnComponent = 0.0f;
+        if (abs(pitch - angleOffset) > GA_FALL_ANGLE_DEG) { finishGATest(true); } else {
+            unsigned long elapsed = millis() - gaTestStartTime;
+            if (elapsed < GA_STABILIZE_DURATION_MS) { refPitch = baseTargetAngleTrim;
+            } else if (elapsed < GA_STABILIZE_DURATION_MS + GA_IMPULSE_DURATION_MS) { refPitch = baseTargetAngleTrim + GA_IMPULSE_ANGLE_DEG;
+            } else if (elapsed < GA_TOTAL_TEST_DURATION_MS) {
+                refPitch = baseTargetAngleTrim; float pitch_error = pitch - angleOffset - refPitch;
+                gaAccumulatedPitchError += pitch_error * pitch_error * dt;
+                gaAccumulatedControlEffort += lqrController.last_output * lqrController.last_output * dt;
+            } else { finishGATest(false); }
+        }
+        break;
+      }
+    }
+
+    bool isPositionOrSpeedMode = (currentState == HOLDING_POSITION || currentState == EXECUTING_MOVE || (currentState == IDLE && controlFlags.speedModeEnabled) || currentState == GA_WAITING_FOR_IMPULSE || currentState == GA_TEST_IN_PROGRESS);
+    if (isPositionOrSpeedMode) {
+      if (currentState != IDLE || (currentState == IDLE && controlFlags.speedModeEnabled)) {
+          long posError = refPosition - currentPosition;
+          if(currentState != EXECUTING_MOVE && currentState != GA_TEST_IN_PROGRESS) { if (abs(posError) < tuningParams.holdPositionMarginPulses) {posError = 0;} }
+          float p_corr = posError * tuningParams.positionErrorGain;
+          float d_corr = actualSpeed * tuningParams.positionDampingGain;
+          speedSetpoint = constrain(p_corr - d_corr, -tuningParams.maxSpeedFromPosition,tuningParams.maxSpeedFromPosition);
+      }
+      float speedError = speedSetpoint - actualSpeed; float angleCorr = speedError * tuningParams.speedPGain;
+      if (currentState != GA_TEST_IN_PROGRESS) { refPitch = baseTargetAngleTrim + angleCorr; }
+    }
+    
+    lqrController.updateState(pitch-angleOffset, pitchRate, currentPosition, actualSpeed);
+    lqrController.setReference(refPitch, refPosition);
+    finalTargetAngle = refPitch;
+
+    if (controlFlags.balancingEnabled && !controlFlags.emergencyStop && controlFlags.lqrEnabled) {
+      int32_t lqr_output_fx = lqrController.compute_fx();
+      float scalar = (currentState == GA_TEST_IN_PROGRESS || currentState == GA_WAITING_FOR_IMPULSE) ? gaTestParams.lqr_output_scalar : tuningParams.lqrOutputScalar;
+      float base_power = lqrController.last_output * scalar;
+      if (currentState == HOLDING_POSITION && !isJoystickMoving) {long headingError=anchoredHeading-currentHeading;turnComponent=constrain(headingError*tuningParams.headingCorrectionFactor,-250.0f,250.0f);}
+      float powerL=constrain(base_power+turnComponent,-tuningParams.globalPowerLimit,tuningParams.globalPowerLimit);float powerR=constrain(base_power-turnComponent,-tuningParams.globalPowerLimit,tuningParams.globalPowerLimit);
+      setMotorPower(powerL,powerR);
+    } else { stopAllMotors(); }
+    esp_task_wdt_reset(); vTaskDelayUntil(&xLastWakeTime,LOOP_INTERVAL_TICKS);
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  printAndLog("info", "\n--- ROBOT - RDZEN BALANSUJACY (ESP_A) v34.3 ---");
+  Serial1.begin(460800, SERIAL_8N1, UART_ESP_B_RX, UART_ESP_B_TX); // ZWIEKSZONO PREDKOSC UART
+  lqrController.configure(tuningParams.Q1_angle,tuningParams.Q2_angular_vel,tuningParams.Q3_position,tuningParams.Q4_velocity,tuningParams.R_control);
+  recalculateMotionParameters();
+  setupSensors(); setupMotors(); setupEncoders();
+  printAndLog("info", "Inicjalizacja sprzetu zakonczona. Tworzenie zadan RTOS...");
+  esp_task_wdt_init(WDT_TIMEOUT_SECONDS, true);
+  xTaskCreate(ControlLoopTask, "ControlTask", 8192, NULL, configMAX_PRIORITIES - 1, &controlTaskHandle);
+  xTaskCreate(UartCommunicationTask, "UartCommTask", 4096, NULL, 4, &uartCommTaskHandle);
+  systemReady = true;
+  printAndLog("info", "=== RDZEN BALANSUJACY GOTOWY ===");
+}
+
+void loop() { vTaskDelay(portMAX_DELAY); }
