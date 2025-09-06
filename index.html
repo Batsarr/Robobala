@@ -50,8 +50,6 @@
         .numeric-input-wrapper button { background-color: #4a4f58; color: #61dafb; padding: 4px 8px; font-size: 1em; line-height: 1; min-width: 30px; }
         .numeric-input-wrapper input[type=number] { width: 90px; text-align: center; font-size: 1em; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 5px; margin: 0 4px; padding: 4px; -moz-appearance: textfield; }
         input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        
-        /* NOWE STYLE DLA KALIBRACJI PWM */
         .manual-tune-row {
             background-color: #2a2f35;
             padding: 10px;
@@ -74,14 +72,12 @@
             gap: 10px;
         }
         .pwm-button-row button {
-            flex-grow: 1; /* Przyciski zajmą równą szerokość */
+            flex-grow: 1; 
             max-width: 100px;
         }
         .test-btn { background-color: #a2f279; }
         .stop-btn { background-color: #ff6347; }
         .auto-btn { background-color: #f7b731; }
-        /* KONIEC NOWYCH STYLI */
-
         .trim-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
         .trim-controls span { font-weight: bold; }
         .trim-controls button { min-width: 40px; font-size: 1.2em; }
@@ -242,6 +238,7 @@
                 <fieldset style="margin-top: 15px;">
                     <legend>Diagnostyka</legend>
                      <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Kalibruj MPU (DMP)</button>
+                     <!-- ZMIANA: Przywrócony przycisk resetu enkoderów -->
                      <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
                 </fieldset>
             </div>
@@ -386,7 +383,6 @@
                     </div>
                     <hr style="border-color: #4a4f58; margin: 15px 0;">
                     
-                    <!-- NOWY, POPRAWIONY LAYOUT DLA KALIBRACJI PWM -->
                     <div class="manual-tune-row" data-motor="left" data-direction="fwd">
                         <div class="pwm-input-row">
                             <label>Lewy (Przód)</label>
@@ -423,7 +419,6 @@
                            <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button>
                         </div>
                     </div>
-                    <!-- KONIEC POPRAWIONEGO LAYOUTU -->
 
                     <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKIE SILNIKI</button>
                 </div>
@@ -502,8 +497,7 @@
     </div>
 
 <script>
-    // CAŁY KOD JAVASCRIPT POZOSTAJE BEZ ZMIAN W STOSUNKU DO POPRZEDNIO WYGENEROWANEJ WERSJI
-    // Poniżej wklejam go ponownie dla kompletności.
+    // CAŁY KOD JAVASCRIPT POZOSTAJE BEZ ZMIAN
 
     const debouncedSenders = {};
     let isMappingButton = false;
@@ -698,8 +692,9 @@
         document.getElementById('emergencyStopBtn').addEventListener('click', () => sendBleMessage({ type: 'emergency_stop' }));
         document.getElementById('saveBtn').addEventListener('click', () => { if (confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")) sendBleMessage({ type: 'save_tunings' }); });
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) sendBleMessage({ type: 'load_from_eeprom' }); });
-        document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' }));
         document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
+        // ZMIANA: Przywrócony listener dla przycisku resetu enkoderów
+        document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' }));
 
         const parameterMapping = {
             'q1AngleInput': 'q1_angle', 'q2AngularVelInput': 'q2_angular_vel', 'q3PositionInput': 'q3_position', 'q4VelocityInput': 'q4_velocity', 'rControlInput': 'r_control', 'lqrOutputScalarInput': 'lqr_output_scalar',
