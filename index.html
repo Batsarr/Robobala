@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v41.1 (Auto-Tune PWM)</title>
+    <title>Robot LQR - Panel Sterowania v41.2 (Dual-Pop GA & Auto-Tune)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -376,22 +376,35 @@
                 <fieldset>
                     <legend>Ustawienia Optymalizacji</legend>
                     <div class="setting-container"><label for="gaGenerationsInput">Liczba Pokolen</label><input type="number" id="gaGenerationsInput" value="20" min="5" max="100"></div>
-                    <div class="setting-container"><label for="gaPopulationInput">Rozmiar Populacji</label><input type="number" id="gaPopulationInput" value="20" min="10" max="30"></div>
+                    
+                    <!-- NOWA, POPRAWIONA SEKCJA USTAWIEŃ POPULACJI -->
                     <div class="setting-container">
-                        <label for="gaImpulsePowerInput">Sila Impulsu Testowego</label>
+                        <label for="gaInitialPopulationInput">Populacja Początkowa (Eksploracja)<span class="help-icon">?</span></label>
+                        <input type="number" id="gaInitialPopulationInput" value="20" min="10" max="30">
+                        <div class="help-text">Większy rozmiar dla pierwszego pokolenia. Umożliwia przetestowanie większej liczby różnorodnych kandydatów na starcie.</div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="gaSubsequentPopulationInput">Populacja Następcza (Dostrajanie)<span class="help-icon">?</span></label>
+                        <input type="number" id="gaSubsequentPopulationInput" value="10" min="4" max="30">
+                        <div class="help-text">Mniejszy rozmiar dla pozostałych pokoleń. Przyspiesza proces, skupiając się na doskonaleniu najlepszych osobników znalezionych w pierwszej fazie.</div>
+                    </div>
+                    <!-- KONIEC NOWEJ SEKCJI -->
+
+                    <div class="setting-container">
+                        <label for="gaImpulsePowerInput">Siła Impulsu Testowego</label>
                         <div class="numeric-input-wrapper"><button id="gaImpulsePowerMinus">-</button><input type="number" id="gaImpulsePowerInput" min="50" max="250" step="10" value="120"><button id="gaImpulsePowerPlus">+</button></div>
                     </div>
                     
                     <hr style="border-color: #4a4f58; margin: 15px 0;">
                     <div class="setting-container">
-                        <label for="gaUseImpulseTest">Uzyj testu z impulsem<span class="help-icon">?</span></label>
+                        <label for="gaUseImpulseTest">Użyj testu z impulsem<span class="help-icon">?</span></label>
                         <label class="switch"><input type="checkbox" id="gaUseImpulseTest" checked><span class="slider round"></span></label>
-                         <div class="help-text">Wlacz, aby testowac odpornosc na zaklocenia (strojenie dynamiczne). Wylacz, aby testowac tylko jakosc balansowania w miejscu (strojenie statyczne do znalezienia ustawien bazowych).</div>
+                         <div class="help-text">Włącz, aby testować odporność na zakłócenia (strojenie dynamiczne). Wyłącz, aby testować tylko jakość balansowania w miejscu (strojenie statyczne do znalezienia ustawień bazowych).</div>
                     </div>
                     <div class="setting-container">
-                        <label for="gaInitialSpreadInput">Rozrzut parametrow startowych (%)<span class="help-icon">?</span></label>
+                        <label for="gaInitialSpreadInput">Rozrzut parametrów startowych (%)<span class="help-icon">?</span></label>
                         <div class="numeric-input-wrapper"><button id="gaInitialSpreadMinus">-</button><input type="number" id="gaInitialSpreadInput" min="1" max="100" step="1" value="50"><button id="gaInitialSpreadPlus">+</button></div>
-                        <div class="help-text">Definiuje, jak bardzo parametry pierwszego pokolenia moga sie roznic od aktualnych ustawien. Niskie wartosci (5-15%) sa bezpieczniejsze i sluza do precyzyjnego dostrajania. Wysokie wartosci (30-60%) sluza do szerszej eksploracji.</div>
+                        <div class="help-text">Definiuje, jak bardzo parametry pierwszego pokolenia mogą się różnić od aktualnych ustawień. Niskie wartości (5-15%) są bezpieczniejsze i służą do precyzyjnego dostrajania. Wysokie wartości (30-60%) służą do szerszej eksploracji.</div>
                     </div>
                      <hr style="border-color: #4a4f58; margin: 15px 0;">
 
@@ -403,7 +416,7 @@
                     <button id="stopGaBtn" style="background-color: #ff6347;" disabled>ZATRZYMAJ</button>
                 </div>
                  <fieldset>
-                    <legend>Postep</legend>
+                    <legend>Postęp</legend>
                     <div id="ga-progress-bar-container"><div id="ga-progress-bar"></div></div>
                     <div class="ga-status-grid">
                         <strong>Pokolenie:</strong> <span id="gaGenerationStatus">-- / --</span>
@@ -569,7 +582,6 @@
                 tuneBtn.disabled = false;
                 tuneBtn.textContent = 'Uruchom Automatyczną Kalibrację';
                 
-                // Ważne: Wyślij nowe wartości do rdzenia B, aby je zapamiętał i używał
                 debouncedSenders['set_min_pwm']();
                 break;
         }
@@ -688,7 +700,9 @@
         }
         const config = {
             gens: parseInt(document.getElementById('gaGenerationsInput').value),
-            pop: parseInt(document.getElementById('gaPopulationInput').value),
+            // NOWY, POPRAWIONY ODCZYT Z DWÓCH PÓL
+            pop: parseInt(document.getElementById('gaInitialPopulationInput').value),
+            sub_pop: parseInt(document.getElementById('gaSubsequentPopulationInput').value),
             early_stop: document.getElementById('gaEarlyStopCheckbox').checked,
             patience: parseInt(document.getElementById('gaPatienceInput').value),
             impulse_power: parseFloat(document.getElementById('gaImpulsePowerInput').value),
