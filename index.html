@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v41.3 (Hybrid PWM Tune)</title>
+    <title>Robot LQR - Panel Sterowania v41.4 (Final UI)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -140,7 +140,6 @@
 
     <h1>Robot LQR - Panel Sterowania</h1>
     <div class="main-grid">
-        <!-- Pozostałe karty (Sterowanie, Status, itd.) pozostają bez zmian -->
         <div class="card" id="controls-card">
             <h2>Sterowanie</h2>
             <div id="joystickWrapper"><canvas id="joystickCanvas"></canvas></div>
@@ -166,7 +165,7 @@
             </fieldset>
 
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
-            <button id="resetZeroBtn" style="margin-top:10px;">Resetuj Osie</button>
+            <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Resetuj Osie</button>
 
             <div class="trim-controls">
                 <button id="trimMinusBtn">-</button>
@@ -178,6 +177,9 @@
                 <span>Korekta Przechylu (Roll)</span>
                 <button id="trimRollPlusBtn">+</button>
             </div>
+            
+            <!-- PRZENIESIONY PRZYCISK -->
+            <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
             
             <button id="emergencyStopBtn">STOP AWARYJNY</button>
         </div>
@@ -238,8 +240,6 @@
                 <fieldset style="margin-top: 15px;">
                     <legend>Diagnostyka</legend>
                      <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Kalibruj MPU (DMP)</button>
-                     <!-- ZMIANA: Przywrócony przycisk resetu enkoderów -->
-                     <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
                 </fieldset>
             </div>
         </div>
@@ -497,8 +497,6 @@
     </div>
 
 <script>
-    // CAŁY KOD JAVASCRIPT POZOSTAJE BEZ ZMIAN
-
     const debouncedSenders = {};
     let isMappingButton = false;
     let actionToMap = null;
@@ -693,7 +691,6 @@
         document.getElementById('saveBtn').addEventListener('click', () => { if (confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")) sendBleMessage({ type: 'save_tunings' }); });
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) sendBleMessage({ type: 'load_from_eeprom' }); });
         document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
-        // ZMIANA: Przywrócony listener dla przycisku resetu enkoderów
         document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' }));
 
         const parameterMapping = {
