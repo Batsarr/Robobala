@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v40.0 (Robust Evolution)</title>
+    <title>Robot LQR - Panel Sterowania v41.1 (Auto-Tune PWM)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -50,10 +50,9 @@
         .numeric-input-wrapper button { background-color: #4a4f58; color: #61dafb; padding: 4px 8px; font-size: 1em; line-height: 1; min-width: 30px; }
         .numeric-input-wrapper input[type=number] { width: 90px; text-align: center; font-size: 1em; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 5px; margin: 0 4px; padding: 4px; -moz-appearance: textfield; }
         input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        .manual-tune-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; margin-bottom: 8px; }
+        .manual-tune-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin-bottom: 8px; }
         .manual-tune-row label { text-align: left; font-weight: bold; color: #a2f279; }
-        .manual-tune-row .test-btn { background-color: #a2f279; }
-        .manual-tune-row .stop-btn { background-color: #ff6347; }
+        .manual-tune-row input[readonly] { background-color: #20232a; color: #a2f279; border: 1px solid #4a4f58; text-align: center; width: 90px; padding: 4px; border-radius: 5px; font-weight: bold;}
         .trim-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
         .trim-controls span { font-weight: bold; }
         .trim-controls button { min-width: 40px; font-size: 1.2em; }
@@ -344,14 +343,24 @@
                 <button class="accordion-header" onclick="toggleAccordion(this)">4. Kalibracja PWM Silnikow</button>
                 <div class="accordion-content">
                     <div class="pwm-info">
-                        <strong>Info:</strong> Minimalne wartosci PWM to prog, ponizej ktorego silnik nie kreci sie. Ustal je testujac kazdy silnik osobno.
+                        <strong>Info:</strong> Ta procedura automatycznie znajdzie minimalną wartość PWM, przy której koła zaczynają się obracać.
+                        <strong>Ważne:</strong> Przed uruchomieniem podnieś robota, aby koła mogły się swobodnie kręcić!
                     </div>
-                    <div class="manual-tune-row" data-motor="left" data-direction="fwd"><label>Lewy (Przod)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div></div>
-                    <div class="manual-tune-row" data-motor="left" data-direction="bwd"><label>Lewy (Tyl)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div></div>
-                    <div class="manual-tune-row" data-motor="right" data-direction="fwd"><label>Prawy (Przod)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div></div>
-                    <div class="manual-tune-row" data-motor="right" data-direction="bwd"><label>Prawy (Tyl)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div></div>
+                    <div class="setting-container">
+                        <label for="pwmTuneStartInput">Rozpocznij szukanie od PWM</label>
+                        <div class="numeric-input-wrapper">
+                            <button id="pwmTuneStartMinus">-</button>
+                            <input type="number" id="pwmTuneStartInput" min="1" max="800" step="10" value="400">
+                            <button id="pwmTuneStartPlus">+</button>
+                        </div>
+                    </div>
+                    <button id="startPwmTuneBtn" style="width:100%; margin-top:15px; background-color:#a2f279;">Uruchom Automatyczną Kalibrację</button>
                     <hr style="border-color: #4a4f58; margin: 15px 0;">
-                    <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKO</button>
+                    <h5>Wyniki Kalibracji:</h5>
+                    <div class="manual-tune-row"><label>Lewy (Przód)</label><input type="number" class="config-value tune-input" id="minPwmLeftFwdInput" readonly value="640"></div>
+                    <div class="manual-tune-row"><label>Lewy (Tył)</label><input type="number" class="config-value tune-input" id="minPwmLeftBwdInput" readonly value="640"></div>
+                    <div class="manual-tune-row"><label>Prawy (Przód)</label><input type="number" class="config-value tune-input" id="minPwmRightFwdInput" readonly value="640"></div>
+                    <div class="manual-tune-row"><label>Prawy (Tył)</label><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" readonly value="640"></div>
                 </div>
             </div>
             
@@ -372,6 +381,20 @@
                         <label for="gaImpulsePowerInput">Sila Impulsu Testowego</label>
                         <div class="numeric-input-wrapper"><button id="gaImpulsePowerMinus">-</button><input type="number" id="gaImpulsePowerInput" min="50" max="250" step="10" value="120"><button id="gaImpulsePowerPlus">+</button></div>
                     </div>
+                    
+                    <hr style="border-color: #4a4f58; margin: 15px 0;">
+                    <div class="setting-container">
+                        <label for="gaUseImpulseTest">Uzyj testu z impulsem<span class="help-icon">?</span></label>
+                        <label class="switch"><input type="checkbox" id="gaUseImpulseTest" checked><span class="slider round"></span></label>
+                         <div class="help-text">Wlacz, aby testowac odpornosc na zaklocenia (strojenie dynamiczne). Wylacz, aby testowac tylko jakosc balansowania w miejscu (strojenie statyczne do znalezienia ustawien bazowych).</div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="gaInitialSpreadInput">Rozrzut parametrow startowych (%)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><button id="gaInitialSpreadMinus">-</button><input type="number" id="gaInitialSpreadInput" min="1" max="100" step="1" value="50"><button id="gaInitialSpreadPlus">+</button></div>
+                        <div class="help-text">Definiuje, jak bardzo parametry pierwszego pokolenia moga sie roznic od aktualnych ustawien. Niskie wartosci (5-15%) sa bezpieczniejsze i sluza do precyzyjnego dostrajania. Wysokie wartosci (30-60%) sluza do szerszej eksploracji.</div>
+                    </div>
+                     <hr style="border-color: #4a4f58; margin: 15px 0;">
+
                     <div class="setting-container"><label for="gaEarlyStopCheckbox">Wczesne zatrzymanie</label><input type="checkbox" id="gaEarlyStopCheckbox" checked></div>
                     <div class="setting-container" id="gaPatienceContainer"><label for="gaPatienceInput">Zatrzymaj po (pokoleniach)</label><input type="number" id="gaPatienceInput" value="3" min="2" max="10"></div>
                 </fieldset>
@@ -388,7 +411,7 @@
                         <strong>Najlepszy Fitness:</strong> <span id="gaBestFitnessStatus">-.----</span>
                     </div>
                     <div id="ga-best-params-display">Najlepsze parametry pojawia sie tutaj...</div>
-                    <button id="gaTriggerBtn" disabled>URUCHOM IMPULS TESTOWY</button>
+                    <button id="gaTriggerBtn" disabled>URUCHOM TEST OSOBNIKA</button>
                 </fieldset>
             </div>
         </div>
@@ -415,7 +438,6 @@
         populatePresetSelect();
         setupNumericInputs();
         setupEventListeners();
-        setupManualTuneButtons();
         setupSequenceControls();
         setupDpadControls();
         setupGamepadMappingModal();
@@ -429,7 +451,7 @@
         });
     });
 
-    const CUSTOM_PRESET_PREFIX = 'lqr_custom_preset_v40.0_';
+    const CUSTOM_PRESET_PREFIX = 'lqr_custom_preset_v41.0_';
     let bleDevice, rxCharacteristic, txCharacteristic;
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
     const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
@@ -445,7 +467,7 @@
     let lastGamepadState = [];
     let lastGamepadAxes = { x: 0, y: 0 };
     let gamepadMappings = {};
-    const GAMEPAD_MAPPING_KEY = 'lqr_gamepad_mappings_v40';
+    const GAMEPAD_MAPPING_KEY = 'lqr_gamepad_mappings_v41';
     const GAMEPAD_AXIS_THRESHOLD = 0.15;
     
     let isSequenceRunning = false;
@@ -528,15 +550,27 @@
                 setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 500);
                 break;
             case 'ga_ready_for_trigger':
-                setGaUiLock(true);
-                document.getElementById('gaTriggerBtn').disabled = !data.ready;
+                const triggerButton = document.getElementById('gaTriggerBtn');
+                triggerButton.disabled = !data.ready;
+                triggerButton.textContent = data.ready ? 'URUCHOM TEST OSOBNIKA' : 'CZEKAM NA ROBOTA...';
                 if (data.ready) {
-                    addLogMessage('[UI] Robot gotowy. Uruchom impuls testowy.', 'info');
+                    addLogMessage('[UI] Robot gotowy. Uruchom test osobnika.', 'info');
                 }
                 break;
-            case 'ga_fall_detected':
-                addLogMessage("[SYSTEM] Wykryto upadek! Postaw robota, wlacz balansowanie i poczekaj na gotowosc do nastepnego testu.", "warn");
-                setGaUiLock(false);
+            case 'min_pwm_tune_results':
+                const params = data.params;
+                document.getElementById('minPwmLeftFwdInput').value = params.min_pwm_left_fwd;
+                document.getElementById('minPwmLeftBwdInput').value = params.min_pwm_left_bwd;
+                document.getElementById('minPwmRightFwdInput').value = params.min_pwm_right_fwd;
+                document.getElementById('minPwmRightBwdInput').value = params.min_pwm_right_bwd;
+                
+                addLogMessage('[UI] Strojenie Min PWM zakończone! Otrzymano nowe wartości.', 'success');
+                const tuneBtn = document.getElementById('startPwmTuneBtn');
+                tuneBtn.disabled = false;
+                tuneBtn.textContent = 'Uruchom Automatyczną Kalibrację';
+                
+                // Ważne: Wyślij nowe wartości do rdzenia B, aby je zapamiętał i używał
+                debouncedSenders['set_min_pwm']();
                 break;
         }
     }
@@ -588,6 +622,17 @@
         document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' }));
         document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
 
+        document.getElementById('startPwmTuneBtn').addEventListener('click', () => {
+            if (confirm("UWAGA! Upewnij się, że robot jest uniesiony, a koła mogą się swobodnie obracać. Kontynuować?")) {
+                const startValue = parseInt(document.getElementById('pwmTuneStartInput').value);
+                sendBleMessage({ type: 'start_min_pwm_tune', start_pwm: startValue });
+                addLogMessage(`[UI] Rozpoczynam automatyczne strojenie Min PWM od wartości ${startValue}...`, 'info');
+                const tuneBtn = document.getElementById('startPwmTuneBtn');
+                tuneBtn.disabled = true;
+                tuneBtn.textContent = 'Strojenie w toku...';
+            }
+        });
+
         const parameterMapping = {
             'q1AngleInput': 'q1_angle', 'q2AngularVelInput': 'q2_angular_vel', 'q3PositionInput': 'q3_position', 'q4VelocityInput': 'q4_velocity', 'rControlInput': 'r_control', 'lqrOutputScalarInput': 'lqr_output_scalar',
             'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickOutputScaleInput': 'joystick_output_scale', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity',
@@ -623,20 +668,40 @@
             
             keys.forEach(inputId => {
                 const input = document.getElementById(inputId);
-                if (input) input.addEventListener('change', debouncedSenders[type]);
+                if (input && !input.readOnly) input.addEventListener('change', debouncedSenders[type]);
             });
         }
 
         document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset);
         document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset);
-        document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); });
+        document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container, .control-row'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); });
         document.getElementById('startGaBtn').addEventListener('click', startGA);
         document.getElementById('stopGaBtn').addEventListener('click', () => stopGA(true));
         document.getElementById('gaTriggerBtn').addEventListener('click', () => { sendBleMessage({ type: 'ga_trigger_test' }); document.getElementById('gaTriggerBtn').disabled = true; });
         document.getElementById('gaEarlyStopCheckbox').addEventListener('change', (e) => { document.getElementById('gaPatienceContainer').style.display = e.target.checked ? 'grid' : 'none'; });
     }
-    
-    function setupManualTuneButtons() { document.querySelectorAll('.manual-tune-row').forEach(row => { const motor = row.dataset.motor; const direction = row.dataset.direction; const input = row.querySelector('.tune-input'); row.querySelector('.test-btn').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: parseInt(input.value) }); }); row.querySelector('.stop-btn').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); }); }); document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); }); }
+
+    function startGA() {
+        if (!bleDevice) {
+            addLogMessage('Polacz z robotem przed rozpoczeciem optymalizacji.', 'warn');
+            return;
+        }
+        const config = {
+            gens: parseInt(document.getElementById('gaGenerationsInput').value),
+            pop: parseInt(document.getElementById('gaPopulationInput').value),
+            early_stop: document.getElementById('gaEarlyStopCheckbox').checked,
+            patience: parseInt(document.getElementById('gaPatienceInput').value),
+            impulse_power: parseFloat(document.getElementById('gaImpulsePowerInput').value),
+            use_impulse_test: document.getElementById('gaUseImpulseTest').checked,
+            initial_spread: parseFloat(document.getElementById('gaInitialSpreadInput').value) / 100.0
+        };
+        sendBleMessage({ type: 'start_ga', config: config });
+        isGaRunning = true;
+        document.getElementById('stopGaBtn').disabled = false;
+        document.getElementById('startGaBtn').disabled = true;
+        setGaUiLock(true);
+        addLogMessage('Wysylanie polecenia rozpoczecia optymalizacji...', 'info');
+    }
     
     function setupSequenceControls() {
         document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep);
@@ -768,27 +833,8 @@
             document.getElementById('connectBleBtn').disabled = !!bleDevice;
         }
     }
-
-    function startGA() {
-        if (!bleDevice) {
-            addLogMessage('Polacz z robotem przed rozpoczeciem optymalizacji.', 'warn');
-            return;
-        }
-        const config = {
-            gens: parseInt(document.getElementById('gaGenerationsInput').value),
-            pop: parseInt(document.getElementById('gaPopulationInput').value),
-            early_stop: document.getElementById('gaEarlyStopCheckbox').checked,
-            patience: parseInt(document.getElementById('gaPatienceInput').value),
-            impulse_power: parseFloat(document.getElementById('gaImpulsePowerInput').value)
-        };
-        sendBleMessage({ type: 'start_ga', config: config });
-        isGaRunning = true;
-        document.getElementById('stopGaBtn').disabled = false;
-        document.getElementById('startGaBtn').disabled = true;
-        setGaUiLock(true);
-        addLogMessage('Wysylanie polecenia rozpoczecia optymalizacji...', 'info');
-    }
-    function stopGA(sendCmd) { if (sendCmd && isGaRunning) sendBleMessage({ type: 'stop_ga' }); isGaRunning = false; setGaUiLock(false); document.getElementById('stopGaBtn').disabled = true; document.getElementById('startGaBtn').disabled = false; document.getElementById('gaTriggerBtn').disabled = true; }
+    
+    function stopGA(sendCmd) { if (sendCmd && isGaRunning) sendBleMessage({ type: 'stop_ga' }); isGaRunning = false; setGaUiLock(false); document.getElementById('stopGaBtn').disabled = true; document.getElementById('startGaBtn').disabled = false; document.getElementById('gaTriggerBtn').disabled = true; document.getElementById('gaTriggerBtn').textContent = 'URUCHOM TEST OSOBNIKA'; }
     function flashElement(element) { if (!element) return; const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element; target.classList.add('gamepad-flash'); setTimeout(() => target.classList.remove('gamepad-flash'), 300); }
     function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
     function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
