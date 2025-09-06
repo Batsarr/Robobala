@@ -50,12 +50,38 @@
         .numeric-input-wrapper button { background-color: #4a4f58; color: #61dafb; padding: 4px 8px; font-size: 1em; line-height: 1; min-width: 30px; }
         .numeric-input-wrapper input[type=number] { width: 90px; text-align: center; font-size: 1em; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 5px; margin: 0 4px; padding: 4px; -moz-appearance: textfield; }
         input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        .manual-tune-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; margin-bottom: 8px; }
-        .manual-tune-row label { text-align: left; font-weight: bold; color: #a2f279; }
-        .manual-tune-row .button-group { display: flex; gap: 5px; }
-        .manual-tune-row .test-btn { background-color: #a2f279; }
-        .manual-tune-row .stop-btn { background-color: #ff6347; }
-        .manual-tune-row .auto-btn { background-color: #f7b731; }
+        
+        /* NOWE STYLE DLA KALIBRACJI PWM */
+        .manual-tune-row {
+            background-color: #2a2f35;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+        }
+        .pwm-input-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .pwm-input-row label {
+            font-weight: bold;
+            color: #a2f279;
+        }
+        .pwm-button-row {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        .pwm-button-row button {
+            flex-grow: 1; /* Przyciski zajmą równą szerokość */
+            max-width: 100px;
+        }
+        .test-btn { background-color: #a2f279; }
+        .stop-btn { background-color: #ff6347; }
+        .auto-btn { background-color: #f7b731; }
+        /* KONIEC NOWYCH STYLI */
+
         .trim-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
         .trim-controls span { font-weight: bold; }
         .trim-controls button { min-width: 40px; font-size: 1.2em; }
@@ -118,6 +144,7 @@
 
     <h1>Robot LQR - Panel Sterowania</h1>
     <div class="main-grid">
+        <!-- Pozostałe karty (Sterowanie, Status, itd.) pozostają bez zmian -->
         <div class="card" id="controls-card">
             <h2>Sterowanie</h2>
             <div id="joystickWrapper"><canvas id="joystickCanvas"></canvas></div>
@@ -227,7 +254,7 @@
                 <div class="chart-controls" id="chartControls"></div>
             </div>
         </div>
-        
+
         <div class="card">
             <h2>Konfiguracja</h2>
             <fieldset>
@@ -358,10 +385,46 @@
                         </div>
                     </div>
                     <hr style="border-color: #4a4f58; margin: 15px 0;">
-                    <div class="manual-tune-row" data-motor="left" data-direction="fwd"><label>Lewy (Przód)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div class="button-group"><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div></div>
-                    <div class="manual-tune-row" data-motor="left" data-direction="bwd"><label>Lewy (Tył)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div class="button-group"><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div></div>
-                    <div class="manual-tune-row" data-motor="right" data-direction="fwd"><label>Prawy (Przód)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div class="button-group"><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div></div>
-                    <div class="manual-tune-row" data-motor="right" data-direction="bwd"><label>Prawy (Tył)</label><div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div><div class="button-group"><button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div></div>
+                    
+                    <!-- NOWY, POPRAWIONY LAYOUT DLA KALIBRACJI PWM -->
+                    <div class="manual-tune-row" data-motor="left" data-direction="fwd">
+                        <div class="pwm-input-row">
+                            <label>Lewy (Przód)</label>
+                            <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div>
+                        </div>
+                        <div class="pwm-button-row">
+                            <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button>
+                        </div>
+                    </div>
+                    <div class="manual-tune-row" data-motor="left" data-direction="bwd">
+                         <div class="pwm-input-row">
+                            <label>Lewy (Tył)</label>
+                            <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div>
+                        </div>
+                        <div class="pwm-button-row">
+                            <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button>
+                        </div>
+                    </div>
+                    <div class="manual-tune-row" data-motor="right" data-direction="fwd">
+                        <div class="pwm-input-row">
+                            <label>Prawy (Przód)</label>
+                            <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div>
+                        </div>
+                        <div class="pwm-button-row">
+                           <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button>
+                        </div>
+                    </div>
+                    <div class="manual-tune-row" data-motor="right" data-direction="bwd">
+                        <div class="pwm-input-row">
+                            <label>Prawy (Tył)</label>
+                            <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div>
+                        </div>
+                        <div class="pwm-button-row">
+                           <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button>
+                        </div>
+                    </div>
+                    <!-- KONIEC POPRAWIONEGO LAYOUTU -->
+
                     <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKIE SILNIKI</button>
                 </div>
             </div>
@@ -439,6 +502,9 @@
     </div>
 
 <script>
+    // CAŁY KOD JAVASCRIPT POZOSTAJE BEZ ZMIAN W STOSUNKU DO POPRZEDNIO WYGENEROWANEJ WERSJI
+    // Poniżej wklejam go ponownie dla kompletności.
+
     const debouncedSenders = {};
     let isMappingButton = false;
     let actionToMap = null;
@@ -449,7 +515,7 @@
         populatePresetSelect();
         setupNumericInputs();
         setupEventListeners();
-        setupManualTuneButtons(); // Re-added this function
+        setupManualTuneButtons(); 
         setupSequenceControls();
         setupDpadControls();
         setupGamepadMappingModal();
@@ -573,17 +639,16 @@
                 const p = data.params;
                 const inputId = `minPwm${p.motor.charAt(0).toUpperCase() + p.motor.slice(1)}${p.direction.charAt(0).toUpperCase() + p.direction.slice(1)}Input`;
                 const inputField = document.getElementById(inputId);
-                const tuneRow = inputField.closest('.manual-tune-row');
-                
                 if (inputField) {
+                    const tuneRow = inputField.closest('.manual-tune-row');
                     inputField.value = p.value;
                     addLogMessage(`[UI] Auto-strojenie dla ${p.motor} ${p.direction} zakończone. Wynik: ${p.value}`, 'success');
                     debouncedSenders['set_min_pwm']();
-                }
-                if(tuneRow){
-                    const autoBtn = tuneRow.querySelector('.auto-btn');
-                    autoBtn.disabled = false;
-                    autoBtn.textContent = 'Auto';
+                    if(tuneRow){
+                        const autoBtn = tuneRow.querySelector('.auto-btn');
+                        autoBtn.disabled = false;
+                        autoBtn.textContent = 'Auto';
+                    }
                 }
                 break;
         }
@@ -618,7 +683,7 @@
     function populatePresetSelect() { const select = document.getElementById('lqrPresetSelect'); select.innerHTML = ''; for (const [index, preset] of Object.entries(builtInPresetsData)) { const option = document.createElement('option'); option.value = index; option.textContent = preset.name; select.appendChild(option); } for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key.startsWith(CUSTOM_PRESET_PREFIX)) { const presetName = key.substring(CUSTOM_PRESET_PREFIX.length); const option = document.createElement('option'); option.value = key; option.textContent = `Wlasny: ${presetName}`; select.appendChild(option); } } }
     async function applySelectedPreset() { const select = document.getElementById('lqrPresetSelect'); const selectedValue = select.value; let presetData; if (selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { presetData = JSON.parse(localStorage.getItem(selectedValue)); if (presetData) addLogMessage(`[UI] Ladowanie wlasnego presetu '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'.`, 'info'); } else { presetData = builtInPresetsData[selectedValue]?.params; if (presetData) addLogMessage(`[UI] Ladowanie wbudowanego presetu '${builtInPresetsData[selectedValue].name}'.`, 'info'); } if (presetData) { for (const [key, value] of Object.entries(presetData)) { const input = document.getElementById(key + 'Input'); if (input) { input.value = value; input.dispatchEvent(new Event('change', { bubbles: true })); } } addLogMessage('[UI] Zastosowano i wyslano wartosci presetu do robota.', 'info'); } else { addLogMessage(`[UI] Blad: nie znaleziono danych dla presetu '${selectedValue}'.`, 'error'); } }
     function saveCurrentAsPreset() { const presetName = prompt("Podaj nazwe dla nowego presetu:", ""); if (presetName && presetName.trim() !== "") { const presetData = {}; const keysToSave = ['q1Angle', 'q2AngularVel', 'q3Position', 'q4Velocity', 'rControl', 'lqrOutputScalar']; keysToSave.forEach(key => { const input = document.getElementById(key + 'Input'); if (input) presetData[key] = parseFloat(input.value); }); localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData)); addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'info'); populatePresetSelect(); } else { addLogMessage('[UI] Anulowano zapisywanie presetu.', 'warn'); } }
-    function setupNumericInputs() { document.querySelectorAll('.numeric-input-wrapper').forEach(wrapper => { const container = wrapper.closest('.setting-container') || wrapper.closest('.manual-tune-row'); if (!container) return; const input = container.querySelector('input[type=number]'); const minusBtn = wrapper.querySelector('button:first-child'); const plusBtn = wrapper.querySelector('button:last-child'); if (!input || !minusBtn || !plusBtn || input.disabled) return; const step = parseFloat(input.step) || 1; const isFloat = input.step.includes('.'); const updateValue = (amount) => { let current = parseFloat(input.value); if (isNaN(current)) current = 0; let newValue = current + amount; if (isFloat) { const dp = (step.toString().split('.')[1] || '').length; newValue = parseFloat(newValue.toFixed(dp)); } const min = parseFloat(input.min); const max = parseFloat(input.max); if (!isNaN(min)) newValue = Math.max(min, newValue); if (!isNaN(max)) newValue = Math.min(max, newValue); input.value = newValue; input.dispatchEvent(new Event('change', { bubbles: true })); }; minusBtn.addEventListener('click', () => updateValue(-step)); plusBtn.addEventListener('click', () => updateValue(step)); }); }
+    function setupNumericInputs() { document.querySelectorAll('.numeric-input-wrapper').forEach(wrapper => { const container = wrapper.closest('.setting-container') || wrapper.closest('.pwm-input-row'); if (!container) return; const input = container.querySelector('input[type=number]'); const minusBtn = wrapper.querySelector('button:first-child'); const plusBtn = wrapper.querySelector('button:last-child'); if (!input || !minusBtn || !plusBtn || input.disabled) return; const step = parseFloat(input.step) || 1; const isFloat = input.step.includes('.'); const updateValue = (amount) => { let current = parseFloat(input.value); if (isNaN(current)) current = 0; let newValue = current + amount; if (isFloat) { const dp = (step.toString().split('.')[1] || '').length; newValue = parseFloat(newValue.toFixed(dp)); } const min = parseFloat(input.min); const max = parseFloat(input.max); if (!isNaN(min)) newValue = Math.max(min, newValue); if (!isNaN(max)) newValue = Math.min(max, newValue); input.value = newValue; input.dispatchEvent(new Event('change', { bubbles: true })); }; minusBtn.addEventListener('click', () => updateValue(-step)); plusBtn.addEventListener('click', () => updateValue(step)); }); }
     
     function setupEventListeners() {
         joystickCanvas.addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd);
@@ -707,7 +772,6 @@
         addLogMessage('Wysylanie polecenia rozpoczecia optymalizacji...', 'info');
     }
     
-    // New function to handle manual and auto PWM tuning buttons
     function setupManualTuneButtons() {
         document.querySelectorAll('.manual-tune-row').forEach(row => {
             const motor = row.dataset.motor;
