@@ -178,7 +178,6 @@
                 <button id="trimRollPlusBtn">+</button>
             </div>
             
-            <!-- PRZENIESIONY PRZYCISK -->
             <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
             
             <button id="emergencyStopBtn">STOP AWARYJNY</button>
@@ -480,12 +479,14 @@
                         <strong>Najlepszy Fitness:</strong> <span id="gaBestFitnessStatus">-.----</span>
                     </div>
                     <div id="ga-best-params-display">Najlepsze parametry pojawia sie tutaj...</div>
+                    <button id="gaSavePresetBtn" style="width:100%; margin-top:10px; background-color:#61dafb;" disabled>Zapisz znalezione jako Preset</button>
                     <button id="gaTriggerBtn" disabled>URUCHOM TEST OSOBNIKA</button>
                 </fieldset>
             </div>
         </div>
 
         <div class="card">
+            <!-- ZMIANA: Dodana klasa 'active' do obu elementów -->
             <button class="accordion-header active" onclick="toggleAccordion(this)">Logi Systemowe</button>
             <div class="accordion-content active">
                 <div id="log-history"></div>
@@ -500,6 +501,7 @@
     const debouncedSenders = {};
     let isMappingButton = false;
     let actionToMap = null;
+    let lastBestGaParams = null; // Zmienna do przechowywania najlepszych parametrów GA
 
     document.addEventListener('DOMContentLoaded', () => {
         initJoystick();
@@ -668,7 +670,12 @@
         addLogMessage("[UI] Parametry robota zsynchronizowane z panelem.", "info");
     }
     function updateTelemetryUI(data) { if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state; if (data.pitch !== undefined) { document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0'; document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`; } if (data.speed !== undefined) document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0); if (data.speed_setpoint !== undefined) document.getElementById('speedSetpointVal').textContent = parseFloat(data.speed_setpoint).toFixed(0); if (data.target_angle !== undefined) document.getElementById('targetAngleVal').textContent = parseFloat(data.target_angle).toFixed(1) + ' \u00B0'; if (data.lqr_output !== undefined) document.getElementById('lqrOutputVal').textContent = parseFloat(data.lqr_output).toFixed(2); if (data.encoder_left !== undefined) document.getElementById('encoderLeftVal').textContent = data.encoder_left; if (data.encoder_right !== undefined) document.getElementById('encoderRightVal').textContent = data.encoder_right; const emergencyBanner = document.getElementById('emergency-banner'); if (emergencyBanner) emergencyBanner.style.display = data.emergency_stop ? 'block' : 'none'; }
-    function updateGaProgress(data) { const progress = (data.gen - 1) * data.total_ind + data.ind; const total = data.total_gen * data.total_ind; document.getElementById('ga-progress-bar').style.width = `${(progress / total) * 100}%`; document.getElementById('gaGenerationStatus').textContent = `${data.gen} / ${data.total_gen}`; document.getElementById('gaIndividualStatus').textContent = `${data.ind} / ${data.total_ind}`; document.getElementById('gaBestFitnessStatus').textContent = data.best_fit.toFixed(4); const params = data.best_params; const paramsText = ` q1: ${params.q1.toFixed(2)}\n q2: ${params.q2.toFixed(2)}\n q3: ${params.q3.toFixed(2)}\n q4: ${params.q4.toFixed(2)}\n  r: ${params.r.toFixed(4)}\n sc: ${params.scalar.toFixed(2)}`; document.getElementById('ga-best-params-display').textContent = paramsText; }
+    function updateGaProgress(data) {
+        lastBestGaParams = data.best_params; // Zapisz najlepsze parametry
+        document.getElementById('gaSavePresetBtn').disabled = false; // Odblokuj przycisk zapisu
+
+        const progress = (data.gen - 1) * data.total_ind + data.ind; const total = data.total_gen * data.total_ind; document.getElementById('ga-progress-bar').style.width = `${(progress / total) * 100}%`; document.getElementById('gaGenerationStatus').textContent = `${data.gen} / ${data.total_gen}`; document.getElementById('gaIndividualStatus').textContent = `${data.ind} / ${data.total_ind}`; document.getElementById('gaBestFitnessStatus').textContent = data.best_fit.toFixed(4); const params = data.best_params; const paramsText = ` q1: ${params.q1.toFixed(2)}\n q2: ${params.q2.toFixed(2)}\n q3: ${params.q3.toFixed(2)}\n q4: ${params.q4.toFixed(2)}\n  r: ${params.r.toFixed(4)}\n sc: ${params.scalar.toFixed(2)}`; document.getElementById('ga-best-params-display').textContent = paramsText;
+    }
     const telemetryChart = new Chart(document.getElementById('telemetryChart'), { type: 'line', data: { labels: Array(100).fill(''), datasets: [] }, options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { type: 'linear', display: true, position: 'left', ticks: { color: '#61dafb' }, title: { display: true, text: 'Wartosc', color: '#61dafb' } }, y1: { type: 'linear', display: true, position: 'right', ticks: { color: '#a2f279' }, title: { display: true, text: 'Sila / Wyjscie', color: '#a2f279' }, grid: { drawOnChartArea: false }, } }, plugins: { legend: { labels: { color: '#fff' } } } } });
     function updateChart(data) { const chartData = telemetryChart.data; if (chartData.labels.length >= 100) chartData.labels.shift(); chartData.labels.push(''); for (const [key, value] of Object.entries(data)) { if (availableTelemetry[key] && value !== undefined) { let dataset = chartData.datasets.find(ds => ds.label === availableTelemetry[key].label); if (!dataset) continue; if (dataset.data.length >= 100) dataset.data.shift(); dataset.data.push(value); } } chartData.datasets.forEach(ds => { if (ds.data.length < chartData.labels.length) { if (ds.data.length >= 100) ds.data.shift(); ds.data.push(null); } }); telemetryChart.update('none'); }
     function setupChartControls() { const container = document.getElementById('chartControls'); container.innerHTML = ''; Object.keys(availableTelemetry).forEach((key) => { const label = document.createElement('label'), checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.value = key; checkbox.checked = (key === 'pitch' || key === 'target_angle'); checkbox.addEventListener('change', (e) => { const varName = e.target.value; if (e.target.checked) { const chartData = telemetryChart.data; if (!chartData.datasets.find(ds => ds.label === availableTelemetry[varName].label)) { const axisId = (varName.includes('output') || varName.includes('out')) ? 'y1' : 'y'; chartData.datasets.push({ label: availableTelemetry[varName].label, data: Array(chartData.labels.length).fill(null), borderColor: availableTelemetry[varName].color, fill: false, tension: 0.1, pointRadius: 0, yAxisID: axisId }); } } else { const chartData = telemetryChart.data; const datasetIndex = chartData.datasets.findIndex(ds => ds.label === availableTelemetry[varName].label); if (datasetIndex > -1) { chartData.datasets.splice(datasetIndex, 1); } } telemetryChart.update(); }); label.appendChild(checkbox); label.append(` ${availableTelemetry[key].label}`); container.appendChild(label); if (checkbox.checked) { checkbox.dispatchEvent(new Event('change')); } }); }
@@ -738,6 +745,7 @@
         document.getElementById('startGaBtn').addEventListener('click', startGA);
         document.getElementById('stopGaBtn').addEventListener('click', () => stopGA(true));
         document.getElementById('gaTriggerBtn').addEventListener('click', () => { sendBleMessage({ type: 'ga_trigger_test' }); document.getElementById('gaTriggerBtn').disabled = true; });
+        document.getElementById('gaSavePresetBtn').addEventListener('click', saveGaPreset);
         document.getElementById('gaEarlyStopCheckbox').addEventListener('change', (e) => { document.getElementById('gaPatienceContainer').style.display = e.target.checked ? 'grid' : 'none'; });
     }
 
@@ -746,6 +754,9 @@
             addLogMessage('Polacz z robotem przed rozpoczeciem optymalizacji.', 'warn');
             return;
         }
+        lastBestGaParams = null; // Resetuj zapisane parametry
+        document.getElementById('gaSavePresetBtn').disabled = true;
+
         const config = {
             gens: parseInt(document.getElementById('gaGenerationsInput').value),
             pop: parseInt(document.getElementById('gaInitialPopulationInput').value),
@@ -764,6 +775,29 @@
         addLogMessage('Wysylanie polecenia rozpoczecia optymalizacji...', 'info');
     }
     
+    function saveGaPreset() {
+        if (!lastBestGaParams) {
+            addLogMessage('Brak zapisanych najlepszych parametrów do zapisania.', 'warn');
+            return;
+        }
+        const presetName = prompt("Podaj nazwe dla nowego presetu znalezionego przez GA:", `GA_Fit_${document.getElementById('gaBestFitnessStatus').textContent}`);
+        if (presetName && presetName.trim() !== "") {
+            const presetData = {
+                q1Angle: lastBestGaParams.q1,
+                q2AngularVel: lastBestGaParams.q2,
+                q3Position: lastBestGaParams.q3,
+                q4Velocity: lastBestGaParams.q4,
+                rControl: lastBestGaParams.r,
+                lqrOutputScalar: lastBestGaParams.scalar
+            };
+            localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData));
+            addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success');
+            populatePresetSelect();
+        } else {
+            addLogMessage('[UI] Anulowano zapisywanie presetu.', 'warn');
+        }
+    }
+
     function setupManualTuneButtons() {
         document.querySelectorAll('.manual-tune-row').forEach(row => {
             const motor = row.dataset.motor;
@@ -914,7 +948,10 @@
     function setupGamepadMappingModal() { document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; }); document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; }); }
     
     function setGaUiLock(isLocked) {
-        const exceptions = ['balanceSwitch', 'emergencyStopBtn', 'stopGaBtn', 'connectBleBtn'];
+        const exceptions = [
+            'balanceSwitch', 'emergencyStopBtn', 'stopGaBtn', 'connectBleBtn',
+            'resetZeroBtn', 'trimPlusBtn', 'trimMinusBtn', 'trimRollPlusBtn', 'trimRollMinusBtn'
+        ];
         document.querySelectorAll('button, input, select').forEach(el => {
             if (!exceptions.includes(el.id)) {
                 el.disabled = isLocked;
