@@ -3,15 +3,257 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v42.9 (FINALNA)</title>
+    <title>Robot LQR - Panel Sterowania v43 (STABLE)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <!-- Osadzona biblioteka bayes-optimizer -->
+    <!-- [NAPRAWA KRYTYCZNA] Wstawiono pełną, sprawdzoną wersję biblioteki bayes-optimizer -->
     <script>
-    !function(t,e){"object"==typeof exports&&"object"==typeof module?module.exports=e():"function"==typeof define&&define.amd?define([],e):"object"==typeof exports?exports.bayes=e():t.bayes=e()}(this,function(){return function(t){function e(r){if(n[r])return n[r].exports;var o=n[r]={i:r,l:!1,exports:{}};return t[r].call(o.exports,o,o.exports,e),o.l=!0,o.exports}var n={};return e.m=t,e.c=n,e.i=function(t){return t},e.d=function(t,n,r){e.o(t,n)||Object.defineProperty(t,n,{configurable:!1,enumerable:!0,get:r})},e.n=function(t){var n=t&&t.__esModule?function(){return t.default}:function(){return t};return e.d(n,"a",n),n},e.o=function(t,e){return Object.prototype.hasOwnProperty.call(t,e)},e.p="",e(e.s=2)
-    }([function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var r=function(){function t(t,e){for(var n=0;n<e.length;n++){var r=e[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(t,r.key,r)}}return function(e,n,r){return n&&t(e.prototype,n),r&&t(e,r),e}}(),o=function(t){return t&&t.__esModule?t:{default:t}},i=function(t,e,n){for(var r=!0;r;){var o=t,i=e,u=n;r=!1,null===o&&(o=Function.prototype);var s=Object.getOwnPropertyDescriptor(o,i);if(void 0!==s){if("value"in s)return s.value;var a=s.get;if(void 0===a)return;return a.call(u)}var c=Object.getPrototypeOf(o);if(null===c)return;t=c,e=i,n=u,r=!0,s=a=c=void 0}},u=n(3),s=o(u),a=n(4),c=o(a),f=function(t){function e(t){var n=t.space;!function(t,e){if(!(t instanceof e))throw new TypeError("Cannot call a class as a function")}(this,e),i(Object.getPrototypeOf(e.prototype),"constructor",this).call(this),this.space=n.map(function(t){return new c.default(t.name,t.domain)}),this.history=[]}return function(t,e){if("function"!=typeof e&&null!==e)throw new TypeError("Super expression must either be null or a function, not " + typeof e);t.prototype=Object.create(e&&e.prototype,{constructor:{value:t,writable:!0,configurable:!0}}),e&&(Object.setPrototypeOf?Object.setPrototypeOf(t,e):t.__proto__=e)}(e,s.default),r(e,[{key:"ask",value:function(){var t=this;return new Promise(function(e){var n={};t.space.forEach(function(t){var e=t.name,r=t.domain,o=r[0],i=r[1];n[e]=o+(i-o)*Math.random()}),e(n)})}},{key:"tell",value:function(t,e){var n=this;return new Promise(function(r){n.history.push({params:t,value:e}),r()})}}]),e}();e.default=f},function(t,e,n){"use strict";function r(t){return t&&t.__esModule?t:{default:t}}Object.defineProperty(e,"__esModule",{value:!0}),e.Optimizer=void 0;var o=n(0),i=r(o);e.Optimizer=i.default},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var r=n(1);Object.defineProperty(e,"Optimizer",{enumerable:!0,get:function(){return o(r).default}});var o=function(t){return t&&t.__esModule?t:{default:t}}
-    },function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var r=function(){function t(t,e){for(var n=0;n<e.length;n++){var r=e[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(t,r.key,r)}}return function(e,n,r){return n&&t(e.prototype,n),r&&t(e,r),e}}(),o=function(){function t(){}return r(t,[{key:"ask",value:function(){throw new Error("The method 'ask' must be implemented.")}},{key:"tell",value:function(){throw new Error("The method 'tell' must be implemented.")}},{key:"getBest",value:function(t){var e=this;return new Promise(function(n){var r=e.history.map(function(e){return e.value});if(t){var o=Math.max.apply(Math,r);n(e.history.find(function(e){return e.value===o}))}else{var i=Math.min.apply(Math,r);n(e.history.find(function(e){return e.value===i})
-    )}})}}]),t}();e.default=o},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var r=function(t,e){if(Array.isArray(t))return t;if(Symbol.iterator in Object(t))return function(t,e){var n=[],r=!0,o=!1,i=void 0;try{for(var u,s=t[Symbol.iterator]();!(r=(u=s.next()).done)&&(n.push(u.value),!e||n.length!==e);r=!0);}catch(t){o=!0,i=t}finally{try{!r&&s.return&&s.return()}finally{if(o)throw i}}return n}(t,e);throw new TypeError("Invalid attempt to destructure non-iterable instance")},o=function(){function t(t,e){!function(t,e){if(!(t instanceof e))throw new TypeError("Cannot call a class as a function")}(this,t);var n=r(e,2),o=n[0],i=n[1];if(o>i)throw new Error("The first value of the domain must be smaller than the second.");this.name=t,this.domain=[o,i]}return t}();e.default=o}])});
+        window.bayes = (function() {
+            'use strict';
+
+            var classCallCheck = function (instance, Constructor) {
+              if (!(instance instanceof Constructor)) {
+                throw new TypeError("Cannot call a class as a function");
+              }
+            };
+
+            var createClass = function () {
+              function defineProperties(target, props) {
+                for (var i = 0; i < props.length; i++) {
+                  var descriptor = props[i];
+                  descriptor.enumerable = descriptor.enumerable || false;
+                  descriptor.configurable = true;
+                  if ("value" in descriptor) descriptor.writable = true;
+                  Object.defineProperty(target, descriptor.key, descriptor);
+                }
+              }
+
+              return function (Constructor, protoProps, staticProps) {
+                if (protoProps) defineProperties(Constructor.prototype, protoProps);
+                if (staticProps) defineProperties(Constructor, staticProps);
+                return Constructor;
+              };
+            }();
+
+            var get = function get(object, property, receiver) {
+              if (object === null) object = Function.prototype;
+              var desc = Object.getOwnPropertyDescriptor(object, property);
+
+              if (desc === undefined) {
+                var parent = Object.getPrototypeOf(object);
+
+                if (parent === null) {
+                  return undefined;
+                } else {
+                  return get(parent, property, receiver);
+                }
+              } else if ("value" in desc) {
+                return desc.value;
+              } else {
+                var getter = desc.get;
+
+                if (getter === undefined) {
+                  return undefined;
+                }
+
+                return getter.call(receiver);
+              }
+            };
+
+            var inherits = function (subClass, superClass) {
+              if (typeof superClass !== "function" && superClass !== null) {
+                throw new TypeError("Super expression must either be a function or null, not " + typeof superClass);
+              }
+
+              subClass.prototype = Object.create(superClass && superClass.prototype, {
+                constructor: {
+                  value: subClass,
+                  enumerable: false,
+                  writable: true,
+                  configurable: true
+                }
+              });
+              if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass;
+            };
+
+            var possibleConstructorReturn = function (self, call) {
+              if (!self) {
+                throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
+              }
+
+              return call && (typeof call === "object" || typeof call === "function") ? call : self;
+            };
+
+            var slicedToArray = function () {
+              function sliceIterator(arr, i) {
+                var _arr = [];
+                var _n = true;
+                var _d = false;
+                var _e = undefined;
+
+                try {
+                  for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) {
+                    _arr.push(_s.value);
+
+                    if (i && _arr.length === i) break;
+                  }
+                } catch (err) {
+                  _d = true;
+                  _e = err;
+                } finally {
+                  try {
+                    if (!_n && _i["return"]) _i["return"]();
+                  } finally {
+                    if (_d) throw _e;
+                  }
+                }
+
+                return _arr;
+              }
+
+              return function (arr, i) {
+                if (Array.isArray(arr)) {
+                  return arr;
+                } else if (Symbol.iterator in Object(arr)) {
+                  return sliceIterator(arr, i);
+                } else {
+                  throw new TypeError("Invalid attempt to destructure non-iterable instance");
+                }
+              };
+            }();
+
+            var Parameter = function () {
+              function Parameter(name, domain) {
+                classCallCheck(this, Parameter);
+
+                var _domain = slicedToArray(domain, 2),
+                    min = _domain[0],
+                    max = _domain[1];
+
+                if (min > max) {
+                  throw new Error('The first value of the domain must be smaller than the second.');
+                }
+                this.name = name;
+                this.domain = [min, max];
+              }
+
+              return Parameter;
+            }();
+
+            var Optimizer$1 = function () {
+              function Optimizer() {
+                classCallCheck(this, Optimizer);
+              }
+
+              createClass(Optimizer, [{
+                key: 'ask',
+                value: function ask() {
+                  throw new Error('The method \'ask\' must be implemented.');
+                }
+              }, {
+                key: 'tell',
+                value: function tell() {
+                  throw new Error('The method \'tell\' must be implemented.');
+                }
+              }, {
+                key: 'getBest',
+                value: function getBest(maximize) {
+                  var _this = this;
+
+                  return new Promise(function (resolve) {
+                    var values = _this.history.map(function (h) {
+                      return h.value;
+                    });
+                    if (maximize) {
+                      var _ret = function () {
+                        var max = Math.max.apply(Math, values);
+                        resolve(_this.history.find(function (h) {
+                          return h.value === max;
+                        }));
+                        return {
+                          v: void 0
+                        };
+                      }();
+
+                      if (typeof _ret === "object") return _ret.v;
+                    } else {
+                      var _ret2 = function () {
+                        var min = Math.min.apply(Math, values);
+                        resolve(_this.history.find(function (h) {
+                          return h.value === min;
+                        }));
+                        return {
+                          v: void 0
+                        };
+                      }();
+
+                      if (typeof _ret2 === "object") return _ret2.v;
+                    }
+                  });
+                }
+              }]);
+              return Optimizer;
+            }();
+
+            var RandomOptimizer = function (_Optimizer) {
+              inherits(RandomOptimizer, _Optimizer);
+
+              function RandomOptimizer(_ref) {
+                var space = _ref.space;
+                classCallCheck(this, RandomOptimizer);
+
+                var _this2 = possibleConstructorReturn(this, (RandomOptimizer.__proto__ || Object.getPrototypeOf(RandomOptimizer)).call(this));
+
+                _this2.space = space.map(function (s) {
+                  return new Parameter(s.name, s.domain);
+                });
+                _this2.history = [];
+                return _this2;
+              }
+
+              createClass(RandomOptimizer, [{
+                key: 'ask',
+                value: function ask() {
+                  var _this3 = this;
+
+                  return new Promise(function (resolve) {
+                    var params = {};
+                    _this3.space.forEach(function (s) {
+                      var name = s.name,
+                          domain = s.domain;
+
+                      var _domain2 = slicedToArray(domain, 2),
+                          min = _domain2[0],
+                          max = _domain2[1];
+
+                      params[name] = min + (max - min) * Math.random();
+                    });
+                    resolve(params);
+                  });
+                }
+              }, {
+                key: 'tell',
+                value: function tell(params, value) {
+                  var _this4 = this;
+
+                  return new Promise(function (resolve) {
+                    _this4.history.push({
+                      params: params,
+                      value: value
+                    });
+                    resolve();
+                  });
+                }
+              }]);
+              return RandomOptimizer;
+            }(Optimizer$1);
+
+            var Optimizer$$1 = RandomOptimizer;
+            var index = {
+              Optimizer: Optimizer$$1
+            };
+            return index;
+        })();
     </script>
 
     <style>
@@ -515,7 +757,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 42.5-UI-FINAL-FIX (Interfejs dla Optymalizacji Bayesowskiej)
+    // WERSJA 43-UI-STABLE (Interfejs dla Optymalizacji Bayesowskiej)
     // =======================================================================================
     const debouncedSenders = {};
     let isMappingButton = false;
@@ -549,7 +791,6 @@
     const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
     const TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
     
-    // [NAPRAWA] Zmienna 'bleBuffer' przeniesiona na poziom globalny dla nowej logiki odbioru
     let bleBuffer = '';
     
     let isBoptRunning = false;
@@ -620,7 +861,6 @@
     async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono! Automatyczna synchronizacja za 1s...', 'success'); setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 1000); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
     function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; if (isBoptRunning) stopBOPT(false); }
     
-    // [NAPRAWA] Zastapiono stara funkcje nowa, niezawodna logika buforowania
     function handleBleNotification(event) {
         const value = event.target.value;
         const decoder = new TextDecoder('utf-8');
@@ -827,7 +1067,6 @@
         }
 
         try {
-            // [NAPRAWA] Dodatkowe sprawdzenie, aby upewnic sie, ze biblioteka jest gotowa
             if (typeof bayes !== 'object' || typeof bayes.Optimizer !== 'function') {
                 throw new Error("Biblioteka Bayes nie zostala poprawnie zainicjalizowana.");
             }
@@ -862,12 +1101,6 @@
         let paramsText = '';
         const isBalanceMode = document.getElementById('boptBalanceSettings').style.display === 'block';
         
-        let currentBoptParamsCamel = {};
-        for(const key in currentBoptParams){
-            const camelKey = key.replace(/_([a-z])/g, g => g[1].toUpperCase());
-            currentBoptParamsCamel[camelKey] = currentBoptParams[key];
-        }
-
         if (isBalanceMode) {
             paramsText = ` q1: ${currentBoptParams.q1_angle.toFixed(1)}\n q2: ${currentBoptParams.q2_angular_vel.toFixed(1)}\n  r: ${currentBoptParams.r_control.toFixed(3)}\n sc: ${currentBoptParams.lqr_output_scalar.toFixed(2)}`;
             if(currentBoptParams.q3_position !== undefined) paramsText += `\n q3: ${currentBoptParams.q3_position.toFixed(1)}`;
