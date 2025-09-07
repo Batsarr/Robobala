@@ -6,10 +6,7 @@
     <title>Robot LQR - Panel Sterowania v42.9 (FINALNA)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <!-- ======================================================================================= -->
-    <!-- [NAPRAWA OSTATECZNA] Osadzenie biblioteki bayes-optimizer bezposrednio w kodzie HTML.    -->
-    <!-- To rozwiazuje problem z niedostepnoscia skryptu i uniezaleznia aplikacje od internetu. -->
-    <!-- ======================================================================================= -->
+    <!-- Osadzona biblioteka bayes-optimizer -->
     <script>
     !function(t,e){"object"==typeof exports&&"object"==typeof module?module.exports=e():"function"==typeof define&&define.amd?define([],e):"object"==typeof exports?exports.bayes=e():t.bayes=e()}(this,function(){return function(t){function e(r){if(n[r])return n[r].exports;var o=n[r]={i:r,l:!1,exports:{}};return t[r].call(o.exports,o,o.exports,e),o.l=!0,o.exports}var n={};return e.m=t,e.c=n,e.i=function(t){return t},e.d=function(t,n,r){e.o(t,n)||Object.defineProperty(t,n,{configurable:!1,enumerable:!0,get:r})},e.n=function(t){var n=t&&t.__esModule?function(){return t.default}:function(){return t};return e.d(n,"a",n),n},e.o=function(t,e){return Object.prototype.hasOwnProperty.call(t,e)},e.p="",e(e.s=2)
     }([function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var r=function(){function t(t,e){for(var n=0;n<e.length;n++){var r=e[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(t,r.key,r)}}return function(e,n,r){return n&&t(e.prototype,n),r&&t(e,r),e}}(),o=function(t){return t&&t.__esModule?t:{default:t}},i=function(t,e,n){for(var r=!0;r;){var o=t,i=e,u=n;r=!1,null===o&&(o=Function.prototype);var s=Object.getOwnPropertyDescriptor(o,i);if(void 0!==s){if("value"in s)return s.value;var a=s.get;if(void 0===a)return;return a.call(u)}var c=Object.getPrototypeOf(o);if(null===c)return;t=c,e=i,n=u,r=!0,s=a=c=void 0}},u=n(3),s=o(u),a=n(4),c=o(a),f=function(t){function e(t){var n=t.space;!function(t,e){if(!(t instanceof e))throw new TypeError("Cannot call a class as a function")}(this,e),i(Object.getPrototypeOf(e.prototype),"constructor",this).call(this),this.space=n.map(function(t){return new c.default(t.name,t.domain)}),this.history=[]}return function(t,e){if("function"!=typeof e&&null!==e)throw new TypeError("Super expression must either be null or a function, not " + typeof e);t.prototype=Object.create(e&&e.prototype,{constructor:{value:t,writable:!0,configurable:!0}}),e&&(Object.setPrototypeOf?Object.setPrototypeOf(t,e):t.__proto__=e)}(e,s.default),r(e,[{key:"ask",value:function(){var t=this;return new Promise(function(e){var n={};t.space.forEach(function(t){var e=t.name,r=t.domain,o=r[0],i=r[1];n[e]=o+(i-o)*Math.random()}),e(n)})}},{key:"tell",value:function(t,e){var n=this;return new Promise(function(r){n.history.push({params:t,value:e}),r()})}}]),e}();e.default=f},function(t,e,n){"use strict";function r(t){return t&&t.__esModule?t:{default:t}}Object.defineProperty(e,"__esModule",{value:!0}),e.Optimizer=void 0;var o=n(0),i=r(o);e.Optimizer=i.default},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var r=n(1);Object.defineProperty(e,"Optimizer",{enumerable:!0,get:function(){return o(r).default}});var o=function(t){return t&&t.__esModule?t:{default:t}}
@@ -518,7 +515,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 42.4-UI-FINAL-FIX (Interfejs dla Optymalizacji Bayesowskiej)
+    // WERSJA 42.5-UI-FINAL-FIX (Interfejs dla Optymalizacji Bayesowskiej)
     // =======================================================================================
     const debouncedSenders = {};
     let isMappingButton = false;
@@ -551,6 +548,8 @@
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
     const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
     const TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+    
+    // [NAPRAWA] Zmienna 'bleBuffer' przeniesiona na poziom globalny dla nowej logiki odbioru
     let bleBuffer = '';
     
     let isBoptRunning = false;
@@ -620,7 +619,29 @@
     function updateAccordionHeight(content) { if (content && content.style.maxHeight !== '0px') { content.style.maxHeight = content.scrollHeight + 'px'; } }
     async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono! Automatyczna synchronizacja za 1s...', 'success'); setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 1000); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
     function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; if (isBoptRunning) stopBOPT(false); }
-    function handleBleNotification(event) { const value = event.target.value; const decoder = new TextDecoder('utf-8'); const chunk = decoder.decode(value); bleBuffer += chunk; let newlineIndex; while ((newlineIndex = bleBuffer.indexOf('\n')) !== -1) { const line = bleBuffer.substring(0, newlineIndex).trim(); bleBuffer = bleBuffer.substring(newlineIndex + 1); if (line) { try { const data = JSON.parse(line); processCompleteMessage(data); } catch (e) { addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error'); } } } }
+    
+    // [NAPRAWA] Zastapiono stara funkcje nowa, niezawodna logika buforowania
+    function handleBleNotification(event) {
+        const value = event.target.value;
+        const decoder = new TextDecoder('utf-8');
+        bleBuffer += decoder.decode(value);
+
+        let newlineIndex;
+        while ((newlineIndex = bleBuffer.indexOf('\n')) !== -1) {
+            const line = bleBuffer.substring(0, newlineIndex).trim();
+            bleBuffer = bleBuffer.substring(newlineIndex + 1);
+
+            if (line) {
+                try {
+                    const data = JSON.parse(line);
+                    processCompleteMessage(data);
+                } catch (e) {
+                    addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error');
+                }
+            }
+        }
+    }
+
     async function sendBleMessage(message) { if (!rxCharacteristic) { return; } try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
     
     function processCompleteMessage(data) {
@@ -783,15 +804,6 @@
     }
 
     async function startBOPT() {
-        // [NAPRAWA] Usunieto warunek sprawdzajacy istnienie biblioteki.
-        // Jest ona teraz osadzona w HTML, wiec ten warunek generowal falszywe alarmy.
-        /*
-        if (typeof bayes === 'undefined' || typeof bayes.Optimizer === 'undefined') {
-            addLogMessage("[UI] BLAD: Biblioteka autostrojenia 'bayes-optimizer' nie jest dostepna. Sprawdz polaczenie z internetem.", 'error');
-            return;
-        }
-        */
-
         if (!bleDevice) { addLogMessage('Polacz z robotem przed rozpoczeciem optymalizacji.', 'warn'); return; }
         if (isBoptRunning) return;
 
@@ -815,9 +827,13 @@
         }
 
         try {
+            // [NAPRAWA] Dodatkowe sprawdzenie, aby upewnic sie, ze biblioteka jest gotowa
+            if (typeof bayes !== 'object' || typeof bayes.Optimizer !== 'function') {
+                throw new Error("Biblioteka Bayes nie zostala poprawnie zainicjalizowana.");
+            }
             bayesianOptimizer = new bayes.Optimizer({ space });
         } catch (error) {
-            addLogMessage(`[UI] KRYTYCZNY BLAD podczas inicjalizacji optymalizatora: ${error}. Moze to byc problem z sama biblioteka.`, 'error');
+            addLogMessage(`[UI] KRYTYCZNY BLAD podczas inicjalizacji optymalizatora: ${error}.`, 'error');
             stopBOPT(false);
             return;
         }
