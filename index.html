@@ -506,7 +506,7 @@
     </div>
 
 <script>
-    const debouncedSenders = {};
+        const debouncedSenders = {};
     let isMappingButton = false;
     let actionToMap = null;
     let lastBestBoptParams = null; 
@@ -820,7 +820,6 @@
         document.getElementById('bopt-current-params-display').textContent = paramsText;
         document.getElementById('boptRunTestBtn').disabled = false;
         
-        // W trybie balansu, test uruchamia się automatycznie
         if (isBalanceMode) {
             handleRunTestBtnClick();
         }
@@ -864,7 +863,6 @@
         
         updateBoptProgress(boptIterationCounter, boptTotalIterations, bestFitness, bestParams);
 
-        // Przejdź do następnej iteracji
         runNextBoptIteration();
     }
     
