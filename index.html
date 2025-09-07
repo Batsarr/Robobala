@@ -180,6 +180,22 @@
                 <strong>Enkoder L:</strong> <span id="encoderLeftVal">0</span>
                 <strong>Enkoder P:</strong> <span id="encoderRightVal">0</span>
             </div>
+
+            <fieldset style="margin-top: 15px;">
+                <legend>Rejestrator Danych (CSV)</legend>
+                <div class="setting-container">
+                    <label for="loggingTimeInput">Czas zbierania (s)</label>
+                    <div class="numeric-input-wrapper">
+                        <button id="loggingTimeMinus">-</button><input type="number" id="loggingTimeInput" min="1" max="30" step="1" value="5"><button id="loggingTimePlus">+</button>
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    <button id="startLoggingBtn" style="flex:2;">Rozpocznij Zbieranie Danych</button>
+                    <button id="cancelLoggingBtn" style="background-color: #ff6347; display:none; flex:1;">Anuluj</button>
+                </div>
+                <div id="loggingStatus" style="margin-top:8px; font-weight:bold; color:#61dafb;">Czekam na polecenie</div>
+                <button id="downloadCsvBtn" style="width:100%; margin-top:10px; background-color:#a2f279;" disabled>Pobierz Plik CSV</button>
+            </fieldset>
         </div>
         
         <div class="card">
@@ -217,21 +233,6 @@
                 <fieldset style="margin-top: 15px;">
                     <legend>Diagnostyka</legend>
                      <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Kalibruj MPU (DMP)</button>
-                     <fieldset style="margin-top: 15px;">
-                        <legend>Rejestrator Danych (CSV)</legend>
-                        <div class="setting-container">
-                            <label for="loggingTimeInput">Czas zbierania (s)</label>
-                            <div class="numeric-input-wrapper">
-                                <button id="loggingTimeMinus">-</button><input type="number" id="loggingTimeInput" min="1" max="30" step="1" value="5"><button id="loggingTimePlus">+</button>
-                            </div>
-                        </div>
-                        <div style="display:flex; gap:10px; margin-top:10px;">
-                            <button id="startLoggingBtn" style="flex:2;">Rozpocznij Zbieranie Danych</button>
-                            <button id="cancelLoggingBtn" style="background-color: #ff6347; display:none; flex:1;">Anuluj</button>
-                        </div>
-                        <div id="loggingStatus" style="margin-top:8px; font-weight:bold; color:#61dafb;">Czekam na polecenie</div>
-                        <button id="downloadCsvBtn" style="width:100%; margin-top:10px; background-color:#a2f279;" disabled>Pobierz Plik CSV</button>
-                    </fieldset>
                 </fieldset>
             </div>
         </div>
@@ -303,7 +304,7 @@
                     </div>
                     <div class="setting-container">
                         <label for="lqrOutputScalarInput">Skala Wyjscia LQR</label>
-                        <div class="numeric-input-wrapper"><button id="lqrOutputScalarMinus">-</button><input type="number" class="config-value" id="lqrOutputScalarInput" min="0.1" max="50.0" step="0.1" value="1.0"><button id="lqrOutputScalarPlus">+</button></div>
+                        <div class="numeric-input-wrapper"><button id="lqrOutputScalarMinus">-</button><input type="number" class="config-value" id="lqrOutputScalarInput" min="0.1" max="50.0" step="0.1" value="20.0"><button id="lqrOutputScalarPlus">+</button></div>
                     </div>
                 </div>
                 
@@ -505,7 +506,6 @@
     </div>
 
 <script>
-    // Pełny, kompletny kod JavaScript
     const debouncedSenders = {};
     let isMappingButton = false;
     let actionToMap = null;
@@ -583,9 +583,9 @@
     };
 
     const builtInPresetsData = {
-        '1': { name: "1. Agresywny / Sztywny", params: { q1Angle: 450, q2AngularVel: 20, q3Position: 1, q4Velocity: 1, rControl: 0.01, lqrOutputScalar: 4.5 }},
-        '2': { name: "2. Zbalansowany (Startowy)", params: { q1Angle: 100, q2AngularVel: 10, q3Position: 1, q4Velocity: 5, rControl: 0.1, lqrOutputScalar: 2.0 }},
-        '3': { name: "3. Plynny / Miekki", params: { q1Angle: 50, q2AngularVel: 5, q3Position: 2, q4Velocity: 10, rControl: 0.5, lqrOutputScalar: 1.5 }},
+        '1': { name: "1. Agresywny / Sztywny", params: { q1Angle: 450, q2AngularVel: 20, q3Position: 1, q4Velocity: 1, rControl: 0.01, lqrOutputScalar: 25.0 }},
+        '2': { name: "2. Zbalansowany (Startowy)", params: { q1Angle: 100, q2AngularVel: 10, q3Position: 1, q4Velocity: 5, rControl: 0.1, lqrOutputScalar: 20.0 }},
+        '3': { name: "3. Plynny / Miekki", params: { q1Angle: 50, q2AngularVel: 5, q3Position: 2, q4Velocity: 10, rControl: 0.5, lqrOutputScalar: 18.0 }},
     };
 
     function initJoystick() { const wrapper = document.getElementById('joystickWrapper'); const size = wrapper.clientWidth; joystickCanvas.width = size; joystickCanvas.height = size; joystickCenter = { x: size / 2, y: size / 2 }; joystickRadius = size / 2 * 0.75; knobRadius = size / 2 * 0.25; drawJoystick(joystickCenter.x, joystickCenter.y); }
@@ -779,7 +779,7 @@
             addLogMessage('[UI] Rozpoczeto optymalizacje BALANSU.', 'success');
             await sendBleMessage({ type: 'ga_save_safe_params' });
             const useImpulse = document.getElementById('boptUseImpulseTest').checked;
-            space = [ { name: 'q1_angle', domain: [1, 1000] }, { name: 'q2_angular_vel', domain: [0.1, 100] }, { name: 'r_control', domain: [0.001, 10] }, { name: 'lqr_output_scalar', domain: [0.1, 10] } ];
+            space = [ { name: 'q1_angle', domain: [1, 1000] }, { name: 'q2_angular_vel', domain: [0.1, 100] }, { name: 'r_control', domain: [0.001, 10] }, { name: 'lqr_output_scalar', domain: [0.1, 50] } ];
             if (useImpulse) { space.push({ name: 'q3_position', domain: [0, 100] }); space.push({ name: 'q4_velocity', domain: [0, 100] }); }
         } else {
             addLogMessage('[UI] Rozpoczeto interaktywne strojenie JAZDY.', 'success');
