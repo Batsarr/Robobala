@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v42.6 (FINAL)</title>
+    <title>Robot LQR - Panel Sterowania v42.7 (NAPRAWIONY)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bayes-optimizer@0.3.1/dist/bayes-optimizer.min.js"></script>
     <style>
@@ -506,7 +506,25 @@
     </div>
 
 <script>
-        const debouncedSenders = {};
+    // =======================================================================================
+    // WERSJA 42.1-UI-FIX (Interfejs dla Optymalizacji Bayesowskiej)
+    //
+    // BAZA: Wersja 42.0
+    //
+    // ZMIANY:
+    // -----------------------------------
+    // [NAPRAWA] ZMIANA #1: Dodano obsluge bledow i walidacje w funkcji startBOPT().
+    //             - Sprawdza, czy zewnetrzna biblioteka 'bayes-optimizer' zostala
+    //               poprawnie zaladowana. Jesli nie, wyswietla blad i przerywa.
+    //             - Otoczono inicjalizacje optymalizatora blokiem try...catch,
+    //               aby wylapac i zaraportowac ewentualne bledy.
+    // [NAPRAWA] ZMIANA #2: Wprowadzono obsluge potwierdzen (ACK) od robota.
+    //             - Interfejs nasluchuje teraz na komunikat 'bopt_ack', ktory
+    //               potwierdza, ze robot przyjal polecenie i rozpoczyna test.
+    //             - Dodano szczegolowe logowanie calego procesu autostrojenia
+    //               dla latwiejszej diagnostyki.
+    // =======================================================================================
+    const debouncedSenders = {};
     let isMappingButton = false;
     let actionToMap = null;
     let lastBestBoptParams = null; 
@@ -639,6 +657,11 @@
             case 'drive_test_result':
                 if (resolveTestResultPromise) { resolveTestResultPromise(data.fitness); }
                 break;
+            case 'bopt_ack': // [NAPRAWA] Obsluga potwierdzenia startu testu od robota
+                if (isBoptRunning) {
+                    addLogMessage(`[UI] Robot potwierdzil gotowosc do testu (${data.status}).`, 'info');
+                }
+                break;
             case 'single_pwm_result':
                 const p = data.params;
                 const inputId = `minPwm${p.motor.charAt(0).toUpperCase() + p.motor.slice(1)}${p.direction.charAt(0).toUpperCase() + p.direction.slice(1)}Input`;
@@ -764,6 +787,11 @@
     }
 
     async function startBOPT() {
+        // [NAPRAWA] Sprawdzenie, czy biblioteka autostrojenia zostala zaladowana
+        if (typeof bayes === 'undefined') {
+            addLogMessage("[UI] BLAD: Biblioteka autostrojenia 'bayes-optimizer' nie jest dostepna. Sprawdz polaczenie z internetem.", 'error');
+            return;
+        }
         if (!bleDevice) { addLogMessage('Polacz z robotem przed rozpoczeciem optymalizacji.', 'warn'); return; }
         if (isBoptRunning) return;
 
@@ -786,7 +814,15 @@
             space = [ { name: 'position_error_gain', domain: [0.1, 10.0] }, { name: 'position_d_gain', domain: [0.0, 15.0] }, { name: 'speed_p_gain', domain: [0.0001, 0.1] } ];
         }
 
-        bayesianOptimizer = new bayes.Optimizer({ space });
+        // [NAPRAWA] Zabezpieczenie inicjalizacji optymalizatora
+        try {
+            bayesianOptimizer = new bayes.Optimizer({ space });
+        } catch (error) {
+            addLogMessage(`[UI] KRYTYCZNY BLAD podczas inicjalizacji optymalizatora: ${error}`, 'error');
+            stopBOPT(false);
+            return;
+        }
+
         boptTotalIterations = parseInt(document.getElementById('boptIterationsInput').value);
         boptIterationCounter = 0;
         
@@ -804,8 +840,8 @@
         }
         boptIterationCounter++;
         updateBoptProgress(boptIterationCounter - 1, boptTotalIterations);
-
-        addLogMessage(`[UI] Iteracja ${boptIterationCounter}/${boptTotalIterations}: Oczekiwanie na test...`, 'info');
+        
+        addLogMessage(`[UI] Iteracja ${boptIterationCounter}/${boptTotalIterations}: Pobieranie propozycji parametrow...`, 'info');
         currentBoptParams = await bayesianOptimizer.ask();
         
         let paramsText = '';
@@ -821,7 +857,10 @@
         document.getElementById('boptRunTestBtn').disabled = false;
         
         if (isBalanceMode) {
+            // W trybie balansu test uruchamia sie automatycznie
             handleRunTestBtnClick();
+        } else {
+            addLogMessage('[UI] Oczekiwanie na reczne uruchomienie testu jazdy...', 'info');
         }
     }
 
@@ -845,7 +884,9 @@
             testCommand = { type: 'run_drive_test', distance_cm: distance };
         }
 
+        // Czekamy chwile, zeby parametry sie zaaplikowaly na robocie
         await new Promise(r => setTimeout(r, 200));
+        addLogMessage(`[UI] Wysylanie komendy testowej: ${testCommand.type}`, 'info');
         await sendBleMessage(testCommand);
 
         const fitnessPromise = new Promise(resolve => { resolveTestResultPromise = resolve; });
@@ -888,8 +929,10 @@
         document.querySelectorAll('button, input, select').forEach(el => {
             const parentCard = el.closest('.card');
             if (parentCard && parentCard.contains(document.getElementById('startBoptBtn'))) {
+                // Wewnatrz karty BOPT, blokuj wszystko oprocz przycisku STOP i URUCHOM TEST
                 if (el.id !== 'stopBoptBtn' && el.id !== 'boptRunTestBtn') el.disabled = isLocked;
             } else {
+                // Poza karta BOPT, blokuj wszystko oprocz STOP AWARYJNY i POLACZ
                 if (el.id !== 'emergencyStopBtn' && el.id !== 'connectBleBtn') {
                     el.disabled = isLocked;
                 }
@@ -897,6 +940,7 @@
         });
         document.getElementById('startBoptBtn').disabled = isLocked;
         document.getElementById('stopBoptBtn').disabled = !isLocked;
+        // Upewnij sie, ze przycisk polaczenia jest zawsze dostepny jesli nie ma polaczenia
         document.getElementById('connectBleBtn').disabled = isLocked || !!bleDevice;
     }
 
