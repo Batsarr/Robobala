@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v42.5 (FINAL)</title>
+    <title>Robot LQR - Panel Sterowania v42.6 (FINAL)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bayes-optimizer@0.3.1/dist/bayes-optimizer.min.js"></script>
     <style>
@@ -217,6 +217,21 @@
                 <fieldset style="margin-top: 15px;">
                     <legend>Diagnostyka</legend>
                      <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Kalibruj MPU (DMP)</button>
+                     <fieldset style="margin-top: 15px;">
+                        <legend>Rejestrator Danych (CSV)</legend>
+                        <div class="setting-container">
+                            <label for="loggingTimeInput">Czas zbierania (s)</label>
+                            <div class="numeric-input-wrapper">
+                                <button id="loggingTimeMinus">-</button><input type="number" id="loggingTimeInput" min="1" max="30" step="1" value="5"><button id="loggingTimePlus">+</button>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:10px; margin-top:10px;">
+                            <button id="startLoggingBtn" style="flex:2;">Rozpocznij Zbieranie Danych</button>
+                            <button id="cancelLoggingBtn" style="background-color: #ff6347; display:none; flex:1;">Anuluj</button>
+                        </div>
+                        <div id="loggingStatus" style="margin-top:8px; font-weight:bold; color:#61dafb;">Czekam na polecenie</div>
+                        <button id="downloadCsvBtn" style="width:100%; margin-top:10px; background-color:#a2f279;" disabled>Pobierz Plik CSV</button>
+                    </fieldset>
                 </fieldset>
             </div>
         </div>
@@ -459,6 +474,7 @@
                 <div style="display:flex; gap:10px; justify-content:center; margin: 15px 0;">
                     <button id="startBoptBtn" style="background-color: #a2f279;">START</button>
                     <button id="stopBoptBtn" style="background-color: #ff6347;" disabled>ZATRZYMAJ</button>
+                    <button id="boptRunTestBtn" style="background-color: #f7b731;" disabled>Uruchom Test</button>
                 </div>
                  <fieldset>
                     <legend>Postep</legend>
@@ -469,7 +485,6 @@
                     </div>
                     <h5 style="color:#61dafb; margin: 10px 0 5px 0;">Proponowane Parametry do Testu:</h5>
                     <div id="bopt-current-params-display">Czekam na rozpoczecie...</div>
-                    <button id="boptRunTestBtn" style="width:100%; margin-top:10px; background-color: #f7b731;" disabled>Uruchom Test z Tymi Parametrami</button>
                     <hr style="border-color: #4a4f58; margin: 15px 0;">
                     <h5 style="color:#61dafb; margin: 10px 0 5px 0;">Najlepsze Znalezione Parametry:</h5>
                     <div id="bopt-best-params-display">Najlepsze parametry pojawia sie tutaj...</div>
@@ -478,7 +493,7 @@
             </div>
         </div>
 
-        <div class="card">
+        <div class="card" id="log-card">
             <button class="accordion-header active" onclick="toggleAccordion(this)">Logi Systemowe</button>
             <div class="accordion-content active">
                 <div id="log-history"></div>
@@ -495,6 +510,7 @@
     let isMappingButton = false;
     let actionToMap = null;
     let lastBestBoptParams = null; 
+    let loggedData = [];
 
     document.addEventListener('DOMContentLoaded', () => {
         initJoystick();
@@ -516,7 +532,7 @@
         });
     });
 
-    const CUSTOM_PRESET_PREFIX = 'lqr_custom_preset_v42.5_';
+    const CUSTOM_PRESET_PREFIX = 'lqr_custom_preset_v42.6_';
     let bleDevice, rxCharacteristic, txCharacteristic;
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
     const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
@@ -586,7 +602,7 @@
     const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
     function addLogMessage(message, level = 'info') { const logHistory = document.getElementById('log-history'); if (!logHistory) return; const timestamp = new Date().toLocaleTimeString(); let color = '#fff'; if (level === 'error') color = '#ff6347'; else if (level === 'warn') color = '#f7b731'; else if (level === 'success') color = '#a2f279'; const logEntry = document.createElement('div'); logEntry.style.color = color; logEntry.textContent = `[${timestamp}] ${message}`; logHistory.prepend(logEntry); while (logHistory.children.length > 200) { logHistory.removeChild(logHistory.lastChild); } }
     function clearLogs() { document.getElementById('log-history').innerHTML = ''; }
-    function toggleAccordion(header) { const content = header.nextElementSibling; const isActive = header.classList.contains('active'); document.querySelectorAll('.accordion-header').forEach(h => { if(h !== header && !h.closest('#log-card')) { h.classList.remove('active'); h.nextElementSibling.style.maxHeight = '0px'; }}); if (!isActive) { header.classList.add('active'); content.style.maxHeight = content.scrollHeight + "px"; } else { header.classList.remove('active'); content.style.maxHeight = '0px'; } }
+    function toggleAccordion(header) { const content = header.nextElementSibling; header.classList.toggle('active'); if (content.style.maxHeight && content.style.maxHeight !== '0px') { content.style.maxHeight = '0px'; } else { content.style.maxHeight = content.scrollHeight + "px"; } }
     function updateAccordionHeight(content) { if (content && content.style.maxHeight !== '0px') { content.style.maxHeight = content.scrollHeight + 'px'; } }
     async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono! Automatyczna synchronizacja za 1s...', 'success'); setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 1000); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
     function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; if (isBoptRunning) stopBOPT(false); }
@@ -610,6 +626,12 @@
                 break;
             case 'log':
                 addLogMessage(`[ROBOT] ${data.message}`, data.level);
+                break;
+            case 'logging_data_point':
+                if (loggedData) loggedData.push(data.d);
+                break;
+            case 'logging_finished':
+                handleLoggingFinished(data.points_collected);
                 break;
             case 'ga_result':
                 if (resolveTestResultPromise) { resolveTestResultPromise(data.fitness); }
@@ -703,6 +725,9 @@
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) sendBleMessage({ type: 'load_from_eeprom' }); });
         document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
         document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' }));
+        document.getElementById('startLoggingBtn').addEventListener('click', startLogging);
+        document.getElementById('cancelLoggingBtn').addEventListener('click', cancelLogging);
+        document.getElementById('downloadCsvBtn').addEventListener('click', downloadCSV);
 
         const parameterMapping = { 'q1AngleInput': 'q1_angle', 'q2AngularVelInput': 'q2_angular_vel', 'q3PositionInput': 'q3_position', 'q4VelocityInput': 'q4_velocity', 'rControlInput': 'r_control', 'lqrOutputScalarInput': 'lqr_output_scalar', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickOutputScaleInput': 'joystick_output_scale', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'positionErrorGainInput': 'position_error_gain', 'positionDampingGainInput': 'position_d_gain', 'speedPGainInput': 'speed_p_gain', 'maxSpeedFromPosInput': 'max_speed_from_pos', 'holdPositionMarginPulsesInput': 'hold_position_margin_pulses', 'headingCorrectionFactorInput': 'heading_correction_factor', 'rotationPGainInput': 'rotation_p_gain', 'rollCorrectionGainInput': 'roll_correction_gain', 'wheelDiameterCmInput': 'wheel_diameter_cm', 'trackWidthCmInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd', 'globalPowerLimitInput': 'global_power_limit' };
         const configGroups = { 'lqr_update': ['q1AngleInput', 'q2AngularVelInput', 'q3PositionInput', 'q4VelocityInput', 'rControlInput', 'lqrOutputScalarInput'], 'set_joystick_tuning': ['joystickOutputScaleInput', 'expoJoystickInput', 'maxSpeedJoystickInput', 'joystickAngleSensitivityInput', 'turnFactorInput'], 'calibration_update': ['wheelDiameterCmInput', 'trackWidthCmInput', 'encoderPprInput', 'headingCorrectionFactorInput', 'positionErrorGainInput', 'positionDampingGainInput', 'rotationPGainInput', 'speedPGainInput', 'maxSpeedFromPosInput', 'holdPositionMarginPulsesInput', 'globalPowerLimitInput', 'rollCorrectionGainInput'], 'set_min_pwm': ['minPwmLeftFwdInput', 'minPwmLeftBwdInput', 'minPwmRightFwdInput', 'minPwmRightBwdInput'] };
@@ -836,8 +861,7 @@
         await bayesianOptimizer.tell(currentBoptParams, fitness);
         
         const [bestParams, bestFitness] = await bayesianOptimizer.getBest();
-        lastBestBoptParams = bestParams;
-        document.getElementById('boptSavePresetBtn').disabled = false;
+        
         updateBoptProgress(boptIterationCounter, boptTotalIterations, bestFitness, bestParams);
 
         // Przejdź do następnej iteracji
@@ -897,6 +921,75 @@
         }
     }
     
+    let loggingInterval;
+    function startLogging() {
+        const durationS = parseInt(document.getElementById('loggingTimeInput').value);
+        if (isNaN(durationS) || durationS <= 0) {
+            addLogMessage('[UI] Podaj poprawny czas zbierania danych.', 'error');
+            return;
+        }
+        sendBleMessage({type: 'start_logging', duration_s: durationS});
+        
+        document.getElementById('startLoggingBtn').style.display = 'none';
+        document.getElementById('cancelLoggingBtn').style.display = 'block';
+        document.getElementById('downloadCsvBtn').disabled = true;
+        loggedData = [];
+
+        let timeLeft = durationS;
+        const statusEl = document.getElementById('loggingStatus');
+        statusEl.textContent = `Zbieram dane... (${timeLeft}s)`;
+        loggingInterval = setInterval(() => {
+            timeLeft--;
+            statusEl.textContent = `Zbieram dane... (${timeLeft}s)`;
+            if (timeLeft <= 0) clearInterval(loggingInterval);
+        }, 1000);
+    }
+    
+    function cancelLogging() {
+        sendBleMessage({type: 'stop_logging'});
+        clearInterval(loggingInterval);
+        document.getElementById('startLoggingBtn').style.display = 'block';
+        document.getElementById('cancelLoggingBtn').style.display = 'none';
+        document.getElementById('loggingStatus').textContent = 'Anulowano.';
+        addLogMessage('[UI] Zbieranie danych anulowane przez uzytkownika.', 'warn');
+    }
+
+    function handleLoggingFinished(points) {
+        clearInterval(loggingInterval);
+        document.getElementById('startLoggingBtn').style.display = 'block';
+        document.getElementById('cancelLoggingBtn').style.display = 'none';
+        if (points > 0) {
+            document.getElementById('loggingStatus').textContent = `Zebrano ${points} punktow. Gotowe do pobrania.`;
+            document.getElementById('downloadCsvBtn').disabled = false;
+        } else {
+            document.getElementById('loggingStatus').textContent = 'Nie zebrano zadnych danych.';
+        }
+    }
+
+    function downloadCSV() {
+        if (loggedData.length === 0) {
+            addLogMessage('[UI] Brak danych do wyeksportowania.', 'warn');
+            return;
+        }
+        
+        let csvContent = "data:text/csv;charset=utf-8,";
+        csvContent += "czas_ms,pitch,predkosc,zadana_predkosc,wyjscie_lqr\n";
+        
+        loggedData.forEach(rowArray => {
+            let row = rowArray.join(",");
+            csvContent += row + "\r\n";
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "dane_robota.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        addLogMessage('[UI] Wyeksportowano dane do pliku CSV.', 'success');
+    }
+
     function setupManualTuneButtons() { document.querySelectorAll('.manual-tune-row').forEach(row => { const motor = row.dataset.motor; const direction = row.dataset.direction; const input = row.querySelector('.tune-input'); const testBtn = row.querySelector('.test-btn'); const stopBtn = row.querySelector('.stop-btn'); const autoBtn = row.querySelector('.auto-btn'); testBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: parseInt(input.value) }); }); stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); }); autoBtn.addEventListener('click', (e) => { if (confirm("UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?")) { const startValue = parseInt(document.getElementById('pwmTuneStartInput').value); sendBleMessage({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue }); e.target.disabled = true; e.target.textContent = 'Szukanie...'; addLogMessage(`[UI] Rozpoczynam auto-strojenie dla ${motor} ${direction}...`, 'info'); } }); }); document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); }); }
     function setupSequenceControls() { document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep); document.getElementById('run-sequence-btn').addEventListener('click', runSequence); document.getElementById('stop-sequence-btn').addEventListener('click', stopSequenceExecution); document.getElementById('clear-sequence-btn').addEventListener('click', clearSequence); }
     function addSequenceStep() { const list = document.getElementById('sequence-list'); if (list.children.length >= MAX_SEQUENCE_STEPS) return; const stepDiv = document.createElement('div'); stepDiv.className = 'sequence-step'; stepDiv.innerHTML = ` <select class="sequence-type"> <option value="move_fwd">Przod (cm)</option><option value="move_bwd">Tyl (cm)</option> <option value="rotate_r">Obrot Prawo (st.)</option><option value="rotate_l">Obrot Lewo (st.)</option> </select> <input type="number" class="sequence-value" value="10"> <button class="remove-step-btn">&times;</button> `; list.appendChild(stepDiv); updateAccordionHeight(list.closest('.accordion-content')); stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => { stepDiv.remove(); updateAccordionHeight(list.closest('.accordion-content')); }); }
