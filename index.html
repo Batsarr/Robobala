@@ -3,9 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v42.7 (NAPRAWIONY)</title>
+    <title>Robot LQR - Panel Sterowania v42.9 (FINALNA)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bayes-optimizer@0.3.1/dist/bayes-optimizer.min.js"></script>
+    
+    <!-- ======================================================================================= -->
+    <!-- [NAPRAWA OSTATECZNA] Osadzenie biblioteki bayes-optimizer bezposrednio w kodzie HTML.    -->
+    <!-- To rozwiazuje problem z niedostepnoscia skryptu i uniezaleznia aplikacje od internetu. -->
+    <!-- ======================================================================================= -->
+    <script>
+    !function(t,e){"object"==typeof exports&&"object"==typeof module?module.exports=e():"function"==typeof define&&define.amd?define([],e):"object"==typeof exports?exports.bayes=e():t.bayes=e()}(this,function(){return function(t){function e(r){if(n[r])return n[r].exports;var o=n[r]={i:r,l:!1,exports:{}};return t[r].call(o.exports,o,o.exports,e),o.l=!0,o.exports}var n={};return e.m=t,e.c=n,e.i=function(t){return t},e.d=function(t,n,r){e.o(t,n)||Object.defineProperty(t,n,{configurable:!1,enumerable:!0,get:r})},e.n=function(t){var n=t&&t.__esModule?function(){return t.default}:function(){return t};return e.d(n,"a",n),n},e.o=function(t,e){return Object.prototype.hasOwnProperty.call(t,e)},e.p="",e(e.s=2)
+    }([function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var r=function(){function t(t,e){for(var n=0;n<e.length;n++){var r=e[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(t,r.key,r)}}return function(e,n,r){return n&&t(e.prototype,n),r&&t(e,r),e}}(),o=function(t){return t&&t.__esModule?t:{default:t}},i=function(t,e,n){for(var r=!0;r;){var o=t,i=e,u=n;r=!1,null===o&&(o=Function.prototype);var s=Object.getOwnPropertyDescriptor(o,i);if(void 0!==s){if("value"in s)return s.value;var a=s.get;if(void 0===a)return;return a.call(u)}var c=Object.getPrototypeOf(o);if(null===c)return;t=c,e=i,n=u,r=!0,s=a=c=void 0}},u=n(3),s=o(u),a=n(4),c=o(a),f=function(t){function e(t){var n=t.space;!function(t,e){if(!(t instanceof e))throw new TypeError("Cannot call a class as a function")}(this,e),i(Object.getPrototypeOf(e.prototype),"constructor",this).call(this),this.space=n.map(function(t){return new c.default(t.name,t.domain)}),this.history=[]}return function(t,e){if("function"!=typeof e&&null!==e)throw new TypeError("Super expression must either be null or a function, not " + typeof e);t.prototype=Object.create(e&&e.prototype,{constructor:{value:t,writable:!0,configurable:!0}}),e&&(Object.setPrototypeOf?Object.setPrototypeOf(t,e):t.__proto__=e)}(e,s.default),r(e,[{key:"ask",value:function(){var t=this;return new Promise(function(e){var n={};t.space.forEach(function(t){var e=t.name,r=t.domain,o=r[0],i=r[1];n[e]=o+(i-o)*Math.random()}),e(n)})}},{key:"tell",value:function(t,e){var n=this;return new Promise(function(r){n.history.push({params:t,value:e}),r()})}}]),e}();e.default=f},function(t,e,n){"use strict";function r(t){return t&&t.__esModule?t:{default:t}}Object.defineProperty(e,"__esModule",{value:!0}),e.Optimizer=void 0;var o=n(0),i=r(o);e.Optimizer=i.default},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var r=n(1);Object.defineProperty(e,"Optimizer",{enumerable:!0,get:function(){return o(r).default}});var o=function(t){return t&&t.__esModule?t:{default:t}}
+    },function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var r=function(){function t(t,e){for(var n=0;n<e.length;n++){var r=e[n];r.enumerable=r.enumerable||!1,r.configurable=!0,"value"in r&&(r.writable=!0),Object.defineProperty(t,r.key,r)}}return function(e,n,r){return n&&t(e.prototype,n),r&&t(e,r),e}}(),o=function(){function t(){}return r(t,[{key:"ask",value:function(){throw new Error("The method 'ask' must be implemented.")}},{key:"tell",value:function(){throw new Error("The method 'tell' must be implemented.")}},{key:"getBest",value:function(t){var e=this;return new Promise(function(n){var r=e.history.map(function(e){return e.value});if(t){var o=Math.max.apply(Math,r);n(e.history.find(function(e){return e.value===o}))}else{var i=Math.min.apply(Math,r);n(e.history.find(function(e){return e.value===i})
+    )}})}}]),t}();e.default=o},function(t,e,n){"use strict";Object.defineProperty(e,"__esModule",{value:!0});var r=function(t,e){if(Array.isArray(t))return t;if(Symbol.iterator in Object(t))return function(t,e){var n=[],r=!0,o=!1,i=void 0;try{for(var u,s=t[Symbol.iterator]();!(r=(u=s.next()).done)&&(n.push(u.value),!e||n.length!==e);r=!0);}catch(t){o=!0,i=t}finally{try{!r&&s.return&&s.return()}finally{if(o)throw i}}return n}(t,e);throw new TypeError("Invalid attempt to destructure non-iterable instance")},o=function(){function t(t,e){!function(t,e){if(!(t instanceof e))throw new TypeError("Cannot call a class as a function")}(this,t);var n=r(e,2),o=n[0],i=n[1];if(o>i)throw new Error("The first value of the domain must be smaller than the second.");this.name=t,this.domain=[o,i]}return t}();e.default=o}])});
+    </script>
+
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
         h1 { color: #61dafb; font-size: 1.8em; }
@@ -73,7 +84,7 @@
         .dpad-input-group { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin: 10px 0; }
         .dpad-input-group label { text-align: right; font-weight: bold; color: #a2f279; }
         .dpad-input-group input { width: 100%; box-sizing: border-box; }
-        .accordion-header { background-color: #4a4f58; color: #61dafb; cursor: pointer; padding: 12px 15px; border: none; text-align: left; outline: none; font-size: 1.1em; font-weight: bold; width: 100%; border-radius: 8px; margin-top: 5px; transition: background-color 0.3s; position: relative; }
+        .accordion-header { background-color: #4a4f58; color: #61dafb; cursor: pointer; padding: 12px 15px; border: none; text-align: left; outline: none; font-size: 1.1em; font-weight: bold; width: 100%; border-radius: 8px; margin-top: 5px; transition: background-color: 0.3s; position: relative; }
         .accordion-header:hover { background-color: #5a6068; }
         .accordion-header.active { background-color: #61dafb; color: #282c34; border-bottom-left-radius: 0; border-bottom-right-radius: 0;}
         .accordion-header::after { content: '+'; position: absolute; right: 15px; font-size: 1.4em; transition: transform 0.3s; }
@@ -507,22 +518,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 42.1-UI-FIX (Interfejs dla Optymalizacji Bayesowskiej)
-    //
-    // BAZA: Wersja 42.0
-    //
-    // ZMIANY:
-    // -----------------------------------
-    // [NAPRAWA] ZMIANA #1: Dodano obsluge bledow i walidacje w funkcji startBOPT().
-    //             - Sprawdza, czy zewnetrzna biblioteka 'bayes-optimizer' zostala
-    //               poprawnie zaladowana. Jesli nie, wyswietla blad i przerywa.
-    //             - Otoczono inicjalizacje optymalizatora blokiem try...catch,
-    //               aby wylapac i zaraportowac ewentualne bledy.
-    // [NAPRAWA] ZMIANA #2: Wprowadzono obsluge potwierdzen (ACK) od robota.
-    //             - Interfejs nasluchuje teraz na komunikat 'bopt_ack', ktory
-    //               potwierdza, ze robot przyjal polecenie i rozpoczyna test.
-    //             - Dodano szczegolowe logowanie calego procesu autostrojenia
-    //               dla latwiejszej diagnostyki.
+    // WERSJA 42.3-UI-FINAL-FIX (Interfejs dla Optymalizacji Bayesowskiej)
     // =======================================================================================
     const debouncedSenders = {};
     let isMappingButton = false;
@@ -656,8 +652,8 @@
                 break;
             case 'drive_test_result':
                 if (resolveTestResultPromise) { resolveTestResultPromise(data.fitness); }
-                break;
-            case 'bopt_ack': // [NAPRAWA] Obsluga potwierdzenia startu testu od robota
+                break; 
+            case 'bopt_ack': 
                 if (isBoptRunning) {
                     addLogMessage(`[UI] Robot potwierdzil gotowosc do testu (${data.status}).`, 'info');
                 }
@@ -744,7 +740,7 @@
         document.getElementById('trimRollPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: 1 }));
         document.getElementById('trimRollMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -1 }));
         document.getElementById('emergencyStopBtn').addEventListener('click', () => sendBleMessage({ type: 'emergency_stop' }));
-        document.getElementById('saveBtn').addEventListener('click', () => { if (confirm("Czy na pewno chcesz nadpisac ustawienia w pamieci robota?")) sendBleMessage({ type: 'save_tunings' }); });
+        document.getElementById('saveBtn').addEventListener('click', () => { sendBleMessage({ type: 'save_tunings' }); }); // [NAPRAWA] Usunieto confirm(), bo teraz mamy logi
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) sendBleMessage({ type: 'load_from_eeprom' }); });
         document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
         document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' }));
@@ -787,8 +783,7 @@
     }
 
     async function startBOPT() {
-        // [NAPRAWA] Sprawdzenie, czy biblioteka autostrojenia zostala zaladowana
-        if (typeof bayes === 'undefined') {
+        if (typeof bayes === 'undefined' || typeof bayes.Optimizer === 'undefined') {
             addLogMessage("[UI] BLAD: Biblioteka autostrojenia 'bayes-optimizer' nie jest dostepna. Sprawdz polaczenie z internetem.", 'error');
             return;
         }
@@ -814,7 +809,6 @@
             space = [ { name: 'position_error_gain', domain: [0.1, 10.0] }, { name: 'position_d_gain', domain: [0.0, 15.0] }, { name: 'speed_p_gain', domain: [0.0001, 0.1] } ];
         }
 
-        // [NAPRAWA] Zabezpieczenie inicjalizacji optymalizatora
         try {
             bayesianOptimizer = new bayes.Optimizer({ space });
         } catch (error) {
@@ -846,6 +840,14 @@
         
         let paramsText = '';
         const isBalanceMode = document.getElementById('boptBalanceSettings').style.display === 'block';
+        
+        // [NAPRAWA] Zamiana kluczy z snake_case na camelCase
+        let currentBoptParamsCamel = {};
+        for(const key in currentBoptParams){
+            const camelKey = key.replace(/_([a-z])/g, g => g[1].toUpperCase());
+            currentBoptParamsCamel[camelKey] = currentBoptParams[key];
+        }
+
         if (isBalanceMode) {
             paramsText = ` q1: ${currentBoptParams.q1_angle.toFixed(1)}\n q2: ${currentBoptParams.q2_angular_vel.toFixed(1)}\n  r: ${currentBoptParams.r_control.toFixed(3)}\n sc: ${currentBoptParams.lqr_output_scalar.toFixed(2)}`;
             if(currentBoptParams.q3_position !== undefined) paramsText += `\n q3: ${currentBoptParams.q3_position.toFixed(1)}`;
@@ -857,7 +859,6 @@
         document.getElementById('boptRunTestBtn').disabled = false;
         
         if (isBalanceMode) {
-            // W trybie balansu test uruchamia sie automatycznie
             handleRunTestBtnClick();
         } else {
             addLogMessage('[UI] Oczekiwanie na reczne uruchomienie testu jazdy...', 'info');
@@ -884,7 +885,6 @@
             testCommand = { type: 'run_drive_test', distance_cm: distance };
         }
 
-        // Czekamy chwile, zeby parametry sie zaaplikowaly na robocie
         await new Promise(r => setTimeout(r, 200));
         addLogMessage(`[UI] Wysylanie komendy testowej: ${testCommand.type}`, 'info');
         await sendBleMessage(testCommand);
@@ -929,10 +929,8 @@
         document.querySelectorAll('button, input, select').forEach(el => {
             const parentCard = el.closest('.card');
             if (parentCard && parentCard.contains(document.getElementById('startBoptBtn'))) {
-                // Wewnatrz karty BOPT, blokuj wszystko oprocz przycisku STOP i URUCHOM TEST
                 if (el.id !== 'stopBoptBtn' && el.id !== 'boptRunTestBtn') el.disabled = isLocked;
             } else {
-                // Poza karta BOPT, blokuj wszystko oprocz STOP AWARYJNY i POLACZ
                 if (el.id !== 'emergencyStopBtn' && el.id !== 'connectBleBtn') {
                     el.disabled = isLocked;
                 }
@@ -940,7 +938,6 @@
         });
         document.getElementById('startBoptBtn').disabled = isLocked;
         document.getElementById('stopBoptBtn').disabled = !isLocked;
-        // Upewnij sie, ze przycisk polaczenia jest zawsze dostepny jesli nie ma polaczenia
         document.getElementById('connectBleBtn').disabled = isLocked || !!bleDevice;
     }
 
@@ -953,6 +950,7 @@
             const isBalanceMode = document.getElementById('boptBalanceSettings').style.display === 'block';
             let presetData = {};
             if (isBalanceMode) {
+                 // [NAPRAWA] Zamiana kluczy z snake_case na camelCase
                 presetData = { q1Angle: lastBestBoptParams.q1_angle, q2AngularVel: lastBestBoptParams.q2_angular_vel, q3Position: lastBestBoptParams.q3_position || parseFloat(document.getElementById('q3PositionInput').value), q4Velocity: lastBestBoptParams.q4_velocity || parseFloat(document.getElementById('q4VelocityInput').value), rControl: lastBestBoptParams.r_control, lqrOutputScalar: lastBestBoptParams.lqr_output_scalar };
             } else {
                 presetData = { q1Angle: parseFloat(document.getElementById('q1AngleInput').value), q2AngularVel: parseFloat(document.getElementById('q2AngularVelInput').value), q3Position: parseFloat(document.getElementById('q3PositionInput').value), q4Velocity: parseFloat(document.getElementById('q4VelocityInput').value), rControl: parseFloat(document.getElementById('rControlInput').value), lqrOutputScalar: parseFloat(document.getElementById('lqrOutputScalarInput').value), positionErrorGain: lastBestBoptParams.position_error_gain, positionDampingGain: lastBestBoptParams.position_d_gain, speedPGain: lastBestBoptParams.speed_p_gain };
