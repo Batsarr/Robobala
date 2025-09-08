@@ -888,14 +888,19 @@
 
         if (!isBoptRunning || !result) {
             addLogMessage('[UI] Test przerwany lub anulowany.', 'warn');
-            document.getElementById('boptRunTestBtn').disabled = false; 
+            // NAPRAWA: Upewnij sie, ze przycisk jest ponownie aktywny, jesli proces jest wciaz aktywny
+            if(isBoptRunning) {
+                document.getElementById('boptRunTestBtn').disabled = false; 
+            }
             return;
         }
 
         addLogMessage(`[UI] Otrzymano wynik (fitness): ${result.fitness.toFixed(4)}`, 'info');
         await bayesianOptimizer.tell(currentBoptParams, result.fitness);
         
-        const [bestParams, bestFitness] = await bayesianOptimizer.getBest();
+        const best = await bayesianOptimizer.getBest();
+        const bestParams = best.params;
+        const bestFitness = best.value;
         
         boptIterationCounter++;
         updateBoptProgress(boptIterationCounter, boptTotalIterations, bestFitness, bestParams);
@@ -918,7 +923,12 @@
             paramsText = ` pos_p: ${currentBoptParams.position_error_gain.toFixed(3)}\n pos_d: ${currentBoptParams.position_d_gain.toFixed(3)}\n spd_p: ${currentBoptParams.speed_p_gain.toFixed(4)}`;
         }
         document.getElementById('bopt-current-params-display').textContent = paramsText;
+        
+        // =========================================================
+        // === KLUCZOWA ZMIANA: Ponowne uaktywnienie przycisku    ===
+        // =========================================================
         document.getElementById('boptRunTestBtn').disabled = false;
+        
         addLogMessage(`[UI] Gotowe do testu iteracji ${boptIterationCounter + 1}.`, 'info');
     }
     // =========================================================
