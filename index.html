@@ -719,13 +719,7 @@
             try {
                 const doc = JSON.parse(message);
                 if (doc.type === 'telemetry') {
-                    updateTelemetry(doc);
-                    if (doc.robot_state) lastKnownRobotState = doc.robot_state;
-                    if (doc.emergency_stop !== undefined) {
-                        document.getElementById('emergencyStopStatus').textContent = doc.emergency_stop ? 'Tak' : 'Nie';
-                        if (doc.emergency_stop) showEmergencyBanner();
-                    }
-                    checkAndExecuteNextSequenceStep(lastKnownRobotState);
+                    handleTelemetryMessage(doc);
                 } else if (doc.type === 'full_config') {
                     loadConfigToUI(doc.params);
                 } else if (doc.type === 'log') {
@@ -746,9 +740,6 @@
             if (doc.emergency_stop !== undefined) {
                 document.getElementById('emergencyStopStatus').textContent = doc.emergency_stop ? 'Tak' : 'Nie';
                 if (doc.emergency_stop) showEmergencyBanner();
-            }
-            if (doc.type === 'ga_result') {
-                handleBoptResult(doc);
             }
             checkAndExecuteNextSequenceStep(lastKnownRobotState);
         }
@@ -1053,7 +1044,7 @@
             addLogMessage('[UI] Zaladowano konfiguracje z robota.', 'success');
         }
 
-        // BOPT
+        // BOPT - Poprawiona sekcja (tylko zmiany w logice, bez wpływu na wygląd)
         function initBoptOptimizer() {
             const space = [
                 { name: 'q1_angle', domain: [50, 200] },
@@ -1104,7 +1095,7 @@
             bayesianOptimizer.ask().then(params => {
                 currentBoptParams = params;
                 updateBoptCurrentParamsDisplay(params);
-                setTimeout(() => runBoptTest(isInitialTest), 1000); // Zwiększony timeout do 1000ms
+                setTimeout(() => runBoptTest(isInitialTest), 1000); // Zwiększony timeout do 1000ms dla stabilności BLE
             }).catch(e => {
                 addLogMessage('[UI] Blad w ask(): ' + e.message, 'error');
                 stopBOPT(true);
@@ -1152,19 +1143,21 @@
             let bestParams = null;
             let bestFitness = null;
             try {
+                // POPRAWKA: Zmieniona destrukturyzacja na bezpośredni dostęp do obiektu z getBest()
                 const bestObservation = await bayesianOptimizer.getBest();
                 bestParams = bestObservation ? bestObservation.params : null;
                 bestFitness = bestObservation ? bestObservation.value : null;
 
-                // Sprawdź historię, jeśli pusta użyj aktualnego
+                // POPRAWKA: Sprawdź historię, jeśli pusta użyj aktualnego
                 if (bayesianOptimizer.history.length === 0) {
                     addLogMessage('[UI] Brak historii – używam aktualnego wyniku.', 'warn');
                     bestParams = currentBoptParams;
                     bestFitness = result.fitness;
                 }
             } catch (e) {
-                console.error('Błąd w getBest:', e);
-                addLogMessage('[UI] Błąd optymalizacji: ' + e.message, 'error');
+                // POPRAWKA: Dodana obsługa błędów w getBest
+                console.error('Blad w getBest:', e);
+                addLogMessage('[UI] Blad optymalizacji: ' + e.message, 'error');
                 stopBOPT(true);
                 return;
             }
@@ -1251,7 +1244,7 @@
                     presetData = { q1Angle: parseFloat(document.getElementById('q1AngleInput').value), q2AngularVel: parseFloat(document.getElementById('q2AngularVelInput').value), q3Position: parseFloat(document.getElementById('q3PositionInput').value), q4Velocity: parseFloat(document.getElementById('q4VelocityInput').value), rControl: parseFloat(document.getElementById('rControlInput').value), lqrOutputScalar: parseFloat(document.getElementById('lqrOutputScalarInput').value), positionErrorGain: lastBestBoptParams.position_error_gain, positionDampingGain: lastBestBoptParams.position_d_gain, speedPGain: lastBestBoptParams.speed_p_gain };
                 }
                 localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData));
-                addLogMessage(`[UI] Zapisano własny preset '${presetName.trim()}.`, 'success');
+                addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success');
                 populatePresetSelect();
             }
         }
@@ -1325,7 +1318,7 @@
             document.getElementById('startLoggingBtn').style.display = 'block';
             document.getElementById('cancelLoggingBtn').style.display = 'none';
             document.getElementById('loggingStatus').textContent = 'Anulowano.';
-            addLogMessage('[UI] Zbieranie danych anulowane przez użytkownika.', 'warn');
+            addLogMessage('[UI] Zbieranie danych anulowane przez uzytkownika.', 'warn');
         }
 
         function handleLoggingFinished(points) {
@@ -1333,10 +1326,10 @@
             document.getElementById('startLoggingBtn').style.display = 'block';
             document.getElementById('cancelLoggingBtn').style.display = 'none';
             if (points > 0) {
-                document.getElementById('loggingStatus').textContent = `Zebrano ${points} punktów. Gotowe do pobrania.`;
+                document.getElementById('loggingStatus').textContent = `Zebrano ${points} punktow. Gotowe do pobrania.`;
                 document.getElementById('downloadCsvBtn').disabled = false;
             } else {
-                document.getElementById('loggingStatus').textContent = 'Nie zebrano żadnych danych.';
+                document.getElementById('loggingStatus').textContent = 'Nie zebrano zadnych danych.';
             }
         }
 
@@ -1379,7 +1372,7 @@
                     sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); 
                 }); 
                 autoBtn.addEventListener('click', (e) => { 
-                    if (confirm("UWAGA! Upewnij się, że robot jest uniesiony, a koła mogą się swobodnie obracać. Kontynuować?")) { 
+                    if (confirm("UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?")) { 
                         const startValue = parseInt(document.getElementById('pwmTuneStartInput').value); 
                         sendBleMessage({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue }); 
                         e.target.disabled = true; 
@@ -1424,7 +1417,7 @@
         function runSequence() { 
             if (isSequenceRunning) return; 
             if (lastKnownRobotState !== 'IDLE' && lastKnownRobotState !== 'HOLDING_POSITION') { 
-                addLogMessage(`[UI] Nie można rozpocząć sekwencji. Robot w stanie '${lastKnownRobotState}'.`, 'error'); 
+                addLogMessage(`[UI] Nie mozna rozpoczac sekwencji. Robot w stanie '${lastKnownRobotState}'.`, 'error'); 
                 return; 
             } 
             const steps = document.querySelectorAll('.sequence-step'); 
@@ -1432,7 +1425,7 @@
             isSequenceRunning = true; 
             currentSequenceStep = 0; 
             updateSequenceUI(); 
-            addLogMessage(`[UI] Rozpoczęto sekwencję z ${steps.length} kroków.`, 'info'); 
+            addLogMessage(`[UI] Rozpoczeto sekwencje z ${steps.length} krokow.`, 'info'); 
             executeNextSequenceStep(); 
         } 
 
@@ -1466,7 +1459,7 @@
             const isRobotIdle = lastKnownRobotState.includes('IDLE') || lastKnownRobotState.includes('HOLDING') || lastKnownRobotState.includes('GA_READY'); 
             const wasRobotWorking = previousState.includes('MOVE') || previousState.includes('ROTATE'); 
             if (isRobotIdle && wasRobotWorking) { 
-                addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakończony.`, 'info'); 
+                addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info'); 
                 currentSequenceStep++; 
                 executeNextSequenceStep(); 
             } 
@@ -1477,7 +1470,7 @@
             if (!isSequenceRunning || currentSequenceStep >= steps.length) { 
                 if (isSequenceRunning) { 
                     isSequenceRunning = false; 
-                    addLogMessage('[UI] Sekwencja ukończona.', 'info'); 
+                    addLogMessage('[UI] Sekwencja ukonczona.', 'info'); 
                 } 
                 updateSequenceUI(); 
                 return; 
@@ -1501,7 +1494,7 @@
                     command = { type: 'execute_rotate', angle_deg: -value }; 
                     break; 
             } 
-            addLogMessage(`[UI] Wysyłanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info'); 
+            addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info'); 
             sendBleMessage(command); 
         } 
 
