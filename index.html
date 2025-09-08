@@ -96,7 +96,7 @@
         .dpad-input-group { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin: 10px 0; }
         .dpad-input-group label { text-align: right; font-weight: bold; color: #a2f279; }
         .dpad-input-group input { width: 100%; box-sizing: border-box; }
-        .accordion-header { background-color: #4a4f58; color: #61dafb; cursor: pointer; padding: 12px 15px; border: none; text-align: left; outline: none; font-size: 1.1em; font-weight: bold; width: 100%; border-radius: 8px; margin-top: 5px; transition: background-color: 0.3s; position: relative; }
+        .accordion-header { background-color: #4a4f58; color: #61dafb; cursor: pointer; padding: 12px 15px; border: none; text-align: left; outline: none; font-size: 1.1em; font-weight: bold; width: 100%; border-radius: 8px; margin-top: 5px; transition: background-color 0.3s; position: relative; }
         .accordion-header:hover { background-color: #5a6068; }
         .accordion-header.active { background-color: #61dafb; color: #282c34; border-bottom-left-radius: 0; border-bottom-right-radius: 0;}
         .accordion-header::after { content: '+'; position: absolute; right: 15px; font-size: 1.4em; transition: transform 0.3s; }
@@ -800,7 +800,9 @@
         document.getElementById('boptRestoreSafeBaseBtn').addEventListener('click', () => { if (confirm("Spowoduje to przywrocenie bezpiecznych parametrow i nadpisanie aktualnych ustawien LQR. Kontynuowac?")) { sendBleMessage({ type: 'ga_restore_safe_params' }); addLogMessage('[UI] Wyslano polecenie przywrocenia bezpiecznej bazy LQR.', 'info'); setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 500); } });
     }
     
-    // === ZMIANA START: Nowa, naprawiona logika BOPT ===
+    // =========================================================
+    // === POCZATEK BLOKU Z NAPRAWIONA LOGIKA BOPT ===
+    // =========================================================
     async function startBOPT() {
         if (!bleDevice) { addLogMessage('Polacz z robotem przed rozpoczeciem optymalizacji.', 'warn'); return; }
         if (isBoptRunning) return;
@@ -919,7 +921,9 @@
         document.getElementById('boptRunTestBtn').disabled = false;
         addLogMessage(`[UI] Gotowe do testu iteracji ${boptIterationCounter + 1}.`, 'info');
     }
-    // === ZMIANA KONIEC ===
+    // =========================================================
+    // === KONIEC BLOKU Z NAPRAWIONA LOGIKA BOPT ===
+    // =========================================================
     
     async function stopBOPT(sendCmd) {
         if (!isBoptRunning) return;
