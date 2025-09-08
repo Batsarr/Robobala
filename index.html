@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v43.5 (BOPT-FIX)</title>
+    <title>Robot LQR - Panel Sterowania v43.5 (FINAL-FIX)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <!-- ================================================================= -->
@@ -530,62 +530,22 @@
     </div>
 
 <script>
+    // Zmienne globalne i stale
     const debouncedSenders = {};
-    let isMappingButton = false;
-    let actionToMap = null;
-    let lastBestBoptParams = null; 
-    let loggedData = [];
-
-    document.addEventListener('DOMContentLoaded', () => {
-        initJoystick();
-        setupChartControls();
-        populatePresetSelect();
-        setupNumericInputs();
-        setupEventListeners();
-        setupManualTuneButtons(); 
-        setupSequenceControls();
-        setupDpadControls();
-        setupGamepadMappingModal();
-        loadGamepadMappings();
-        renderMappingModal();
-        pollGamepad();
-        window.addEventListener('resize', initJoystick);
-        document.querySelectorAll('.accordion-header.active').forEach(header => {
-            const content = header.nextElementSibling;
-            if (content) { content.style.maxHeight = content.scrollHeight + "px"; }
-        });
-    });
-
+    let isMappingButton = false, actionToMap = null, lastBestBoptParams = null, loggedData = [];
     const CUSTOM_PRESET_PREFIX = 'lqr_custom_preset_v42.6_';
     let bleDevice, rxCharacteristic, txCharacteristic;
-    const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
-    const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
-    const TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
-    
+    const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b", RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9", TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
     let bleBuffer = '';
-    
-    let isBoptRunning = false;
-    let bayesianOptimizer;
-    let resolveTestResultPromise;
-    let currentBoptParams = null;
-    let boptIterationCounter = 0;
-    let boptTotalIterations = 0;
-
-    const joystickCanvas = document.getElementById('joystickCanvas');
-    const joystickCtx = joystickCanvas.getContext('2d');
+    let isBoptRunning = false, bayesianOptimizer, resolveTestResultPromise, currentBoptParams = null;
+    let boptIterationCounter = 0, boptTotalIterations = 0;
+    let bestFitnessSoFar = 0.0, bestParamsSoFar = null;
+    const joystickCanvas = document.getElementById('joystickCanvas'), joystickCtx = joystickCanvas.getContext('2d');
     let joystickCenter, joystickRadius, knobRadius, isDragging = false;
-    let lastJoystickSendTime = 0;
-    const JOYSTICK_SEND_INTERVAL = 25;
-    let gamepadIndex = null;
-    let lastGamepadState = [];
-    let lastGamepadAxes = { x: 0, y: 0 };
-    let gamepadMappings = {};
-    const GAMEPAD_MAPPING_KEY = 'lqr_gamepad_mappings_v42';
-    const GAMEPAD_AXIS_THRESHOLD = 0.15;
-    
-    let isSequenceRunning = false;
-    let currentSequenceStep = 0;
-    const MAX_SEQUENCE_STEPS = 10;
+    let lastJoystickSendTime = 0; const JOYSTICK_SEND_INTERVAL = 25;
+    let gamepadIndex = null, lastGamepadState = [], lastGamepadAxes = { x: 0, y: 0 };
+    let gamepadMappings = {}; const GAMEPAD_MAPPING_KEY = 'lqr_gamepad_mappings_v42'; const GAMEPAD_AXIS_THRESHOLD = 0.15;
+    let isSequenceRunning = false, currentSequenceStep = 0; const MAX_SEQUENCE_STEPS = 10;
     let lastKnownRobotState = 'IDLE';
 
     const availableActions = {
@@ -612,6 +572,26 @@
         '2': { name: "2. Zbalansowany (Startowy)", params: { q1Angle: 100, q2AngularVel: 10, q3Position: 1, q4Velocity: 5, rControl: 0.1, lqrOutputScalar: 20.0 }},
         '3': { name: "3. Plynny / Miekki", params: { q1Angle: 50, q2AngularVel: 5, q3Position: 2, q4Velocity: 10, rControl: 0.5, lqrOutputScalar: 18.0 }},
     };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        initJoystick();
+        setupChartControls();
+        populatePresetSelect();
+        setupNumericInputs();
+        setupEventListeners();
+        setupManualTuneButtons(); 
+        setupSequenceControls();
+        setupDpadControls();
+        setupGamepadMappingModal();
+        loadGamepadMappings();
+        renderMappingModal();
+        pollGamepad();
+        window.addEventListener('resize', initJoystick);
+        document.querySelectorAll('.accordion-header.active').forEach(header => {
+            const content = header.nextElementSibling;
+            if (content) { content.style.maxHeight = content.scrollHeight + "px"; }
+        });
+    });
 
     function initJoystick() { const wrapper = document.getElementById('joystickWrapper'); const size = wrapper.clientWidth; joystickCanvas.width = size; joystickCanvas.height = size; joystickCenter = { x: size / 2, y: size / 2 }; joystickRadius = size / 2 * 0.75; knobRadius = size / 2 * 0.25; drawJoystick(joystickCenter.x, joystickCenter.y); }
     function drawJoystick(x, y) { joystickCtx.clearRect(0, 0, joystickCanvas.width, joystickCanvas.height); joystickCtx.beginPath(); joystickCtx.arc(joystickCenter.x, joystickCenter.y, joystickRadius, 0, 2 * Math.PI); joystickCtx.fillStyle = 'rgba(255, 255, 255, 0.1)'; joystickCtx.fill(); joystickCtx.beginPath(); joystickCtx.arc(x, y, knobRadius, 0, 2 * Math.PI); joystickCtx.fillStyle = '#61dafb'; joystickCtx.fill(); }
@@ -654,40 +634,6 @@
     }
     
     async function sendBleMessage(message) { if (!rxCharacteristic) { return; } try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
-    
-    function processCompleteMessage(data) {
-        let previousRobotState = lastKnownRobotState;
-        if (data.type === 'telemetry' && data.robot_state) {
-            lastKnownRobotState = data.robot_state;
-        }
-
-        switch (data.type) {
-            case 'telemetry': updateTelemetryUI(data); updateChart(data); checkAndExecuteNextSequenceStep(previousRobotState); break;
-            case 'full_config': applyFullConfig(data); addLogMessage("[UI] Konfiguracja zsynchronizowana z robotem.", "info"); break;
-            case 'log': addLogMessage(`[ROBOT] ${data.message}`, data.level); break;
-            case 'logging_data_point': if (loggedData) loggedData.push(data.d); break;
-            case 'logging_finished': handleLoggingFinished(data.points_collected); break;
-            case 'ga_result': if (resolveTestResultPromise) { resolveTestResultPromise(data); } break;
-            case 'drive_test_result': if (resolveTestResultPromise) { resolveTestResultPromise(data); } break; 
-            case 'bopt_ack': if (isBoptRunning) { addLogMessage(`[UI] Robot potwierdzil gotowosc do testu (${data.status}).`, 'info'); } break;
-            case 'single_pwm_result':
-                const p = data.params;
-                const inputId = `minPwm${p.motor.charAt(0).toUpperCase() + p.motor.slice(1)}${p.direction.charAt(0).toUpperCase() + p.direction.slice(1)}Input`;
-                const inputField = document.getElementById(inputId);
-                if (inputField) {
-                    const tuneRow = inputField.closest('.manual-tune-row');
-                    inputField.value = p.value;
-                    addLogMessage(`[UI] Auto-strojenie dla ${p.motor} ${p.direction} zakonczone. Wynik: ${p.value}`, 'success');
-                    debouncedSenders['set_min_pwm']();
-                    if(tuneRow){
-                        const autoBtn = tuneRow.querySelector('.auto-btn');
-                        autoBtn.disabled = false;
-                        autoBtn.textContent = 'Auto';
-                    }
-                }
-                break;
-        }
-    }
     
     function applyFullConfig(data) {
         const params = data.params || data; 
@@ -810,6 +756,8 @@
         isBoptRunning = true;
         setBoptUiLock(true);
         lastBestBoptParams = null;
+        bestFitnessSoFar = 0.0;
+        bestParamsSoFar = null;
         document.getElementById('boptSavePresetBtn').disabled = true;
         
         const isBalanceMode = document.getElementById('boptBalanceSettings').style.display === 'block';
@@ -839,6 +787,8 @@
         updateBoptProgress(0, boptTotalIterations);
         
         await sendBleMessage({ type: 'ga_save_safe_params' });
+        await new Promise(r => setTimeout(r, 100));
+        await sendBleMessage({ type: 'reset_zero' });
         await new Promise(r => setTimeout(r, 100));
 
         addLogMessage('[UI] Przygotowywanie pierwszej propozycji parametrow...', 'info');
@@ -888,29 +838,34 @@
 
         if (!isBoptRunning || !result) {
             addLogMessage('[UI] Test przerwany lub anulowany.', 'warn');
-            // NAPRAWA: Upewnij sie, ze przycisk jest ponownie aktywny, jesli proces jest wciaz aktywny
             if(isBoptRunning) {
-                document.getElementById('boptRunTestBtn').disabled = false; 
+                document.getElementById('bopt-current-params-display').textContent = 'Przerwano. Czekam na polecenie...';
             }
             return;
         }
 
-        addLogMessage(`[UI] Otrzymano wynik (fitness): ${result.fitness.toFixed(4)}`, 'info');
+        addLogMessage(`[UI] Otrzymano wynik (fitness): ${result.fitness.toFixed(4)}. Powrot do bazy...`, 'info');
+        document.getElementById('bopt-current-params-display').textContent = 'Powrot do bazy...';
+
         await bayesianOptimizer.tell(currentBoptParams, result.fitness);
         
-        const best = await bayesianOptimizer.getBest();
-        const bestParams = best.params;
-        const bestFitness = best.value;
-        
         boptIterationCounter++;
-        updateBoptProgress(boptIterationCounter, boptTotalIterations, bestFitness, bestParams);
+
+        if (result.fitness > bestFitnessSoFar) {
+            bestFitnessSoFar = result.fitness;
+            const best = await bayesianOptimizer.getBest();
+            bestParamsSoFar = best.params;
+            addLogMessage(`[UI] Nowy najlepszy wynik: ${bestFitnessSoFar.toFixed(4)}`, 'success');
+        }
+
+        updateBoptProgress(boptIterationCounter, boptTotalIterations, bestFitnessSoFar, bestParamsSoFar);
         
         if (boptIterationCounter >= boptTotalIterations) {
             addLogMessage('[UI] Optymalizacja zakonczona!', 'success');
             stopBOPT(false);
             return;
         }
-
+        
         addLogMessage('[UI] Przygotowywanie kolejnej propozycji parametrow...', 'info');
         currentBoptParams = await bayesianOptimizer.ask();
 
@@ -923,17 +878,7 @@
             paramsText = ` pos_p: ${currentBoptParams.position_error_gain.toFixed(3)}\n pos_d: ${currentBoptParams.position_d_gain.toFixed(3)}\n spd_p: ${currentBoptParams.speed_p_gain.toFixed(4)}`;
         }
         document.getElementById('bopt-current-params-display').textContent = paramsText;
-        
-        // =========================================================
-        // === KLUCZOWA ZMIANA: Ponowne uaktywnienie przycisku    ===
-        // =========================================================
-        document.getElementById('boptRunTestBtn').disabled = false;
-        
-        addLogMessage(`[UI] Gotowe do testu iteracji ${boptIterationCounter + 1}.`, 'info');
     }
-    // =========================================================
-    // === KONIEC BLOKU Z NAPRAWIONA LOGIKA BOPT ===
-    // =========================================================
     
     async function stopBOPT(sendCmd) {
         if (!isBoptRunning) return;
@@ -945,6 +890,8 @@
 
         if (sendCmd) {
             addLogMessage('[UI] Zatrzymywanie optymalizacji i przywracanie stanu...', 'info');
+            await sendBleMessage({ type: 'balance_toggle', enabled: false });
+            await new Promise(r => setTimeout(r, 100));
             await sendBleMessage({ type: 'ga_restore_safe_params' });
             await new Promise(r => setTimeout(r, 100));
             await sendBleMessage({ type: 'command_stop' });
@@ -1071,7 +1018,6 @@
     function flashElement(element) { if (!element) return; const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element; target.classList.add('gamepad-flash'); setTimeout(() => target.classList.remove('gamepad-flash'), 300); }
     function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
     function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
-
 </script>
 
 </body>
