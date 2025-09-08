@@ -770,11 +770,9 @@
         document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset);
         document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container, .control-row'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); });
         
-        // === ZMIANA START: Dodano nasluchiwanie na klikniecie przycisku "Uruchom Test" ===
         document.getElementById('startBoptBtn').addEventListener('click', startBOPT);
         document.getElementById('boptRunTestBtn').addEventListener('click', handleRunTestBtnClick);
         document.getElementById('stopBoptBtn').addEventListener('click', () => stopBOPT(true));
-        // === ZMIANA KONIEC ===
         
         document.getElementById('boptSavePresetBtn').addEventListener('click', saveBoptPreset);
 
