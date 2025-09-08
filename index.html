@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v43.4 (Naprawiony)</title>
+    <title>Robot LQR - Panel Sterowania v43.5 (BOPT-FIX)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <!-- ================================================================= -->
@@ -530,9 +530,6 @@
     </div>
 
 <script>
-    // =======================================================================================
-    // WERSJA 43.5-BOPT-FIX (Naprawiona, reczna petla BOPT)
-    // =======================================================================================
     const debouncedSenders = {};
     let isMappingButton = false;
     let actionToMap = null;
@@ -773,9 +770,12 @@
         document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset);
         document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container, .control-row'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); });
         
+        // === ZMIANA START: Dodano nasluchiwanie na klikniecie przycisku "Uruchom Test" ===
         document.getElementById('startBoptBtn').addEventListener('click', startBOPT);
         document.getElementById('boptRunTestBtn').addEventListener('click', handleRunTestBtnClick);
         document.getElementById('stopBoptBtn').addEventListener('click', () => stopBOPT(true));
+        // === ZMIANA KONIEC ===
+        
         document.getElementById('boptSavePresetBtn').addEventListener('click', saveBoptPreset);
 
         const boptModeBalanceBtn = document.getElementById('boptModeBalance');
@@ -802,7 +802,7 @@
         document.getElementById('boptRestoreSafeBaseBtn').addEventListener('click', () => { if (confirm("Spowoduje to przywrocenie bezpiecznych parametrow i nadpisanie aktualnych ustawien LQR. Kontynuowac?")) { sendBleMessage({ type: 'ga_restore_safe_params' }); addLogMessage('[UI] Wyslano polecenie przywrocenia bezpiecznej bazy LQR.', 'info'); setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 500); } });
     }
     
-    // ================== ZMIANA: NAPRAWIONA LOGIKA BOPT ===================
+    // === ZMIANA START: Nowa, naprawiona logika BOPT ===
     async function startBOPT() {
         if (!bleDevice) { addLogMessage('Polacz z robotem przed rozpoczeciem optymalizacji.', 'warn'); return; }
         if (isBoptRunning) return;
@@ -863,9 +863,8 @@
         document.getElementById('boptRunTestBtn').disabled = true;
         addLogMessage(`[UI] Uruchamianie testu dla iteracji ${boptIterationCounter + 1}...`, 'info');
 
-        // Krok 1: Zapewnienie, ze robot balansuje
         await sendBleMessage({ type: 'balance_toggle', enabled: true });
-        await new Promise(r => setTimeout(r, 200)); // Pauza na stabilizacje
+        await new Promise(r => setTimeout(r, 200)); 
 
         const isBalanceMode = document.getElementById('boptBalanceSettings').style.display === 'block';
         let testCommand;
@@ -907,7 +906,6 @@
             return;
         }
 
-        // Krok 2: Przygotowanie kolejnej iteracji
         addLogMessage('[UI] Przygotowywanie kolejnej propozycji parametrow...', 'info');
         currentBoptParams = await bayesianOptimizer.ask();
 
@@ -923,7 +921,7 @@
         document.getElementById('boptRunTestBtn').disabled = false;
         addLogMessage(`[UI] Gotowe do testu iteracji ${boptIterationCounter + 1}.`, 'info');
     }
-    // ==============================================================================
+    // === ZMIANA KONIEC ===
     
     async function stopBOPT(sendCmd) {
         if (!isBoptRunning) return;
