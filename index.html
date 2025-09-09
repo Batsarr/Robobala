@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v43.6 (BOPT-REWORK)</title>
+    <title>Robot LQR - Panel Sterowania v43.7 (BOPT-STABILITY-FIX)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <!-- ================================================================= -->
@@ -128,7 +128,8 @@
         #bopt-progress-bar { width: 0%; height: 20px; background-color: #a2f279; transition: width 0.5s ease; }
         .bopt-status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 15px; text-align: left; margin-bottom: 15px; }
         .bopt-status-grid strong { color: #61dafb; }
-        #bopt-best-params-display, #bopt-current-params-display { background-color: #20232a; border-radius: 5px; padding: 10px; font-family: monospace; text-align: left; white-space: pre; font-size: 0.9em; line-height: 1.5; }
+        /* [STABILITY-FIX] Zmieniono 'pre' na 'pre-wrap' aby pozwolic na lamanie linii */
+        #bopt-best-params-display, #bopt-current-params-display { background-color: #20232a; border-radius: 5px; padding: 10px; font-family: monospace; text-align: left; white-space: pre-wrap; font-size: 0.9em; line-height: 1.5; }
         #bopt-last-result-display { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 5px 15px; background-color: #2a2f35; padding: 10px; border-radius: 6px; margin-top: 10px; }
         #bopt-last-result-display > div { text-align: left; }
         #bopt-last-result-display strong { color: #a2f279; }
@@ -579,29 +580,19 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 43.6-BOPT-REWORK (Interfejs Uzytkownika)
+    // WERSJA 43.7-BOPT-STABILITY-FIX (Interfejs Uzytkownika)
     //
     // ZMIANY:
     // -----------------------------------
-    // [BOPT-REWORK] Calkowicie przebudowano logike automatycznego strojenia (BOPT).
-    // [BOPT-REWORK] Wprowadzono interaktywny, dwuetapowy cykl testu:
-    //               1. Uzytkownik klika "Przygotuj do Testu" (wysyla 'ga_prepare_and_zero').
-    //               2. Robot zeruje stan i potwierdza gotowosc.
-    //               3. Przycisk zmienia sie na "ROZPOCZNIJ POMIAR".
-    //               4. Uzytkownik wyzwala wlasciwy pomiar (wysyla 'ga_execute...').
-    // [BEZPIECZENSTWO] Po kazdym tescie UI automatycznie wysyla komende
-    //                  'ga_restore_safe_params', aby robot wrocil do stabilnego
-    //                  stanu przed przygotowaniem do nastepnej proby.
-    // [BOPT-REWORK] Zlagodzono blokade UI ('setBoptUiLock'): podczas strojenia
-    //               przelacznik balansu i korekta pionu pozostaja aktywne,
-    //               dajac uzytkownikowi mozliwosc interwencji.
-    // [NOWA OCENA]  Dodano nowy panel do konfiguracji wag dla nowej, wieloskladnikowej
-    //               funkcji oceny fitness. Zmiany sa wysylane do robota przez
-    //               nowe polecenie 'ga_set_fitness_weights'.
-    // [NOWA OCENA]  UI teraz odbiera i wyswietla szczegolowe wyniki kazdej proby
-    //               (kary za kat, oscylacje, wysilek, pozycje oraz bonus za stabilnosc).
-    // [UX]          Poprawiono komunikaty i etykiety przyciskow, aby lepiej
-    //               prowadzic uzytkownika przez nowy proces strojenia.
+    // [STABILITY-FIX] Wprowadzono mechanizm timeoutu i ponawiania prob w cyklu BOPT.
+    //                 Jesli UI nie otrzyma potwierdzenia 'bopt_ack' od robota w ciagu
+    //                 3 sekund, automatycznie ponowi probe wyslania polecenia.
+    //                 Po 3 nieudanych probach, test zostanie przerwany z komunikatem bledu.
+    // [STABILITY-FIX] Zapobiega to "zawieszaniu sie" interfejsu w przypadku utraty
+    //                 pakietu BLE, co bylo przyczyna problemu z 3. iteracji.
+    // [UI-FIX]        Naprawiono problem z ucinaniem tekstu w panelu "Najlepsze
+    //                 Znalezione Parametry" przez zmiane wlasciwosci CSS 'white-space'
+    //                 z 'pre' na 'pre-wrap', co pozwala na zawijanie dlugich linii.
     // =======================================================================================
 
     const debouncedSenders = {};
@@ -638,7 +629,6 @@
     
     let bleBuffer = '';
     
-    // [BOPT-REWORK] Nowa logika stanu dla BOPT
     let isBoptRunning = false;
     let boptState = 'idle'; // 'idle', 'preparing', 'awaiting_trigger', 'testing'
     let bayesianOptimizer;
@@ -646,6 +636,12 @@
     let currentBoptParams = null;
     let boptIterationCounter = 0;
     let boptTotalIterations = 0;
+    // [STABILITY-FIX] Zmienne do obslugi timeoutu
+    let boptPrepareTimeout = null;
+    let boptPrepareRetries = 0;
+    const BOPT_MAX_RETRIES = 3;
+    const BOPT_PREPARE_TIMEOUT_MS = 3000;
+
 
     const joystickCanvas = document.getElementById('joystickCanvas');
     const joystickCtx = joystickCanvas.getContext('2d');
@@ -752,6 +748,11 @@
             case 'drive_test_result': if (resolveTestResultPromise) { resolveTestResultPromise(data); } break; 
             case 'bopt_ack': 
                 if (isBoptRunning && data.status === 'ready_for_trigger') {
+                    // [STABILITY-FIX] Otrzymano potwierdzenie, anuluj timeout
+                    clearTimeout(boptPrepareTimeout);
+                    boptPrepareTimeout = null;
+                    boptPrepareRetries = 0;
+
                     boptState = 'awaiting_trigger';
                     const triggerBtn = document.getElementById('boptTriggerTestBtn');
                     triggerBtn.textContent = 'ROZPOCZNIJ POMIAR';
@@ -823,7 +824,6 @@
         }
     }
 
-    // [BOPT-REWORK] Nowa funkcja do wyswietlania szczegolowych wynikow
     function updateBoptLastResultUI(data) {
         document.getElementById('boptLastFitnessDetail').textContent = data.fitness !== undefined ? data.fitness.toFixed(4) : '-.----';
         document.getElementById('boptLastAnglePenalty').textContent = data.p_angle !== undefined ? data.p_angle.toExponential(2) : '-.--';
@@ -866,7 +866,6 @@
         const configGroups = { 'lqr_update': ['q1AngleInput', 'q2AngularVelInput', 'q3PositionInput', 'q4VelocityInput', 'rControlInput', 'lqrOutputScalarInput'], 'set_joystick_tuning': ['joystickOutputScaleInput', 'expoJoystickInput', 'maxSpeedJoystickInput', 'joystickAngleSensitivityInput', 'turnFactorInput'], 'calibration_update': ['wheelDiameterCmInput', 'trackWidthCmInput', 'encoderPprInput', 'headingCorrectionFactorInput', 'positionErrorGainInput', 'positionDampingGainInput', 'rotationPGainInput', 'speedPGainInput', 'maxSpeedFromPosInput', 'holdPositionMarginPulsesInput', 'globalPowerLimitInput', 'rollCorrectionGainInput'], 'set_min_pwm': ['minPwmLeftFwdInput', 'minPwmLeftBwdInput', 'minPwmRightFwdInput', 'minPwmRightBwdInput'] };
         for (const [type, keys] of Object.entries(configGroups)) { debouncedSenders[type] = debounce(() => { const params = {}; keys.forEach(inputId => { const input = document.getElementById(inputId); if (input) { const snakeKey = parameterMapping[inputId]; if (!snakeKey) { console.error(`Brak mapowania dla parametru o ID: ${inputId}`); return; } let value = parseFloat(input.value); if (snakeKey === 'turn_factor' || snakeKey === 'joystick_output_scale' || snakeKey === 'expo_joystick') value /= 100; if (snakeKey === 'global_power_limit') value = Math.round(value * 1023 / 100); params[snakeKey] = value; } }); sendBleMessage({ type, params }); }, 350); keys.forEach(inputId => { const input = document.getElementById(inputId); if (input && !input.readOnly) input.addEventListener('change', debouncedSenders[type]); }); }
         
-        // [BOPT-REWORK] Listener dla wag funkcji fitness
         debouncedSenders['ga_set_fitness_weights'] = debounce(() => {
             const params = {};
             document.querySelectorAll('.fitness-weight').forEach(input => {
@@ -912,9 +911,9 @@
         document.getElementById('boptRestoreSafeBaseBtn').addEventListener('click', () => { if (confirm("Spowoduje to przywrocenie bezpiecznych parametrow i nadpisanie aktualnych ustawien LQR. Kontynuowac?")) { sendBleMessage({ type: 'ga_restore_safe_params' }); addLogMessage('[UI] Wyslano polecenie przywrocenia bezpiecznej bazy LQR.', 'info'); setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 500); } });
     }
     
-    // =========================================================
-    // === POCZATEK BLOKU Z NOWA LOGIKA BOPT (WERSJA REWORK) ===
-    // =========================================================
+    // =======================================================================
+    // === POCZATEK BLOKU Z NOWA LOGIKA BOPT (WERSJA STABILITY-FIX) ===
+    // =======================================================================
     async function startBOPT() {
         if (!bleDevice) { addLogMessage('Polacz z robotem przed rozpoczeciem optymalizacji.', 'warn'); return; }
         if (isBoptRunning) return;
@@ -950,7 +949,6 @@
         boptIterationCounter = 0;
         updateBoptProgress(0, boptTotalIterations);
         
-        // Zapisz aktualne parametry jako bezpieczna baze i wyslij wagi fitness
         await sendBleMessage({ type: 'ga_save_safe_params' });
         debouncedSenders['ga_set_fitness_weights']();
         await new Promise(r => setTimeout(r, 200));
@@ -989,11 +987,8 @@
 
         if (boptState === 'preparing') {
             triggerBtn.disabled = true;
-            triggerBtn.textContent = 'Czekam na potwierdzenie...';
-            triggerInfo.textContent = 'Robot zeruje swoj stan...';
-            addLogMessage(`[UI] Wysylanie polecenia przygotowania do testu (iteracja ${boptIterationCounter + 1})...`, 'info');
-            await sendBleMessage({ type: 'ga_prepare_and_zero' });
-            // Czekamy na bopt_ack, ktory zmieni stan na 'awaiting_trigger'
+            boptPrepareRetries = 0;
+            sendPrepareCommandWithTimeout();
         }
         else if (boptState === 'awaiting_trigger') {
             triggerBtn.disabled = true;
@@ -1038,7 +1033,6 @@
             boptIterationCounter++;
             updateBoptProgress(boptIterationCounter, boptTotalIterations, best.value, best.params);
             
-            // KLUCZOWY KROK: Przywroc bezpieczne parametry PRZED nastepna proba
             addLogMessage('[UI] Pomiar zakonczony. Przywracanie bezpiecznych parametrow...', 'info');
             await sendBleMessage({ type: 'ga_restore_safe_params' });
             await new Promise(r => setTimeout(r, 200));
@@ -1053,10 +1047,35 @@
         }
     }
     
+    // [STABILITY-FIX] Nowa funkcja z obsluga timeoutu i ponawiania
+    function sendPrepareCommandWithTimeout() {
+        const triggerBtn = document.getElementById('boptTriggerTestBtn');
+        const triggerInfo = document.getElementById('bopt-trigger-info');
+
+        if (boptPrepareRetries >= BOPT_MAX_RETRIES) {
+            addLogMessage('[UI] BLAD: Robot nie odpowiada na polecenie przygotowania. Anulowanie testu.', 'error');
+            stopBOPT(true);
+            return;
+        }
+
+        boptPrepareRetries++;
+        triggerBtn.textContent = `Czekam na potwierdzenie... (proba ${boptPrepareRetries}/${BOPT_MAX_RETRIES})`;
+        triggerInfo.textContent = 'Robot zeruje swoj stan...';
+        addLogMessage(`[UI] Wysylanie polecenia przygotowania (proba ${boptPrepareRetries})...`, 'info');
+        sendBleMessage({ type: 'ga_prepare_and_zero' });
+
+        boptPrepareTimeout = setTimeout(() => {
+            addLogMessage(`[UI] Timeout! Nie otrzymano potwierdzenia od robota. Ponawiam probe...`, 'warn');
+            sendPrepareCommandWithTimeout();
+        }, BOPT_PREPARE_TIMEOUT_MS);
+    }
+    
     async function stopBOPT(sendCmd) {
         if (!isBoptRunning) return;
         isBoptRunning = false;
         boptState = 'idle';
+        if(boptPrepareTimeout) clearTimeout(boptPrepareTimeout);
+        boptPrepareTimeout = null;
         if(resolveTestResultPromise) resolveTestResultPromise(null);
         setBoptUiLock(false);
         document.getElementById('boptTriggerTestBtn').disabled = true;
@@ -1069,14 +1088,10 @@
             await sendBleMessage({ type: 'ga_restore_safe_params' });
             await new Promise(r => setTimeout(r, 100));
             await sendBleMessage({ type: 'command_stop' });
-            await new Promise(r => setTimeout(r, 100));
-            // Nie ladujemy z EEPROM, zeby nie nadpisac dobrych ustawien
         }
     }
 
-    // [BOPT-REWORK] Zlagodzona blokada UI
     function setBoptUiLock(isLocked) {
-        // Kontrolki, ktore ZAWSZE musza byc dostepne
         const SAFE_DURING_BOPT_IDS = [
             'connectBleBtn', 'emergencyStopBtn', 'stopBoptBtn',
             'balanceSwitch', 'trimPlusBtn', 'trimMinusBtn',
@@ -1085,10 +1100,8 @@
         
         document.querySelectorAll('button, input, select').forEach(el => {
             if (SAFE_DURING_BOPT_IDS.includes(el.id)) {
-                return; // Pomin te kontrolki, zostaw je aktywne
+                return;
             }
-            
-            // Specjalna obsluga glownego przycisku testowego
             if (el.id === 'boptTriggerTestBtn') {
                 el.disabled = !isLocked;
             } else {
@@ -1121,9 +1134,9 @@
         }
     }
     
-    // =========================================================
-    // === KONIEC BLOKU Z NOWA LOGIKA BOPT (WERSJA REWORK) ===
-    // =========================================================
+    // ===================================================================
+    // === POZOSTALE FUNKCJE POMOCNICZE (BEZ ZMIAN W TEJ WERSJI) ===
+    // ===================================================================
 
     let loggingInterval;
     function startLogging() {
