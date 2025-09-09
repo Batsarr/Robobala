@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v44.1 (UI-Final)</title>
+    <title>Robot LQR - Panel Sterowania v44.2 (UI-Final-Fix)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -578,24 +578,32 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 44.1 (UI-Final) - Wdrozenie poprawek synchornizacji
+    // WERSJA 44.2 (UI-Final-Fix)
     //
     // ZMIANY:
     // -----------------------------------
-    // [SYNC-FIX]   Potwierdzono i zweryfikowano, ze wszystkie grupy parametrow sa
-    //              poprawnie mapowane i wysylane do rdzenia zarzadzajacego.
-    //              Usprawnia to proces synchronizacji i zapisu do EEPROM.
-    // [FITNESS-RX] Potwierdzono, ze UI jest gotowe do odbierania i wyswietlania
-    //              szczegolowych wynikow funkcji fitness, co umozliwia lepsza
-    //              analize procesu strojenia.
-    // [CODE-STYLE] Ujednolicono komentarze i komunikaty do jezyka polskiego bez znakow
-    //              diakrytycznych.
+    // [SCOPE-FIX]  Przeniesiono definicje stalej `parameterMapping` do zakresu
+    //              globalnego skryptu. Rozwiazuje to krytyczny blad `ReferenceError`,
+    //              ktory uniemozliwial dzialanie Asystenta Strojenia, poniewaz
+    //              nie mial on dostepu do tej zmiennej.
     // =======================================================================================
 
     const debouncedSenders = {};
     let isMappingButton = false;
     let actionToMap = null;
     let loggedData = [];
+
+    // [SCOPE-FIX] Przeniesiono 'parameterMapping' do zakresu globalnego,
+    // aby byl widoczny dla calego skryptu, w tym dla TuningAssistant.
+    const parameterMapping = { 
+        'q1AngleInput': 'q1_angle', 'q2AngularVelInput': 'q2_angular_vel', 'q3PositionInput': 'q3_position', 'q4VelocityInput': 'q4_velocity', 'rControlInput': 'r_control', 'lqrOutputScalarInput': 'lqr_output_scalar', 
+        'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickOutputScaleInput': 'joystick_output_scale', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 
+        'positionErrorGainInput': 'position_error_gain', 'positionDampingGainInput': 'position_d_gain', 'speedPGainInput': 'speed_p_gain', 'maxSpeedFromPosInput': 'max_speed_from_pos', 
+        'holdPositionMarginPulsesInput': 'hold_position_margin_pulses', 'headingCorrectionFactorInput': 'heading_correction_factor', 'rotationPGainInput': 'rotation_p_gain', 'rollCorrectionGainInput': 'roll_correction_gain', 
+        'wheelDiameterCmInput': 'wheel_diameter_cm', 'trackWidthCmInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 
+        'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd', 
+        'globalPowerLimitInput': 'global_power_limit' 
+    };
 
     document.addEventListener('DOMContentLoaded', () => {
         initJoystick();
@@ -760,16 +768,7 @@
     }
     
     function applyFullConfig(data) {
-        const params = data.params || data; 
-        const parameterMapping = {
-            'q1_angle': 'q1AngleInput', 'q2_angular_vel': 'q2AngularVelInput', 'q3_position': 'q3PositionInput', 'q4_velocity': 'q4VelocityInput', 'r_control': 'rControlInput', 'lqr_output_scalar': 'lqrOutputScalarInput',
-            'expo_joystick': 'expoJoystickInput', 'max_speed_joystick': 'maxSpeedJoystickInput', 'turn_factor': 'turnFactorInput', 'joystick_output_scale': 'joystickOutputScaleInput', 'joystick_angle_sensitivity': 'joystickAngleSensitivityInput',
-            'position_error_gain': 'positionErrorGainInput', 'position_d_gain': 'positionDampingGainInput', 'speed_p_gain': 'speedPGainInput', 'max_speed_from_pos': 'maxSpeedFromPosInput',
-            'hold_position_margin_pulses': 'holdPositionMarginPulsesInput', 'heading_correction_factor': 'headingCorrectionFactorInput', 'rotation_p_gain': 'rotationPGainInput', 'roll_correction_gain': 'rollCorrectionGainInput',
-            'wheel_diameter_cm': 'wheelDiameterCmInput', 'track_width_cm': 'trackWidthCmInput', 'encoder_ppr': 'encoderPprInput',
-            'min_pwm_left_fwd': 'minPwmLeftFwdInput', 'min_pwm_left_bwd': 'minPwmLeftBwdInput', 'min_pwm_right_fwd': 'minPwmRightFwdInput', 'min_pwm_right_bwd': 'minPwmRightBwdInput', 'global_power_limit': 'globalPowerLimitInput',
-            'm_body': 'mBodyInput', 'm_wheel': 'mWheelInput', 'l': 'lInput', 'r_wheel': 'rWheelInput', 'i_body': 'iBodyInput', 'i_wheel': 'iWheelInput', 'motor_resistance': 'motorResistanceInput', 'motor_kt': 'motorKtInput', 'motor_kv': 'motorKvInput'
-        };
+        const params = data.params || data;
         for(const [key_snake, inputId] of Object.entries(parameterMapping)){
             if(params[key_snake] !== undefined){
                 const input = document.getElementById(inputId);
@@ -841,7 +840,6 @@
         document.getElementById('cancelLoggingBtn').addEventListener('click', cancelLogging);
         document.getElementById('downloadCsvBtn').addEventListener('click', downloadCSV);
 
-        const parameterMapping = { 'q1AngleInput': 'q1_angle', 'q2AngularVelInput': 'q2_angular_vel', 'q3PositionInput': 'q3_position', 'q4VelocityInput': 'q4_velocity', 'rControlInput': 'r_control', 'lqrOutputScalarInput': 'lqr_output_scalar', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickOutputScaleInput': 'joystick_output_scale', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'positionErrorGainInput': 'position_error_gain', 'positionDampingGainInput': 'position_d_gain', 'speedPGainInput': 'speed_p_gain', 'maxSpeedFromPosInput': 'max_speed_from_pos', 'holdPositionMarginPulsesInput': 'hold_position_margin_pulses', 'headingCorrectionFactorInput': 'heading_correction_factor', 'rotationPGainInput': 'rotation_p_gain', 'rollCorrectionGainInput': 'roll_correction_gain', 'wheelDiameterCmInput': 'wheel_diameter_cm', 'trackWidthCmInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd', 'globalPowerLimitInput': 'global_power_limit' };
         const configGroups = { 'lqr_update': ['q1AngleInput', 'q2AngularVelInput', 'q3PositionInput', 'q4VelocityInput', 'rControlInput', 'lqrOutputScalarInput'], 'set_joystick_tuning': ['joystickOutputScaleInput', 'expoJoystickInput', 'maxSpeedJoystickInput', 'joystickAngleSensitivityInput', 'turnFactorInput'], 'calibration_update': ['wheelDiameterCmInput', 'trackWidthCmInput', 'encoderPprInput', 'headingCorrectionFactorInput', 'positionErrorGainInput', 'positionDampingGainInput', 'rotationPGainInput', 'speedPGainInput', 'maxSpeedFromPosInput', 'holdPositionMarginPulsesInput', 'globalPowerLimitInput', 'rollCorrectionGainInput'], 'set_min_pwm': ['minPwmLeftFwdInput', 'minPwmLeftBwdInput', 'minPwmRightFwdInput', 'minPwmRightBwdInput'] };
         
         for (const [type, keys] of Object.entries(configGroups)) { 
@@ -925,20 +923,18 @@
         generateNextParams() { const s = this.state[this.activeMode]; const paramDefs = this.tuningModes[this.activeMode].params; const paramKeys = Object.keys(paramDefs); const stepMultiplier = parseFloat(document.getElementById('tuningStepMultiplierInput').value); let nextParams = { ...s.bestParams }; if (s.consecutiveFailures >= paramKeys.length * 2) { addLogMessage('[UI] Utknieto w lokalnym optimum. Inicjuje losowy restart.', 'warn'); for (const key of paramKeys) { const step = paramDefs[key].step * 5 * stepMultiplier; const change = (Math.random() - 0.5) * 2 * step; nextParams[key] += change; } s.consecutiveFailures = 0; return nextParams; } const currentParamKey = paramKeys[s.paramIndex]; const step = paramDefs[currentParamKey].step * stepMultiplier * s.lastChange; nextParams[currentParamKey] += step; return nextParams; },
         async prepareAndRunTest(params, isBaseTest = false) {
             this.isBaseTest = isBaseTest;
-            const msgParams = {};
-            // Zbierz wszystkie parametry LQR i kaskadowe z UI, a nastepnie nadpisz tymi z testu
-            document.querySelectorAll('.config-value').forEach(input => {
-                const key = Object.keys(parameterMapping).find(k => parameterMapping[k] === input.id);
-                if (key) msgParams[key] = parseFloat(input.value);
-            });
-            Object.assign(msgParams, params); // Nadpisz wartosciami z testu
-
             const lqrMsg = { type: 'lqr_update', params: {} };
             const calibMsg = { type: 'calibration_update', params: {} };
             
             Object.keys(params).forEach(pKey => {
-                if (this.tuningModes.balance.params[pKey] || this.tuningModes.impulse.params[pKey]) lqrMsg.params[parameterMapping[this.tuningModes[this.activeMode].params[pKey].id]] = params[pKey];
-                if (this.tuningModes.drive.params[pKey]) calibMsg.params[parameterMapping[this.tuningModes[this.activeMode].params[pKey].id]] = params[pKey];
+                const paramDef = this.tuningModes[this.activeMode].params[pKey];
+                const snakeKey = parameterMapping[paramDef.id];
+                if (this.tuningModes.balance.params[pKey] || this.tuningModes.impulse.params[pKey]) {
+                    lqrMsg.params[snakeKey] = params[pKey];
+                }
+                if (this.tuningModes.drive.params[pKey]) {
+                    calibMsg.params[snakeKey] = params[pKey];
+                }
             });
 
             if(Object.keys(lqrMsg.params).length > 0) await sendBleMessage(lqrMsg);
