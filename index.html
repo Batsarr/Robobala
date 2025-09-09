@@ -107,7 +107,7 @@
         #tuning-progress-bar { width: 0%; height: 20px; background-color: #a2f279; transition: width 0.5s ease; }
         .tuning-status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 15px; text-align: left; margin-bottom: 15px; }
         .tuning-status-grid strong { color: #61dafb; }
-        #tuning-best-params-display, #tuning-current-params-display { background-color: #20232a; border-radius: 5px; padding: 10px; font-family: monospace; text-align: left; white-space: pre-wrap; font-size: 0.9em; line-height: 1.5; }
+        #tuning-best-params-display { background-color: #20232a; border-radius: 5px; padding: 10px; font-family: monospace; text-align: left; white-space: pre-wrap; font-size: 0.9em; line-height: 1.5; }
         #tuning-last-result-display { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 5px 15px; background-color: #2a2f35; padding: 10px; border-radius: 6px; margin-top: 10px; }
         #tuning-last-result-display > div { text-align: left; }
         #tuning-last-result-display strong { color: #a2f279; }
@@ -584,8 +584,8 @@
     //                a nastepnie wznawiac strojenie od ostatniego punktu.
     // [UI-FIX]       Interfejs dynamicznie pokazuje tylko te opcje i parametry,
     //                ktore sa relevantne dla aktualnie wybranego trybu strojenia.
-    // [CSV-FIX]      Dostosowano obsluge logiki CSV do nowej, dzialajacej
-    //                implementacji na robocie.
+    // [STATE-FIX]    Naprawiono krytyczny blad w zarzadzaniu stanem Asystenta,
+    //                ktory powodowal ciagle powtarzanie tej samej, pierwszej proby.
     // =======================================================================================
 
     const debouncedSenders = {};
@@ -726,14 +726,16 @@
             case 'logging_data_point': if (loggedData) loggedData.push(data.d); break;
             case 'logging_finished': handleLoggingFinished(data.points_collected); break;
             case 'ga_result': 
-                TuningAssistant.processResult(data);
+                if (TuningAssistant.resolveTestPromise) {
+                    TuningAssistant.resolveTestPromise(data);
+                }
                 break;
             case 'bopt_ack': 
                 if (data.status === 'ready_for_trigger') {
                     clearTimeout(tuningAckTimeout);
                     tuningAckTimeout = null;
                     tuningAckRetries = 0;
-                    TuningAssistant.onReadyForTest();
+                    TuningAssistant.onReadyForTest(TuningAssistant.isBaseTest);
                 }
                 break;
             case 'single_pwm_result':
@@ -782,7 +784,7 @@
     function updateTuningProgressUI(iteration, total, bestFitness = null, bestParams = null) {
         document.getElementById('tuning-progress-bar').style.width = `${(iteration / total) * 100}%`;
         document.getElementById('tuningIterationStatus').textContent = `${iteration} / ${total}`;
-        if (bestFitness !== null && bestParams !== null) {
+        if (bestFitness !== null && bestFitness > -1 && bestParams !== null) {
             document.getElementById('tuningSavePresetBtn').disabled = false;
             document.getElementById('applyBestBtn').disabled = false;
             document.getElementById('tuningBestFitnessStatus').textContent = bestFitness.toFixed(4);
@@ -792,6 +794,9 @@
                 paramsText += ` ${key}: ${value.toFixed(4)}\n`;
             }
             document.getElementById('tuning-best-params-display').textContent = paramsText;
+        } else {
+             document.getElementById('tuning-best-params-display').textContent = "Najlepsze parametry pojawia sie tutaj...";
+             document.getElementById('tuningBestFitnessStatus').textContent = "-.----";
         }
     }
 
@@ -880,7 +885,7 @@
     }
     
     // =======================================================================
-    // === NOWY BLOK - INTELIGENTNY ASYSTENT STROJENIA ===
+    // === NOWY BLOK - INTELIGENTNY ASYSTENT STROJENIA (WERSJA Z POPRAWKA) ===
     // =======================================================================
     const TuningAssistant = {
         state: {},
@@ -889,6 +894,8 @@
         isLooping: false,
         loopCount: 0,
         resolveTestPromise: null,
+        currentTestParams: null, 
+        isBaseTest: false,
 
         tuningModes: {
             'balance': {
@@ -919,13 +926,13 @@
         init() {
             for (const mode in this.tuningModes) {
                 this.state[mode] = {
-                    initialParams: null,
+                    sessionActive: false,
                     bestParams: null,
                     bestFitness: -1,
                     currentIteration: 0,
                     totalIterations: 20,
                     paramIndex: 0,
-                    lastChange: 1, // 1 for increase, -1 for decrease
+                    lastChange: 1,
                     stepSizeMultiplier: 1.0,
                     consecutiveFailures: 0
                 };
@@ -945,7 +952,7 @@
             });
 
             document.getElementById('tuningImpulseSettings').style.display = (newMode === 'impulse') ? 'block' : 'none';
-            document.getElementById('tuningDriveSettings').style.display = (newMode === 'drive') ? 'block' : 'none';
+            document.getElementById('tuningDriveSettings').style.display = (newMode === 'drive') ? 'none';
 
             this.updateUI();
             addLogMessage(`[UI] Aktywowano tryb: ${this.tuningModes[newMode].label}`, 'info');
@@ -971,59 +978,70 @@
             this.isRunning = true;
             this.setUiLock(true);
 
-            if (!this.state[this.activeMode].initialParams) {
-                this.startNewSession();
+            const s = this.state[this.activeMode];
+            if (!s.sessionActive) {
+                await this.startNewSession();
+                // startNewSession konczy sie stop(false), wiec musimy wyjsc
+                return;
             }
             
-            const s = this.state[this.activeMode];
             if (s.currentIteration >= s.totalIterations) {
                 addLogMessage(`[UI] Osiagnieto limit iteracji dla tego trybu.`, 'info');
                 this.stop(false);
                 return;
             }
-
-            const nextParams = this.generateNextParams();
+            
+            this.currentTestParams = this.generateNextParams();
             document.getElementById('tuning-status-text').textContent = 'Przygotowuje robota do testu...';
             
-            await this.prepareAndRunTest(nextParams);
+            await this.prepareAndRunTest(this.currentTestParams, false);
         },
 
         async runTestLoop(count) {
-            if (this.isLooping || this.isRunning) return;
+            if (this.isLooping || this.isRunning) {
+                this.isLooping = false; // Pozwala uzyc jako przycisk stop
+                return;
+            }
             this.isLooping = true;
             this.loopCount = count;
-            document.getElementById('run5TestsBtn').textContent = `Zatrzymaj po ${this.loopCount}`;
+            document.getElementById('run5TestsBtn').textContent = `Zatrzymaj (${this.loopCount})`;
             await this.runSingleTest();
         },
 
         stop(userInitiated) {
             this.isRunning = false;
-            if (this.isLooping) {
-                this.isLooping = false;
-                this.loopCount = 0;
-                 document.getElementById('run5TestsBtn').textContent = 'Uruchom 5 Prob';
-            }
+            this.isLooping = false;
+            this.loopCount = 0;
+            document.getElementById('run5TestsBtn').textContent = 'Uruchom 5 Prob';
             this.setUiLock(false);
+
             if (userInitiated) {
                 addLogMessage(`[UI] Strojenie zatrzymane przez uzytkownika.`, 'warn');
                 document.getElementById('tuning-status-text').textContent = 'Zatrzymano. Gotow do wznowienia.';
+            } else if (this.state[this.activeMode].sessionActive) {
+                document.getElementById('tuning-status-text').textContent = 'Zakonczono. Gotowy do kolejnej proby.';
             } else {
-                 document.getElementById('tuning-status-text').textContent = 'Zakonczono. Gotowy.';
+                 document.getElementById('tuning-status-text').textContent = 'Czekam na rozpoczecie...';
             }
         },
         
-        startNewSession() {
+        async startNewSession() {
             const s = this.state[this.activeMode];
-            s.initialParams = this.getCurrentValuesFromUI(this.activeMode);
-            s.bestParams = { ...s.initialParams };
-            s.bestFitness = -1;
+            const initialParams = this.getCurrentValuesFromUI(this.activeMode);
+            s.bestParams = { ...initialParams };
             s.currentIteration = 0;
             s.paramIndex = 0;
             s.lastChange = 1;
             s.stepSizeMultiplier = 1.0;
             s.consecutiveFailures = 0;
+            s.sessionActive = true;
+            
             addLogMessage(`[UI] Rozpoczeto nowa sesje strojenia dla trybu "${this.tuningModes[this.activeMode].label}".`, 'success');
-            addLogMessage(`[UI] Baza: ${JSON.stringify(s.initialParams)}`, 'info');
+            addLogMessage(`[UI] Baza: ${JSON.stringify(s.bestParams)}`, 'info');
+
+            document.getElementById('tuning-status-text').textContent = 'Testuje parametry bazowe...';
+            this.currentTestParams = { ...s.bestParams };
+            await this.prepareAndRunTest(this.currentTestParams, true);
         },
         
         generateNextParams() {
@@ -1036,7 +1054,7 @@
             if (s.consecutiveFailures >= paramKeys.length * 2) {
                 addLogMessage('[UI] Utknieto w lokalnym optimum. Inicjuje losowy restart.', 'warn');
                 for (const key of paramKeys) {
-                    const step = paramDefs[key].step * 5; // Wiekszy krok dla restartu
+                    const step = paramDefs[key].step * 5;
                     const change = (Math.random() - 0.5) * 2 * step;
                     nextParams[key] += change;
                 }
@@ -1051,39 +1069,39 @@
             return nextParams;
         },
 
-        async prepareAndRunTest(params) {
-            // 1. Zastosuj nowe parametry na robocie
+        async prepareAndRunTest(params, isBaseTest = false) {
+            this.isBaseTest = isBaseTest;
             const paramDefs = this.tuningModes[this.activeMode].params;
-            const lqrParams = {};
-            const cascadeParams = {};
+            const fullLqrParamsFromUI = { ...this.getCurrentValuesFromUI('balance'), ...this.getCurrentValuesFromUI('impulse') };
+            const fullCascadeParamsFromUI = this.getCurrentValuesFromUI('drive');
+            
+            const lqrParamsToSend = {};
+            const cascadeParamsToSend = {};
 
+            Object.keys(fullLqrParamsFromUI).forEach(k => lqrParamsToSend[k] = fullLqrParamsFromUI[k]);
+            Object.keys(fullCascadeParamsFromUI).forEach(k => cascadeParamsToSend[k] = fullCascadeParamsFromUI[k]);
+            
             for (const key in params) {
-                if (paramDefs[key].type === 'lqr') lqrParams[key] = params[key];
-                if (paramDefs[key].type === 'cascade') cascadeParams[key] = params[key];
+                if (paramDefs[key].type === 'lqr') lqrParamsToSend[key] = params[key];
+                if (paramDefs[key].type === 'cascade') cascadeParamsToSend[key] = params[key];
             }
             
-            const allLqrParams = { ...this.getCurrentValuesFromUI('balance'), ...this.getCurrentValuesFromUI('impulse'), ...lqrParams };
-            const allCascadeParams = { ...this.getCurrentValuesFromUI('drive'), ...cascadeParams };
-
             const lqrMsg = { type: 'lqr_update', params: {
-                q1_angle: allLqrParams.q1Angle, q2_angular_vel: allLqrParams.q2AngularVel,
-                q3_position: allLqrParams.q3Position, q4_velocity: allLqrParams.q4Velocity,
-                r_control: allLqrParams.rControl
+                q1_angle: lqrParamsToSend.q1Angle, q2_angular_vel: lqrParamsToSend.q2AngularVel,
+                q3_position: lqrParamsToSend.q3Position, q4_velocity: lqrParamsToSend.q4Velocity,
+                r_control: lqrParamsToSend.rControl
             }};
             const cascadeMsg = { type: 'calibration_update', params: {
-                position_error_gain: allCascadeParams.positionErrorGain,
-                position_d_gain: allCascadeParams.positionDampingGain,
-                speed_p_gain: allCascadeParams.speedPGain
+                position_error_gain: cascadeParamsToSend.positionErrorGain,
+                position_d_gain: cascadeParamsToSend.positionDampingGain,
+                speed_p_gain: cascadeParamsToSend.speedPGain
             }};
 
             await sendBleMessage(lqrMsg);
             await sendBleMessage(cascadeMsg);
             
-            // 2. Przygotuj robota
             tuningAckRetries = 0;
             this.sendPrepareWithTimeout();
-            
-            // Czekaj na potwierdzenie od robota (onReadyForTest)
         },
         
         sendPrepareWithTimeout() {
@@ -1103,15 +1121,13 @@
         },
 
         onReadyForTest() {
-            document.getElementById('tuning-status-text').textContent = 'Robot gotowy. Uruchom test przyciskiem.';
-            // Ta funkcja jest wywolywana, gdy robot jest gotowy. Czekamy na reczne wyzwolenie.
-            // W naszym przeplywie, reczne wyzwolenie jest juz zrobione, wiec od razu lecimy z testem.
+            const s = this.state[this.activeMode];
+            const iterText = this.isBaseTest ? 'bazowy' : `proba ${s.currentIteration + 1}`;
+            document.getElementById('tuning-status-text').textContent = `Robot gotowy. Uruchamiam test (${iterText})...`;
             this.triggerTest();
         },
 
         async triggerTest() {
-            document.getElementById('tuning-status-text').textContent = `Test w toku (proba ${this.state[this.activeMode].currentIteration + 1})...`;
-            
             await sendBleMessage({ type: 'balance_toggle', enabled: true });
             await new Promise(r => setTimeout(r, 200)); 
             
@@ -1121,31 +1137,40 @@
 
             await sendBleMessage({ type: 'ga_run_test', mode: this.activeMode });
 
-            const resultPromise = new Promise(resolve => { this.resolveTestPromise = resolve; });
-            await resultPromise; // Czekamy na wynik z processResult
+            const resultPromise = new Promise(resolve => { this.resolveTestPromise = (result) => resolve(result); });
+            const result = await resultPromise;
+            this.processResult(result);
         },
 
         processResult(result) {
-            if (!this.isRunning) return;
+            if (!this.isRunning && !this.isBaseTest) return; // Zapobiegaj przetwarzaniu jesli zatrzymano
             
             const s = this.state[this.activeMode];
             updateTuningLastResultUI(result);
             addLogMessage(`[UI] Otrzymano wynik (fitness): ${result.fitness.toFixed(4)}`, 'info');
             
+            if (this.isBaseTest) {
+                s.bestFitness = result.fitness;
+                addLogMessage(`[UI] Zapisano bazowy fitness: ${s.bestFitness.toFixed(4)}`, 'success');
+                this.updateUI();
+                this.stop(false);
+                return;
+            }
+
             if (result.fitness > s.bestFitness) {
                 addLogMessage(`[UI] Poprawa! Nowy najlepszy fitness: ${result.fitness.toFixed(4)}`, 'success');
                 s.bestFitness = result.fitness;
-                s.bestParams = this.generateNextParams(); // Zapisujemy parametry, ktore daly ten wynik
-                s.stepSizeMultiplier = 1.2; // Przyspiesz w dobrym kierunku
+                s.bestParams = { ...this.currentTestParams };
+                s.stepSizeMultiplier = 1.2;
                 s.consecutiveFailures = 0;
             } else {
                 addLogMessage(`[UI] Brak poprawy. Odrzucam zmiany.`, 'warn');
-                s.lastChange *= -1; // Sprobuj w druga strone
-                s.stepSizeMultiplier *= 0.8; // Zwolnij, bo jestesmy blisko optimum
+                s.lastChange *= -1;
+                s.stepSizeMultiplier *= 0.8;
                 if(s.stepSizeMultiplier < 0.2) s.stepSizeMultiplier = 0.2;
                 s.consecutiveFailures++;
 
-                if (s.lastChange === 1) { // Jesli wlasnie wrocilismy do proby w gore
+                if (s.lastChange === 1) { 
                     s.paramIndex = (s.paramIndex + 1) % Object.keys(this.tuningModes[this.activeMode].params).length;
                 }
             }
@@ -1153,10 +1178,10 @@
             s.currentIteration++;
             this.updateUI();
 
-            if (this.isLooping && this.loopCount > 1) {
+            if (this.isLooping && this.loopCount > 1 && s.currentIteration < s.totalIterations) {
                 this.loopCount--;
-                document.getElementById('run5TestsBtn').textContent = `Zatrzymaj po ${this.loopCount}`;
-                this.isRunning = false; // "Reset" flagi, zeby kolejna iteracja ruszyła
+                document.getElementById('run5TestsBtn').textContent = `Zatrzymaj (${this.loopCount})`;
+                this.isRunning = false;
                 this.runSingleTest();
             } else {
                 this.stop(false);
@@ -1186,8 +1211,19 @@
             const presetName = prompt("Podaj nazwe dla presetu:", `Asystent_${this.activeMode}_Fit_${s.bestFitness.toFixed(4)}`);
             
             if (presetName && presetName.trim() !== "") {
-                const presetData = { ...this.getCurrentValuesFromUI('balance'), ...this.getCurrentValuesFromUI('impulse'), ...s.bestParams };
-                localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData));
+                const fullParamsFromUI = { 
+                    ...this.getCurrentValuesFromUI('balance'), 
+                    ...this.getCurrentValuesFromUI('impulse'),
+                    ...this.getCurrentValuesFromUI('drive')
+                };
+                const presetData = { ...fullParamsFromUI, ...s.bestParams };
+                const presetDataForSave = {};
+                Object.keys(presetData).forEach(key => {
+                    const id = this.tuningModes.balance.params[key]?.id || this.tuningModes.impulse.params[key]?.id || this.tuningModes.drive.params[key]?.id || null;
+                    if(id) presetDataForSave[id.replace('Input','')] = presetData[key];
+                });
+
+                localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetDataForSave));
                 addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success');
                 populatePresetSelect();
             }
@@ -1197,7 +1233,7 @@
             document.querySelectorAll('#startTuningBtn, #run5TestsBtn, #applyBestBtn, .tuning-mode-btn').forEach(el => el.disabled = isLocked);
             document.getElementById('stopTuningBtn').disabled = !isLocked;
             
-            if (!isLocked && this.isLooping) { // Jesli petla sie skonczyla, odblokuj i zresetuj
+            if (!isLocked && this.isLooping) {
                  this.isLooping = false;
                  this.loopCount = 0;
                  document.getElementById('run5TestsBtn').textContent = 'Uruchom 5 Prob';
@@ -1206,7 +1242,7 @@
     };
     
     // ===================================================================
-    // === POZOSTALE FUNKCJE POMOCNICZE (BEZ ZMIAN W TEJ WERSJI) ===
+    // === POZOSTALE FUNKCJE POMOCNICZE ===
     // ===================================================================
 
     let loggingInterval;
