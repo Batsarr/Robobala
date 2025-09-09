@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v43.9 (UI-FIX)</title>
+    <title>Robot LQR - Panel Sterowania v44.0 (FIX)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -107,7 +107,7 @@
         #tuning-progress-bar { width: 0%; height: 20px; background-color: #a2f279; transition: width 0.5s ease; }
         .tuning-status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 15px; text-align: left; margin-bottom: 15px; }
         .tuning-status-grid strong { color: #61dafb; }
-        #tuning-best-params-display { background-color: #20232a; border-radius: 5px; padding: 10px; font-family: monospace; text-align: left; white-space: pre-wrap; font-size: 0.9em; line-height: 1.5; }
+        #tuning-best-params-display, #tuning-next-params-display { background-color: #20232a; border-radius: 5px; padding: 10px; font-family: monospace; text-align: left; white-space: pre-wrap; font-size: 0.9em; line-height: 1.5; }
         #tuning-last-result-display { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 5px 15px; background-color: #2a2f35; padding: 10px; border-radius: 6px; margin-top: 10px; }
         #tuning-last-result-display > div { text-align: left; }
         #tuning-last-result-display strong { color: #a2f279; }
@@ -467,6 +467,17 @@
                         <label for="tuningIterationsInput">Liczba Iteracji</label>
                         <div class="numeric-input-wrapper"><button id="tuningIterationsMinus">-</button><input type="number" id="tuningIterationsInput" value="20" min="5" max="100"><button id="tuningIterationsPlus">+</button></div>
                     </div>
+                     <div class="setting-container">
+                        <label for="tuningTestDurationInput">Czas Trwania Testu (s)</label>
+                        <div class="numeric-input-wrapper"><button id="tuningTestDurationMinus">-</button><input type="number" id="tuningTestDurationInput" value="3" min="1" max="10"><button id="tuningTestDurationPlus">+</button></div>
+                    </div>
+                    <div class="setting-container">
+                         <label for="tuningStepMultiplierInput">Agresywnosc Strojenia</label>
+                         <div style="display: flex; align-items: center; gap: 8px;">
+                             <input type="range" id="tuningStepMultiplierInput" min="0.05" max="2.0" step="0.05" value="1.0" style="width: 100%;">
+                             <span id="tuningStepMultiplierValue" style="min-width: 40px; text-align: right;">1.0</span>
+                         </div>
+                    </div>
                     
                     <div id="tuningImpulseSettings" style="display:none;">
                         <div class="setting-container"><label for="tuningImpulsePowerInput">Sila Impulsu</label><div class="numeric-input-wrapper"><button id="tuningImpulsePowerMinus">-</button><input type="number" id="tuningImpulsePowerInput" min="50" max="250" step="10" value="120"><button id="tuningImpulsePowerPlus">+</button></div></div>
@@ -503,6 +514,9 @@
                         <strong>Iteracja:</strong> <span id="tuningIterationStatus">-- / --</span>
                         <strong>Najlepszy Fitness:</strong> <span id="tuningBestFitnessStatus">-.----</span>
                     </div>
+
+                    <h5 style="color:#61dafb; margin: 10px 0 5px 0;">Parametry Następnej Próby:</h5>
+                    <div id="tuning-next-params-display">Kliknij "Uruchom Test", aby wygenerować...</div>
                     
                     <h5 style="color:#61dafb; margin: 10px 0 5px 0;">Wynik Ostatniej Proby:</h5>
                     <div id="tuning-last-result-display">
@@ -564,16 +578,22 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 43.9-UI-FIX (Interfejs Uzytkownika)
+    // WERSJA 44.0 (Algorytm i UI Asystenta - Poprawka)
     //
     // ZMIANY:
     // -----------------------------------
-    // [UI-FIX] Naprawiono krytyczny blad skladniowy (brakujacy przecinek) w obiekcie
-    //          TuningAssistant, ktory uniemozliwial wczytanie wiekszosci skryptow
-    //          i blokowal dzialanie interfejsu (przyciski, akordeony).
-    // [STATE-FIX] Usprawniono logike zarzadzania stanem w Asystencie Strojenia, aby
-    //             zapewnic poprawne, sekwencyjne dzialanie prob i uniknac problemu
-    //             "utkniecia" na pierwszej iteracji.
+    // [ALG-FIX] Naprawiono fundamentalny blad w logice asystenta, ktory powodowal
+    //           testowanie wciaz tych samych, zlych parametrow.
+    // [UI] Dodano suwak "Agresywnosc Strojenia" (Mnoznik Kroku), aby uzytkownik
+    //      mogl kontrolowac wielkosc zmian parametrów i unikac destabilizacji.
+    // [UI] Dodano podglad "Parametry Nastepnej Proby", aby zwiekszyc transparentnosc
+    //      dzialania algorytmu.
+    // [UI] Dodano numeryczne pole "Czas Trwania Testu" do kontrolowania dlugosci
+    //      kazdej proby i zapewnienia porownywalnosci wynikow.
+    // [CODE] Zrefaktoryzowano i uproszczono glowna petle testujaca, aby byla bardziej
+    //        niezawodna i latwiejsza w analizie.
+    // [SYNTAX-FIX] Naprawiono krytyczny blad skladniowy (brakujacy przecinek po
+    //              metodzie setMode), ktory blokowal calkowicie dzialanie skryptow.
     // =======================================================================================
 
     const debouncedSenders = {};
@@ -771,7 +791,7 @@
     function updateTuningProgressUI(iteration, total, bestFitness = null, bestParams = null) {
         document.getElementById('tuning-progress-bar').style.width = `${(iteration / total) * 100}%`;
         document.getElementById('tuningIterationStatus').textContent = `${iteration} / ${total}`;
-        if (bestFitness !== null && bestFitness > -1 && bestParams !== null) {
+        if (bestFitness !== null && bestFitness > -Infinity && bestParams !== null) {
             document.getElementById('tuningSavePresetBtn').disabled = false;
             document.getElementById('applyBestBtn').disabled = false;
             document.getElementById('tuningBestFitnessStatus').textContent = bestFitness.toFixed(4);
@@ -856,6 +876,12 @@
         document.getElementById('tuningSaveSafeBaseBtn').addEventListener('click', () => { sendBleMessage({ type: 'ga_save_safe_params' }); addLogMessage('[UI] Wyslano polecenie zapisu bezpiecznej bazy parametrow.', 'info'); });
         document.getElementById('tuningRestoreSafeBaseBtn').addEventListener('click', () => { if (confirm("Spowoduje to przywrocenie bezpiecznych parametrow i nadpisanie aktualnych ustawien LQR. Kontynuowac?")) { sendBleMessage({ type: 'ga_restore_safe_params' }); addLogMessage('[UI] Wyslano polecenie przywrocenia bezpiecznej bazy parametrow.', 'info'); setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 500); } });
         
+        const stepMultiplierSlider = document.getElementById('tuningStepMultiplierInput');
+        const stepMultiplierValue = document.getElementById('tuningStepMultiplierValue');
+        stepMultiplierSlider.addEventListener('input', (e) => {
+            stepMultiplierValue.textContent = parseFloat(e.target.value).toFixed(2);
+        });
+
         document.getElementById('updatePhysicalParamsBtn').addEventListener('click', async () => {
             await sendBleMessage({ type: 'balance_toggle', enabled: false });
             await new Promise(r => setTimeout(r, 100));
@@ -914,12 +940,11 @@
                 this.state[mode] = {
                     sessionActive: false,
                     bestParams: null,
-                    bestFitness: -1,
+                    bestFitness: -Infinity,
                     currentIteration: 0,
                     totalIterations: 20,
                     paramIndex: 0,
                     lastChange: 1,
-                    stepSizeMultiplier: 1.0,
                     consecutiveFailures: 0
                 };
             }
@@ -963,47 +988,71 @@
             if (this.isRunning) return;
             this.isRunning = true;
             this.setUiLock(true);
+            let result;
+            try {
+                const s = this.state[this.activeMode];
+                if (!s.sessionActive) {
+                    await this.startNewSession();
+                }
+                
+                if (s.currentIteration >= s.totalIterations) {
+                    addLogMessage(`[UI] Osiagnieto limit iteracji dla tego trybu.`, 'info');
+                    this.stop(false);
+                    return;
+                }
+                
+                this.currentTestParams = this.generateNextParams();
+                
+                let paramsText = '';
+                for (const [key, value] of Object.entries(this.currentTestParams)) {
+                     paramsText += ` ${key}: ${value.toFixed(4)}\n`;
+                }
+                document.getElementById('tuning-next-params-display').textContent = paramsText;
 
-            const s = this.state[this.activeMode];
-            if (!s.sessionActive) {
-                await this.startNewSession();
-                return;
+                document.getElementById('tuning-status-text').textContent = 'Przygotowuje robota do testu...';
+                
+                result = await this.prepareAndRunTest(this.currentTestParams, false);
+                this.processResult(result);
+
+            } catch(error) {
+                addLogMessage(`[UI] Blad podczas testu: ${error}`, 'error');
+                this.stop(true);
             }
             
-            if (s.currentIteration >= s.totalIterations) {
-                addLogMessage(`[UI] Osiagnieto limit iteracji dla tego trybu.`, 'info');
-                this.stop(false);
-                return;
+            if (!this.isLooping) {
+                 this.stop(false);
             }
-            
-            this.currentTestParams = this.generateNextParams();
-            document.getElementById('tuning-status-text').textContent = 'Przygotowuje robota do testu...';
-            
-            await this.prepareAndRunTest(this.currentTestParams, false);
+            return result;
         },
 
         async runTestLoop(count) {
-            if (this.isLooping || this.isRunning) {
-                this.isLooping = false;
-                return;
-            }
+            if (this.isLooping || this.isRunning) return;
+
             this.isLooping = true;
-            this.loopCount = count;
-            document.getElementById('run5TestsBtn').textContent = `Zatrzymaj (${this.loopCount})`;
-            await this.runSingleTest();
+            this.setUiLock(true);
+            document.getElementById('run5TestsBtn').textContent = `Stop (${count})`;
+
+            for (let i = 0; i < count; i++) {
+                if (!this.isLooping) break;
+                document.getElementById('run5TestsBtn').textContent = `Stop (${count - i - 1})`;
+                await this.runSingleTest();
+            }
+
+            this.isLooping = false;
+            this.stop(false);
         },
 
         stop(userInitiated) {
             this.isRunning = false;
             this.isLooping = false;
-            this.loopCount = 0;
             document.getElementById('run5TestsBtn').textContent = 'Uruchom 5 Prob';
             this.setUiLock(false);
-
+            
+            const s = this.state[this.activeMode];
             if (userInitiated) {
                 addLogMessage(`[UI] Strojenie zatrzymane przez uzytkownika.`, 'warn');
-                document.getElementById('tuning-status-text').textContent = 'Zatrzymano. Gotow do wznowienia.';
-            } else if (this.state[this.activeMode].sessionActive) {
+                 document.getElementById('tuning-status-text').textContent = 'Zatrzymano. Gotow do wznowienia.';
+            } else if (s.sessionActive) {
                 document.getElementById('tuning-status-text').textContent = 'Zakonczono. Gotowy do kolejnej proby.';
             } else {
                  document.getElementById('tuning-status-text').textContent = 'Czekam na rozpoczecie...';
@@ -1017,7 +1066,6 @@
             s.currentIteration = 0;
             s.paramIndex = 0;
             s.lastChange = 1;
-            s.stepSizeMultiplier = 1.0;
             s.consecutiveFailures = 0;
             s.sessionActive = true;
             
@@ -1026,20 +1074,26 @@
 
             document.getElementById('tuning-status-text').textContent = 'Testuje parametry bazowe...';
             this.currentTestParams = { ...s.bestParams };
-            await this.prepareAndRunTest(this.currentTestParams, true);
+            const baseResult = await this.prepareAndRunTest(this.currentTestParams, true);
+            
+            s.bestFitness = baseResult.fitness;
+            addLogMessage(`[UI] Zapisano bazowy fitness: ${s.bestFitness.toFixed(4)}`, 'success');
+            updateTuningLastResultUI(baseResult);
+            this.updateUI();
         },
         
         generateNextParams() {
             const s = this.state[this.activeMode];
             const paramDefs = this.tuningModes[this.activeMode].params;
             const paramKeys = Object.keys(paramDefs);
+            const stepMultiplier = parseFloat(document.getElementById('tuningStepMultiplierInput').value);
             
             let nextParams = { ...s.bestParams };
 
             if (s.consecutiveFailures >= paramKeys.length * 2) {
                 addLogMessage('[UI] Utknieto w lokalnym optimum. Inicjuje losowy restart.', 'warn');
                 for (const key of paramKeys) {
-                    const step = paramDefs[key].step * 5;
+                    const step = paramDefs[key].step * 5 * stepMultiplier;
                     const change = (Math.random() - 0.5) * 2 * step;
                     nextParams[key] += change;
                 }
@@ -1048,7 +1102,7 @@
             }
 
             const currentParamKey = paramKeys[s.paramIndex];
-            const step = paramDefs[currentParamKey].step * s.stepSizeMultiplier * s.lastChange;
+            const step = paramDefs[currentParamKey].step * stepMultiplier * s.lastChange;
             nextParams[currentParamKey] += step;
 
             return nextParams;
@@ -1087,6 +1141,10 @@
             
             tuningAckRetries = 0;
             this.sendPrepareWithTimeout();
+            
+            return new Promise(resolve => {
+                this.resolveTestPromise = (result) => resolve(result);
+            });
         },
         
         sendPrepareWithTimeout() {
@@ -1119,40 +1177,26 @@
             if (this.activeMode === 'impulse') {
                  await sendBleMessage({ type: 'ga_set_impulse', power: parseFloat(document.getElementById('tuningImpulsePowerInput').value) });
             }
-
-            await sendBleMessage({ type: 'ga_run_test', mode: this.activeMode });
-
-            const resultPromise = new Promise(resolve => { this.resolveTestPromise = (result) => resolve(result); });
-            const result = await resultPromise;
-            this.processResult(result);
+            
+            const testDuration = parseInt(document.getElementById('tuningTestDurationInput').value);
+            await sendBleMessage({ type: 'ga_run_test', mode: this.activeMode, duration_s: testDuration });
         },
         
         processResult(result) {
-            if (!this.isRunning) return;
+            if (this.isBaseTest) return; // Base result is handled in startNewSession
             
             const s = this.state[this.activeMode];
             updateTuningLastResultUI(result);
             addLogMessage(`[UI] Otrzymano wynik (fitness): ${result.fitness.toFixed(4)}`, 'info');
-            
-            if (this.isBaseTest) {
-                s.bestFitness = result.fitness;
-                addLogMessage(`[UI] Zapisano bazowy fitness: ${s.bestFitness.toFixed(4)}`, 'success');
-                this.updateUI();
-                this.stop(false);
-                return;
-            }
 
             if (result.fitness > s.bestFitness) {
-                addLogMessage(`[UI] Poprawa! Nowy najlepszy fitness: ${result.fitness.toFixed(4)}`, 'success');
+                addLogMessage(`[UI] Poprawa! Nowy najlepszy fitness: ${result.fitness.toFixed(4)} (stary: ${s.bestFitness.toFixed(4)})`, 'success');
                 s.bestFitness = result.fitness;
                 s.bestParams = { ...this.currentTestParams };
-                s.stepSizeMultiplier = 1.2;
                 s.consecutiveFailures = 0;
             } else {
                 addLogMessage(`[UI] Brak poprawy. Odrzucam zmiany.`, 'warn');
                 s.lastChange *= -1;
-                s.stepSizeMultiplier *= 0.8;
-                if(s.stepSizeMultiplier < 0.2) s.stepSizeMultiplier = 0.2;
                 s.consecutiveFailures++;
 
                 if (s.lastChange === 1) { 
@@ -1162,15 +1206,6 @@
             
             s.currentIteration++;
             this.updateUI();
-
-            if (this.isLooping && this.loopCount > 1 && s.currentIteration < s.totalIterations) {
-                this.loopCount--;
-                document.getElementById('run5TestsBtn').textContent = `Zatrzymaj (${this.loopCount})`;
-                this.isRunning = false;
-                this.runSingleTest();
-            } else {
-                this.stop(false);
-            }
         },
         
         applyBestParams() {
@@ -1220,12 +1255,12 @@
         },
 
         setUiLock(isLocked) {
-            document.querySelectorAll('#startTuningBtn, #run5TestsBtn, #applyBestBtn, .tuning-mode-btn').forEach(el => el.disabled = isLocked);
+            document.querySelectorAll('#startTuningBtn, #run5TestsBtn, #applyBestBtn, .tuning-mode-btn, #tuningStepMultiplierInput').forEach(el => el.disabled = isLocked);
             document.getElementById('stopTuningBtn').disabled = !isLocked;
             
-            if (!isLocked && this.isLooping) {
-                 this.isLooping = false;
-                 this.loopCount = 0;
+            if (isLocked) {
+                 document.getElementById('run5TestsBtn').textContent = 'Stop';
+            } else {
                  document.getElementById('run5TestsBtn').textContent = 'Uruchom 5 Prob';
             }
         },
