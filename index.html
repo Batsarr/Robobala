@@ -938,12 +938,12 @@
             });
 
             document.getElementById('tuningImpulseSettings').style.display = (newMode === 'impulse') ? 'block' : 'none';
-            document.getElementById('tuningDriveSettings').style.display = (newMode === 'drive') ? 'none';
+            document.getElementById('tuningDriveSettings').style.display = (newMode === 'drive') ? 'block' : 'none';
 
             this.updateUI();
             addLogMessage(`[UI] Aktywowano tryb: ${this.tuningModes[newMode].label}`, 'info');
         },
-        
+
         updateUI() {
             const s = this.state[this.activeMode];
             s.totalIterations = parseInt(document.getElementById('tuningIterationsInput').value);
