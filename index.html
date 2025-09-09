@@ -845,7 +845,6 @@
         document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset);
         document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container, .control-row'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); });
         
-        // --- NOWE EVENTY DLA INTELIGENTNEGO STROJENIA ---
         document.querySelectorAll('.tuning-mode-btn').forEach(btn => {
             btn.addEventListener('click', () => TuningAssistant.setMode(btn.dataset.mode));
         });
@@ -1229,7 +1228,7 @@
                  this.loopCount = 0;
                  document.getElementById('run5TestsBtn').textContent = 'Uruchom 5 Prob';
             }
-        }
+        },
     };
     
     // ===================================================================
