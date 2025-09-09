@@ -3,32 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v43.7 (BOPT-STABILITY-FIX)</title>
+    <title>Robot LQR - Panel Sterowania v43.8 (MODULAR-TUNE-FINAL)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <!-- ================================================================= -->
-    <!-- === POCZATEK BLOKU BIBLIOTEKI BAYES-OPTIMIZER (BEZ ZMIAN) === -->
-    <!-- ================================================================= -->
-    <script>
-        window.bayes = (function() {
-            'use strict';
-            var classCallCheck = function (instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } };
-            var createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-            var get = function get(object, property, receiver) { if (object === null) object = Function.prototype; var desc = Object.getOwnPropertyDescriptor(object, property); if (desc === undefined) { var parent = Object.getPrototypeOf(object); if (parent === null) { return undefined; } else { return get(parent, property, receiver); } } else if ("value" in desc) { return desc.value; } else { var getter = desc.get; if (getter === undefined) { return undefined; } return getter.call(receiver); } };
-            var inherits = function (subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be a function or null, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; };
-            var possibleConstructorReturn = function (self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; };
-            var slicedToArray = function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; }();
-            var Parameter = function () { function Parameter(name, domain) { classCallCheck(this, Parameter); var _domain = slicedToArray(domain, 2), min = _domain[0], max = _domain[1]; if (min > max) { throw new Error('The first value of the domain must be smaller than the second.'); } this.name = name; this.domain = [min, max]; } return Parameter; }();
-            var Optimizer$1 = function () { function Optimizer() { classCallCheck(this, Optimizer); } createClass(Optimizer, [{ key: 'ask', value: function ask() { throw new Error('The method \'ask\' must be implemented.'); } }, { key: 'tell', value: function tell() { throw new Error('The method \'tell\' must be implemented.'); } }, { key: 'getBest', value: function getBest(maximize) { var _this = this; return new Promise(function (resolve) { var values = _this.history.map(function (h) { return h.value; }); if (maximize) { var _ret = function () { var max = Math.max.apply(Math, values); resolve(_this.history.find(function (h) { return h.value === max; })); return { v: void 0 }; }(); if (typeof _ret === "object") return _ret.v; } else { var _ret2 = function () { var min = Math.min.apply(Math, values); resolve(_this.history.find(function (h) { return h.value === min; })); return { v: void 0 }; }(); if (typeof _ret2 === "object") return _ret2.v; } }); } }]); return Optimizer; }();
-            var RandomOptimizer = function (_Optimizer) { inherits(RandomOptimizer, _Optimizer); function RandomOptimizer(_ref) { var space = _ref.space; classCallCheck(this, RandomOptimizer); var _this2 = possibleConstructorReturn(this, (RandomOptimizer.__proto__ || Object.getPrototypeOf(RandomOptimizer)).call(this)); _this2.space = space.map(function (s) { return new Parameter(s.name, s.domain); }); _this2.history = []; return _this2; } createClass(RandomOptimizer, [{ key: 'ask', value: function ask() { var _this3 = this; return new Promise(function (resolve) { var params = {}; _this3.space.forEach(function (s) { var name = s.name, domain = s.domain; var _domain2 = slicedToArray(domain, 2), min = _domain2[0], max = _domain2[1]; params[name] = min + (max - min) * Math.random(); }); resolve(params); }); } }, { key: 'tell', value: function tell(params, value) { var _this4 = this; return new Promise(function (resolve) { _this4.history.push({ params: params, value: value }); resolve(); }); } }]); return RandomOptimizer; }(Optimizer$1);
-            var Optimizer$$1 = RandomOptimizer; var index = { Optimizer: Optimizer$$1 }; return index;
-        })();
-    </script>
-    <!-- =============================================================== -->
-    <!-- === KONIEC BLOKU BIBLIOTEKI BAYES-OPTIMIZER === -->
-    <!-- =============================================================== -->
-
-
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
         h1 { color: #61dafb; font-size: 1.8em; }
@@ -124,15 +101,20 @@
         .preset-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
         #applySelectedPresetBtn { background-color: #a2f279; }
         #saveCurrentAsPresetBtn { background-color: #61dafb; }
-        #bopt-progress-bar-container { width: 100%; background-color: #20232a; border-radius: 5px; overflow: hidden; margin: 10px 0; border: 1px solid #61dafb;}
-        #bopt-progress-bar { width: 0%; height: 20px; background-color: #a2f279; transition: width 0.5s ease; }
-        .bopt-status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 15px; text-align: left; margin-bottom: 15px; }
-        .bopt-status-grid strong { color: #61dafb; }
-        /* [STABILITY-FIX] Zmieniono 'pre' na 'pre-wrap' aby pozwolic na lamanie linii */
-        #bopt-best-params-display, #bopt-current-params-display { background-color: #20232a; border-radius: 5px; padding: 10px; font-family: monospace; text-align: left; white-space: pre-wrap; font-size: 0.9em; line-height: 1.5; }
-        #bopt-last-result-display { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 5px 15px; background-color: #2a2f35; padding: 10px; border-radius: 6px; margin-top: 10px; }
-        #bopt-last-result-display > div { text-align: left; }
-        #bopt-last-result-display strong { color: #a2f279; }
+        
+        /* --- NOWE STYLE DLA INTELIGENTNEGO STROJENIA --- */
+        #tuning-progress-bar-container { width: 100%; background-color: #20232a; border-radius: 5px; overflow: hidden; margin: 10px 0; border: 1px solid #61dafb;}
+        #tuning-progress-bar { width: 0%; height: 20px; background-color: #a2f279; transition: width 0.5s ease; }
+        .tuning-status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 15px; text-align: left; margin-bottom: 15px; }
+        .tuning-status-grid strong { color: #61dafb; }
+        #tuning-best-params-display, #tuning-current-params-display { background-color: #20232a; border-radius: 5px; padding: 10px; font-family: monospace; text-align: left; white-space: pre-wrap; font-size: 0.9em; line-height: 1.5; }
+        #tuning-last-result-display { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 5px 15px; background-color: #2a2f35; padding: 10px; border-radius: 6px; margin-top: 10px; }
+        #tuning-last-result-display > div { text-align: left; }
+        #tuning-last-result-display strong { color: #a2f279; }
+        .tuning-mode-selector { display: grid; grid-template-columns: 1fr; gap: 5px; }
+        .tuning-mode-btn { background-color: #4a4f58; }
+        .tuning-mode-btn.active { background-color: #a2f279; color: #282c34; }
+        .tuning-actions, .tuning-loop-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; }
     </style>
 </head>
 <body>
@@ -468,72 +450,74 @@
         </div>
         
         <div class="card">
-             <button class="accordion-header" onclick="toggleAccordion(this)">Automatyczne Strojenie (Optymalizacja Bayesowska)</button>
+             <button class="accordion-header" onclick="toggleAccordion(this)">Inteligentny Asystent Strojenia</button>
              <div class="accordion-content">
                 <fieldset>
-                    <legend>Ustawienia Optymalizacji</legend>
-                    <div class="setting-container"><label>Tryb:</label>
-                        <div style="display:flex; gap: 5px;">
-                            <button id="boptModeBalance" style="background-color:#a2f279; flex:1;">Strojenie Balansu</button>
-                            <button id="boptModeDrive" style="flex:1;">Strojenie Jazdy</button>
-                        </div>
+                    <legend>1. Wybor Trybu Strojenia</legend>
+                    <div class="tuning-mode-selector">
+                        <button id="tuningModeBalance" class="tuning-mode-btn active" data-mode="balance">Strojenie Balansu Statycznego</button>
+                        <button id="tuningModeImpulse" class="tuning-mode-btn" data-mode="impulse">Strojenie Reakcji na Zaklocenia</button>
+                        <button id="tuningModeDrive" class="tuning-mode-btn" data-mode="drive">Strojenie Jazdy Autonomicznej</button>
                     </div>
-                    <div class="setting-container"><label for="boptIterationsInput">Liczba Iteracji</label><input type="number" id="boptIterationsInput" value="20" min="5" max="100"></div>
-                    
-                    <div id="boptBalanceSettings" style="display:block;">
-                        <div class="setting-container"><label for="boptImpulsePowerInput">Sila Impulsu</label><div class="numeric-input-wrapper"><button id="boptImpulsePowerMinus">-</button><input type="number" id="boptImpulsePowerInput" min="50" max="250" step="10" value="120"><button id="boptImpulsePowerPlus">+</button></div></div>
-                        <div class="setting-container"><label for="boptUseImpulseTest">Test z impulsem<span class="help-icon">?</span></label><label class="switch"><input type="checkbox" id="boptUseImpulseTest" checked><span class="slider round"></span></label>
-                            <div class="help-text">Wlacz, aby testowac odpornosc na zaklocenia (strojenie dynamiczne). Wylacz, aby testowac tylko balans w miejscu (strojenie statyczne).</div>
-                        </div>
-                        <hr style="border-color: #4a4f58; margin: 15px 0;">
-                        <div style="background-color: #2a2f35; padding: 10px; border-radius: 6px;">
-                            <label>Zarzadzanie baza dla testu</label>
-                            <div style="display:flex; gap:10px; justify-content:center; margin-top:10px;">
-                                <button id="boptSaveSafeBaseBtn" style="background-color: #61dafb; color: #282c34;">Zapisz Aktualne jako Baza</button>
-                                <button id="boptRestoreSafeBaseBtn" style="background-color: #f7b731;">Przywroc Baze</button>
-                            </div>
-                        </div>
+                </fieldset>
+                
+                <fieldset>
+                    <legend>2. Ustawienia Testu</legend>
+                    <div class="setting-container">
+                        <label for="tuningIterationsInput">Liczba Iteracji</label>
+                        <div class="numeric-input-wrapper"><button id="tuningIterationsMinus">-</button><input type="number" id="tuningIterationsInput" value="20" min="5" max="100"><button id="tuningIterationsPlus">+</button></div>
                     </div>
                     
-                    <div id="boptDriveSettings" style="display:none;">
-                         <div class="setting-container"><label for="boptDriveDistanceInput">Dystans testowy (cm)</label><input type="number" id="boptDriveDistanceInput" value="50" min="10" max="200"></div>
+                    <div id="tuningImpulseSettings" style="display:none;">
+                        <div class="setting-container"><label for="tuningImpulsePowerInput">Sila Impulsu</label><div class="numeric-input-wrapper"><button id="tuningImpulsePowerMinus">-</button><input type="number" id="tuningImpulsePowerInput" min="50" max="250" step="10" value="120"><button id="tuningImpulsePowerPlus">+</button></div></div>
                     </div>
-
+                    
+                    <div id="tuningDriveSettings" style="display:none;">
+                         <div class="setting-container"><label for="tuningDriveDistanceInput">Dystans testowy (cm)</label><div class="numeric-input-wrapper"><button id="tuningDriveDistanceMinus">-</button><input type="number" id="tuningDriveDistanceInput" value="10" min="10" max="100"><button id="tuningDriveDistancePlus">+</button></div></div>
+                    </div>
+                     <hr style="border-color: #4a4f58; margin: 15px 0;">
+                    <div style="background-color: #2a2f35; padding: 10px; border-radius: 6px;">
+                        <label>Zarzadzanie bezpieczna baza</label>
+                        <div style="display:flex; gap:10px; justify-content:center; margin-top:10px;">
+                            <button id="tuningSaveSafeBaseBtn" style="background-color: #61dafb; color: #282c34;">Zapisz Aktualne jako Baza</button>
+                            <button id="tuningRestoreSafeBaseBtn" style="background-color: #f7b731;">Przywroc Baze</button>
+                        </div>
+                    </div>
                 </fieldset>
 
-                <div style="display:flex; gap:10px; justify-content:center; margin: 15px 0;">
-                    <button id="startBoptBtn" style="background-color: #a2f279;">START</button>
-                    <button id="stopBoptBtn" style="background-color: #ff6347;" disabled>ZATRZYMAJ</button>
-                </div>
-                 
                 <fieldset>
-                    <legend>Postep</legend>
-                    <div id="bopt-progress-bar-container"><div id="bopt-progress-bar"></div></div>
-                    <div class="bopt-status-grid">
-                        <strong>Iteracja:</strong> <span id="boptIterationStatus">-- / --</span>
-                        <strong>Najlepszy Fitness:</strong> <span id="boptBestFitnessStatus">-.----</span>
+                    <legend>3. Sterowanie i Postep</legend>
+                     <p id="tuning-status-text" style="font-style: italic; color: #f7b731; margin-top: 10px;">Czekam na rozpoczecie...</p>
+                    
+                    <div class="tuning-actions">
+                         <button id="startTuningBtn" style="background-color: #a2f279;">Uruchom Test</button>
+                         <button id="stopTuningBtn" style="background-color: #ff6347;" disabled>Zatrzymaj</button>
+                    </div>
+                     <div class="tuning-loop-actions">
+                         <button id="run5TestsBtn" style="background-color: #f7b731;">Uruchom 5 Prob</button>
+                         <button id="applyBestBtn" style="background-color: #61dafb;" disabled>Zastosuj Znalezione</button>
+                    </div>
+                 
+                    <div id="tuning-progress-bar-container"><div id="tuning-progress-bar"></div></div>
+                    <div class="tuning-status-grid">
+                        <strong>Iteracja:</strong> <span id="tuningIterationStatus">-- / --</span>
+                        <strong>Najlepszy Fitness:</strong> <span id="tuningBestFitnessStatus">-.----</span>
                     </div>
                     
                     <h5 style="color:#61dafb; margin: 10px 0 5px 0;">Wynik Ostatniej Proby:</h5>
-                    <div id="bopt-last-result-display">
-                        <div><strong>Fitness:</strong> <span id="boptLastFitnessDetail">-.----</span></div>
-                        <div><strong>Kara (Kat):</strong> <span id="boptLastAnglePenalty">-.--</span></div>
-                        <div><strong>Kara (Oscylacje):</strong> <span id="boptLastVelocityPenalty">-.--</span></div>
-                        <div><strong>Kara (Wysilek):</strong> <span id="boptLastEffortPenalty">-.--</span></div>
-                        <div><strong>Kara (Pozycja):</strong> <span id="boptLastPositionPenalty">-.--</span></div>
-                        <div><strong>Bonus (Stabilnosc):</strong> <span id="boptLastBonus">-.--</span></div>
+                    <div id="tuning-last-result-display">
+                        <div><strong>Fitness:</strong> <span id="tuningLastFitnessDetail">-.----</span></div>
+                        <div><strong>Kara (Kat):</strong> <span id="tuningLastAnglePenalty">-.--</span></div>
+                        <div><strong>Kara (Oscylacje):</strong> <span id="tuningLastVelocityPenalty">-.--</span></div>
+                        <div><strong>Kara (Wysilek):</strong> <span id="tuningLastEffortPenalty">-.--</span></div>
+                        <div><strong>Kara (Pozycja):</strong> <span id="tuningLastPositionPenalty">-.--</span></div>
+                        <div><strong>Bonus (Stabilnosc):</strong> <span id="tuningLastBonus">-.--</span></div>
                     </div>
                     <hr style="border-color: #4a4f58; margin: 15px 0;">
-
-                    <h5 style="color:#61dafb; margin: 10px 0 5px 0;">Proponowane Parametry do Testu:</h5>
-                    <div id="bopt-current-params-display">Czekam na rozpoczecie...</div>
-                     <p id="bopt-trigger-info" style="font-style: italic; color: #f7b731; margin-top: 10px;"></p>
-                    <button id="boptTriggerTestBtn" style="width:100%; background-color: #f7b731;" disabled>Uruchom Test</button>
                     
-                    <hr style="border-color: #4a4f58; margin: 15px 0;">
                     <h5 style="color:#61dafb; margin: 10px 0 5px 0;">Najlepsze Znalezione Parametry:</h5>
-                    <div id="bopt-best-params-display">Najlepsze parametry pojawia sie tutaj...</div>
-                    <button id="boptSavePresetBtn" style="width:100%; margin-top:10px; background-color:#61dafb;" disabled>Zapisz znalezione jako Preset</button>
+                    <div id="tuning-best-params-display">Najlepsze parametry pojawia sie tutaj...</div>
+                    <button id="tuningSavePresetBtn" style="width:100%; margin-top:10px; background-color:#61dafb;" disabled>Zapisz znalezione jako Preset</button>
                 </fieldset>
 
                 <button class="accordion-header" onclick="toggleAccordion(this)" style="margin-top: 15px;">Ustawienia Funkcji Oceny (Fitness)</button>
@@ -580,25 +564,33 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 43.7-BOPT-STABILITY-FIX (Interfejs Uzytkownika)
+    // WERSJA 43.8-MODULAR-TUNE-FINAL (Interfejs Uzytkownika)
     //
     // ZMIANY:
     // -----------------------------------
-    // [STABILITY-FIX] Wprowadzono mechanizm timeoutu i ponawiania prob w cyklu BOPT.
-    //                 Jesli UI nie otrzyma potwierdzenia 'bopt_ack' od robota w ciagu
-    //                 3 sekund, automatycznie ponowi probe wyslania polecenia.
-    //                 Po 3 nieudanych probach, test zostanie przerwany z komunikatem bledu.
-    // [STABILITY-FIX] Zapobiega to "zawieszaniu sie" interfejsu w przypadku utraty
-    //                 pakietu BLE, co bylo przyczyna problemu z 3. iteracji.
-    // [UI-FIX]        Naprawiono problem z ucinaniem tekstu w panelu "Najlepsze
-    //                 Znalezione Parametry" przez zmiane wlasciwosci CSS 'white-space'
-    //                 z 'pre' na 'pre-wrap', co pozwala na zawijanie dlugich linii.
+    // [MODULAR-TUNE] Calkowicie przebudowano sekcje optymalizacji. Wprowadzono
+    //                trzy niezalezne tryby strojenia, zgodne z nowa logika robota:
+    //                1. Strojenie Balansu Statycznego (Q1, Q2, R).
+    //                2. Strojenie Reakcji na Zaklocenia (Q3, Q4).
+    //                3. Strojenie Jazdy Autonomicznej (kaskada P/D).
+    // [HILL-CLIMB]   Zastapiono biblioteke 'bayes-optimizer' (ktora byla de facto
+    //                losowym zgadywaniem) nowym, niestandardowym "Inteligentnym
+    //                Asystentem Strojenia". Implementuje on algorytm wspinaczkowy
+    //                (hill climbing) z losowymi restartami, ktory iteracyjnie
+    //                ulepsza parametry, zamiast losowo ich szukac.
+    // [WORKFLOW]     Dodano przycisk "Uruchom 5 Prob" do pol-automatyzacji procesu.
+    //                Zachowano przycisk "Uruchom Test" do pelnej manualnej kontroli.
+    //                Proces mozna pauzowac, testowac znalezione parametry manualnie,
+    //                a nastepnie wznawiac strojenie od ostatniego punktu.
+    // [UI-FIX]       Interfejs dynamicznie pokazuje tylko te opcje i parametry,
+    //                ktore sa relevantne dla aktualnie wybranego trybu strojenia.
+    // [CSV-FIX]      Dostosowano obsluge logiki CSV do nowej, dzialajacej
+    //                implementacji na robocie.
     // =======================================================================================
 
     const debouncedSenders = {};
     let isMappingButton = false;
     let actionToMap = null;
-    let lastBestBoptParams = null; 
     let loggedData = [];
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -614,6 +606,7 @@
         loadGamepadMappings();
         renderMappingModal();
         pollGamepad();
+        TuningAssistant.init(); // Inicjalizacja nowego asystenta
         window.addEventListener('resize', initJoystick);
         document.querySelectorAll('.accordion-header.active').forEach(header => {
             const content = header.nextElementSibling;
@@ -621,7 +614,7 @@
         });
     });
 
-    const CUSTOM_PRESET_PREFIX = 'lqr_custom_preset_v42.6_';
+    const CUSTOM_PRESET_PREFIX = 'lqr_custom_preset_v43.8_';
     let bleDevice, rxCharacteristic, txCharacteristic;
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
     const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
@@ -629,18 +622,11 @@
     
     let bleBuffer = '';
     
-    let isBoptRunning = false;
-    let boptState = 'idle'; // 'idle', 'preparing', 'awaiting_trigger', 'testing'
-    let bayesianOptimizer;
-    let resolveTestResultPromise;
-    let currentBoptParams = null;
-    let boptIterationCounter = 0;
-    let boptTotalIterations = 0;
-    // [STABILITY-FIX] Zmienne do obslugi timeoutu
-    let boptPrepareTimeout = null;
-    let boptPrepareRetries = 0;
-    const BOPT_MAX_RETRIES = 3;
-    const BOPT_PREPARE_TIMEOUT_MS = 3000;
+    // Zmienne do obslugi timeoutu
+    let tuningAckTimeout = null;
+    let tuningAckRetries = 0;
+    const TUNING_MAX_RETRIES = 3;
+    const TUNING_ACK_TIMEOUT_MS = 3000;
 
 
     const joystickCanvas = document.getElementById('joystickCanvas');
@@ -668,7 +654,7 @@
         'reset_zero': { label: 'Resetuj Osie (Pion)', elementId: 'resetZeroBtn' },
         'trim_plus': { label: 'Korekta Pionu (+)', elementId: 'trimPlusBtn' },
         'trim_minus': { label: 'Korekta Pionu (-)', elementId: 'trimMinusBtn' },
-        'bopt_run_test': { label: 'Uruchom Test BOPT', elementId: 'boptTriggerTestBtn' }
+        'tuning_run_test': { label: 'Uruchom Test Strojenia', elementId: 'startTuningBtn' }
     };
     
     const availableTelemetry = {
@@ -702,7 +688,7 @@
     function toggleAccordion(header) { const content = header.nextElementSibling; header.classList.toggle('active'); if (content.style.maxHeight && content.style.maxHeight !== '0px') { content.style.maxHeight = '0px'; } else { content.style.maxHeight = content.scrollHeight + "px"; } }
     function updateAccordionHeight(content) { if (content && content.style.maxHeight !== '0px') { content.style.maxHeight = content.scrollHeight + 'px'; } }
     async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono! Synchronizacja w toku...', 'success'); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
-    function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; if (isBoptRunning) stopBOPT(false); }
+    function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; TuningAssistant.stop(false); }
     
     function handleBleNotification(event) {
         const value = event.target.value;
@@ -740,25 +726,14 @@
             case 'logging_data_point': if (loggedData) loggedData.push(data.d); break;
             case 'logging_finished': handleLoggingFinished(data.points_collected); break;
             case 'ga_result': 
-                if (isBoptRunning) {
-                    updateBoptLastResultUI(data);
-                    if (resolveTestResultPromise) resolveTestResultPromise(data);
-                }
+                TuningAssistant.processResult(data);
                 break;
-            case 'drive_test_result': if (resolveTestResultPromise) { resolveTestResultPromise(data); } break; 
             case 'bopt_ack': 
-                if (isBoptRunning && data.status === 'ready_for_trigger') {
-                    // [STABILITY-FIX] Otrzymano potwierdzenie, anuluj timeout
-                    clearTimeout(boptPrepareTimeout);
-                    boptPrepareTimeout = null;
-                    boptPrepareRetries = 0;
-
-                    boptState = 'awaiting_trigger';
-                    const triggerBtn = document.getElementById('boptTriggerTestBtn');
-                    triggerBtn.textContent = 'ROZPOCZNIJ POMIAR';
-                    triggerBtn.disabled = false;
-                    document.getElementById('bopt-trigger-info').textContent = 'Robot jest gotowy. Wcisnij przycisk, aby rozpoczac pomiar.';
-                    addLogMessage('[UI] Robot potwierdzil gotowosc do pomiaru.', 'info');
+                if (data.status === 'ready_for_trigger') {
+                    clearTimeout(tuningAckTimeout);
+                    tuningAckTimeout = null;
+                    tuningAckRetries = 0;
+                    TuningAssistant.onReadyForTest();
                 }
                 break;
             case 'single_pwm_result':
@@ -804,33 +779,29 @@
     }
     function updateTelemetryUI(data) { if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state; if (data.pitch !== undefined) { document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0'; document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`; } if (data.speed !== undefined) document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0); if (data.speed_setpoint !== undefined) document.getElementById('speedSetpointVal').textContent = parseFloat(data.speed_setpoint).toFixed(0); if (data.target_angle !== undefined) document.getElementById('targetAngleVal').textContent = parseFloat(data.target_angle).toFixed(1) + ' \u00B0'; if (data.lqr_output !== undefined) document.getElementById('lqrOutputVal').textContent = parseFloat(data.lqr_output).toFixed(2); if (data.encoder_left !== undefined) document.getElementById('encoderLeftVal').textContent = data.encoder_left; if (data.encoder_right !== undefined) document.getElementById('encoderRightVal').textContent = data.encoder_right; const emergencyBanner = document.getElementById('emergency-banner'); if (emergencyBanner) emergencyBanner.style.display = data.emergency_stop ? 'block' : 'none'; }
     
-    function updateBoptProgress(iteration, total, bestFitness = null, bestParams = null) {
-        document.getElementById('bopt-progress-bar').style.width = `${(iteration / total) * 100}%`;
-        document.getElementById('boptIterationStatus').textContent = `${iteration} / ${total}`;
-        if (bestFitness && bestParams) {
-            lastBestBoptParams = bestParams;
-            document.getElementById('boptSavePresetBtn').disabled = false;
-            document.getElementById('boptBestFitnessStatus').textContent = bestFitness.toFixed(4);
+    function updateTuningProgressUI(iteration, total, bestFitness = null, bestParams = null) {
+        document.getElementById('tuning-progress-bar').style.width = `${(iteration / total) * 100}%`;
+        document.getElementById('tuningIterationStatus').textContent = `${iteration} / ${total}`;
+        if (bestFitness !== null && bestParams !== null) {
+            document.getElementById('tuningSavePresetBtn').disabled = false;
+            document.getElementById('applyBestBtn').disabled = false;
+            document.getElementById('tuningBestFitnessStatus').textContent = bestFitness.toFixed(4);
+            
             let paramsText = '';
-            const isBalanceMode = document.getElementById('boptBalanceSettings').style.display === 'block';
-            if (isBalanceMode) {
-                 paramsText = ` q1: ${bestParams.q1_angle.toFixed(1)}\n q2: ${bestParams.q2_angular_vel.toFixed(1)}\n  r: ${bestParams.r_control.toFixed(3)}\n sc: ${bestParams.lqr_output_scalar.toFixed(1)}`;
-                if(bestParams.q3_position !== undefined) paramsText += `\n q3: ${bestParams.q3_position.toFixed(1)}`;
-                if(bestParams.q4_velocity !== undefined) paramsText += `\n q4: ${bestParams.q4_velocity.toFixed(1)}`;
-            } else {
-                 paramsText = ` pos_p: ${bestParams.position_error_gain.toFixed(3)}\n pos_d: ${bestParams.position_d_gain.toFixed(3)}\n spd_p: ${bestParams.speed_p_gain.toFixed(4)}`;
+            for (const [key, value] of Object.entries(bestParams)) {
+                paramsText += ` ${key}: ${value.toFixed(4)}\n`;
             }
-            document.getElementById('bopt-best-params-display').textContent = paramsText;
+            document.getElementById('tuning-best-params-display').textContent = paramsText;
         }
     }
 
-    function updateBoptLastResultUI(data) {
-        document.getElementById('boptLastFitnessDetail').textContent = data.fitness !== undefined ? data.fitness.toFixed(4) : '-.----';
-        document.getElementById('boptLastAnglePenalty').textContent = data.p_angle !== undefined ? data.p_angle.toExponential(2) : '-.--';
-        document.getElementById('boptLastVelocityPenalty').textContent = data.p_vel !== undefined ? data.p_vel.toExponential(2) : '-.--';
-        document.getElementById('boptLastEffortPenalty').textContent = data.p_effort !== undefined ? data.p_effort.toExponential(2) : '-.--';
-        document.getElementById('boptLastPositionPenalty').textContent = data.p_pos !== undefined ? data.p_pos.toExponential(2) : '-.--';
-        document.getElementById('boptLastBonus').textContent = data.b_stable !== undefined ? data.b_stable.toFixed(1) : '-.--';
+    function updateTuningLastResultUI(data) {
+        document.getElementById('tuningLastFitnessDetail').textContent = data.fitness !== undefined ? data.fitness.toFixed(4) : '-.----';
+        document.getElementById('tuningLastAnglePenalty').textContent = data.p_angle !== undefined ? data.p_angle.toExponential(2) : '-.--';
+        document.getElementById('tuningLastVelocityPenalty').textContent = data.p_vel !== undefined ? data.p_vel.toExponential(2) : '-.--';
+        document.getElementById('tuningLastEffortPenalty').textContent = data.p_effort !== undefined ? data.p_effort.toExponential(2) : '-.--';
+        document.getElementById('tuningLastPositionPenalty').textContent = data.p_pos !== undefined ? data.p_pos.toExponential(2) : '-.--';
+        document.getElementById('tuningLastBonus').textContent = data.b_stable !== undefined ? data.b_stable.toFixed(1) : '-.--';
     }
 
 
@@ -882,17 +853,17 @@
         document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset);
         document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container, .control-row'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); });
         
-        document.getElementById('startBoptBtn').addEventListener('click', startBOPT);
-        document.getElementById('boptTriggerTestBtn').addEventListener('click', handleBoptTriggerClick);
-        document.getElementById('stopBoptBtn').addEventListener('click', () => stopBOPT(true));
-        document.getElementById('boptSavePresetBtn').addEventListener('click', saveBoptPreset);
-
-        const boptModeBalanceBtn = document.getElementById('boptModeBalance');
-        const boptModeDriveBtn = document.getElementById('boptModeDrive');
-        const balanceSettings = document.getElementById('boptBalanceSettings');
-        const driveSettings = document.getElementById('boptDriveSettings');
-        boptModeBalanceBtn.addEventListener('click', () => { boptModeBalanceBtn.style.backgroundColor = '#a2f279'; boptModeDriveBtn.style.backgroundColor = ''; balanceSettings.style.display = 'block'; driveSettings.style.display = 'none'; });
-        boptModeDriveBtn.addEventListener('click', () => { boptModeDriveBtn.style.backgroundColor = '#a2f279'; boptModeBalanceBtn.style.backgroundColor = ''; balanceSettings.style.display = 'none'; driveSettings.style.display = 'block'; });
+        // --- NOWE EVENTY DLA INTELIGENTNEGO STROJENIA ---
+        document.querySelectorAll('.tuning-mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => TuningAssistant.setMode(btn.dataset.mode));
+        });
+        document.getElementById('startTuningBtn').addEventListener('click', () => TuningAssistant.runSingleTest());
+        document.getElementById('run5TestsBtn').addEventListener('click', () => TuningAssistant.runTestLoop(5));
+        document.getElementById('stopTuningBtn').addEventListener('click', () => TuningAssistant.stop(true));
+        document.getElementById('applyBestBtn').addEventListener('click', () => TuningAssistant.applyBestParams());
+        document.getElementById('tuningSavePresetBtn').addEventListener('click', () => TuningAssistant.savePreset());
+        document.getElementById('tuningSaveSafeBaseBtn').addEventListener('click', () => { sendBleMessage({ type: 'ga_save_safe_params' }); addLogMessage('[UI] Wyslano polecenie zapisu bezpiecznej bazy parametrow.', 'info'); });
+        document.getElementById('tuningRestoreSafeBaseBtn').addEventListener('click', () => { if (confirm("Spowoduje to przywrocenie bezpiecznych parametrow i nadpisanie aktualnych ustawien LQR. Kontynuowac?")) { sendBleMessage({ type: 'ga_restore_safe_params' }); addLogMessage('[UI] Wyslano polecenie przywrocenia bezpiecznej bazy parametrow.', 'info'); setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 500); } });
         
         document.getElementById('updatePhysicalParamsBtn').addEventListener('click', async () => {
             await sendBleMessage({ type: 'balance_toggle', enabled: false });
@@ -906,233 +877,333 @@
             await sendBleMessage({ type: 'update_physical_params', params });
             addLogMessage('[UI] Wyslano polecenie aktualizacji parametrow fizycznych.', 'info');
         });
-
-        document.getElementById('boptSaveSafeBaseBtn').addEventListener('click', () => { sendBleMessage({ type: 'ga_save_safe_params' }); addLogMessage('[UI] Wyslano polecenie zapisu bezpiecznej bazy LQR.', 'info'); });
-        document.getElementById('boptRestoreSafeBaseBtn').addEventListener('click', () => { if (confirm("Spowoduje to przywrocenie bezpiecznych parametrow i nadpisanie aktualnych ustawien LQR. Kontynuowac?")) { sendBleMessage({ type: 'ga_restore_safe_params' }); addLogMessage('[UI] Wyslano polecenie przywrocenia bezpiecznej bazy LQR.', 'info'); setTimeout(() => sendBleMessage({ type: 'load_from_eeprom' }), 500); } });
     }
     
     // =======================================================================
-    // === POCZATEK BLOKU Z NOWA LOGIKA BOPT (WERSJA STABILITY-FIX) ===
+    // === NOWY BLOK - INTELIGENTNY ASYSTENT STROJENIA ===
     // =======================================================================
-    async function startBOPT() {
-        if (!bleDevice) { addLogMessage('Polacz z robotem przed rozpoczeciem optymalizacji.', 'warn'); return; }
-        if (isBoptRunning) return;
+    const TuningAssistant = {
+        state: {},
+        activeMode: 'balance',
+        isRunning: false,
+        isLooping: false,
+        loopCount: 0,
+        resolveTestPromise: null,
 
-        isBoptRunning = true;
-        setBoptUiLock(true);
-        lastBestBoptParams = null;
-        document.getElementById('boptSavePresetBtn').disabled = true;
+        tuningModes: {
+            'balance': {
+                label: 'Strojenie Balansu Statycznego',
+                params: {
+                    'q1Angle': { id: 'q1AngleInput', step: 10, type: 'lqr' },
+                    'q2AngularVel': { id: 'q2AngularVelInput', step: 1, type: 'lqr' },
+                    'rControl': { id: 'rControlInput', step: 0.01, type: 'lqr' }
+                }
+            },
+            'impulse': {
+                label: 'Strojenie Reakcji na Zaklocenia',
+                params: {
+                    'q3Position': { id: 'q3PositionInput', step: 5, type: 'lqr' },
+                    'q4Velocity': { id: 'q4VelocityInput', step: 1, type: 'lqr' }
+                }
+            },
+            'drive': {
+                label: 'Strojenie Jazdy Autonomicznej',
+                params: {
+                    'positionErrorGain': { id: 'positionErrorGainInput', step: 0.1, type: 'cascade' },
+                    'positionDampingGain': { id: 'positionDampingGainInput', step: 0.1, type: 'cascade' },
+                    'speedPGain': { id: 'speedPGainInput', step: 0.0005, type: 'cascade' }
+                }
+            }
+        },
+
+        init() {
+            for (const mode in this.tuningModes) {
+                this.state[mode] = {
+                    initialParams: null,
+                    bestParams: null,
+                    bestFitness: -1,
+                    currentIteration: 0,
+                    totalIterations: 20,
+                    paramIndex: 0,
+                    lastChange: 1, // 1 for increase, -1 for decrease
+                    stepSizeMultiplier: 1.0,
+                    consecutiveFailures: 0
+                };
+            }
+            this.setMode('balance', true);
+        },
+
+        setMode(newMode, force = false) {
+            if (this.isRunning && !force) {
+                addLogMessage(`[UI] Zmien tryb po zakonczeniu lub zatrzymaniu strojenia.`, 'warn');
+                return;
+            }
+            this.activeMode = newMode;
+            
+            document.querySelectorAll('.tuning-mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === newMode);
+            });
+
+            document.getElementById('tuningImpulseSettings').style.display = (newMode === 'impulse') ? 'block' : 'none';
+            document.getElementById('tuningDriveSettings').style.display = (newMode === 'drive') ? 'block' : 'none';
+
+            this.updateUI();
+            addLogMessage(`[UI] Aktywowano tryb: ${this.tuningModes[newMode].label}`, 'info');
+        },
         
-        const isBalanceMode = document.getElementById('boptBalanceSettings').style.display === 'block';
-        let space;
-
-        if (isBalanceMode) {
-            addLogMessage('[UI] Rozpoczeto optymalizacje BALANSU.', 'success');
-            const useImpulse = document.getElementById('boptUseImpulseTest').checked;
-            space = [ { name: 'q1_angle', domain: [1, 1000] }, { name: 'q2_angular_vel', domain: [0.1, 100] }, { name: 'r_control', domain: [0.001, 10] }, { name: 'lqr_output_scalar', domain: [0.1, 50] } ];
-            if (useImpulse) { space.push({ name: 'q3_position', domain: [0, 100] }); space.push({ name: 'q4_velocity', domain: [0, 100] }); }
-        } else {
-            addLogMessage('[UI] Rozpoczeto interaktywne strojenie JAZDY.', 'success');
-            space = [ { name: 'position_error_gain', domain: [0.1, 10.0] }, { name: 'position_d_gain', domain: [0.0, 15.0] }, { name: 'speed_p_gain', domain: [0.0001, 0.1] } ];
-        }
-
-        try {
-            if (typeof bayes !== 'object' || typeof bayes.Optimizer !== 'function') { throw new Error("Biblioteka Bayes nie zostala poprawnie zainicjalizowana."); }
-            bayesianOptimizer = new bayes.Optimizer({ space });
-        } catch (error) {
-            addLogMessage(`[UI] KRYTYCZNY BLAD podczas inicjalizacji optymalizatora: ${error}.`, 'error');
-            stopBOPT(false);
-            return;
-        }
-
-        boptTotalIterations = parseInt(document.getElementById('boptIterationsInput').value);
-        boptIterationCounter = 0;
-        updateBoptProgress(0, boptTotalIterations);
+        updateUI() {
+            const s = this.state[this.activeMode];
+            s.totalIterations = parseInt(document.getElementById('tuningIterationsInput').value);
+            updateTuningProgressUI(s.currentIteration, s.totalIterations, s.bestFitness, s.bestParams);
+        },
         
-        await sendBleMessage({ type: 'ga_save_safe_params' });
-        debouncedSenders['ga_set_fitness_weights']();
-        await new Promise(r => setTimeout(r, 200));
+        getCurrentValuesFromUI(mode) {
+            const params = {};
+            const paramDefs = this.tuningModes[mode].params;
+            for (const key in paramDefs) {
+                params[key] = parseFloat(document.getElementById(paramDefs[key].id).value);
+            }
+            return params;
+        },
 
-        await prepareForNextBoptIteration();
-    }
+        async runSingleTest() {
+            if (this.isRunning) return;
+            this.isRunning = true;
+            this.setUiLock(true);
 
-    async function prepareForNextBoptIteration() {
-        addLogMessage('[UI] Przygotowywanie propozycji parametrow...', 'info');
-        currentBoptParams = await bayesianOptimizer.ask();
+            if (!this.state[this.activeMode].initialParams) {
+                this.startNewSession();
+            }
+            
+            const s = this.state[this.activeMode];
+            if (s.currentIteration >= s.totalIterations) {
+                addLogMessage(`[UI] Osiagnieto limit iteracji dla tego trybu.`, 'info');
+                this.stop(false);
+                return;
+            }
+
+            const nextParams = this.generateNextParams();
+            document.getElementById('tuning-status-text').textContent = 'Przygotowuje robota do testu...';
+            
+            await this.prepareAndRunTest(nextParams);
+        },
+
+        async runTestLoop(count) {
+            if (this.isLooping || this.isRunning) return;
+            this.isLooping = true;
+            this.loopCount = count;
+            document.getElementById('run5TestsBtn').textContent = `Zatrzymaj po ${this.loopCount}`;
+            await this.runSingleTest();
+        },
+
+        stop(userInitiated) {
+            this.isRunning = false;
+            if (this.isLooping) {
+                this.isLooping = false;
+                this.loopCount = 0;
+                 document.getElementById('run5TestsBtn').textContent = 'Uruchom 5 Prob';
+            }
+            this.setUiLock(false);
+            if (userInitiated) {
+                addLogMessage(`[UI] Strojenie zatrzymane przez uzytkownika.`, 'warn');
+                document.getElementById('tuning-status-text').textContent = 'Zatrzymano. Gotow do wznowienia.';
+            } else {
+                 document.getElementById('tuning-status-text').textContent = 'Zakonczono. Gotowy.';
+            }
+        },
         
-        let paramsText = '';
-        const isBalanceMode = document.getElementById('boptBalanceSettings').style.display === 'block';
-        if (isBalanceMode) {
-            paramsText = ` q1: ${currentBoptParams.q1_angle.toFixed(1)}\n q2: ${currentBoptParams.q2_angular_vel.toFixed(1)}\n  r: ${currentBoptParams.r_control.toFixed(3)}\n sc: ${currentBoptParams.lqr_output_scalar.toFixed(2)}`;
-            if(currentBoptParams.q3_position !== undefined) paramsText += `\n q3: ${currentBoptParams.q3_position.toFixed(1)}`;
-            if(currentBoptParams.q4_velocity !== undefined) paramsText += `\n q4: ${currentBoptParams.q4_velocity.toFixed(1)}`;
-        } else {
-            paramsText = ` pos_p: ${currentBoptParams.position_error_gain.toFixed(3)}\n pos_d: ${currentBoptParams.position_d_gain.toFixed(3)}\n spd_p: ${currentBoptParams.speed_p_gain.toFixed(4)}`;
-        }
-        document.getElementById('bopt-current-params-display').textContent = paramsText;
+        startNewSession() {
+            const s = this.state[this.activeMode];
+            s.initialParams = this.getCurrentValuesFromUI(this.activeMode);
+            s.bestParams = { ...s.initialParams };
+            s.bestFitness = -1;
+            s.currentIteration = 0;
+            s.paramIndex = 0;
+            s.lastChange = 1;
+            s.stepSizeMultiplier = 1.0;
+            s.consecutiveFailures = 0;
+            addLogMessage(`[UI] Rozpoczeto nowa sesje strojenia dla trybu "${this.tuningModes[this.activeMode].label}".`, 'success');
+            addLogMessage(`[UI] Baza: ${JSON.stringify(s.initialParams)}`, 'info');
+        },
         
-        boptState = 'preparing';
-        const triggerBtn = document.getElementById('boptTriggerTestBtn');
-        triggerBtn.disabled = false;
-        triggerBtn.textContent = 'Przygotuj do Testu';
-        document.getElementById('bopt-trigger-info').textContent = 'Ustaw robota i wcisnij przycisk, aby wyzerowac jego pozycje.';
-        addLogMessage('[UI] Gotowe. Ustaw robota w pozycji startowej.', 'info');
-    }
+        generateNextParams() {
+            const s = this.state[this.activeMode];
+            const paramDefs = this.tuningModes[this.activeMode].params;
+            const paramKeys = Object.keys(paramDefs);
+            
+            let nextParams = { ...s.bestParams };
 
-    async function handleBoptTriggerClick() {
-        if (!isBoptRunning || !currentBoptParams) return;
+            if (s.consecutiveFailures >= paramKeys.length * 2) {
+                addLogMessage('[UI] Utknieto w lokalnym optimum. Inicjuje losowy restart.', 'warn');
+                for (const key of paramKeys) {
+                    const step = paramDefs[key].step * 5; // Wiekszy krok dla restartu
+                    const change = (Math.random() - 0.5) * 2 * step;
+                    nextParams[key] += change;
+                }
+                s.consecutiveFailures = 0;
+                return nextParams;
+            }
 
-        const triggerBtn = document.getElementById('boptTriggerTestBtn');
-        const triggerInfo = document.getElementById('bopt-trigger-info');
+            const currentParamKey = paramKeys[s.paramIndex];
+            const step = paramDefs[currentParamKey].step * s.stepSizeMultiplier * s.lastChange;
+            nextParams[currentParamKey] += step;
 
-        if (boptState === 'preparing') {
-            triggerBtn.disabled = true;
-            boptPrepareRetries = 0;
-            sendPrepareCommandWithTimeout();
-        }
-        else if (boptState === 'awaiting_trigger') {
-            triggerBtn.disabled = true;
-            triggerBtn.textContent = 'Test w toku...';
-            triggerInfo.textContent = '';
-            boptState = 'testing';
+            return nextParams;
+        },
 
-            addLogMessage(`[UI] Uruchamianie pomiaru dla iteracji ${boptIterationCounter + 1}...`, 'info');
+        async prepareAndRunTest(params) {
+            // 1. Zastosuj nowe parametry na robocie
+            const paramDefs = this.tuningModes[this.activeMode].params;
+            const lqrParams = {};
+            const cascadeParams = {};
+
+            for (const key in params) {
+                if (paramDefs[key].type === 'lqr') lqrParams[key] = params[key];
+                if (paramDefs[key].type === 'cascade') cascadeParams[key] = params[key];
+            }
+            
+            const allLqrParams = { ...this.getCurrentValuesFromUI('balance'), ...this.getCurrentValuesFromUI('impulse'), ...lqrParams };
+            const allCascadeParams = { ...this.getCurrentValuesFromUI('drive'), ...cascadeParams };
+
+            const lqrMsg = { type: 'lqr_update', params: {
+                q1_angle: allLqrParams.q1Angle, q2_angular_vel: allLqrParams.q2AngularVel,
+                q3_position: allLqrParams.q3Position, q4_velocity: allLqrParams.q4Velocity,
+                r_control: allLqrParams.rControl
+            }};
+            const cascadeMsg = { type: 'calibration_update', params: {
+                position_error_gain: allCascadeParams.positionErrorGain,
+                position_d_gain: allCascadeParams.positionDampingGain,
+                speed_p_gain: allCascadeParams.speedPGain
+            }};
+
+            await sendBleMessage(lqrMsg);
+            await sendBleMessage(cascadeMsg);
+            
+            // 2. Przygotuj robota
+            tuningAckRetries = 0;
+            this.sendPrepareWithTimeout();
+            
+            // Czekaj na potwierdzenie od robota (onReadyForTest)
+        },
+        
+        sendPrepareWithTimeout() {
+            if (tuningAckRetries >= TUNING_MAX_RETRIES) {
+                addLogMessage('[UI] BLAD: Robot nie odpowiada na polecenie przygotowania. Anulowanie.', 'error');
+                this.stop(true);
+                return;
+            }
+            tuningAckRetries++;
+            document.getElementById('tuning-status-text').textContent = `Czekam na potwierdzenie od robota... (proba ${tuningAckRetries})`;
+            sendBleMessage({ type: 'ga_prepare_and_zero' });
+
+            tuningAckTimeout = setTimeout(() => {
+                addLogMessage('[UI] Timeout! Nie otrzymano potwierdzenia. Ponawiam probe...', 'warn');
+                this.sendPrepareWithTimeout();
+            }, TUNING_ACK_TIMEOUT_MS);
+        },
+
+        onReadyForTest() {
+            document.getElementById('tuning-status-text').textContent = 'Robot gotowy. Uruchom test przyciskiem.';
+            // Ta funkcja jest wywolywana, gdy robot jest gotowy. Czekamy na reczne wyzwolenie.
+            // W naszym przeplywie, reczne wyzwolenie jest juz zrobione, wiec od razu lecimy z testem.
+            this.triggerTest();
+        },
+
+        async triggerTest() {
+            document.getElementById('tuning-status-text').textContent = `Test w toku (proba ${this.state[this.activeMode].currentIteration + 1})...`;
+            
             await sendBleMessage({ type: 'balance_toggle', enabled: true });
             await new Promise(r => setTimeout(r, 200)); 
-
-            const isBalanceMode = document.getElementById('boptBalanceSettings').style.display === 'block';
-            let testCommand;
             
-            if (isBalanceMode) {
-                await sendBleMessage({ type: 'lqr_update', params: currentBoptParams });
-                const useImpulse = document.getElementById('boptUseImpulseTest').checked;
-                testCommand = useImpulse ? {type: 'ga_execute_impulse_and_measure'} : {type: 'ga_run_static_stability_test'};
-                await sendBleMessage({ type: 'ga_set_impulse', power: parseFloat(document.getElementById('boptImpulsePowerInput').value) });
-            } else {
-                await sendBleMessage({ type: 'calibration_update', params: currentBoptParams });
-                const distance = parseFloat(document.getElementById('boptDriveDistanceInput').value);
-                testCommand = { type: 'run_drive_test', distance_cm: distance };
+            if (this.activeMode === 'impulse') {
+                 await sendBleMessage({ type: 'ga_set_impulse', power: parseFloat(document.getElementById('tuningImpulsePowerInput').value) });
             }
 
-            await new Promise(r => setTimeout(r, 100));
-            await sendBleMessage(testCommand);
+            await sendBleMessage({ type: 'ga_run_test', mode: this.activeMode });
 
-            const resultPromise = new Promise(resolve => { resolveTestResultPromise = resolve; });
-            const result = await resultPromise; 
+            const resultPromise = new Promise(resolve => { this.resolveTestPromise = resolve; });
+            await resultPromise; // Czekamy na wynik z processResult
+        },
 
-            if (!isBoptRunning || !result) {
-                addLogMessage('[UI] Test przerwany lub anulowany.', 'warn');
-                return;
-            }
-
+        processResult(result) {
+            if (!this.isRunning) return;
+            
+            const s = this.state[this.activeMode];
+            updateTuningLastResultUI(result);
             addLogMessage(`[UI] Otrzymano wynik (fitness): ${result.fitness.toFixed(4)}`, 'info');
-            await bayesianOptimizer.tell(currentBoptParams, result.fitness);
             
-            const best = await bayesianOptimizer.getBest();
-            
-            boptIterationCounter++;
-            updateBoptProgress(boptIterationCounter, boptTotalIterations, best.value, best.params);
-            
-            addLogMessage('[UI] Pomiar zakonczony. Przywracanie bezpiecznych parametrow...', 'info');
-            await sendBleMessage({ type: 'ga_restore_safe_params' });
-            await new Promise(r => setTimeout(r, 200));
-
-            if (boptIterationCounter >= boptTotalIterations) {
-                addLogMessage('[UI] Optymalizacja zakonczona!', 'success');
-                stopBOPT(false);
-                return;
-            }
-
-            await prepareForNextBoptIteration();
-        }
-    }
-    
-    // [STABILITY-FIX] Nowa funkcja z obsluga timeoutu i ponawiania
-    function sendPrepareCommandWithTimeout() {
-        const triggerBtn = document.getElementById('boptTriggerTestBtn');
-        const triggerInfo = document.getElementById('bopt-trigger-info');
-
-        if (boptPrepareRetries >= BOPT_MAX_RETRIES) {
-            addLogMessage('[UI] BLAD: Robot nie odpowiada na polecenie przygotowania. Anulowanie testu.', 'error');
-            stopBOPT(true);
-            return;
-        }
-
-        boptPrepareRetries++;
-        triggerBtn.textContent = `Czekam na potwierdzenie... (proba ${boptPrepareRetries}/${BOPT_MAX_RETRIES})`;
-        triggerInfo.textContent = 'Robot zeruje swoj stan...';
-        addLogMessage(`[UI] Wysylanie polecenia przygotowania (proba ${boptPrepareRetries})...`, 'info');
-        sendBleMessage({ type: 'ga_prepare_and_zero' });
-
-        boptPrepareTimeout = setTimeout(() => {
-            addLogMessage(`[UI] Timeout! Nie otrzymano potwierdzenia od robota. Ponawiam probe...`, 'warn');
-            sendPrepareCommandWithTimeout();
-        }, BOPT_PREPARE_TIMEOUT_MS);
-    }
-    
-    async function stopBOPT(sendCmd) {
-        if (!isBoptRunning) return;
-        isBoptRunning = false;
-        boptState = 'idle';
-        if(boptPrepareTimeout) clearTimeout(boptPrepareTimeout);
-        boptPrepareTimeout = null;
-        if(resolveTestResultPromise) resolveTestResultPromise(null);
-        setBoptUiLock(false);
-        document.getElementById('boptTriggerTestBtn').disabled = true;
-        document.getElementById('boptTriggerTestBtn').textContent = 'Uruchom Test';
-        document.getElementById('bopt-current-params-display').textContent = 'Anulowano.';
-        document.getElementById('bopt-trigger-info').textContent = '';
-
-        if (sendCmd) {
-            addLogMessage('[UI] Zatrzymywanie optymalizacji i przywracanie stanu...', 'info');
-            await sendBleMessage({ type: 'ga_restore_safe_params' });
-            await new Promise(r => setTimeout(r, 100));
-            await sendBleMessage({ type: 'command_stop' });
-        }
-    }
-
-    function setBoptUiLock(isLocked) {
-        const SAFE_DURING_BOPT_IDS = [
-            'connectBleBtn', 'emergencyStopBtn', 'stopBoptBtn',
-            'balanceSwitch', 'trimPlusBtn', 'trimMinusBtn',
-            'trimRollPlusBtn', 'trimRollMinusBtn'
-        ];
-        
-        document.querySelectorAll('button, input, select').forEach(el => {
-            if (SAFE_DURING_BOPT_IDS.includes(el.id)) {
-                return;
-            }
-            if (el.id === 'boptTriggerTestBtn') {
-                el.disabled = !isLocked;
+            if (result.fitness > s.bestFitness) {
+                addLogMessage(`[UI] Poprawa! Nowy najlepszy fitness: ${result.fitness.toFixed(4)}`, 'success');
+                s.bestFitness = result.fitness;
+                s.bestParams = this.generateNextParams(); // Zapisujemy parametry, ktore daly ten wynik
+                s.stepSizeMultiplier = 1.2; // Przyspiesz w dobrym kierunku
+                s.consecutiveFailures = 0;
             } else {
-                el.disabled = isLocked;
+                addLogMessage(`[UI] Brak poprawy. Odrzucam zmiany.`, 'warn');
+                s.lastChange *= -1; // Sprobuj w druga strone
+                s.stepSizeMultiplier *= 0.8; // Zwolnij, bo jestesmy blisko optimum
+                if(s.stepSizeMultiplier < 0.2) s.stepSizeMultiplier = 0.2;
+                s.consecutiveFailures++;
+
+                if (s.lastChange === 1) { // Jesli wlasnie wrocilismy do proby w gore
+                    s.paramIndex = (s.paramIndex + 1) % Object.keys(this.tuningModes[this.activeMode].params).length;
+                }
             }
-        });
-        
-        document.getElementById('startBoptBtn').disabled = isLocked;
-        document.getElementById('stopBoptBtn').disabled = !isLocked;
-        document.getElementById('connectBleBtn').disabled = isLocked || !!bleDevice;
-    }
+            
+            s.currentIteration++;
+            this.updateUI();
 
-
-    async function saveBoptPreset() {
-        if (!lastBestBoptParams) { addLogMessage('Brak danych do zapisu.', 'warn'); return; }
-        const bestFitness = parseFloat(document.getElementById('boptBestFitnessStatus').textContent);
-        const presetName = prompt("Podaj nazwe dla presetu:", `BOPT_Fit_${bestFitness.toFixed(4)}`);
-        
-        if (presetName && presetName.trim() !== "") {
-            const isBalanceMode = document.getElementById('boptBalanceSettings').style.display === 'block';
-            let presetData = {};
-            if (isBalanceMode) {
-                presetData = { q1Angle: lastBestBoptParams.q1_angle, q2AngularVel: lastBestBoptParams.q2_angular_vel, q3Position: lastBestBoptParams.q3_position || parseFloat(document.getElementById('q3PositionInput').value), q4Velocity: lastBestBoptParams.q4_velocity || parseFloat(document.getElementById('q4VelocityInput').value), rControl: lastBestBoptParams.r_control, lqrOutputScalar: lastBestBoptParams.lqr_output_scalar };
+            if (this.isLooping && this.loopCount > 1) {
+                this.loopCount--;
+                document.getElementById('run5TestsBtn').textContent = `Zatrzymaj po ${this.loopCount}`;
+                this.isRunning = false; // "Reset" flagi, zeby kolejna iteracja ruszyła
+                this.runSingleTest();
             } else {
-                presetData = { q1Angle: parseFloat(document.getElementById('q1AngleInput').value), q2AngularVel: parseFloat(document.getElementById('q2AngularVelInput').value), q3Position: parseFloat(document.getElementById('q3PositionInput').value), q4Velocity: parseFloat(document.getElementById('q4VelocityInput').value), rControl: parseFloat(document.getElementById('rControlInput').value), lqrOutputScalar: parseFloat(document.getElementById('lqrOutputScalarInput').value), positionErrorGain: lastBestBoptParams.position_error_gain, positionDampingGain: lastBestBoptParams.position_d_gain, speedPGain: lastBestBoptParams.speed_p_gain };
+                this.stop(false);
             }
-            localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData));
-            addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success');
-            populatePresetSelect();
+        },
+        
+        applyBestParams() {
+            const s = this.state[this.activeMode];
+            if (!s.bestParams) {
+                 addLogMessage(`[UI] Brak znalezionych parametrow do zastosowania.`, 'warn');
+                 return;
+            }
+            const paramDefs = this.tuningModes[this.activeMode].params;
+            for (const key in s.bestParams) {
+                const input = document.getElementById(paramDefs[key].id);
+                if (input) {
+                    input.value = s.bestParams[key];
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+            addLogMessage(`[UI] Zastosowano najlepsze znalezione parametry dla trybu "${this.tuningModes[this.activeMode].label}".`, 'success');
+        },
+
+        savePreset() {
+            const s = this.state[this.activeMode];
+            if (!s.bestParams) { addLogMessage('[UI] Brak danych do zapisu.', 'warn'); return; }
+            const presetName = prompt("Podaj nazwe dla presetu:", `Asystent_${this.activeMode}_Fit_${s.bestFitness.toFixed(4)}`);
+            
+            if (presetName && presetName.trim() !== "") {
+                const presetData = { ...this.getCurrentValuesFromUI('balance'), ...this.getCurrentValuesFromUI('impulse'), ...s.bestParams };
+                localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData));
+                addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success');
+                populatePresetSelect();
+            }
+        },
+
+        setUiLock(isLocked) {
+            document.querySelectorAll('#startTuningBtn, #run5TestsBtn, #applyBestBtn, .tuning-mode-btn').forEach(el => el.disabled = isLocked);
+            document.getElementById('stopTuningBtn').disabled = !isLocked;
+            
+            if (!isLocked && this.isLooping) { // Jesli petla sie skonczyla, odblokuj i zresetuj
+                 this.isLooping = false;
+                 this.loopCount = 0;
+                 document.getElementById('run5TestsBtn').textContent = 'Uruchom 5 Prob';
+            }
         }
-    }
+    };
     
     // ===================================================================
     // === POZOSTALE FUNKCJE POMOCNICZE (BEZ ZMIAN W TEJ WERSJI) ===
