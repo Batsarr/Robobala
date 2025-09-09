@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v43.5 (FINAL-FIX)</title>
+    <title>Robot LQR - Panel Sterowania v43.6 (BOPT-REWORK)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <!-- ================================================================= -->
@@ -129,6 +129,9 @@
         .bopt-status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 15px; text-align: left; margin-bottom: 15px; }
         .bopt-status-grid strong { color: #61dafb; }
         #bopt-best-params-display, #bopt-current-params-display { background-color: #20232a; border-radius: 5px; padding: 10px; font-family: monospace; text-align: left; white-space: pre; font-size: 0.9em; line-height: 1.5; }
+        #bopt-last-result-display { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 5px 15px; background-color: #2a2f35; padding: 10px; border-radius: 6px; margin-top: 10px; }
+        #bopt-last-result-display > div { text-align: left; }
+        #bopt-last-result-display strong { color: #a2f279; }
     </style>
 </head>
 <body>
@@ -483,7 +486,7 @@
                         </div>
                         <hr style="border-color: #4a4f58; margin: 15px 0;">
                         <div style="background-color: #2a2f35; padding: 10px; border-radius: 6px;">
-                            <label>Zarzadzanie baza dla testu statycznego</label>
+                            <label>Zarzadzanie baza dla testu</label>
                             <div style="display:flex; gap:10px; justify-content:center; margin-top:10px;">
                                 <button id="boptSaveSafeBaseBtn" style="background-color: #61dafb; color: #282c34;">Zapisz Aktualne jako Baza</button>
                                 <button id="boptRestoreSafeBaseBtn" style="background-color: #f7b731;">Przywroc Baze</button>
@@ -496,25 +499,70 @@
                     </div>
 
                 </fieldset>
+
                 <div style="display:flex; gap:10px; justify-content:center; margin: 15px 0;">
                     <button id="startBoptBtn" style="background-color: #a2f279;">START</button>
                     <button id="stopBoptBtn" style="background-color: #ff6347;" disabled>ZATRZYMAJ</button>
-                    <button id="boptRunTestBtn" style="background-color: #f7b731;" disabled>Uruchom Test</button>
                 </div>
-                 <fieldset>
+                 
+                <fieldset>
                     <legend>Postep</legend>
                     <div id="bopt-progress-bar-container"><div id="bopt-progress-bar"></div></div>
                     <div class="bopt-status-grid">
                         <strong>Iteracja:</strong> <span id="boptIterationStatus">-- / --</span>
                         <strong>Najlepszy Fitness:</strong> <span id="boptBestFitnessStatus">-.----</span>
                     </div>
+                    
+                    <h5 style="color:#61dafb; margin: 10px 0 5px 0;">Wynik Ostatniej Proby:</h5>
+                    <div id="bopt-last-result-display">
+                        <div><strong>Fitness:</strong> <span id="boptLastFitnessDetail">-.----</span></div>
+                        <div><strong>Kara (Kat):</strong> <span id="boptLastAnglePenalty">-.--</span></div>
+                        <div><strong>Kara (Oscylacje):</strong> <span id="boptLastVelocityPenalty">-.--</span></div>
+                        <div><strong>Kara (Wysilek):</strong> <span id="boptLastEffortPenalty">-.--</span></div>
+                        <div><strong>Kara (Pozycja):</strong> <span id="boptLastPositionPenalty">-.--</span></div>
+                        <div><strong>Bonus (Stabilnosc):</strong> <span id="boptLastBonus">-.--</span></div>
+                    </div>
+                    <hr style="border-color: #4a4f58; margin: 15px 0;">
+
                     <h5 style="color:#61dafb; margin: 10px 0 5px 0;">Proponowane Parametry do Testu:</h5>
                     <div id="bopt-current-params-display">Czekam na rozpoczecie...</div>
+                     <p id="bopt-trigger-info" style="font-style: italic; color: #f7b731; margin-top: 10px;"></p>
+                    <button id="boptTriggerTestBtn" style="width:100%; background-color: #f7b731;" disabled>Uruchom Test</button>
+                    
                     <hr style="border-color: #4a4f58; margin: 15px 0;">
                     <h5 style="color:#61dafb; margin: 10px 0 5px 0;">Najlepsze Znalezione Parametry:</h5>
                     <div id="bopt-best-params-display">Najlepsze parametry pojawia sie tutaj...</div>
                     <button id="boptSavePresetBtn" style="width:100%; margin-top:10px; background-color:#61dafb;" disabled>Zapisz znalezione jako Preset</button>
                 </fieldset>
+
+                <button class="accordion-header" onclick="toggleAccordion(this)" style="margin-top: 15px;">Ustawienia Funkcji Oceny (Fitness)</button>
+                <div class="accordion-content">
+                    <div class="setting-container">
+                        <label for="wAngleInput">Waga - Blad Kata<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><input type="number" class="fitness-weight" id="wAngleInput" min="0" max="100" step="0.5" value="10.0"></div>
+                        <div class="help-text">Jak wazne jest utrzymanie idealnego pionu. Zwieksz, aby mocniej karac wszelkie odchylenia.</div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="wVelocityInput">Waga - Oscylacje<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><input type="number" class="fitness-weight" id="wVelocityInput" min="0" max="100" step="0.1" value="1.0"></div>
+                        <div class="help-text">Jak wazne jest tlumienie drgan. Zwieksz, aby promowac plynniejsze, spokojniejsze zachowanie.</div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="wEffortInput">Waga - Wysilek<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><input type="number" class="fitness-weight" id="wEffortInput" min="0" max="1" step="0.01" value="0.05"></div>
+                        <div class="help-text">Jak wazna jest oszczednosc energii. Zwieksz, aby promowac rozwiazania uzywajace mniejszej mocy.</div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="wPositionInput">Waga - Blad Pozycji<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><input type="number" class="fitness-weight" id="wPositionInput" min="0" max="10" step="0.05" value="0.1"></div>
+                        <div class="help-text">Jak wazne jest pozostawanie w miejscu. Zwieksz, aby karac "uciekanie" robota podczas balansowania.</div>
+                    </div>
+                     <div class="setting-container">
+                        <label for="wBonusInput">Waga - Bonus Stabilnosci<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><input type="number" class="fitness-weight" id="wBonusInput" min="0" max="0.1" step="0.001" value="0.001"></div>
+                        <div class="help-text">Nagroda za kazdy cykl spedzony w bardzo waskiej strefie pionu. Zwieksz, aby promowac "zamrozenie" w pionie.</div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -530,48 +578,37 @@
     </div>
 
 <script>
-    // Zmienne globalne i stale
+    // =======================================================================================
+    // WERSJA 43.6-BOPT-REWORK (Interfejs Uzytkownika)
+    //
+    // ZMIANY:
+    // -----------------------------------
+    // [BOPT-REWORK] Calkowicie przebudowano logike automatycznego strojenia (BOPT).
+    // [BOPT-REWORK] Wprowadzono interaktywny, dwuetapowy cykl testu:
+    //               1. Uzytkownik klika "Przygotuj do Testu" (wysyla 'ga_prepare_and_zero').
+    //               2. Robot zeruje stan i potwierdza gotowosc.
+    //               3. Przycisk zmienia sie na "ROZPOCZNIJ POMIAR".
+    //               4. Uzytkownik wyzwala wlasciwy pomiar (wysyla 'ga_execute...').
+    // [BEZPIECZENSTWO] Po kazdym tescie UI automatycznie wysyla komende
+    //                  'ga_restore_safe_params', aby robot wrocil do stabilnego
+    //                  stanu przed przygotowaniem do nastepnej proby.
+    // [BOPT-REWORK] Zlagodzono blokade UI ('setBoptUiLock'): podczas strojenia
+    //               przelacznik balansu i korekta pionu pozostaja aktywne,
+    //               dajac uzytkownikowi mozliwosc interwencji.
+    // [NOWA OCENA]  Dodano nowy panel do konfiguracji wag dla nowej, wieloskladnikowej
+    //               funkcji oceny fitness. Zmiany sa wysylane do robota przez
+    //               nowe polecenie 'ga_set_fitness_weights'.
+    // [NOWA OCENA]  UI teraz odbiera i wyswietla szczegolowe wyniki kazdej proby
+    //               (kary za kat, oscylacje, wysilek, pozycje oraz bonus za stabilnosc).
+    // [UX]          Poprawiono komunikaty i etykiety przyciskow, aby lepiej
+    //               prowadzic uzytkownika przez nowy proces strojenia.
+    // =======================================================================================
+
     const debouncedSenders = {};
-    let isMappingButton = false, actionToMap = null, lastBestBoptParams = null, loggedData = [];
-    const CUSTOM_PRESET_PREFIX = 'lqr_custom_preset_v42.6_';
-    let bleDevice, rxCharacteristic, txCharacteristic;
-    const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b", RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9", TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
-    let bleBuffer = '';
-    let isBoptRunning = false, bayesianOptimizer, resolveTestResultPromise, currentBoptParams = null;
-    let boptIterationCounter = 0, boptTotalIterations = 0;
-    let bestFitnessSoFar = 0.0, bestParamsSoFar = null;
-    const joystickCanvas = document.getElementById('joystickCanvas'), joystickCtx = joystickCanvas.getContext('2d');
-    let joystickCenter, joystickRadius, knobRadius, isDragging = false;
-    let lastJoystickSendTime = 0; const JOYSTICK_SEND_INTERVAL = 25;
-    let gamepadIndex = null, lastGamepadState = [], lastGamepadAxes = { x: 0, y: 0 };
-    let gamepadMappings = {}; const GAMEPAD_MAPPING_KEY = 'lqr_gamepad_mappings_v42'; const GAMEPAD_AXIS_THRESHOLD = 0.15;
-    let isSequenceRunning = false, currentSequenceStep = 0; const MAX_SEQUENCE_STEPS = 10;
-    let lastKnownRobotState = 'IDLE';
-
-    const availableActions = {
-        'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' },
-        'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' },
-        'toggle_speed_mode': { label: 'Wlacz/Wylacz Tryb Predkosci', elementId: 'speedModeSwitch' },
-        'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyStopBtn' },
-        'reset_zero': { label: 'Resetuj Osie (Pion)', elementId: 'resetZeroBtn' },
-        'trim_plus': { label: 'Korekta Pionu (+)', elementId: 'trimPlusBtn' },
-        'trim_minus': { label: 'Korekta Pionu (-)', elementId: 'trimMinusBtn' },
-        'bopt_run_test': { label: 'Uruchom Test BOPT', elementId: 'boptRunTestBtn' }
-    };
-    
-    const availableTelemetry = {
-        'pitch': { label: 'Pitch (Kat)', color: '#61dafb' },
-        'target_angle': { label: 'Zadany Kat', color: '#a2f279' },
-        'speed': { label: 'Predkosc', color: '#f7b731' },
-        'speed_setpoint': { label: 'Zadana Predkosc', color: '#ff6347' },
-        'lqr_output': { label: 'LQR Wyjscie', color: '#ff9ff3' },
-    };
-
-    const builtInPresetsData = {
-        '1': { name: "1. Agresywny / Sztywny", params: { q1Angle: 450, q2AngularVel: 20, q3Position: 1, q4Velocity: 1, rControl: 0.01, lqrOutputScalar: 25.0 }},
-        '2': { name: "2. Zbalansowany (Startowy)", params: { q1Angle: 100, q2AngularVel: 10, q3Position: 1, q4Velocity: 5, rControl: 0.1, lqrOutputScalar: 20.0 }},
-        '3': { name: "3. Plynny / Miekki", params: { q1Angle: 50, q2AngularVel: 5, q3Position: 2, q4Velocity: 10, rControl: 0.5, lqrOutputScalar: 18.0 }},
-    };
+    let isMappingButton = false;
+    let actionToMap = null;
+    let lastBestBoptParams = null; 
+    let loggedData = [];
 
     document.addEventListener('DOMContentLoaded', () => {
         initJoystick();
@@ -592,6 +629,65 @@
             if (content) { content.style.maxHeight = content.scrollHeight + "px"; }
         });
     });
+
+    const CUSTOM_PRESET_PREFIX = 'lqr_custom_preset_v42.6_';
+    let bleDevice, rxCharacteristic, txCharacteristic;
+    const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+    const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
+    const TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+    
+    let bleBuffer = '';
+    
+    // [BOPT-REWORK] Nowa logika stanu dla BOPT
+    let isBoptRunning = false;
+    let boptState = 'idle'; // 'idle', 'preparing', 'awaiting_trigger', 'testing'
+    let bayesianOptimizer;
+    let resolveTestResultPromise;
+    let currentBoptParams = null;
+    let boptIterationCounter = 0;
+    let boptTotalIterations = 0;
+
+    const joystickCanvas = document.getElementById('joystickCanvas');
+    const joystickCtx = joystickCanvas.getContext('2d');
+    let joystickCenter, joystickRadius, knobRadius, isDragging = false;
+    let lastJoystickSendTime = 0;
+    const JOYSTICK_SEND_INTERVAL = 25;
+    let gamepadIndex = null;
+    let lastGamepadState = [];
+    let lastGamepadAxes = { x: 0, y: 0 };
+    let gamepadMappings = {};
+    const GAMEPAD_MAPPING_KEY = 'lqr_gamepad_mappings_v42';
+    const GAMEPAD_AXIS_THRESHOLD = 0.15;
+    
+    let isSequenceRunning = false;
+    let currentSequenceStep = 0;
+    const MAX_SEQUENCE_STEPS = 10;
+    let lastKnownRobotState = 'IDLE';
+
+    const availableActions = {
+        'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' },
+        'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' },
+        'toggle_speed_mode': { label: 'Wlacz/Wylacz Tryb Predkosci', elementId: 'speedModeSwitch' },
+        'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyStopBtn' },
+        'reset_zero': { label: 'Resetuj Osie (Pion)', elementId: 'resetZeroBtn' },
+        'trim_plus': { label: 'Korekta Pionu (+)', elementId: 'trimPlusBtn' },
+        'trim_minus': { label: 'Korekta Pionu (-)', elementId: 'trimMinusBtn' },
+        'bopt_run_test': { label: 'Uruchom Test BOPT', elementId: 'boptTriggerTestBtn' }
+    };
+    
+    const availableTelemetry = {
+        'pitch': { label: 'Pitch (Kat)', color: '#61dafb' },
+        'target_angle': { label: 'Zadany Kat', color: '#a2f279' },
+        'speed': { label: 'Predkosc', color: '#f7b731' },
+        'speed_setpoint': { label: 'Zadana Predkosc', color: '#ff6347' },
+        'lqr_output': { label: 'LQR Wyjscie', color: '#ff9ff3' },
+    };
+
+    const builtInPresetsData = {
+        '1': { name: "1. Agresywny / Sztywny", params: { q1Angle: 450, q2AngularVel: 20, q3Position: 1, q4Velocity: 1, rControl: 0.01, lqrOutputScalar: 25.0 }},
+        '2': { name: "2. Zbalansowany (Startowy)", params: { q1Angle: 100, q2AngularVel: 10, q3Position: 1, q4Velocity: 5, rControl: 0.1, lqrOutputScalar: 20.0 }},
+        '3': { name: "3. Plynny / Miekki", params: { q1Angle: 50, q2AngularVel: 5, q3Position: 2, q4Velocity: 10, rControl: 0.5, lqrOutputScalar: 18.0 }},
+    };
 
     function initJoystick() { const wrapper = document.getElementById('joystickWrapper'); const size = wrapper.clientWidth; joystickCanvas.width = size; joystickCanvas.height = size; joystickCenter = { x: size / 2, y: size / 2 }; joystickRadius = size / 2 * 0.75; knobRadius = size / 2 * 0.25; drawJoystick(joystickCenter.x, joystickCenter.y); }
     function drawJoystick(x, y) { joystickCtx.clearRect(0, 0, joystickCanvas.width, joystickCanvas.height); joystickCtx.beginPath(); joystickCtx.arc(joystickCenter.x, joystickCenter.y, joystickRadius, 0, 2 * Math.PI); joystickCtx.fillStyle = 'rgba(255, 255, 255, 0.1)'; joystickCtx.fill(); joystickCtx.beginPath(); joystickCtx.arc(x, y, knobRadius, 0, 2 * Math.PI); joystickCtx.fillStyle = '#61dafb'; joystickCtx.fill(); }
@@ -634,6 +730,54 @@
     }
     
     async function sendBleMessage(message) { if (!rxCharacteristic) { return; } try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
+    
+    function processCompleteMessage(data) {
+        let previousRobotState = lastKnownRobotState;
+        if (data.type === 'telemetry' && data.robot_state) {
+            lastKnownRobotState = data.robot_state;
+        }
+
+        switch (data.type) {
+            case 'telemetry': updateTelemetryUI(data); updateChart(data); checkAndExecuteNextSequenceStep(previousRobotState); break;
+            case 'full_config': applyFullConfig(data); addLogMessage("[UI] Konfiguracja zsynchronizowana z robotem.", "info"); break;
+            case 'log': addLogMessage(`[ROBOT] ${data.message}`, data.level); break;
+            case 'logging_data_point': if (loggedData) loggedData.push(data.d); break;
+            case 'logging_finished': handleLoggingFinished(data.points_collected); break;
+            case 'ga_result': 
+                if (isBoptRunning) {
+                    updateBoptLastResultUI(data);
+                    if (resolveTestResultPromise) resolveTestResultPromise(data);
+                }
+                break;
+            case 'drive_test_result': if (resolveTestResultPromise) { resolveTestResultPromise(data); } break; 
+            case 'bopt_ack': 
+                if (isBoptRunning && data.status === 'ready_for_trigger') {
+                    boptState = 'awaiting_trigger';
+                    const triggerBtn = document.getElementById('boptTriggerTestBtn');
+                    triggerBtn.textContent = 'ROZPOCZNIJ POMIAR';
+                    triggerBtn.disabled = false;
+                    document.getElementById('bopt-trigger-info').textContent = 'Robot jest gotowy. Wcisnij przycisk, aby rozpoczac pomiar.';
+                    addLogMessage('[UI] Robot potwierdzil gotowosc do pomiaru.', 'info');
+                }
+                break;
+            case 'single_pwm_result':
+                const p = data.params;
+                const inputId = `minPwm${p.motor.charAt(0).toUpperCase() + p.motor.slice(1)}${p.direction.charAt(0).toUpperCase() + p.direction.slice(1)}Input`;
+                const inputField = document.getElementById(inputId);
+                if (inputField) {
+                    const tuneRow = inputField.closest('.manual-tune-row');
+                    inputField.value = p.value;
+                    addLogMessage(`[UI] Auto-strojenie dla ${p.motor} ${p.direction} zakonczone. Wynik: ${p.value}`, 'success');
+                    debouncedSenders['set_min_pwm']();
+                    if(tuneRow){
+                        const autoBtn = tuneRow.querySelector('.auto-btn');
+                        autoBtn.disabled = false;
+                        autoBtn.textContent = 'Auto';
+                    }
+                }
+                break;
+        }
+    }
     
     function applyFullConfig(data) {
         const params = data.params || data; 
@@ -679,6 +823,17 @@
         }
     }
 
+    // [BOPT-REWORK] Nowa funkcja do wyswietlania szczegolowych wynikow
+    function updateBoptLastResultUI(data) {
+        document.getElementById('boptLastFitnessDetail').textContent = data.fitness !== undefined ? data.fitness.toFixed(4) : '-.----';
+        document.getElementById('boptLastAnglePenalty').textContent = data.p_angle !== undefined ? data.p_angle.toExponential(2) : '-.--';
+        document.getElementById('boptLastVelocityPenalty').textContent = data.p_vel !== undefined ? data.p_vel.toExponential(2) : '-.--';
+        document.getElementById('boptLastEffortPenalty').textContent = data.p_effort !== undefined ? data.p_effort.toExponential(2) : '-.--';
+        document.getElementById('boptLastPositionPenalty').textContent = data.p_pos !== undefined ? data.p_pos.toExponential(2) : '-.--';
+        document.getElementById('boptLastBonus').textContent = data.b_stable !== undefined ? data.b_stable.toFixed(1) : '-.--';
+    }
+
+
     const telemetryChart = new Chart(document.getElementById('telemetryChart'), { type: 'line', data: { labels: Array(100).fill(''), datasets: [] }, options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { type: 'linear', display: true, position: 'left', ticks: { color: '#61dafb' }, title: { display: true, text: 'Wartosc', color: '#61dafb' } }, y1: { type: 'linear', display: true, position: 'right', ticks: { color: '#a2f279' }, title: { display: true, text: 'Sila / Wyjscie', color: '#a2f279' }, grid: { drawOnChartArea: false }, } }, plugins: { legend: { labels: { color: '#fff' } } } } });
     function updateChart(data) { const chartData = telemetryChart.data; if (chartData.labels.length >= 100) chartData.labels.shift(); chartData.labels.push(''); for (const [key, value] of Object.entries(data)) { if (availableTelemetry[key] && value !== undefined) { let dataset = chartData.datasets.find(ds => ds.label === availableTelemetry[key].label); if (!dataset) continue; if (dataset.data.length >= 100) dataset.data.shift(); dataset.data.push(value); } } chartData.datasets.forEach(ds => { if (ds.data.length < chartData.labels.length) { if (ds.data.length >= 100) ds.data.shift(); ds.data.push(null); } }); telemetryChart.update('none'); }
     function setupChartControls() { const container = document.getElementById('chartControls'); container.innerHTML = ''; Object.keys(availableTelemetry).forEach((key) => { const label = document.createElement('label'), checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.value = key; checkbox.checked = (key === 'pitch' || key === 'target_angle'); checkbox.addEventListener('change', (e) => { const varName = e.target.value; if (e.target.checked) { const chartData = telemetryChart.data; if (!chartData.datasets.find(ds => ds.label === availableTelemetry[varName].label)) { const axisId = (varName.includes('output') || varName.includes('out')) ? 'y1' : 'y'; chartData.datasets.push({ label: availableTelemetry[varName].label, data: Array(chartData.labels.length).fill(null), borderColor: availableTelemetry[varName].color, fill: false, tension: 0.1, pointRadius: 0, yAxisID: axisId }); } } else { const chartData = telemetryChart.data; const datasetIndex = chartData.datasets.findIndex(ds => ds.label === availableTelemetry[varName].label); if (datasetIndex > -1) { chartData.datasets.splice(datasetIndex, 1); } } telemetryChart.update(); }); label.appendChild(checkbox); label.append(` ${availableTelemetry[key].label}`); container.appendChild(label); if (checkbox.checked) { checkbox.dispatchEvent(new Event('change')); } }); }
@@ -710,6 +865,18 @@
         const parameterMapping = { 'q1AngleInput': 'q1_angle', 'q2AngularVelInput': 'q2_angular_vel', 'q3PositionInput': 'q3_position', 'q4VelocityInput': 'q4_velocity', 'rControlInput': 'r_control', 'lqrOutputScalarInput': 'lqr_output_scalar', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickOutputScaleInput': 'joystick_output_scale', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'positionErrorGainInput': 'position_error_gain', 'positionDampingGainInput': 'position_d_gain', 'speedPGainInput': 'speed_p_gain', 'maxSpeedFromPosInput': 'max_speed_from_pos', 'holdPositionMarginPulsesInput': 'hold_position_margin_pulses', 'headingCorrectionFactorInput': 'heading_correction_factor', 'rotationPGainInput': 'rotation_p_gain', 'rollCorrectionGainInput': 'roll_correction_gain', 'wheelDiameterCmInput': 'wheel_diameter_cm', 'trackWidthCmInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd', 'globalPowerLimitInput': 'global_power_limit' };
         const configGroups = { 'lqr_update': ['q1AngleInput', 'q2AngularVelInput', 'q3PositionInput', 'q4VelocityInput', 'rControlInput', 'lqrOutputScalarInput'], 'set_joystick_tuning': ['joystickOutputScaleInput', 'expoJoystickInput', 'maxSpeedJoystickInput', 'joystickAngleSensitivityInput', 'turnFactorInput'], 'calibration_update': ['wheelDiameterCmInput', 'trackWidthCmInput', 'encoderPprInput', 'headingCorrectionFactorInput', 'positionErrorGainInput', 'positionDampingGainInput', 'rotationPGainInput', 'speedPGainInput', 'maxSpeedFromPosInput', 'holdPositionMarginPulsesInput', 'globalPowerLimitInput', 'rollCorrectionGainInput'], 'set_min_pwm': ['minPwmLeftFwdInput', 'minPwmLeftBwdInput', 'minPwmRightFwdInput', 'minPwmRightBwdInput'] };
         for (const [type, keys] of Object.entries(configGroups)) { debouncedSenders[type] = debounce(() => { const params = {}; keys.forEach(inputId => { const input = document.getElementById(inputId); if (input) { const snakeKey = parameterMapping[inputId]; if (!snakeKey) { console.error(`Brak mapowania dla parametru o ID: ${inputId}`); return; } let value = parseFloat(input.value); if (snakeKey === 'turn_factor' || snakeKey === 'joystick_output_scale' || snakeKey === 'expo_joystick') value /= 100; if (snakeKey === 'global_power_limit') value = Math.round(value * 1023 / 100); params[snakeKey] = value; } }); sendBleMessage({ type, params }); }, 350); keys.forEach(inputId => { const input = document.getElementById(inputId); if (input && !input.readOnly) input.addEventListener('change', debouncedSenders[type]); }); }
+        
+        // [BOPT-REWORK] Listener dla wag funkcji fitness
+        debouncedSenders['ga_set_fitness_weights'] = debounce(() => {
+            const params = {};
+            document.querySelectorAll('.fitness-weight').forEach(input => {
+                const key = 'w_' + input.id.replace('Input', '').substring(1).toLowerCase();
+                params[key] = parseFloat(input.value);
+            });
+            sendBleMessage({ type: 'ga_set_fitness_weights', params });
+            addLogMessage('[UI] Wyslano nowe wagi funkcji fitness do robota.', 'info');
+        }, 500);
+        document.querySelectorAll('.fitness-weight').forEach(input => input.addEventListener('change', debouncedSenders['ga_set_fitness_weights']));
 
         document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset);
         document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset);
@@ -717,9 +884,8 @@
         document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container, .control-row'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); });
         
         document.getElementById('startBoptBtn').addEventListener('click', startBOPT);
-        document.getElementById('boptRunTestBtn').addEventListener('click', handleRunTestBtnClick);
+        document.getElementById('boptTriggerTestBtn').addEventListener('click', handleBoptTriggerClick);
         document.getElementById('stopBoptBtn').addEventListener('click', () => stopBOPT(true));
-        
         document.getElementById('boptSavePresetBtn').addEventListener('click', saveBoptPreset);
 
         const boptModeBalanceBtn = document.getElementById('boptModeBalance');
@@ -747,7 +913,7 @@
     }
     
     // =========================================================
-    // === POCZATEK BLOKU Z NAPRAWIONA LOGIKA BOPT ===
+    // === POCZATEK BLOKU Z NOWA LOGIKA BOPT (WERSJA REWORK) ===
     // =========================================================
     async function startBOPT() {
         if (!bleDevice) { addLogMessage('Polacz z robotem przed rozpoczeciem optymalizacji.', 'warn'); return; }
@@ -756,8 +922,6 @@
         isBoptRunning = true;
         setBoptUiLock(true);
         lastBestBoptParams = null;
-        bestFitnessSoFar = 0.0;
-        bestParamsSoFar = null;
         document.getElementById('boptSavePresetBtn').disabled = true;
         
         const isBalanceMode = document.getElementById('boptBalanceSettings').style.display === 'block';
@@ -786,90 +950,20 @@
         boptIterationCounter = 0;
         updateBoptProgress(0, boptTotalIterations);
         
+        // Zapisz aktualne parametry jako bezpieczna baze i wyslij wagi fitness
         await sendBleMessage({ type: 'ga_save_safe_params' });
-        await new Promise(r => setTimeout(r, 100));
-        await sendBleMessage({ type: 'reset_zero' });
-        await new Promise(r => setTimeout(r, 100));
+        debouncedSenders['ga_set_fitness_weights']();
+        await new Promise(r => setTimeout(r, 200));
 
-        addLogMessage('[UI] Przygotowywanie pierwszej propozycji parametrow...', 'info');
-        currentBoptParams = await bayesianOptimizer.ask();
-        
-        let paramsText = '';
-        if (isBalanceMode) {
-            paramsText = ` q1: ${currentBoptParams.q1_angle.toFixed(1)}\n q2: ${currentBoptParams.q2_angular_vel.toFixed(1)}\n  r: ${currentBoptParams.r_control.toFixed(3)}\n sc: ${currentBoptParams.lqr_output_scalar.toFixed(2)}`;
-            if(currentBoptParams.q3_position !== undefined) paramsText += `\n q3: ${currentBoptParams.q3_position.toFixed(1)}`;
-            if(currentBoptParams.q4_velocity !== undefined) paramsText += `\n q4: ${currentBoptParams.q4_velocity.toFixed(1)}`;
-        } else {
-            paramsText = ` pos_p: ${currentBoptParams.position_error_gain.toFixed(3)}\n pos_d: ${currentBoptParams.position_d_gain.toFixed(3)}\n spd_p: ${currentBoptParams.speed_p_gain.toFixed(4)}`;
-        }
-        document.getElementById('bopt-current-params-display').textContent = paramsText;
-        document.getElementById('boptRunTestBtn').disabled = false;
-        addLogMessage('[UI] Gotowe. Wcisnij "Uruchom Test", aby rozpoczac pierwsza probe.', 'info');
+        await prepareForNextBoptIteration();
     }
 
-    async function handleRunTestBtnClick() {
-        if (!isBoptRunning || !currentBoptParams) return;
-
-        document.getElementById('boptRunTestBtn').disabled = true;
-        addLogMessage(`[UI] Uruchamianie testu dla iteracji ${boptIterationCounter + 1}...`, 'info');
-
-        await sendBleMessage({ type: 'balance_toggle', enabled: true });
-        await new Promise(r => setTimeout(r, 200)); 
-
-        const isBalanceMode = document.getElementById('boptBalanceSettings').style.display === 'block';
-        let testCommand;
-        
-        if (isBalanceMode) {
-            await sendBleMessage({ type: 'lqr_update', params: currentBoptParams });
-            const useImpulse = document.getElementById('boptUseImpulseTest').checked;
-            testCommand = useImpulse ? {type: 'ga_execute_impulse_and_measure'} : {type: 'ga_run_static_stability_test'};
-            await sendBleMessage({ type: 'ga_set_impulse', power: parseFloat(document.getElementById('boptImpulsePowerInput').value) });
-        } else {
-            await sendBleMessage({ type: 'calibration_update', params: currentBoptParams });
-            const distance = parseFloat(document.getElementById('boptDriveDistanceInput').value);
-            testCommand = { type: 'run_drive_test', distance_cm: distance };
-        }
-
-        await new Promise(r => setTimeout(r, 100));
-        await sendBleMessage(testCommand);
-
-        const resultPromise = new Promise(resolve => { resolveTestResultPromise = resolve; });
-        const result = await resultPromise; 
-
-        if (!isBoptRunning || !result) {
-            addLogMessage('[UI] Test przerwany lub anulowany.', 'warn');
-            if(isBoptRunning) {
-                document.getElementById('bopt-current-params-display').textContent = 'Przerwano. Czekam na polecenie...';
-            }
-            return;
-        }
-
-        addLogMessage(`[UI] Otrzymano wynik (fitness): ${result.fitness.toFixed(4)}. Powrot do bazy...`, 'info');
-        document.getElementById('bopt-current-params-display').textContent = 'Powrot do bazy...';
-
-        await bayesianOptimizer.tell(currentBoptParams, result.fitness);
-        
-        boptIterationCounter++;
-
-        if (result.fitness > bestFitnessSoFar) {
-            bestFitnessSoFar = result.fitness;
-            const best = await bayesianOptimizer.getBest();
-            bestParamsSoFar = best.params;
-            addLogMessage(`[UI] Nowy najlepszy wynik: ${bestFitnessSoFar.toFixed(4)}`, 'success');
-        }
-
-        updateBoptProgress(boptIterationCounter, boptTotalIterations, bestFitnessSoFar, bestParamsSoFar);
-        
-        if (boptIterationCounter >= boptTotalIterations) {
-            addLogMessage('[UI] Optymalizacja zakonczona!', 'success');
-            stopBOPT(false);
-            return;
-        }
-        
-        addLogMessage('[UI] Przygotowywanie kolejnej propozycji parametrow...', 'info');
+    async function prepareForNextBoptIteration() {
+        addLogMessage('[UI] Przygotowywanie propozycji parametrow...', 'info');
         currentBoptParams = await bayesianOptimizer.ask();
-
+        
         let paramsText = '';
+        const isBalanceMode = document.getElementById('boptBalanceSettings').style.display === 'block';
         if (isBalanceMode) {
             paramsText = ` q1: ${currentBoptParams.q1_angle.toFixed(1)}\n q2: ${currentBoptParams.q2_angular_vel.toFixed(1)}\n  r: ${currentBoptParams.r_control.toFixed(3)}\n sc: ${currentBoptParams.lqr_output_scalar.toFixed(2)}`;
             if(currentBoptParams.q3_position !== undefined) paramsText += `\n q3: ${currentBoptParams.q3_position.toFixed(1)}`;
@@ -878,43 +972,135 @@
             paramsText = ` pos_p: ${currentBoptParams.position_error_gain.toFixed(3)}\n pos_d: ${currentBoptParams.position_d_gain.toFixed(3)}\n spd_p: ${currentBoptParams.speed_p_gain.toFixed(4)}`;
         }
         document.getElementById('bopt-current-params-display').textContent = paramsText;
+        
+        boptState = 'preparing';
+        const triggerBtn = document.getElementById('boptTriggerTestBtn');
+        triggerBtn.disabled = false;
+        triggerBtn.textContent = 'Przygotuj do Testu';
+        document.getElementById('bopt-trigger-info').textContent = 'Ustaw robota i wcisnij przycisk, aby wyzerowac jego pozycje.';
+        addLogMessage('[UI] Gotowe. Ustaw robota w pozycji startowej.', 'info');
+    }
+
+    async function handleBoptTriggerClick() {
+        if (!isBoptRunning || !currentBoptParams) return;
+
+        const triggerBtn = document.getElementById('boptTriggerTestBtn');
+        const triggerInfo = document.getElementById('bopt-trigger-info');
+
+        if (boptState === 'preparing') {
+            triggerBtn.disabled = true;
+            triggerBtn.textContent = 'Czekam na potwierdzenie...';
+            triggerInfo.textContent = 'Robot zeruje swoj stan...';
+            addLogMessage(`[UI] Wysylanie polecenia przygotowania do testu (iteracja ${boptIterationCounter + 1})...`, 'info');
+            await sendBleMessage({ type: 'ga_prepare_and_zero' });
+            // Czekamy na bopt_ack, ktory zmieni stan na 'awaiting_trigger'
+        }
+        else if (boptState === 'awaiting_trigger') {
+            triggerBtn.disabled = true;
+            triggerBtn.textContent = 'Test w toku...';
+            triggerInfo.textContent = '';
+            boptState = 'testing';
+
+            addLogMessage(`[UI] Uruchamianie pomiaru dla iteracji ${boptIterationCounter + 1}...`, 'info');
+            await sendBleMessage({ type: 'balance_toggle', enabled: true });
+            await new Promise(r => setTimeout(r, 200)); 
+
+            const isBalanceMode = document.getElementById('boptBalanceSettings').style.display === 'block';
+            let testCommand;
+            
+            if (isBalanceMode) {
+                await sendBleMessage({ type: 'lqr_update', params: currentBoptParams });
+                const useImpulse = document.getElementById('boptUseImpulseTest').checked;
+                testCommand = useImpulse ? {type: 'ga_execute_impulse_and_measure'} : {type: 'ga_run_static_stability_test'};
+                await sendBleMessage({ type: 'ga_set_impulse', power: parseFloat(document.getElementById('boptImpulsePowerInput').value) });
+            } else {
+                await sendBleMessage({ type: 'calibration_update', params: currentBoptParams });
+                const distance = parseFloat(document.getElementById('boptDriveDistanceInput').value);
+                testCommand = { type: 'run_drive_test', distance_cm: distance };
+            }
+
+            await new Promise(r => setTimeout(r, 100));
+            await sendBleMessage(testCommand);
+
+            const resultPromise = new Promise(resolve => { resolveTestResultPromise = resolve; });
+            const result = await resultPromise; 
+
+            if (!isBoptRunning || !result) {
+                addLogMessage('[UI] Test przerwany lub anulowany.', 'warn');
+                return;
+            }
+
+            addLogMessage(`[UI] Otrzymano wynik (fitness): ${result.fitness.toFixed(4)}`, 'info');
+            await bayesianOptimizer.tell(currentBoptParams, result.fitness);
+            
+            const best = await bayesianOptimizer.getBest();
+            
+            boptIterationCounter++;
+            updateBoptProgress(boptIterationCounter, boptTotalIterations, best.value, best.params);
+            
+            // KLUCZOWY KROK: Przywroc bezpieczne parametry PRZED nastepna proba
+            addLogMessage('[UI] Pomiar zakonczony. Przywracanie bezpiecznych parametrow...', 'info');
+            await sendBleMessage({ type: 'ga_restore_safe_params' });
+            await new Promise(r => setTimeout(r, 200));
+
+            if (boptIterationCounter >= boptTotalIterations) {
+                addLogMessage('[UI] Optymalizacja zakonczona!', 'success');
+                stopBOPT(false);
+                return;
+            }
+
+            await prepareForNextBoptIteration();
+        }
     }
     
     async function stopBOPT(sendCmd) {
         if (!isBoptRunning) return;
         isBoptRunning = false;
+        boptState = 'idle';
         if(resolveTestResultPromise) resolveTestResultPromise(null);
         setBoptUiLock(false);
-        document.getElementById('boptRunTestBtn').disabled = true;
+        document.getElementById('boptTriggerTestBtn').disabled = true;
+        document.getElementById('boptTriggerTestBtn').textContent = 'Uruchom Test';
         document.getElementById('bopt-current-params-display').textContent = 'Anulowano.';
+        document.getElementById('bopt-trigger-info').textContent = '';
 
         if (sendCmd) {
             addLogMessage('[UI] Zatrzymywanie optymalizacji i przywracanie stanu...', 'info');
-            await sendBleMessage({ type: 'balance_toggle', enabled: false });
-            await new Promise(r => setTimeout(r, 100));
             await sendBleMessage({ type: 'ga_restore_safe_params' });
             await new Promise(r => setTimeout(r, 100));
             await sendBleMessage({ type: 'command_stop' });
             await new Promise(r => setTimeout(r, 100));
-            await sendBleMessage({ type: 'load_from_eeprom' });
+            // Nie ladujemy z EEPROM, zeby nie nadpisac dobrych ustawien
         }
     }
 
+    // [BOPT-REWORK] Zlagodzona blokada UI
     function setBoptUiLock(isLocked) {
+        // Kontrolki, ktore ZAWSZE musza byc dostepne
+        const SAFE_DURING_BOPT_IDS = [
+            'connectBleBtn', 'emergencyStopBtn', 'stopBoptBtn',
+            'balanceSwitch', 'trimPlusBtn', 'trimMinusBtn',
+            'trimRollPlusBtn', 'trimRollMinusBtn'
+        ];
+        
         document.querySelectorAll('button, input, select').forEach(el => {
-            const parentCard = el.closest('.card');
-            if (parentCard && parentCard.contains(document.getElementById('startBoptBtn'))) {
-                if (el.id !== 'stopBoptBtn' && el.id !== 'boptRunTestBtn') el.disabled = isLocked;
+            if (SAFE_DURING_BOPT_IDS.includes(el.id)) {
+                return; // Pomin te kontrolki, zostaw je aktywne
+            }
+            
+            // Specjalna obsluga glownego przycisku testowego
+            if (el.id === 'boptTriggerTestBtn') {
+                el.disabled = !isLocked;
             } else {
-                if (el.id !== 'emergencyStopBtn' && el.id !== 'connectBleBtn') {
-                    el.disabled = isLocked;
-                }
+                el.disabled = isLocked;
             }
         });
+        
         document.getElementById('startBoptBtn').disabled = isLocked;
         document.getElementById('stopBoptBtn').disabled = !isLocked;
         document.getElementById('connectBleBtn').disabled = isLocked || !!bleDevice;
     }
+
 
     async function saveBoptPreset() {
         if (!lastBestBoptParams) { addLogMessage('Brak danych do zapisu.', 'warn'); return; }
@@ -935,6 +1121,10 @@
         }
     }
     
+    // =========================================================
+    // === KONIEC BLOKU Z NOWA LOGIKA BOPT (WERSJA REWORK) ===
+    // =========================================================
+
     let loggingInterval;
     function startLogging() {
         const durationS = parseInt(document.getElementById('loggingTimeInput').value);
@@ -1018,6 +1208,7 @@
     function flashElement(element) { if (!element) return; const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element; target.classList.add('gamepad-flash'); setTimeout(() => target.classList.remove('gamepad-flash'), 300); }
     function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
     function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
+
 </script>
 
 </body>
