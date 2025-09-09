@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot LQR - Panel Sterowania v43.8 (MODULAR-TUNE-FINAL)</title>
+    <title>Robot LQR - Panel Sterowania v43.9 (UI-FIX)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -564,28 +564,16 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 43.8-MODULAR-TUNE-FINAL (Interfejs Uzytkownika)
+    // WERSJA 43.9-UI-FIX (Interfejs Uzytkownika)
     //
     // ZMIANY:
     // -----------------------------------
-    // [MODULAR-TUNE] Calkowicie przebudowano sekcje optymalizacji. Wprowadzono
-    //                trzy niezalezne tryby strojenia, zgodne z nowa logika robota:
-    //                1. Strojenie Balansu Statycznego (Q1, Q2, R).
-    //                2. Strojenie Reakcji na Zaklocenia (Q3, Q4).
-    //                3. Strojenie Jazdy Autonomicznej (kaskada P/D).
-    // [HILL-CLIMB]   Zastapiono biblioteke 'bayes-optimizer' (ktora byla de facto
-    //                losowym zgadywaniem) nowym, niestandardowym "Inteligentnym
-    //                Asystentem Strojenia". Implementuje on algorytm wspinaczkowy
-    //                (hill climbing) z losowymi restartami, ktory iteracyjnie
-    //                ulepsza parametry, zamiast losowo ich szukac.
-    // [WORKFLOW]     Dodano przycisk "Uruchom 5 Prob" do pol-automatyzacji procesu.
-    //                Zachowano przycisk "Uruchom Test" do pelnej manualnej kontroli.
-    //                Proces mozna pauzowac, testowac znalezione parametry manualnie,
-    //                a nastepnie wznawiac strojenie od ostatniego punktu.
-    // [UI-FIX]       Interfejs dynamicznie pokazuje tylko te opcje i parametry,
-    //                ktore sa relevantne dla aktualnie wybranego trybu strojenia.
-    // [STATE-FIX]    Naprawiono krytyczny blad w zarzadzaniu stanem Asystenta,
-    //                ktory powodowal ciagle powtarzanie tej samej, pierwszej proby.
+    // [UI-FIX] Naprawiono krytyczny blad skladniowy (brakujacy przecinek) w obiekcie
+    //          TuningAssistant, ktory uniemozliwial wczytanie wiekszosci skryptow
+    //          i blokowal dzialanie interfejsu (przyciski, akordeony).
+    // [STATE-FIX] Usprawniono logike zarzadzania stanem w Asystencie Strojenia, aby
+    //             zapewnic poprawne, sekwencyjne dzialanie prob i uniknac problemu
+    //             "utkniecia" na pierwszej iteracji.
     // =======================================================================================
 
     const debouncedSenders = {};
@@ -622,7 +610,6 @@
     
     let bleBuffer = '';
     
-    // Zmienne do obslugi timeoutu
     let tuningAckTimeout = null;
     let tuningAckRetries = 0;
     const TUNING_MAX_RETRIES = 3;
@@ -735,7 +722,7 @@
                     clearTimeout(tuningAckTimeout);
                     tuningAckTimeout = null;
                     tuningAckRetries = 0;
-                    TuningAssistant.onReadyForTest(TuningAssistant.isBaseTest);
+                    TuningAssistant.onReadyForTest();
                 }
                 break;
             case 'single_pwm_result':
@@ -981,7 +968,6 @@
             const s = this.state[this.activeMode];
             if (!s.sessionActive) {
                 await this.startNewSession();
-                // startNewSession konczy sie stop(false), wiec musimy wyjsc
                 return;
             }
             
@@ -999,7 +985,7 @@
 
         async runTestLoop(count) {
             if (this.isLooping || this.isRunning) {
-                this.isLooping = false; // Pozwala uzyc jako przycisk stop
+                this.isLooping = false;
                 return;
             }
             this.isLooping = true;
@@ -1082,8 +1068,8 @@
             Object.keys(fullCascadeParamsFromUI).forEach(k => cascadeParamsToSend[k] = fullCascadeParamsFromUI[k]);
             
             for (const key in params) {
-                if (paramDefs[key].type === 'lqr') lqrParamsToSend[key] = params[key];
-                if (paramDefs[key].type === 'cascade') cascadeParamsToSend[key] = params[key];
+                if (paramDefs[key]?.type === 'lqr') lqrParamsToSend[key] = params[key];
+                if (paramDefs[key]?.type === 'cascade') cascadeParamsToSend[key] = params[key];
             }
             
             const lqrMsg = { type: 'lqr_update', params: {
@@ -1141,9 +1127,9 @@
             const result = await resultPromise;
             this.processResult(result);
         },
-
+        
         processResult(result) {
-            if (!this.isRunning && !this.isBaseTest) return; // Zapobiegaj przetwarzaniu jesli zatrzymano
+            if (!this.isRunning) return;
             
             const s = this.state[this.activeMode];
             updateTuningLastResultUI(result);
@@ -1218,9 +1204,14 @@
                 };
                 const presetData = { ...fullParamsFromUI, ...s.bestParams };
                 const presetDataForSave = {};
+                
+                const allParamDefs = {...this.tuningModes.balance.params, ...this.tuningModes.impulse.params, ...this.tuningModes.drive.params};
                 Object.keys(presetData).forEach(key => {
-                    const id = this.tuningModes.balance.params[key]?.id || this.tuningModes.impulse.params[key]?.id || this.tuningModes.drive.params[key]?.id || null;
-                    if(id) presetDataForSave[id.replace('Input','')] = presetData[key];
+                    const id = allParamDefs[key]?.id;
+                    if(id) {
+                         const presetKey = id.replace('Input', '');
+                         presetDataForSave[presetKey] = presetData[key];
+                    }
                 });
 
                 localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetDataForSave));
