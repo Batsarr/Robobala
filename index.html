@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v45.2</title>
+    <title>Robot PID - Panel Sterowania v46.0</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
-        h1 { color: #61dafb; font-size: 1.8em; }
+        .main-container { display: flex; flex-direction: column; align-items: center; gap: 15px; width: 100%; }
+        h1 { color: #61dafb; font-size: 1.8em; margin-bottom: 15px; }
+        .card { background-color: #3a3f47; border-radius: 8px; padding: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); width: 100%; max-width: 700px; box-sizing: border-box; }
         h2 { color: #61dafb; font-size: 1.4em; margin-top: 0; margin-bottom: 15px; }
-        .main-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 15px; align-items: start; max-width: 1920px; margin: auto; }
-        .card { background-color: #3a3f47; border-radius: 8px; padding: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
         .info-grid, .status-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px; text-align: left; font-size: 1em; margin-top: 10px; align-items: center;}
         .info-grid strong, .status-grid strong { color: #a2f279; }
         button { background-color: #61dafb; color: #282c34; border: none; padding: 8px 12px; border-radius: 5px; font-weight: bold; cursor: pointer; transition: background-color 0.3s, opacity 0.3s, box-shadow 0.2s; font-size: 0.9em; }
@@ -108,30 +108,11 @@
     </div>
     
     <h1>Robot PID - Panel Sterowania</h1>
-    <div class="main-grid">
-        <div class="card" id="controls-card">
-            <h2>Sterowanie</h2>
-            <div id="joystickWrapper"><canvas id="joystickCanvas"></canvas></div>
-            <div class="control-row"><span class="control-label">Balansowanie</span><label class="switch"><input type="checkbox" id="balanceSwitch"><span class="slider round"></span></label></div>
-            <div class="control-row"><span class="control-label">Trzymaj Pozycje</span><label class="switch"><input type="checkbox" id="holdPositionSwitch"><span class="slider round"></span></label></div>
-            <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
-            <fieldset style="padding: 10px 10px 5px 10px; margin-top:20px;"><legend>Strojenie Joysticka</legend> 
-                <div class="setting-container"><label for="joystickSensitivityInput">Czulosc Globalna (%)</label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickSensitivityInput" min="10" max="100" step="5" value="100"><button>+</button></div></div>
-                <div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)</label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button>+</button></div></div> 
-                <div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button>+</button></div></div> 
-                <div class="setting-container"><label for="joystickAngleSensitivityInput">Czulosc Kata (st.)</label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickAngleSensitivityInput" min="1" max="30" step="0.5" value="10"><button>+</button></div></div> 
-                <div class="setting-container"><label for="turnFactorInput">Czulosc Skretu (%)</label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="turnFactorInput" min="0" max="100" step="5" value="25"><button>+</button></div></div> 
-                <div class="setting-container"><label for="joystickDeadzoneInput">Strefa Martwa (%)</label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickDeadzoneInput" min="0" max="50" step="1" value="0"><button>+</button></div></div>
-            </fieldset>
-            <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
-            <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Resetuj Osie</button>
-            <div class="trim-controls"> <button id="trimMinusBtn">-</button> <span>Korekta Pionu (Pitch)</span> <button id="trimPlusBtn">+</button> </div>
-            <div class="trim-controls"> <button id="trimRollMinusBtn">-</button> <span>Korekta Przechylu (Roll)</span> <button id="trimRollPlusBtn">+</button> </div>
-            <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
-            <button id="emergencyStopBtn">STOP AWARYJNY</button>
-        </div>
+
+    <div class="main-container">
+        <!-- KARTA 1: STEROWANIE I STATUS -->
         <div class="card">
-            <h2>Status Robota</h2>
+            <h2>Sterowanie i Status</h2>
             <button id="connectBleBtn" style="width: 100%; margin-bottom: 15px;">POLACZ Z ROBOTEM</button>
             <div class="status-grid"> 
                 <strong>Polaczenie:</strong> <div><span id="connectionStatus" class="status-indicator status-disconnected"></span> <span id="connectionText">Rozlaczony</span></div>
@@ -139,114 +120,153 @@
                 <strong>Tryb Pracy:</strong> <span id="robotStateVal" style="font-weight:bold; color: #61dafb;">IDLE</span>
             </div>
             <div class="info-grid"> <strong>Kat (Pitch):</strong> <div class="angle-display"><span id="angleVal">0.0 &deg;</span><div class="angle-indicator-wrapper"><div id="angleIndicator" class="angle-indicator-needle"></div></div></div> <strong>Predkosc (imp/s):</strong> <span id="speedVal">0</span> <strong>Zadany Kat:</strong> <span id="targetAngleVal">0.0 &deg;</span> <strong>Wyjscie PID Balansu:</strong> <span id="balancePidOutVal">0</span> <strong>Wyjscie PID Predk.:</strong> <span id="speedPidOutVal">0</span> <strong>Enkoder L:</strong> <span id="encoderLeftVal">0</span> <strong>Enkoder P:</strong> <span id="encoderRightVal">0</span> </div>
+            <hr style="border-color: #4a4f58; margin: 20px 0;">
+            <div id="joystickWrapper"><canvas id="joystickCanvas"></canvas></div>
+            <div class="control-row"><span class="control-label">Balansowanie</span><label class="switch"><input type="checkbox" id="balanceSwitch"><span class="slider round"></span></label></div>
+            <div class="control-row"><span class="control-label">Trzymaj Pozycje</span><label class="switch"><input type="checkbox" id="holdPositionSwitch"><span class="slider round"></span></label></div>
+            <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
+            <button id="emergencyStopBtn">STOP AWARYJNY</button>
         </div>
+
+        <!-- KARTA 2: KONFIGURACJA -->
         <div class="card">
-             <button class="accordion-header active" onclick="toggleAccordion(this)">Sterowanie Autonomiczne</button>
-             <div class="accordion-content active">
-                <fieldset> <legend>Sterowanie Precyzyjne (D-Pad)</legend> <div class="dpad-input-group"><label for="dpadDistInput">Dystans (cm):</label><input type="number" id="dpadDistInput" value="20"></div> <div class="dpad-input-group"><label for="dpadAngleInput">Kat (st.):</label><input type="number" id="dpadAngleInput" value="90"></div> <div class="dpad-container"> <button id="dpad-up" class="dpad-btn" data-dpad="up">&#8593;</button> <button id="dpad-left" class="dpad-btn" data-dpad="left">&#8592;</button> <button id="dpad-stop" class="dpad-btn" data-dpad="stop">&#215;</button> <button id="dpad-right" class="dpad-btn" data-dpad="right">&#8594;</button> <button id="dpad-down" class="dpad-btn" data-dpad="down">&#8595;</button> </div> </fieldset>
-                <fieldset style="margin-top: 15px;"> <legend>Diagnostyka</legend> <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Kalibruj MPU (DMP)</button> </fieldset>
-            </div>
-        </div>
-        <div class="card">
-            <button class="accordion-header active" onclick="toggleAccordion(this)">Wykres Telemetryczny</button>
-            <div class="accordion-content active"> <div id="chart-wrapper"><canvas id="telemetryChart"></canvas></div> <div class="chart-controls" id="chartControls"></div> </div>
-        </div>
-        <div class="card" style="grid-column: span 2;">
             <h2>Konfiguracja</h2>
             <fieldset> <legend>Profile Ustawien PID</legend> <div class="profile-controls"> <select id="pidPresetSelect" style="width: 100%; padding: 5px;"></select> </div> <div class="preset-actions"> <button id="applySelectedPresetBtn">Zastosuj</button> <button id="saveCurrentAsPresetBtn">Zapisz jako Nowy</button> </div> <button id="deleteSelectedPresetBtn" style="width:100%; margin-top: 10px; background-color: #ff6347;">Usun Wybrany Preset</button> </fieldset>
-            <div id="allSettings">
-
-                <button class="accordion-header" onclick="toggleAccordion(this)">1. PID Balansu (Podstawowy)</button>
-                <div class="accordion-content"> 
-                    <div class="setting-container"> <label for="balanceKpInput">Kp - Sila<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKpInput" step="1" value="95"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Sztywnosc utrzymania pionu. Zwieksz dla szybszej reakcji na wychylenie. Zbyt duza wartosc powoduje oscylacje.</div> </div> 
-                    <div class="setting-container"> <label for="balanceKiInput">Ki - Korekta<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKiInput" step="0.01" value="0"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Usuwa dlugotrwaly blad (np. gdy robot dryfuje). Zwiekszaj bardzo ostroznie, czesto nie jest potrzebny.</div> </div> 
-                    <div class="setting-container"> <label for="balanceKdInput">Kd - Tlumienie<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKdInput" step="0.01" value="3.23"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Hamuje oscylacje i uspokaja robota. Przewiduje przyszly blad. Zbyt duza wartosc spowalnia reakcje.</div> </div> 
-                    <div class="setting-container"> <label for="balanceFilterAlphaInput">Filtr Pochodnej (%)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceFilterAlphaInput" min="1" max="100" step="1" value="100"><button>+</button></div> <div class="help-text">Wygladza odczyt pochodnej, redukujac wplyw szumow. 100% = brak filtrowania. Zmniejsz, jesli robot jest nerwowy.</div> </div>
-                </div>
-
-                <button class="accordion-header" onclick="toggleAccordion(this)">2. PID Kaskadowy (Predkosc/Pozycja)</button>
-                <div class="accordion-content">
-                    <div class="parameter-group"><h5>PID Predkosci</h5>
-                        <div class="setting-container"> <label for="speedKpInput">Kp - Reakcja</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKpInput" step="0.01" value="0.05"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="speedKiInput">Ki - Eliminacja bledu</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKiInput" step="0.001" value="0.0"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="speedKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKdInput" step="0.001" value="0.0"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="maxTargetAngleInput">Max. kat z PID Predk. (st.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxTargetAngleInput" step="0.5" value="15.0"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="speedDeadbandInput">Strefa martwa (imp/s)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedDeadbandInput" step="1" value="5"><button>+</button></div> </div>
-                    </div>
-                     <div class="parameter-group"><h5>PID Pozycji</h5>
-                        <div class="setting-container"> <label for="positionKpInput">Kp - Sila powrotu</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionKpInput" step="0.1" value="2.5"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="positionKiInput">Ki - Korekta</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionKiInput" step="0.001" value="0.006"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="positionKdInput">Kd - Hamowanie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionKdInput" step="0.05" value="1.0"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="maxTargetSpeedInput">Max. predkosc z PID Poz. (imp/s)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxTargetSpeedInput" step="50" value="1000"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="positionDeadbandInput">Margines bledu (imp.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionDeadbandInput" step="1" value="15"><button>+</button></div> </div>
-                    </div>
-                </div>
-
-                <button class="accordion-header" onclick="toggleAccordion(this)">3. PID Obrotu i Kursu</button>
-                <div class="accordion-content">
-                    <div class="parameter-group"><h5>PID Obrotu (D-Pad)</h5>
-                        <div class="setting-container"> <label for="rotationKpInput">Kp - Sila obrotu</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationKpInput" step="0.1" value="1.0"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="rotationKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationKdInput" step="0.1" value="1.0"><button>+</button></div> </div>
-                    </div>
-                    <div class="parameter-group"><h5>PID Utrzymania Kursu (podczas jazdy prosto)</h5>
-                        <div class="setting-container"> <label for="headingKpInput">Kp - Sila korekty</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKpInput" step="0.05" value="0.8"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="headingKiInput">Ki - Precyzja</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKiInput" step="0.005" value="0.02"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="headingKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKdInput" step="0.01" value="0.1"><button>+</button></div> </div>
-                    </div>
-                    <div class="parameter-group"><h5>PID Korekty Przechylu (Roll, podczas skretu)</h5>
-                        <div class="setting-container"> <label for="rollKpInput">Kp - Sila</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rollKpInput" step="0.5" value="15.0"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="rollKiInput">Ki - Precyzja</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rollKiInput" step="0.01" value="0.0"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="rollKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rollKdInput" step="0.05" value="0.5"><button>+</button></div> </div>
-                    </div>
-                </div>
-
-                <button class="accordion-header" onclick="toggleAccordion(this)">4. Parametry Sprzetowe i Mechaniczne</button>
-                <div class="accordion-content"> 
-                    <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" step="0.1" value="8.0"><button>+</button></div> </div> 
-                    <div class="setting-container"> <label for="trackWidthInput">Rozstaw kol (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="trackWidthInput" step="0.1" value="13.0"><button>+</button></div> </div> 
-                    <div class="setting-container"> <label for="encoderPprInput">Impulsy na obrot (PPR)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="encoderPprInput" step="10" value="820"><button>+</button></div> </div> 
-                    <hr style="border-color: #4a4f58; margin: 10px 0;">
-                    <div class="setting-container"> <label for="turnToRollTargetInput">Kat przechylu przy skrecie (st.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="turnToRollTargetInput" step="0.1" value="5.0"><button>+</button></div> </div> 
-                    <div class="setting-container"> <label for="balanceDeadbandAngleInput">Strefa martwa balansu (st.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceDeadbandAngleInput" step="0.1" value="0.5"><button>+</button></div> </div>
-                </div>
-
-                <button class="accordion-header" onclick="toggleAccordion(this)">5. Kalibracja PWM Silnikow</button>
-                <div class="accordion-content"> 
-                    <div class="pwm-info"> <strong>Info:</strong> Uzyj przycisku <strong>"Testuj"</strong>, aby sprawdzic recznie wpisana wartosc. <strong>Wazne:</strong> Przed testem podnies robota, aby kola mogly sie swobodnie krecic! </div>
-                    <div class="manual-tune-row" data-motor="left" data-direction="fwd"> <div class="pwm-input-row"> <label>Lewy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div> </div> 
-                    <div class="manual-tune-row" data-motor="left" data-direction="bwd"> <div class="pwm-input-row"> <label>Lewy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div> </div> 
-                    <div class="manual-tune-row" data-motor="right" data-direction="fwd"> <div class="pwm-input-row"> <label>Prawy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div> </div> 
-                    <div class="manual-tune-row" data-motor="right" data-direction="bwd"> <div class="pwm-input-row"> <label>Prawy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div> </div> 
-                    <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKIE SILNIKI</button> 
-                </div>
-
+            
+            <button class="accordion-header active" onclick="toggleAccordion(this)">1. Strojenie Joysticka</button>
+            <div class="accordion-content active">
+                <div class="setting-container"><label for="joystickSensitivityInput">Czulosc Globalna (%)</label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickSensitivityInput" min="10" max="100" step="5" value="100"><button>+</button></div></div>
+                <div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)</label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button>+</button></div></div> 
+                <div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)</label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button>+</button></div></div> 
+                <div class="setting-container"><label for="joystickAngleSensitivityInput">Czulosc Kata (st.)</label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickAngleSensitivityInput" min="1" max="30" step="0.5" value="10"><button>+</button></div></div> 
+                <div class="setting-container"><label for="turnFactorInput">Czulosc Skretu (%)</label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="turnFactorInput" min="0" max="100" step="5" value="25"><button>+</button></div></div> 
+                <div class="setting-container"><label for="joystickDeadzoneInput">Strefa Martwa (%)</label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickDeadzoneInput" min="0" max="50" step="1" value="0"><button>+</button></div></div>
             </div>
-            <div class="button-group" style="display:flex; gap:10px; justify-content:center; margin-top:20px;"> <button id="loadBtn">Wczytaj z Robota</button> <button id="saveBtn">Zapisz na Robocie</button> </div>
+
+            <button class="accordion-header" onclick="toggleAccordion(this)">2. PID Balansu (Podstawowy)</button>
+            <div class="accordion-content"> 
+                <div class="setting-container"> <label for="balanceKpInput">Kp - Sila<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKpInput" step="1" value="95"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Sztywnosc utrzymania pionu. Zwieksz dla szybszej reakcji na wychylenie. Zbyt duza wartosc powoduje oscylacje.</div> </div> 
+                <div class="setting-container"> <label for="balanceKiInput">Ki - Korekta<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKiInput" step="0.01" value="0"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Usuwa dlugotrwaly blad (np. gdy robot dryfuje). Zwiekszaj bardzo ostroznie, czesto nie jest potrzebny.</div> </div> 
+                <div class="setting-container"> <label for="balanceKdInput">Kd - Tlumienie<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKdInput" step="0.01" value="3.23"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Hamuje oscylacje i uspokaja robota. Przewiduje przyszly blad. Zbyt duza wartosc spowalnia reakcje.</div> </div> 
+                <div class="setting-container"> <label for="balanceFilterAlphaInput">Filtr Pochodnej (%)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceFilterAlphaInput" min="1" max="100" step="1" value="100"><button>+</button></div> <div class="help-text">Wygladza odczyt pochodnej, redukujac wplyw szumow. 100% = brak filtrowania. Zmniejsz, jesli robot jest nerwowy.</div> </div>
+            </div>
+
+            <button class="accordion-header" onclick="toggleAccordion(this)">3. PID Kaskadowy (Predkosc/Pozycja)</button>
+            <div class="accordion-content">
+                <div class="parameter-group"><h5>PID Predkosci</h5>
+                    <div class="setting-container"> <label for="speedKpInput">Kp - Reakcja</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKpInput" step="0.01" value="0.05"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="speedKiInput">Ki - Eliminacja bledu</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKiInput" step="0.001" value="0.0"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="speedKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKdInput" step="0.001" value="0.0"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="maxTargetAngleInput">Max. kat z PID Predk. (st.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxTargetAngleInput" step="0.5" value="15.0"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="speedDeadbandInput">Strefa martwa (imp/s)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedDeadbandInput" step="1" value="5"><button>+</button></div> </div>
+                </div>
+                 <div class="parameter-group"><h5>PID Pozycji</h5>
+                    <div class="setting-container"> <label for="positionKpInput">Kp - Sila powrotu</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionKpInput" step="0.1" value="2.5"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="positionKiInput">Ki - Korekta</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionKiInput" step="0.001" value="0.006"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="positionKdInput">Kd - Hamowanie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionKdInput" step="0.05" value="1.0"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="maxTargetSpeedInput">Max. predkosc z PID Poz. (imp/s)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxTargetSpeedInput" step="50" value="1000"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="positionDeadbandInput">Margines bledu (imp.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionDeadbandInput" step="1" value="15"><button>+</button></div> </div>
+                </div>
+            </div>
+
+            <button class="accordion-header" onclick="toggleAccordion(this)">4. PID Obrotu i Kursu</button>
+            <div class="accordion-content">
+                <div class="parameter-group"><h5>PID Obrotu (D-Pad)</h5>
+                    <div class="setting-container"> <label for="rotationKpInput">Kp - Sila obrotu</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationKpInput" step="0.1" value="1.0"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="rotationKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationKdInput" step="0.1" value="1.0"><button>+</button></div> </div>
+                </div>
+                <div class="parameter-group"><h5>PID Utrzymania Kursu (podczas jazdy prosto)</h5>
+                    <div class="setting-container"> <label for="headingKpInput">Kp - Sila korekty</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKpInput" step="0.05" value="0.8"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="headingKiInput">Ki - Precyzja</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKiInput" step="0.005" value="0.02"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="headingKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKdInput" step="0.01" value="0.1"><button>+</button></div> </div>
+                </div>
+                <div class="parameter-group"><h5>PID Korekty Przechylu (Roll, podczas skretu)</h5>
+                    <div class="setting-container"> <label for="rollKpInput">Kp - Sila</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rollKpInput" step="0.5" value="15.0"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="rollKiInput">Ki - Precyzja</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rollKiInput" step="0.01" value="0.0"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="rollKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rollKdInput" step="0.05" value="0.5"><button>+</button></div> </div>
+                </div>
+            </div>
+
+            <button class="accordion-header" onclick="toggleAccordion(this)">5. Parametry Sprzetowe i Mechaniczne</button>
+            <div class="accordion-content"> 
+                <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" step="0.1" value="8.0"><button>+</button></div> </div> 
+                <div class="setting-container"> <label for="trackWidthInput">Rozstaw kol (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="trackWidthInput" step="0.1" value="13.0"><button>+</button></div> </div> 
+                <div class="setting-container"> <label for="encoderPprInput">Impulsy na obrot (PPR)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="encoderPprInput" step="10" value="820"><button>+</button></div> </div> 
+                <hr style="border-color: #4a4f58; margin: 10px 0;">
+                <div class="setting-container"> <label for="turnToRollTargetInput">Kat przechylu przy skrecie (st.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="turnToRollTargetInput" step="0.1" value="5.0"><button>+</button></div> </div> 
+                <div class="setting-container"> <label for="balanceDeadbandAngleInput">Strefa martwa balansu (st.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceDeadbandAngleInput" step="0.1" value="0.5"><button>+</button></div> </div>
+            </div>
+
+            <button class="accordion-header" onclick="toggleAccordion(this)">6. Kalibracja PWM Silnikow</button>
+            <div class="accordion-content"> 
+                <div class="pwm-info"> <strong>Info:</strong> Uzyj przycisku <strong>"Testuj"</strong>, aby sprawdzic recznie wpisana wartosc. <strong>Wazne:</strong> Przed testem podnies robota, aby kola mogly sie swobodnie krecic! </div>
+                <div class="manual-tune-row" data-motor="left" data-direction="fwd"> <div class="pwm-input-row"> <label>Lewy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div> </div> 
+                <div class="manual-tune-row" data-motor="left" data-direction="bwd"> <div class="pwm-input-row"> <label>Lewy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div> </div> 
+                <div class="manual-tune-row" data-motor="right" data-direction="fwd"> <div class="pwm-input-row"> <label>Prawy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div> </div> 
+                <div class="manual-tune-row" data-motor="right" data-direction="bwd"> <div class="pwm-input-row"> <label>Prawy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button></div> </div> 
+                <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKIE SILNIKI</button> 
+            </div>
+            
+            <div class="button-group" style="display:flex; gap:10px; justify-content:center; margin-top:20px;"> 
+                <button id="loadBtn">Wczytaj z Robota</button> 
+                <button id="saveBtn">Zapisz na Robocie</button> 
+            </div>
         </div>
+        
+        <!-- KARTA 3: NARZEDZIA I DIAGNOSTYKA -->
+        <div class="card">
+            <h2>Narzędzia i Diagnostyka</h2>
+            <button class="accordion-header active" onclick="toggleAccordion(this)">Sterowanie Autonomiczne (D-Pad)</button>
+             <div class="accordion-content active">
+                <fieldset> <legend>Sterowanie Precyzyjne</legend> <div class="dpad-input-group"><label for="dpadDistInput">Dystans (cm):</label><input type="number" id="dpadDistInput" value="20"></div> <div class="dpad-input-group"><label for="dpadAngleInput">Kat (st.):</label><input type="number" id="dpadAngleInput" value="90"></div> <div class="dpad-container"> <button id="dpad-up" class="dpad-btn" data-dpad="up">&#8593;</button> <button id="dpad-left" class="dpad-btn" data-dpad="left">&#8592;</button> <button id="dpad-stop" class="dpad-btn" data-dpad="stop">&#215;</button> <button id="dpad-right" class="dpad-btn" data-dpad="right">&#8594;</button> <button id="dpad-down" class="dpad-btn" data-dpad="down">&#8595;</button> </div> </fieldset>
+            </div>
+            <button class="accordion-header" onclick="toggleAccordion(this)">Narzędzia Systemowe</button>
+            <div class="accordion-content">
+                <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731;">Mapowanie Przyciskow Gamepada</button>
+                <button id="resetZeroBtn-tool" style="margin-top:10px; width:100%;">Resetuj Osie</button>
+                <div class="trim-controls"> <button id="trimMinusBtn-tool">-</button> <span>Korekta Pionu (Pitch)</span> <button id="trimPlusBtn-tool">+</button> </div>
+                <div class="trim-controls"> <button id="trimRollMinusBtn-tool">-</button> <span>Korekta Przechylu (Roll)</span> <button id="trimRollPlusBtn-tool">+</button> </div>
+                <button id="resetEncodersBtn-tool" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
+                <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731; margin-top:10px;">Kalibruj MPU (DMP)</button>
+            </div>
+        </div>
+
+        <!-- KARTA 4: WYKRES -->
+        <div class="card">
+            <h2>Wykres Telemetryczny</h2>
+            <div id="chart-wrapper"><canvas id="telemetryChart"></canvas></div>
+            <div class="chart-controls" id="chartControls"></div>
+        </div>
+        
+        <!-- KARTA 5: LOGI -->
         <div class="card" id="log-card">
-            <button class="accordion-header active" onclick="toggleAccordion(this)">Logi Systemowe</button>
-            <div class="accordion-content active"> <div id="log-history"></div> <div style="margin-top: 10px; display: flex; gap: 10px; justify-content: center; align-items: center;"> <button onclick="clearLogs()" style="background-color: #f7b731;">Wyczysc Logi</button> </div> </div>
+            <h2>Logi Systemowe</h2>
+            <div id="log-history"></div>
+            <div style="margin-top: 10px; display: flex; gap: 10px; justify-content: center; align-items: center;">
+                <button onclick="clearLogs()" style="background-color: #f7b731;">Wyczysc Logi</button>
+            </div>
         </div>
     </div>
 
 <script>
     // =======================================================================================
-    // WERSJA 45.2 (UI - PID Final Merge)
+    // WERSJA 46.0 (UI - PID Final)
+    //
+    // OPIS:
+    // Finalna wersja interfejsu uzytkownika, w pelni zintegrowana z dwurdzeniowym
+    // systemem PID (wersja 46.0 oprogramowania).
     //
     // ZMIANY:
-    // -----------------------------------
-    // [MERGE]          Polaczono najlepsze elementy z interfejsu LQR (Strona Web.txt)
-    //                  i PID (P3.txt).
-    // [GAMEPAD-RESTORE] Przywrocono pelna funkcjonalnosc mapowania przyciskow gamepada.
-    // [PID-COMPAT]     Zweryfikowano wszystkie mapowania parametrow (`parameterMapping`),
-    //                  polecenia JSON i dane telemetryczne, aby zapewnic 100%
-    //                  kompatybilnosci z oprogramowaniem PID v45.1.
-    // [CLEANUP]        Usunieto niekompatybilne elementy (np. Asystent Strojenia LQR,
-    //                  przycisk Auto-PWM), ktore nie sa wspierane przez nowe oprogramowanie.
+    // - [LAYOUT] Przebudowano interfejs na czytelny, responsywny uklad jednokolumnowy.
+    // - [PID-COMPAT] Wszystkie panele konfiguracyjne, presety i mapowania JavaScript
+    //   zostaly dostosowane do obslugi nowego zestawu parametrow PID.
+    // - [CLEANUP] Usunieto wszystkie elementy zwiazane z LQR, w tym Asystenta Strojenia.
+    // - [FEATURE-KEEP] Zachowano kluczowe funkcjonalnosci, takie jak mapowanie gamepada,
+    //   sterowanie D-Pad i reczne testowanie PWM.
     // =======================================================================================
 
     const debouncedSenders = {};
-    const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v45_';
+    const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v46_';
     const parameterMapping = {
         'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b',
         'balanceFilterAlphaInput': 'filter_alpha', 'joystickAngleSensitivityInput': 'angle_sensitivity',
@@ -300,7 +320,7 @@
     let lastGamepadState = [];
     let lastGamepadAxes = { x: 0, y: 0 };
     let gamepadMappings = {};
-    const GAMEPAD_MAPPING_KEY = 'pid_gamepad_mappings_v45';
+    const GAMEPAD_MAPPING_KEY = 'pid_gamepad_mappings_v46';
     const GAMEPAD_AXIS_THRESHOLD = 0.15;
     let isMappingButton = false;
     let actionToMap = null;
@@ -334,7 +354,7 @@
     function updateAccordionHeight(content) { if (content && content.style.maxHeight !== '0px') { content.style.maxHeight = content.scrollHeight + 'px'; } }
     async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono! Synchronizacja w toku...', 'success'); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
     function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; }
-    function handleBleNotification(event) { const value = event.target.value; const decoder = new TextDecoder('utf-8'); bleBuffer += decoder.decode(value); let newlineIndex; while ((newlineIndex = bleBuffer.indexOf('\n')) !== -1) { const line = bleBuffer.substring(0, newlineIndex).trim(); bleBuffer = bleBuffer.substring(newlineIndex + 1); if (line) { try { const data = JSON.parse(line); processCompleteMessage(data); } catch (e) { addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error'); } } } }
+    function handleBleNotification(event) { const value = event.target.value; const decoder = new TextDecoder('utf-8'); bleBuffer += decoder.decode(value); let newlineIndex; while ((newlineIndex = bleBuffer.indexOf('\n')) !== -1) { const line = bleBuffer.substring(0, newlineIndex).trim(); bleBuffer = bleBuffer.substring(newlineIndex + 1); if (line) { try { const data = JSON.parse(line); processCompleteMessage(data); } catch (e) { /* Ignoruj bledy parsowania w konsoli, ale nie spamuj UI */ } } } }
     async function sendBleMessage(message) { if (!rxCharacteristic) { return; } try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
     function processCompleteMessage(data) { switch (data.type) { case 'telemetry': updateTelemetryUI(data); updateChart(data); break; case 'full_config': applyFullConfig(data.params); addLogMessage("[UI] Konfiguracja zsynchronizowana z robotem.", "info"); break; case 'log': addLogMessage(`[ROBOT] ${data.message}`, data.level); break; } }
     function applyFullConfig(params) { for(const [inputId, snakeKey] of Object.entries(parameterMapping)){ if(params[snakeKey] !== undefined){ const input = document.getElementById(inputId); if(input){ let value = params[snakeKey]; if (['turnFactor', 'expo', 'sensitivity', 'deadzone', 'filter_alpha'].includes(snakeKey)) { value = (value * 100).toFixed(1); } input.value = value; } } } }
@@ -347,7 +367,7 @@
     function saveCurrentAsPreset() { const presetName = prompt("Podaj nazwe dla nowego presetu:", ""); if (presetName && presetName.trim() !== "") { const presetData = {}; Object.keys(builtInPresetsData['1'].params).forEach(key => { const input = document.getElementById(key + 'Input'); if (input) presetData[key] = parseFloat(input.value); }); localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData)); addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success'); populatePresetSelect(); } }
     function deleteSelectedPreset() { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; if (!selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { addLogMessage('[UI] Nie mozna usunac wbudowanego presetu.', 'warn'); return; } if (confirm(`Czy na pewno chcesz usunac preset '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'?`)) { localStorage.removeItem(selectedValue); addLogMessage(`[UI] Usunieto preset.`, 'info'); populatePresetSelect(); } }
     function setupNumericInputs() { document.querySelectorAll('.numeric-input-wrapper').forEach(wrapper => { const container = wrapper.closest('.setting-container') || wrapper.closest('.pwm-input-row'); if (!container) return; const input = container.querySelector('input[type=number]'); const minusBtn = wrapper.querySelector('button:first-child'); const plusBtn = wrapper.querySelector('button:last-child'); if (!input || !minusBtn || !plusBtn || input.disabled) return; const step = parseFloat(input.step) || 1; const isFloat = input.step.includes('.'); const updateValue = (amount) => { let current = parseFloat(input.value); if (isNaN(current)) current = 0; let newValue = current + amount; if (isFloat) { const dp = (step.toString().split('.')[1] || '').length; newValue = parseFloat(newValue.toFixed(dp)); } const min = parseFloat(input.min); const max = parseFloat(input.max); if (!isNaN(min)) newValue = Math.max(min, newValue); if (!isNaN(max)) newValue = Math.min(max, newValue); input.value = newValue; input.dispatchEvent(new Event('change', { bubbles: true })); }; minusBtn.addEventListener('click', () => updateValue(-step)); plusBtn.addEventListener('click', () => updateValue(step)); }); }
-    function setupEventListeners() { joystickCanvas.addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); joystickCanvas.addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd); document.getElementById('connectBleBtn').addEventListener('click', connectBLE); ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); }); document.getElementById('resetZeroBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_zero' })); document.getElementById('trimPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 1 })); document.getElementById('trimMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -1 })); document.getElementById('trimRollPlusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: 1 })); document.getElementById('trimRollMinusBtn').addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -1 })); document.getElementById('emergencyStopBtn').addEventListener('click', () => sendBleMessage({ type: 'emergency_stop' })); document.getElementById('saveBtn').addEventListener('click', () => { sendBleMessage({ type: 'save_tunings' }); }); document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) sendBleMessage({ type: 'load_from_eeprom' }); }); document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' })); document.getElementById('resetEncodersBtn').addEventListener('click', () => sendBleMessage({ type: 'reset_encoders' })); const configGroups = { 'balance_pid_update': ['balanceKpInput', 'balanceKiInput', 'balanceKdInput', 'balanceFilterAlphaInput', 'joystickAngleSensitivityInput'], 'speed_pid_update': ['speedKpInput', 'speedKiInput', 'speedKdInput', 'maxTargetAngleInput', 'speedDeadbandInput'], 'position_pid_update': ['positionKpInput', 'positionKiInput', 'positionKdInput', 'maxTargetSpeedInput', 'positionDeadbandInput'], 'rotation_pid_update': ['rotationKpInput', 'rotationKdInput'], 'heading_pid_update': ['headingKpInput', 'headingKiInput', 'headingKdInput'], 'roll_pid_update': ['rollKpInput', 'rollKiInput', 'rollKdInput'], 'set_joystick_tuning': ['joystickSensitivityInput', 'expoJoystickInput', 'maxSpeedJoystickInput', 'turnFactorInput', 'joystickDeadzoneInput'], 'calibration_update': ['wheelDiameterInput', 'trackWidthInput', 'encoderPprInput', 'turnToRollTargetInput', 'balanceDeadbandAngleInput'], 'set_min_pwm': ['minPwmLeftFwdInput', 'minPwmLeftBwdInput', 'minPwmRightFwdInput', 'minPwmRightBwdInput'] }; for (const [type, keys] of Object.entries(configGroups)) { debouncedSenders[type] = debounce(() => { const params = {}; keys.forEach(inputId => { const input = document.getElementById(inputId); if (input) { const snakeKey = parameterMapping[inputId]; if (!snakeKey) { console.error(`Brak mapowania dla parametru o ID: ${inputId}`); return; } let value = parseFloat(input.value); if (['turnFactor', 'expo', 'sensitivity', 'deadzone', 'filter_alpha'].includes(snakeKey)) { value /= 100; } params[snakeKey] = value; } }); sendBleMessage({ type, params }); }, 350); keys.forEach(inputId => { const input = document.getElementById(inputId); if (input && !input.readOnly) input.addEventListener('change', debouncedSenders[type]); }); } document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset); document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); }); }
+    function setupEventListeners() { joystickCanvas.addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); joystickCanvas.addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd); document.getElementById('connectBleBtn').addEventListener('click', connectBLE); ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); }); const toolButtons = { 'resetZeroBtn-tool': { type: 'reset_zero' }, 'trimPlusBtn-tool': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn-tool': { type: 'adjust_zero', value: -1 }, 'trimRollPlusBtn-tool': { type: 'adjust_roll', value: 1 }, 'trimRollMinusBtn-tool': { type: 'adjust_roll', value: -1 }, 'resetEncodersBtn-tool': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' }, 'saveBtn': { type: 'save_tunings' } }; for(const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); } document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) sendBleMessage({ type: 'load_from_eeprom' }); }); document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' })); const configGroups = { 'balance_pid_update': ['balanceKpInput', 'balanceKiInput', 'balanceKdInput', 'balanceFilterAlphaInput', 'joystickAngleSensitivityInput'], 'speed_pid_update': ['speedKpInput', 'speedKiInput', 'speedKdInput', 'maxTargetAngleInput', 'speedDeadbandInput'], 'position_pid_update': ['positionKpInput', 'positionKiInput', 'positionKdInput', 'maxTargetSpeedInput', 'positionDeadbandInput'], 'rotation_pid_update': ['rotationKpInput', 'rotationKdInput'], 'heading_pid_update': ['headingKpInput', 'headingKiInput', 'headingKdInput'], 'roll_pid_update': ['rollKpInput', 'rollKiInput', 'rollKdInput'], 'set_joystick_tuning': ['joystickSensitivityInput', 'expoJoystickInput', 'maxSpeedJoystickInput', 'turnFactorInput', 'joystickDeadzoneInput'], 'calibration_update': ['wheelDiameterInput', 'trackWidthInput', 'encoderPprInput', 'turnToRollTargetInput', 'balanceDeadbandAngleInput'], 'set_min_pwm': ['minPwmLeftFwdInput', 'minPwmLeftBwdInput', 'minPwmRightFwdInput', 'minPwmRightBwdInput'] }; for (const [type, keys] of Object.entries(configGroups)) { debouncedSenders[type] = debounce(() => { const params = {}; keys.forEach(inputId => { const input = document.getElementById(inputId); if (input) { const snakeKey = parameterMapping[inputId]; if (!snakeKey) { return; } let value = parseFloat(input.value); if (['turnFactor', 'expo', 'sensitivity', 'deadzone', 'filter_alpha'].includes(snakeKey)) { value /= 100; } params[snakeKey] = value; } }); sendBleMessage({ type, params }); }, 350); keys.forEach(inputId => { const input = document.getElementById(inputId); if (input && !input.readOnly) input.addEventListener('change', debouncedSenders[type]); }); } document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset); document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); }); }
     function setupManualTuneButtons() { document.querySelectorAll('.manual-tune-row').forEach(row => { const motor = row.dataset.motor; const direction = row.dataset.direction; const input = row.querySelector('.tune-input'); const testBtn = row.querySelector('.test-btn'); const stopBtn = row.querySelector('.stop-btn'); testBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: parseInt(input.value) }); }); stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); }); }); document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); }); }
     function setupDpadControls() { document.querySelectorAll('.dpad-btn').forEach(btn => { btn.addEventListener('click', (e) => { const action = e.currentTarget.dataset.dpad; if (action === 'up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'stop') sendBleMessage({ type: 'command_stop' }); }); }); }
     function setupGamepadMappingModal() { document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; }); document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; }); }
