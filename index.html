@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v_NAPRAWCZA</title>
+    <title>Robot PID - Panel Sterowania v47.3</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -251,14 +251,13 @@
 
 <script>
     // =======================================================================================
-    // WERSJA NAPRAWCZA (UI - Kompatybilny z architektura mostu)
+    // WERSJA 47.3 (UI - Kompatybilny z architektura "Przezroczystego Mostu")
     //
     // OPIS:
-    // Ten kod interfejsu jest w pelni kompatybilny z naprawiona architektura backendu.
-    // Wysyla on precyzyjne, atomowe polecenia (np. `balance_pid_update`), ktore sa
-    // teraz poprawnie przekazywane przez ESP_B (most) i wykonywane przez ESP_A (mozg).
-    // Logika UI nie wymagala duzych zmian, poniewaz problem lezal glownie po stronie
-    // oprogramowania robota.
+    // Ta wersja interfejsu jest w pelni zgodna z naprawiona architektura komunikacyjna,
+    // w ktorej ESP_B dziala jako transparentny przekaznik. Wszystkie polecenia
+    // sa poprawnie mapowane i wysylane do ESP_A, ktory jest jedynym zrodlem
+    // prawdy o stanie robota.
     // =======================================================================================
 
     const debouncedSenders = {};
