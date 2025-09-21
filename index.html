@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v47.1</title>
+    <title>Robot PID - Panel Sterowania v47.3</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -32,7 +32,6 @@
         legend { color: #61dafb; font-weight: bold; padding: 0 10px; font-size: 1.1em; }
         #joystickWrapper { position: relative; width: 180px; height: 180px; border-radius: 50%; background-color: #4a4f58; border: 3px solid #61dafb; margin: 15px auto; touch-action: none; }
         #joystickCanvas { width: 100%; height: 100%; display: block; }
-        #chart-wrapper { position: relative; height: 320px; border-radius: 8px; overflow: hidden; background-color: #20232a; }
         #log-history { text-align: left; height: 350px; overflow-y: auto; background-color: #20232a; padding: 10px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; }
         .status-indicator { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
         .status-ok { background-color: #a2f279; }
@@ -43,8 +42,6 @@
         .angle-display { display: flex; align-items: center; justify-content: space-between; }
         .angle-indicator-wrapper { position: relative; width: 34px; height: 34px; background-color: #20232a; border-radius: 50%; border: 1px solid #61dafb; }
         .angle-indicator-needle { position: absolute; bottom: 50%; left: calc(50% - 1px); width: 2px; height: 50%; background-color: #ff6347; transform-origin: bottom center; transition: transform 0.1s linear; }
-        .chart-controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 10px; font-size: 0.9em; }
-        .chart-controls label { color: #fff; }
         .setting-container { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin: 8px 0; }
         .setting-container label { font-size: 1em; font-weight: bold; color: #a2f279; text-align: left; }
         .numeric-input-wrapper { display: flex; align-items: center; flex-shrink: 0; }
@@ -62,17 +59,6 @@
         .trim-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
         .trim-controls span { font-weight: bold; }
         .trim-controls button { min-width: 40px; font-size: 1.2em; }
-        .dpad-container { display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; gap: 5px; max-width: 150px; margin: 15px auto; }
-        .dpad-btn { background-color: #61dafb; color: #282c34; border-radius: 5px; font-size: 2em; line-height: 1; padding: 5px; cursor: pointer; border: none; }
-        .dpad-btn:hover { background-color: #a2f279; }
-        #dpad-up { grid-column: 2; grid-row: 1; }
-        #dpad-left { grid-column: 1; grid-row: 2; }
-        #dpad-right { grid-column: 3; grid-row: 2; }
-        #dpad-down { grid-column: 2; grid-row: 3; }
-        #dpad-stop { grid-column: 2; grid-row: 2; background-color: #ff6347; color: white; }
-        .dpad-input-group { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin: 10px 0; }
-        .dpad-input-group label { text-align: right; font-weight: bold; color: #a2f279; }
-        .dpad-input-group input { width: 100%; box-sizing: border-box; }
         .accordion-header { background-color: #4a4f58; color: #61dafb; cursor: pointer; padding: 12px 15px; border: none; text-align: left; outline: none; font-size: 1.1em; font-weight: bold; width: 100%; border-radius: 8px; margin-top: 5px; transition: background-color 0.3s; position: relative; }
         .accordion-header:hover { background-color: #5a6068; }
         .accordion-header.active { background-color: #61dafb; color: #282c34; border-bottom-left-radius: 0; border-bottom-right-radius: 0;}
@@ -117,7 +103,6 @@
             <div class="control-row"><span class="control-label">Balansowanie</span><label class="switch"><input type="checkbox" id="balanceSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">Trzymaj Pozycje</span><label class="switch"><input type="checkbox" id="holdPositionSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
-            
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
             <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Resetuj Osie</button>
             <div class="trim-controls"> <button id="trimMinusBtn">-</button> <span>Korekta Pionu (Pitch)</span> <button id="trimPlusBtn">+</button> </div>
@@ -174,7 +159,6 @@
             <h2>Konfiguracja</h2>
             <fieldset> <legend>Profile Ustawien PID</legend> <div class="profile-controls"> <select id="pidPresetSelect" style="width: 100%; padding: 5px;"></select> </div> <div class="preset-actions"> <button id="applySelectedPresetBtn">Zastosuj</button> <button id="saveCurrentAsPresetBtn">Zapisz jako Nowy</button> </div> <button id="deleteSelectedPresetBtn" style="width:100%; margin-top: 10px; background-color: #ff6347;">Usun Wybrany Preset</button> </fieldset>
             <div id="allSettings">
-
                 <button class="accordion-header" onclick="toggleAccordion(this)">1. Strojenie Joysticka</button>
                 <div class="accordion-content">
                     <div class="setting-container"><label for="joystickSensitivityInput">Czulosc Globalna (%)</label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickSensitivityInput" min="10" max="100" step="5" value="100"><button>+</button></div></div>
@@ -267,7 +251,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 47.1 (UI - Interaktywny Asystent Strojenia PID)
+    // WERSJA 47.3 (UI - Interaktywny Asystent Strojenia PID)
     //
     // OPIS:
     // Wersja interfejsu z zaimplementowanym interaktywnym Asystentem Strojenia PID.
@@ -297,7 +281,6 @@
     };
 
     const PIDTuningAssistant = {
-        // Parametry do strojenia: [ID inputu, krok, nazwa dla logow]
         paramDefs: [
             { id: 'balanceKpInput', step: 1.0, name: 'Balance Kp' },
             { id: 'balanceKdInput', step: 0.1, name: 'Balance Kd' },
@@ -305,15 +288,13 @@
             { id: 'positionKpInput', step: 0.1, name: 'Position Kp' },
             { id: 'positionKdInput', step: 0.05, name: 'Position Kd' },
         ],
-        
-        // Stan wewnetrzny
         bestParams: {},
         bestFitness: -1,
         candidateParams: {},
         isSessionActive: false,
         isTestRunning: false,
         paramIndex: 0,
-        direction: 1, // 1 for increasing, -1 for decreasing
+        direction: 1,
         testDataPoints: [],
 
         init() {
@@ -330,7 +311,6 @@
             this.paramIndex = 0;
             this.direction = 1;
             
-            // Wczytaj biezace wartosci z formularzy jako punkt startowy
             this.paramDefs.forEach(p => {
                 this.bestParams[p.id] = parseFloat(document.getElementById(p.id).value);
             });
@@ -339,7 +319,6 @@
             document.getElementById('tuning-main-panel').style.display = 'block';
             updateAccordionHeight(document.getElementById('tuning-main-panel').closest('.accordion-content'));
             
-            // Uruchom test bazowy
             document.getElementById('tuning-status-text').textContent = 'Uruchamiam test bazowy dla biezacych ustawien...';
             this.setUiLock(true);
             const result = await this.runTest(this.bestParams);
@@ -381,7 +360,7 @@
                     addLogMessage(`[TUNER] ZNALEZIONO POPRAWE! Nowa ocena: ${result.fitness.toFixed(4)} (Stara: ${this.bestFitness.toFixed(4)})`, 'success');
                     this.bestFitness = result.fitness;
                     this.bestParams = { ...this.candidateParams };
-                    this.direction = 1; // Zresetuj kierunek po znalezieniu lepszego
+                    this.direction = 1; 
                 } else {
                     addLogMessage(`[TUNER] Brak poprawy (Ocena: ${result.fitness.toFixed(4)}). Odrzucam zmiane.`, 'warn');
                     if (this.direction === 1) {
@@ -409,7 +388,6 @@
                 p_effort += dp.pe * dp.pe;
             }
 
-            // Normalizuj przez liczbe probek, aby wynik byl niezalezny od czasu trwania
             const n = dataPoints.length;
             p_angle /= n; p_vel /= n; p_effort /= n;
 
@@ -427,7 +405,7 @@
                     return;
                 }
                 
-                this.testDataPoints = []; // Wyczysc dane z poprzedniego testu
+                this.testDataPoints = [];
 
                 const onDataPoint = (event) => this.testDataPoints.push(event.detail);
                 const onTestEnd = (event) => {
@@ -439,7 +417,7 @@
                     
                     if (event.detail.status === 'fallen') {
                         addLogMessage('[TUNER] Robot upadl podczas testu!', 'error');
-                        resolve({ fitness: 0.01 }); // Zwraca bardzo niska ocene
+                        resolve({ fitness: 0.01 });
                     } else {
                         const result = this.calculateFitness(this.testDataPoints);
                         document.getElementById('lastFitnessDisplay').textContent = result.fitness.toFixed(4);
@@ -450,7 +428,6 @@
                 window.addEventListener('pid_test_datapoint', onDataPoint);
                 window.addEventListener('pid_test_ended', onTestEnd);
 
-                // 1. Zaktualizuj parametry na robocie
                 const groups = {};
                 Object.keys(paramsToTest).forEach(inputId => {
                     const groupType = this.findGroupForInput(inputId);
@@ -466,15 +443,12 @@
                     }
                 }
 
-                // 2. Uruchom rejestrowanie
                 sendBleMessage({ type: 'pid_start_test_logging' });
                 this.isTestRunning = true;
 
-                // 3. Ustaw timer, ktory zakonczy test po stronie UI
                 const durationMs = parseInt(document.getElementById('tuningTestDurationInput').value) * 1000;
                 const testTimeout = setTimeout(() => {
                     sendBleMessage({ type: 'pid_stop_test_logging' });
-                    // Symulujemy wiadomosc o zakonczeniu, gdyby robot jej nie wyslal
                     window.dispatchEvent(new CustomEvent('pid_test_ended', { detail: {status: 'completed'} }));
                 }, durationMs);
             });
@@ -542,8 +516,6 @@
             if(speedGroup.includes(inputId)) return 'speed_pid_update';
             if(posGroup.includes(inputId)) return 'position_pid_update';
             
-            // Jesli nie pasuje do zadnej grupy PID, zakladamy, ze jest w innej komendzie
-            // Ta uproszczona wersja dziala, bo stroimy tylko parametry z tych 3 grup
             const param = this.paramDefs.find(p => p.id === inputId);
             if (param) {
                 if (param.name.includes("Balance")) return 'balance_pid_update';
@@ -555,22 +527,17 @@
         }
     };
     
-    // ... (reszta kodu bez zmian, wklej cala poprzednia zawartosc od tego miejsca)
-    // ...
-
     document.addEventListener('DOMContentLoaded', () => {
         initJoystick();
-        // Usunieto setupChartControls, poniewaz nie jest on juz potrzebny w tej wersji
         populatePresetSelect();
         setupNumericInputs();
         setupEventListeners();
         setupManualTuneButtons(); 
-        // Usunieto setupDpadControls, mozna go dodac z powrotem, jesli jest potrzebny
         setupGamepadMappingModal();
         loadGamepadMappings();
         renderMappingModal();
         pollGamepad();
-        PIDTuningAssistant.init(); // Inicjalizacja nowego asystenta
+        PIDTuningAssistant.init();
         window.addEventListener('resize', initJoystick);
         document.querySelectorAll('.accordion-header.active').forEach(header => {
             const content = header.nextElementSibling;
@@ -673,7 +640,7 @@
     function saveCurrentAsPreset() { const presetName = prompt("Podaj nazwe dla nowego presetu:", ""); if (presetName && presetName.trim() !== "") { const presetData = {}; Object.keys(builtInPresetsData['1'].params).forEach(key => { const input = document.getElementById(key + 'Input'); if (input) presetData[key] = parseFloat(input.value); }); localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData)); addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success'); populatePresetSelect(); } }
     function deleteSelectedPreset() { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; if (!selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { addLogMessage('[UI] Nie mozna usunac wbudowanego presetu.', 'warn'); return; } if (confirm(`Czy na pewno chcesz usunac preset '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'?`)) { localStorage.removeItem(selectedValue); addLogMessage(`[UI] Usunieto preset.`, 'info'); populatePresetSelect(); } }
     function setupNumericInputs() { document.querySelectorAll('.numeric-input-wrapper').forEach(wrapper => { const container = wrapper.closest('.setting-container') || wrapper.closest('.pwm-input-row'); if (!container) return; const input = container.querySelector('input[type=number]'); const minusBtn = wrapper.querySelector('button:first-child'); const plusBtn = wrapper.querySelector('button:last-child'); if (!input || !minusBtn || !plusBtn || input.disabled) return; const step = parseFloat(input.step) || 1; const isFloat = input.step.includes('.'); const updateValue = (amount) => { let current = parseFloat(input.value); if (isNaN(current)) current = 0; let newValue = current + amount; if (isFloat) { const dp = (step.toString().split('.')[1] || '').length; newValue = parseFloat(newValue.toFixed(dp)); } const min = parseFloat(input.min); const max = parseFloat(input.max); if (!isNaN(min)) newValue = Math.max(min, newValue); if (!isNaN(max)) newValue = Math.min(max, newValue); input.value = newValue; input.dispatchEvent(new Event('change', { bubbles: true })); }; minusBtn.addEventListener('click', () => updateValue(-step)); plusBtn.addEventListener('click', () => updateValue(step)); }); }
-    function setupEventListeners() { joystickCanvas.addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); joystickCanvas.addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd); document.getElementById('connectBleBtn').addEventListener('click', connectBLE); ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); }); const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'trimRollPlusBtn': { type: 'adjust_roll', value: 1 }, 'trimRollMinusBtn': { type: 'adjust_roll', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' }, 'saveBtn': { type: 'save_tunings' } }; for(const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); } document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) sendBleMessage({ type: 'load_from_eeprom' }); }); document.getElementById('calibrateMpuBtn').addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' })); const configGroups = { 'balance_pid_update': ['balanceKpInput', 'balanceKiInput', 'balanceKdInput', 'balanceFilterAlphaInput', 'joystickAngleSensitivityInput'], 'speed_pid_update': ['speedKpInput', 'speedKiInput', 'speedKdInput', 'maxTargetAngleInput', 'speedDeadbandInput'], 'position_pid_update': ['positionKpInput', 'positionKiInput', 'positionKdInput', 'maxTargetSpeedInput', 'positionDeadbandInput'], 'rotation_pid_update': ['rotationKpInput', 'rotationKdInput'], 'heading_pid_update': ['headingKpInput', 'headingKiInput', 'headingKdInput'], 'roll_pid_update': ['rollKpInput', 'rollKiInput', 'rollKdInput'], 'set_joystick_tuning': ['joystickSensitivityInput', 'expoJoystickInput', 'maxSpeedJoystickInput', 'turnFactorInput', 'joystickDeadzoneInput'], 'calibration_update': ['wheelDiameterInput', 'trackWidthInput', 'encoderPprInput', 'turnToRollTargetInput', 'balanceDeadbandAngleInput'], 'set_min_pwm': ['minPwmLeftFwdInput', 'minPwmLeftBwdInput', 'minPwmRightFwdInput', 'minPwmRightBwdInput'] }; for (const [type, keys] of Object.entries(configGroups)) { debouncedSenders[type] = debounce(() => { const params = {}; keys.forEach(inputId => { const input = document.getElementById(inputId); if (input) { const snakeKey = parameterMapping[inputId]; if (!snakeKey) { return; } let value = parseFloat(input.value); if (['turnFactor', 'expo', 'sensitivity', 'deadzone', 'filter_alpha'].includes(snakeKey)) { value /= 100; } params[snakeKey] = value; } }); sendBleMessage({ type, params }); }, 350); keys.forEach(inputId => { const input = document.getElementById(inputId); if (input && !input.readOnly) input.addEventListener('change', debouncedSenders[type]); }); } document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset); document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); }); }
+    function setupEventListeners() { joystickCanvas.addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); joystickCanvas.addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd); document.getElementById('connectBleBtn').addEventListener('click', connectBLE); ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); }); const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'trimRollPlusBtn': { type: 'adjust_roll', value: 1 }, 'trimRollMinusBtn': { type: 'adjust_roll', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' }, 'saveBtn': { type: 'save_tunings' } }; for(const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); } document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) sendBleMessage({ type: 'load_from_eeprom' }); }); document.getElementById('calibrateMpuBtn')?.addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' })); const configGroups = { 'balance_pid_update': ['balanceKpInput', 'balanceKiInput', 'balanceKdInput', 'balanceFilterAlphaInput', 'joystickAngleSensitivityInput'], 'speed_pid_update': ['speedKpInput', 'speedKiInput', 'speedKdInput', 'maxTargetAngleInput', 'speedDeadbandInput'], 'position_pid_update': ['positionKpInput', 'positionKiInput', 'positionKdInput', 'maxTargetSpeedInput', 'positionDeadbandInput'], 'rotation_pid_update': ['rotationKpInput', 'rotationKdInput'], 'heading_pid_update': ['headingKpInput', 'headingKiInput', 'headingKdInput'], 'roll_pid_update': ['rollKpInput', 'rollKiInput', 'rollKdInput'], 'set_joystick_tuning': ['joystickSensitivityInput', 'expoJoystickInput', 'maxSpeedJoystickInput', 'turnFactorInput', 'joystickDeadzoneInput'], 'calibration_update': ['wheelDiameterInput', 'trackWidthInput', 'encoderPprInput', 'turnToRollTargetInput', 'balanceDeadbandAngleInput'], 'set_min_pwm': ['minPwmLeftFwdInput', 'minPwmLeftBwdInput', 'minPwmRightFwdInput', 'minPwmRightBwdInput'] }; for (const [type, keys] of Object.entries(configGroups)) { debouncedSenders[type] = debounce(() => { const params = {}; keys.forEach(inputId => { const input = document.getElementById(inputId); if (input) { const snakeKey = parameterMapping[inputId]; if (!snakeKey) { return; } let value = parseFloat(input.value); if (['turnFactor', 'expo', 'sensitivity', 'deadzone', 'filter_alpha'].includes(snakeKey)) { value /= 100; } params[snakeKey] = value; } }); sendBleMessage({ type, params }); }, 350); keys.forEach(inputId => { const input = document.getElementById(inputId); if (input && !input.readOnly) input.addEventListener('change', debouncedSenders[type]); }); } document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset); document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); }); }
     function setupManualTuneButtons() { document.querySelectorAll('.manual-tune-row').forEach(row => { const motor = row.dataset.motor; const direction = row.dataset.direction; const input = row.querySelector('.tune-input'); const testBtn = row.querySelector('.test-btn'); const stopBtn = row.querySelector('.stop-btn'); const autoBtn = row.querySelector('.auto-btn'); testBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: parseInt(input.value) }); }); stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); }); autoBtn.addEventListener('click', (e) => { if (confirm("UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?")) { const startValue = parseInt(document.getElementById('pwmTuneStartInput').value); sendBleMessage({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue }); e.target.disabled = true; e.target.textContent = 'Szukanie...'; addLogMessage(`[UI] Rozpoczynam auto-strojenie dla ${motor} ${direction}...`, 'info'); } }); }); document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); }); }
     function setupGamepadMappingModal() { document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; }); document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; }); }
     function flashElement(element) { if (!element) return; const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element; target.classList.add('gamepad-flash'); setTimeout(() => target.classList.remove('gamepad-flash'), 300); }
