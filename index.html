@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v2.2 (Connection Fix)</title>
+    <title>Robot PID - Panel Sterowania v2.3 (Enhanced Debugging)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -243,7 +243,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 2.2 (UI dla PID) - Ostateczna Poprawka Stabilnosci Polaczenia
+    // WERSJA 2.3 (UI dla PID) - Rozszerzone logowanie bledow
     // =======================================================================================
     
     let debouncedSendConfig;
@@ -384,7 +384,6 @@
 
     function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; }
     
-    // [POPRAWKA] Poprawna funkcja do obslugi fragmentacji
     function handleBleNotification(event) {
         const value = event.target.value;
         const decoder = new TextDecoder('utf-8');
@@ -408,7 +407,13 @@
                                 const fullData = JSON.parse(fullMessage);
                                 processCompleteMessage(fullData);
                             } catch (e) {
+                                // === POCZATEK POPRAWKI - ROZSZERZONE LOGOWANIE BLEDU ===
                                 addLogMessage(`[UI] Blad parsowania zlozonej wiadomosci: ${e}`, 'error');
+                                // Logujemy do konsoli deweloperskiej przegladarki (F12)
+                                console.error("Nie udalo sie sparsowac ponizszego zlozonego stringa JSON:");
+                                console.error(fullMessage);
+                                addLogMessage(`[UI] Zobacz konsole deweloperska (F12), aby zobaczyc wadliwe dane.`, 'warn');
+                                // === KONIEC POPRAWKI ===
                             }
                         }
                     } else {
