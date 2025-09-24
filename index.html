@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v2.1 (Stable Sync)</title>
+    <title>Robot PID - Panel Sterowania v2.2 (Connection Fix)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -62,17 +62,6 @@
         .trim-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
         .trim-controls span { font-weight: bold; }
         .trim-controls button { min-width: 40px; font-size: 1.2em; }
-        .dpad-container { display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; gap: 5px; max-width: 150px; margin: 15px auto; }
-        .dpad-btn { background-color: #61dafb; color: #282c34; border-radius: 5px; font-size: 2em; line-height: 1; padding: 5px; cursor: pointer; border: none; }
-        .dpad-btn:hover { background-color: #a2f279; }
-        #dpad-up { grid-column: 2; grid-row: 1; }
-        #dpad-left { grid-column: 1; grid-row: 2; }
-        #dpad-right { grid-column: 3; grid-row: 2; }
-        #dpad-down { grid-column: 2; grid-row: 3; }
-        #dpad-stop { grid-column: 2; grid-row: 2; background-color: #ff6347; color: white; }
-        .dpad-input-group { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin: 10px 0; }
-        .dpad-input-group label { text-align: right; font-weight: bold; color: #a2f279; }
-        .dpad-input-group input { width: 100%; box-sizing: border-box; }
         .accordion-header { background-color: #4a4f58; color: #61dafb; cursor: pointer; padding: 12px 15px; border: none; text-align: left; outline: none; font-size: 1.1em; font-weight: bold; width: 100%; border-radius: 8px; margin-top: 5px; transition: background-color 0.3s; position: relative; }
         .accordion-header:hover { background-color: #5a6068; }
         .accordion-header.active { background-color: #61dafb; color: #282c34; border-bottom-left-radius: 0; border-bottom-right-radius: 0;}
@@ -254,17 +243,11 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 2.1 (UI dla PID) - Poprawka stabilnosci polaczenia
-    //
-    // OPIS:
-    // Ten interfejs jest finalna, w pelni funkcjonalna wersja panelu sterowania
-    // dla robota z kaskada regulatorow PID. Zostal on zbudowany na bazie stabilnego
-    // i bogatego w funkcje UI z systemu LQR, z adaptacja do nowych parametrow i logiki.
+    // WERSJA 2.2 (UI dla PID) - Ostateczna Poprawka Stabilnosci Polaczenia
     // =======================================================================================
     
     let debouncedSendConfig;
 
-    // [SYNC-MAP] Krytyczne mapowanie ID pol formularza na klucze JSON (snake_case)
     const parameterMapping = {
         'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b',
         'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 
@@ -291,7 +274,6 @@
         setupNumericInputs();
         setupEventListeners();
         setupManualTuneButtons();
-        setupDpadControls();
         setupGamepadMappingModal();
         loadGamepadMappings();
         renderMappingModal();
@@ -388,10 +370,9 @@
             document.getElementById('connectionText').textContent = 'Polaczony';
             addLogMessage('[UI] Polaczono! Zadam konfiguracji...', 'success');
 
-            // [BLE-CONNECT-FIX] Wyslij zadanie o konfiguracje po udanym polaczeniu
             setTimeout(() => {
                 sendBleMessage({ type: 'request_full_config' });
-            }, 500); // Daj chwile na stabilizacje polaczenia
+            }, 500); 
 
         } catch (error) {
             addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error');
@@ -403,6 +384,7 @@
 
     function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; }
     
+    // [POPRAWKA] Poprawna funkcja do obslugi fragmentacji
     function handleBleNotification(event) {
         const value = event.target.value;
         const decoder = new TextDecoder('utf-8');
@@ -479,7 +461,6 @@
                 const input = document.getElementById(inputId);
                 if (input) {
                     let value = params[snakeKey];
-                    // Skalowanie % wartosci z powrotem do UI
                     if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) {
                          value = (value * 100);
                     }
@@ -758,11 +739,6 @@
         document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); });
     }
     
-    function setupDpadControls() {
-        // Ta funkcja jest pusta, poniewaz D-Pad zostal usuniety z HTML.
-        // Zostawiam ja dla spojnosc, gdyby D-Pad wrocil.
-    }
-
     function setupGamepadMappingModal() {
         document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; });
         document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; });
