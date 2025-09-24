@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v2.0 (Stable Sync)</title>
+    <title>Robot PID - Panel Sterowania v2.1 (Stable Sync)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -254,16 +254,17 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 2.0 (UI dla PID) - Architektura oparta na LQR v44.2
+    // WERSJA 2.1 (UI dla PID) - Poprawka stabilnosci polaczenia
     //
     // OPIS:
     // Ten interfejs jest finalna, w pelni funkcjonalna wersja panelu sterowania
     // dla robota z kaskada regulatorow PID. Zostal on zbudowany na bazie stabilnego
     // i bogatego w funkcje UI z systemu LQR, z adaptacja do nowych parametrow i logiki.
     // =======================================================================================
+    
+    let debouncedSendConfig;
 
-    const debouncedSenders = {};
-    const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v2_';
+    // [SYNC-MAP] Krytyczne mapowanie ID pol formularza na klucze JSON (snake_case)
     const parameterMapping = {
         'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b',
         'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 
@@ -324,6 +325,7 @@
     const GAMEPAD_AXIS_THRESHOLD = 0.15;
     let isMappingButton = false;
     let actionToMap = null;
+    const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v2_';
 
     const availableActions = { 
         'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' }, 
@@ -363,7 +365,42 @@
     function clearLogs() { document.getElementById('log-history').innerHTML = ''; }
     function toggleAccordion(header) { const content = header.nextElementSibling; header.classList.toggle('active'); if (content.style.maxHeight && content.style.maxHeight !== '0px') { content.style.maxHeight = '0px'; } else { content.style.maxHeight = content.scrollHeight + "px"; } }
     function updateAccordionHeight(content) { if (content && content.style.maxHeight !== '0px') { content.style.maxHeight = content.scrollHeight + 'px'; } }
-    async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ name: 'Robobala_PID' }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono! Synchronizacja w toku...', 'success'); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
+    
+    async function connectBLE() {
+        addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info');
+        try {
+            bleDevice = await navigator.bluetooth.requestDevice({
+                filters: [{ name: 'Robobala_PID' }],
+                optionalServices: [SERVICE_UUID]
+            });
+            addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info');
+            document.getElementById('connectBleBtn').disabled = true;
+            document.getElementById('connectionText').textContent = 'Laczenie...';
+            bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+            const server = await bleDevice.gatt.connect();
+            const service = await server.getPrimaryService(SERVICE_UUID);
+            rxCharacteristic = await service.getCharacteristic(RX_UUID);
+            txCharacteristic = await service.getCharacteristic(TX_UUID);
+            await txCharacteristic.startNotifications();
+            txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification);
+            
+            document.getElementById('connectionStatus').className = 'status-indicator status-ok';
+            document.getElementById('connectionText').textContent = 'Polaczony';
+            addLogMessage('[UI] Polaczono! Zadam konfiguracji...', 'success');
+
+            // [BLE-CONNECT-FIX] Wyslij zadanie o konfiguracje po udanym polaczeniu
+            setTimeout(() => {
+                sendBleMessage({ type: 'request_full_config' });
+            }, 500); // Daj chwile na stabilizacje polaczenia
+
+        } catch (error) {
+            addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error');
+            document.getElementById('connectionStatus').className = 'status-indicator status-error';
+            document.getElementById('connectionText').textContent = 'Blad polaczenia';
+            document.getElementById('connectBleBtn').disabled = false;
+        }
+    }
+
     function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; }
     
     function handleBleNotification(event) {
@@ -425,7 +462,7 @@
                     const tuneRow = inputField.closest('.manual-tune-row');
                     inputField.value = p.value;
                     addLogMessage(`[UI] Auto-strojenie dla ${p.motor} ${p.direction} zakonczone. Wynik: ${p.value}`, 'success');
-                    debouncedSenders['set_min_pwm']();
+                    sendFullConfigToRobot();
                     if(tuneRow){
                         const autoBtn = tuneRow.querySelector('.auto-btn');
                         autoBtn.disabled = false;
@@ -631,21 +668,26 @@
 
     function sendFullConfigToRobot() {
         const params = {};
-        Object.keys(parameterMapping).forEach(inputId => {
+        for (const [inputId, snakeKey] of Object.entries(parameterMapping)) {
             const input = document.getElementById(inputId);
             if (input) {
-                const snakeKey = parameterMapping[inputId];
                 let value = parseFloat(input.value);
                 if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) {
                      value /= 100;
                 }
                 params[snakeKey] = value;
             }
-        });
+        }
         sendBleMessage({ type: 'full_config', params });
     }
 
     function setupEventListeners() {
+        debouncedSendConfig = debounce(sendFullConfigToRobot, 400);
+
+        document.querySelectorAll('.config-value').forEach(input => {
+            input.addEventListener('change', debouncedSendConfig);
+        });
+
         joystickCanvas.addEventListener('mousedown', handleJoystickStart);
         document.addEventListener('mousemove', handleJoystickMove);
         document.addEventListener('mouseup', handleJoystickEnd);
@@ -669,49 +711,11 @@
         
         document.getElementById('loadBtn').addEventListener('click', () => {
             if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) {
-                sendBleMessage({ type: 'request_full_config_for_save' });
+                sendBleMessage({ type: 'request_full_config' });
             }
         });
 
         document.getElementById('calibrateMpuBtn')?.addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
-
-        // Debounced senders for live tuning
-        const singleParamGroups = {
-             'balance_pid_update': ['balanceKpInput', 'balanceKiInput', 'balanceKdInput', 'balanceFilterAlphaInput', 'joystickAngleSensitivityInput'],
-             'speed_pid_update': ['speedKpInput', 'speedKiInput', 'speedKdInput', 'maxTargetAngleInput', 'speedDeadbandInput'],
-             'position_pid_update': ['positionKpInput', 'positionKiInput', 'positionKdInput', 'maxTargetSpeedInput', 'positionDeadbandInput'],
-             'rotation_pid_update': ['rotationKpInput', 'rotationKdInput'],
-             'heading_pid_update': ['headingKpInput', 'headingKiInput', 'headingKdInput'],
-             'roll_pid_update': ['rollKpInput', 'rollKiInput', 'rollKdInput'],
-             'set_joystick_tuning': ['joystickSensitivityInput', 'expoJoystickInput', 'maxSpeedJoystickInput', 'turnFactorInput', 'joystickDeadzoneInput'],
-             'calibration_update': ['wheelDiameterInput', 'trackWidthInput', 'encoderPprInput', 'turnToRollTargetInput', 'balanceDeadbandAngleInput'],
-             'set_min_pwm': ['minPwmLeftFwdInput', 'minPwmLeftBwdInput', 'minPwmRightFwdInput', 'minPwmRightBwdInput']
-        };
-
-        for (const [type, keys] of Object.entries(singleParamGroups)) {
-             debouncedSenders[type] = debounce(() => {
-                const params = {};
-                keys.forEach(inputId => {
-                    const input = document.getElementById(inputId);
-                    if(input){
-                        const snakeKey = parameterMapping[inputId];
-                        let value = parseFloat(input.value);
-                         if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) {
-                            value /= 100;
-                        }
-                        params[snakeKey] = value;
-                    }
-                });
-                sendBleMessage({ type, params });
-             }, 350);
-
-            keys.forEach(inputId => {
-                const input = document.getElementById(inputId);
-                if (input && !input.readOnly) {
-                    input.addEventListener('change', debouncedSenders[type]);
-                }
-            });
-        }
         
         document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset);
         document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset);
@@ -755,16 +759,8 @@
     }
     
     function setupDpadControls() {
-        document.querySelectorAll('.dpad-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const action = e.currentTarget.dataset.dpad;
-                if (action === 'up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) });
-                else if (action === 'down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) });
-                else if (action === 'left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) });
-                else if (action === 'right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) });
-                else if (action === 'stop') sendBleMessage({ type: 'command_stop' });
-            });
-        });
+        // Ta funkcja jest pusta, poniewaz D-Pad zostal usuniety z HTML.
+        // Zostawiam ja dla spojnosc, gdyby D-Pad wrocil.
     }
 
     function setupGamepadMappingModal() {
