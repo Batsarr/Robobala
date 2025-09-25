@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v2.2 (Connection Fix)</title>
+    <title>Robot PID - Panel Sterowania v17.1</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -33,6 +33,7 @@
         #joystickWrapper { position: relative; width: 180px; height: 180px; border-radius: 50%; background-color: #4a4f58; border: 3px solid #61dafb; margin: 15px auto; touch-action: none; }
         #joystickCanvas { width: 100%; height: 100%; display: block; }
         #chart-wrapper { position: relative; height: 320px; border-radius: 8px; overflow: hidden; background-color: #20232a; }
+        #log-card { grid-column: 1 / -1; }
         #log-history { text-align: left; height: 350px; overflow-y: auto; background-color: #20232a; padding: 10px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; }
         .status-indicator { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
         .status-ok { background-color: #a2f279; }
@@ -51,14 +52,6 @@
         .numeric-input-wrapper button { background-color: #4a4f58; color: #61dafb; padding: 4px 8px; font-size: 1em; line-height: 1; min-width: 30px; }
         .numeric-input-wrapper input[type=number] { width: 90px; text-align: center; font-size: 1em; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 5px; margin: 0 4px; padding: 4px; -moz-appearance: textfield; }
         input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        .manual-tune-row { background-color: #2a2f35; padding: 10px; border-radius: 6px; margin-bottom: 12px; }
-        .pwm-input-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .pwm-input-row label { font-weight: bold; color: #a2f279; }
-        .pwm-button-row { display: flex; justify-content: flex-end; gap: 10px; }
-        .pwm-button-row button { flex-grow: 1; max-width: 100px; }
-        .test-btn { background-color: #a2f279; }
-        .stop-btn { background-color: #ff6347; }
-        .auto-btn { background-color: #f7b731; }
         .trim-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
         .trim-controls span { font-weight: bold; }
         .trim-controls button { min-width: 40px; font-size: 1.2em; }
@@ -69,35 +62,17 @@
         .accordion-header.active::after { content: '-'; }
         .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out; background-color: #3a3f47; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;}
         .accordion-content.active { padding: 15px; }
-        .pwm-info { background-color: #20232a; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #61dafb; }
-        .pwm-info strong { color: #a2f279; }
         .parameter-group { background-color: #20232a; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
         .parameter-group h5 { color: #61dafb; margin: 0 0 8px 0; font-size: 1.1em; }
         .help-icon { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: #61dafb; color: #282c34; font-size: 12px; font-weight: bold; text-align: center; line-height: 16px; margin-left: 8px; cursor: pointer; user-select: none; }
         .help-text { background-color: #20232a; color: #fff; border-radius: 6px; padding: 10px; border: 1px solid #61dafb; margin-top: 8px; text-align: left; font-size: 0.9em; line-height: 1.4; width: 100%; box-sizing: border-box; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease-out; padding-top: 0; padding-bottom: 0; grid-column: 1 / -1; }
         .help-text.visible { max-height: 200px; padding-top: 10px; padding-bottom: 10px; }
-        .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); z-index: 2000; display: none; justify-content: center; align-items: center; }
-        .modal-content { background-color: #3a3f47; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
-        .mapping-row { display: grid; grid-template-columns: 1fr 100px 100px; gap: 10px; align-items: center; margin-bottom: 10px; }
-        .mapping-label { text-align: left; font-weight: bold; }
-        .mapping-button { font-size: 0.8em; padding: 6px 8px; }
-        .mapping-display { background-color: #20232a; padding: 6px; border-radius: 4px; font-family: monospace; }
-        .preset-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-        #applySelectedPresetBtn { background-color: #a2f279; }
-        #saveCurrentAsPresetBtn { background-color: #61dafb; }
     </style>
 </head>
 <body>
     <div id="emergency-banner">ZATRZYMANIE AWARYJNE</div>
-    <div id="gamepad-mapping-modal" class="modal-backdrop">
-        <div class="modal-content">
-            <h2>Mapowanie Przyciskow Gamepada</h2>
-            <div id="gamepad-mapping-list"></div>
-            <button id="close-modal-btn" style="margin-top: 20px;">Zamknij</button>
-        </div>
-    </div>
 
-    <h1>Robot PID - Panel Sterowania</h1>
+    <h1>Robot PID - Panel Sterowania v17.1</h1>
     <div class="main-grid">
         <div class="card" id="controls-card">
             <h2>Sterowanie</h2>
@@ -105,7 +80,6 @@
             <div class="control-row"><span class="control-label">Balansowanie</span><label class="switch"><input type="checkbox" id="balanceSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">Trzymaj Pozycje</span><label class="switch"><input type="checkbox" id="holdPositionSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
-            <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
             <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Resetuj Osie</button>
             <div class="trim-controls"> <button id="trimMinusBtn">-</button> <span>Korekta Pionu (Pitch)</span> <button id="trimPlusBtn">+</button> </div>
             <div class="trim-controls"> <button id="trimRollMinusBtn">-</button> <span>Korekta Przechylu (Roll)</span> <button id="trimRollPlusBtn">+</button> </div>
@@ -117,7 +91,6 @@
             <button id="connectBleBtn" style="width: 100%; margin-bottom: 15px;">POLACZ Z ROBOTEM</button>
             <div class="status-grid">
                 <strong>Polaczenie:</strong> <div><span id="connectionStatus" class="status-indicator status-disconnected"></span> <span id="connectionText">Rozlaczony</span></div>
-                <strong>Gamepad:</strong> <span id="gamepadStatus" style="font-weight:bold; color: #f7b731;">Brak</span>
                 <strong>Tryb Pracy:</strong> <span id="robotStateVal" style="font-weight:bold; color: #61dafb;">IDLE</span>
             </div>
             <div class="info-grid">
@@ -133,23 +106,14 @@
             </fieldset>
         </div>
         <div class="card">
-            <button class="accordion-header" onclick="toggleAccordion(this)">Wykres Telemetryczny</button>
-            <div class="accordion-content">
+            <button class="accordion-header active" onclick="toggleAccordion(this)">Wykres Telemetryczny</button>
+            <div class="accordion-content active">
                 <div id="chart-wrapper"><canvas id="telemetryChart"></canvas></div>
                 <div class="chart-controls" id="chartControls"></div>
             </div>
         </div>
         <div class="card">
             <h2>Konfiguracja</h2>
-            <fieldset>
-                <legend>Profile Ustawien PID</legend>
-                <div class="profile-controls"> <select id="pidPresetSelect" style="width: 100%; padding: 5px;"></select> </div>
-                <div class="preset-actions">
-                    <button id="applySelectedPresetBtn">Zastosuj</button>
-                    <button id="saveCurrentAsPresetBtn">Zapisz jako Nowy</button>
-                </div>
-                <button id="deleteSelectedPresetBtn" style="width:100%; margin-top: 10px; background-color: #ff6347;">Usun Wybrany Preset</button>
-            </fieldset>
             <div id="allSettings">
                 <button class="accordion-header" onclick="toggleAccordion(this)">1. Strojenie Joysticka</button>
                 <div class="accordion-content">
@@ -186,45 +150,6 @@
                         <div class="setting-container"> <label for="positionDeadbandInput">Margines bledu (imp.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionDeadbandInput" step="1" value="15"><button>+</button></div> </div>
                     </div>
                 </div>
-
-                <button class="accordion-header" onclick="toggleAccordion(this)">4. PID Obrotu i Kursu</button>
-                <div class="accordion-content">
-                    <div class="parameter-group"><h5>PID Obrotu (D-Pad)</h5>
-                        <div class="setting-container"> <label for="rotationKpInput">Kp - Sila obrotu</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationKpInput" step="0.1" value="1.0"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="rotationKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationKdInput" step="0.1" value="1.0"><button>+</button></div> </div>
-                    </div>
-                    <div class="parameter-group"><h5>PID Utrzymania Kursu (podczas jazdy prosto)</h5>
-                        <div class="setting-container"> <label for="headingKpInput">Kp - Sila korekty</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKpInput" step="0.05" value="0.8"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="headingKiInput">Ki - Precyzja</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKiInput" step="0.005" value="0.02"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="headingKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKdInput" step="0.01" value="0.1"><button>+</button></div> </div>
-                    </div>
-                    <div class="parameter-group"><h5>PID Korekty Przechylu (Roll, podczas skretu)</h5>
-                        <div class="setting-container"> <label for="rollKpInput">Kp - Sila</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rollKpInput" step="0.5" value="15.0"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="rollKiInput">Ki - Precyzja</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rollKiInput" step="0.01" value="0.0"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="rollKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rollKdInput" step="0.05" value="0.5"><button>+</button></div> </div>
-                    </div>
-                </div>
-
-                <button class="accordion-header" onclick="toggleAccordion(this)">5. Parametry Sprzetowe i Mechaniczne</button>
-                <div class="accordion-content"> 
-                    <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" step="0.1" value="8.0"><button>+</button></div> </div> 
-                    <div class="setting-container"> <label for="trackWidthInput">Rozstaw kol (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="trackWidthInput" step="0.1" value="13.0"><button>+</button></div> </div> 
-                    <div class="setting-container"> <label for="encoderPprInput">Impulsy na obrot (PPR)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="encoderPprInput" step="10" value="820"><button>+</button></div> </div> 
-                    <hr style="border-color: #4a4f58; margin: 10px 0;">
-                    <div class="setting-container"> <label for="turnToRollTargetInput">Kat przechylu przy skrecie (st.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="turnToRollTargetInput" step="0.1" value="5.0"><button>+</button></div> </div> 
-                    <div class="setting-container"> <label for="balanceDeadbandAngleInput">Strefa martwa balansu (st.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceDeadbandAngleInput" step="0.1" value="0.5"><button>+</button></div> </div>
-                </div>
-
-                <button class="accordion-header" onclick="toggleAccordion(this)">6. Kalibracja PWM Silnikow</button>
-                <div class="accordion-content"> 
-                    <div class="pwm-info"> <strong>Info:</strong> Uzyj przycisku <strong>"Auto"</strong>, aby automatycznie znalezc prog startowy silnika, lub <strong>"Testuj"</strong>, aby sprawdzic recznie wpisana wartosc. <strong>Wazne:</strong> Przed testem podnies robota, aby kola mogly sie swobodnie krecic! </div> 
-                     <div class="setting-container"> <label for="pwmTuneStartInput">Rozpocznij auto-szukanie od PWM</label> <div class="numeric-input-wrapper"> <button id="pwmTuneStartMinus">-</button> <input type="number" id="pwmTuneStartInput" min="1" max="800" step="10" value="400"> <button id="pwmTuneStartPlus">+</button> </div> </div> <hr style="border-color: #4a4f58; margin: 15px 0;">
-                    <div class="manual-tune-row" data-motor="left" data-direction="fwd"> <div class="pwm-input-row"> <label>Lewy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div> 
-                    <div class="manual-tune-row" data-motor="left" data-direction="bwd"> <div class="pwm-input-row"> <label>Lewy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div> 
-                    <div class="manual-tune-row" data-motor="right" data-direction="fwd"> <div class="pwm-input-row"> <label>Prawy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightFwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div> 
-                    <div class="manual-tune-row" data-motor="right" data-direction="bwd"> <div class="pwm-input-row"> <label>Prawy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="1023" step="1" value="640"><button class="tune-plus">+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div> 
-                    <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKIE SILNIKI</button> 
-                </div>
             </div>
             <div class="button-group" style="display:flex; gap:10px; justify-content:center; margin-top:20px;"> 
                 <button id="loadBtn">Wczytaj z Robota</button> 
@@ -232,20 +157,16 @@
             </div>
         </div>
         
-        <div class="card" id="log-card" style="grid-column: 1 / -1;">
+        <div class="card" id="log-card">
             <h2>Logi Systemowe</h2>
             <div id="log-history"></div>
             <div style="margin-top: 10px; display: flex; gap: 10px; justify-content: center; align-items: center;">
-                <button onclick="clearLogs()" style="background-color: #f7b731;">Wyczysc Logi</button>
+                <button id="clearLogsBtn" style="background-color: #f7b731;">Wyczysc Logi</button>
             </div>
         </div>
     </div>
 
 <script>
-    // =======================================================================================
-    // WERSJA 2.2 (UI dla PID) - Ostateczna Poprawka Stabilnosci Polaczenia
-    // =======================================================================================
-    
     let debouncedSendConfig;
 
     const parameterMapping = {
@@ -256,28 +177,15 @@
         'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedDeadbandInput': 'speed_pid_deadband',
         'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p',
         'maxTargetSpeedInput': 'max_target_speed_from_pos_pid', 'positionDeadbandInput': 'position_pid_deadband',
-        'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r',
-        'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h',
-        'rollKpInput': 'kp_roll', 'rollKiInput': 'ki_roll', 'rollKdInput': 'kd_roll',
         'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick',
-        'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone',
-        'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr',
-        'turnToRollTargetInput': 'turn_to_roll_target', 'balanceDeadbandAngleInput': 'balance_deadband_angle',
-        'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd',
-        'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd'
+        'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone'
     };
     
     document.addEventListener('DOMContentLoaded', () => {
         initJoystick();
         setupChartControls();
-        populatePresetSelect();
         setupNumericInputs();
         setupEventListeners();
-        setupManualTuneButtons();
-        setupGamepadMappingModal();
-        loadGamepadMappings();
-        renderMappingModal();
-        pollGamepad();
         window.addEventListener('resize', initJoystick);
         document.querySelectorAll('.accordion-header.active').forEach(header => {
             const content = header.nextElementSibling;
@@ -299,34 +207,10 @@
     let lastJoystickSendTime = 0;
     const JOYSTICK_SEND_INTERVAL = 25;
     
-    let gamepadIndex = null;
-    let lastGamepadState = [];
-    let lastGamepadAxes = { x: 0, y: 0 };
-    let gamepadMappings = {};
-    const GAMEPAD_MAPPING_KEY = 'pid_gamepad_mappings_v2';
-    const GAMEPAD_AXIS_THRESHOLD = 0.15;
-    let isMappingButton = false;
-    let actionToMap = null;
-    const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v2_';
-
-    const availableActions = { 
-        'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' }, 
-        'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' }, 
-        'toggle_speed_mode': { label: 'Wlacz/Wylacz Tryb Predkosci', elementId: 'speedModeSwitch' }, 
-        'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyStopBtn' }, 
-        'reset_zero': { label: 'Resetuj Osie (Pion)', elementId: 'resetZeroBtn' }, 
-        'trim_plus': { label: 'Korekta Pionu (+)', elementId: 'trimPlusBtn' }, 
-        'trim_minus': { label: 'Korekta Pionu (-)', elementId: 'trimMinusBtn' }
-    };
     const availableTelemetry = { 
         'pitch': { label: 'Pitch (Kat)', color: '#61dafb' }, 
         'target_angle': { label: 'Zadany Kat', color: '#a2f279' }, 
         'speed': { label: 'Predkosc', color: '#f7b731' }
-    };
-    const builtInPresetsData = { 
-        '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 95.0, balanceKiInput: 0.0, balanceKdInput: 3.23, speedKpInput: 0.05, positionKpInput: 2.5, positionKiInput: 0.006, positionKdInput: 1.0 }}, 
-        '2': { name: "2. PID Mieciutki (Plynny)", params: { balanceKpInput: 80.0, balanceKiInput: 0.0, balanceKdInput: 2.8, speedKpInput: 0.03, positionKpInput: 1.8, positionKiInput: 0.004, positionKdInput: 0.8 }}, 
-        '3': { name: "3. PID Agresywny (Sztywny)", params: { balanceKpInput: 110.0, balanceKiInput: 0.0, balanceKdInput: 4.0, speedKpInput: 0.07, positionKpInput: 3.5, positionKiInput: 0.01, positionKdInput: 1.5 }}
     };
 
     function initJoystick() { const wrapper = document.getElementById('joystickWrapper'); const size = wrapper.clientWidth; joystickCanvas.width = size; joystickCanvas.height = size; joystickCenter = { x: size / 2, y: size / 2 }; joystickRadius = size / 2 * 0.75; knobRadius = size / 2 * 0.25; drawJoystick(joystickCenter.x, joystickCenter.y); }
@@ -336,17 +220,9 @@
     function handleJoystickMove(event) { if (!isDragging) return; event.preventDefault(); let { x, y } = getJoystickPosition(event); const dx = x - joystickCenter.x; const dy = y - joystickCenter.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; } drawJoystick(x, y); const now = Date.now(); if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) { const joyX = (x - joystickCenter.x) / joystickRadius; const joyY = -(y - joystickCenter.y) / joystickRadius; sendBleMessage({ type: 'joystick', x: joyX, y: joyY }); lastJoystickSendTime = now; } }
     function handleJoystickEnd(event) { if (!isDragging) return; event.preventDefault(); isDragging = false; drawJoystick(joystickCenter.x, joystickCenter.y); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
     
-    function pollGamepad() { if (gamepadIndex !== null) { const gp = navigator.getGamepads()[gamepadIndex]; if (gp) { if (isMappingButton && actionToMap) { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { Object.keys(gamepadMappings).forEach(key => { if (gamepadMappings[key] === actionToMap) delete gamepadMappings[key]; }); gamepadMappings[i] = actionToMap; saveGamepadMappings(); addLogMessage(`[UI] Akcja '${availableActions[actionToMap].label}' przypisana do przycisku ${i}.`, 'success'); isMappingButton = false; actionToMap = null; renderMappingModal(); } }); } else { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { const action = gamepadMappings[i]; if (action && availableActions[action]) { const element = document.getElementById(availableActions[action].elementId); if (element && !element.disabled) { element.click(); flashElement(element); } } } }); } lastGamepadState = gp.buttons.map(b => b.pressed); let x = gp.axes[0]; let y = gp.axes[1]; if (Math.abs(x) < GAMEPAD_AXIS_THRESHOLD) x = 0; if (Math.abs(y) < GAMEPAD_AXIS_THRESHOLD) y = 0; if (x !== lastGamepadAxes.x || y !== lastGamepadAxes.y) { sendBleMessage({ type: 'joystick', x: x, y: -y }); lastGamepadAxes = { x, y }; } } } requestAnimationFrame(pollGamepad); }
-    window.addEventListener('gamepadconnected', (e) => { gamepadIndex = e.gamepad.index; document.getElementById('gamepadStatus').textContent = 'Polaczony'; document.getElementById('gamepadStatus').style.color = '#a2f279'; addLogMessage(`[UI] Gamepad polaczony: ${e.gamepad.id}`, 'success'); });
-    window.addEventListener('gamepaddisconnected', (e) => { gamepadIndex = null; document.getElementById('gamepadStatus').textContent = 'Brak'; document.getElementById('gamepadStatus').style.color = '#f7b731'; addLogMessage('[UI] Gamepad rozlaczony.', 'warn'); });
-    
-    function startMapping(action, buttonElement) { if (gamepadIndex === null) { addLogMessage("Podlacz gamepada, aby rozpoczac mapowanie!", "warn"); return; } isMappingButton = true; actionToMap = action; document.querySelectorAll('.mapping-button').forEach(btn => btn.textContent = "Przypisz"); buttonElement.textContent = "Czekam..."; addLogMessage(`[UI] Nasluchiwanie na przycisk dla akcji: ${availableActions[action].label}...`, "info"); }
-    function renderMappingModal() { const list = document.getElementById('gamepad-mapping-list'); list.innerHTML = ''; for (const [action, config] of Object.entries(availableActions)) { const row = document.createElement('div'); row.className = 'mapping-row'; const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action); row.innerHTML = `<span class="mapping-label">${config.label}</span><span class="mapping-display">${buttonIndex !== undefined ? `Przycisk ${buttonIndex}` : 'Brak'}</span><button class="mapping-button" data-action="${action}">Przypisz</button>`; list.appendChild(row); } list.querySelectorAll('.mapping-button').forEach(button => { button.addEventListener('click', (e) => { const action = e.target.dataset.action; startMapping(action, e.target); }); }); }
     const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
     function addLogMessage(message, level = 'info') { const logHistory = document.getElementById('log-history'); if (!logHistory) return; const timestamp = new Date().toLocaleTimeString(); let color = '#fff'; if (level === 'error') color = '#ff6347'; else if (level === 'warn') color = '#f7b731'; else if (level === 'success') color = '#a2f279'; const logEntry = document.createElement('div'); logEntry.style.color = color; logEntry.textContent = `[${timestamp}] ${message}`; logHistory.prepend(logEntry); while (logHistory.children.length > 200) { logHistory.removeChild(logHistory.lastChild); } }
-    function clearLogs() { document.getElementById('log-history').innerHTML = ''; }
     function toggleAccordion(header) { const content = header.nextElementSibling; header.classList.toggle('active'); if (content.style.maxHeight && content.style.maxHeight !== '0px') { content.style.maxHeight = '0px'; } else { content.style.maxHeight = content.scrollHeight + "px"; } }
-    function updateAccordionHeight(content) { if (content && content.style.maxHeight !== '0px') { content.style.maxHeight = content.scrollHeight + 'px'; } }
     
     async function connectBLE() {
         addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info');
@@ -368,11 +244,8 @@
             
             document.getElementById('connectionStatus').className = 'status-indicator status-ok';
             document.getElementById('connectionText').textContent = 'Polaczony';
-            addLogMessage('[UI] Polaczono! Zadam konfiguracji...', 'success');
-
-            setTimeout(() => {
-                sendBleMessage({ type: 'request_full_config' });
-            }, 500); 
+            addLogMessage('[UI] Polaczono! Zadam pelnej konfiguracji...', 'success');
+            setTimeout(() => { sendBleMessage({ type: 'request_full_config' }); }, 500); 
 
         } catch (error) {
             addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error');
@@ -384,7 +257,6 @@
 
     function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; }
     
-    // [POPRAWKA] Poprawna funkcja do obslugi fragmentacji
     function handleBleNotification(event) {
         const value = event.target.value;
         const decoder = new TextDecoder('utf-8');
@@ -407,16 +279,12 @@
                             try {
                                 const fullData = JSON.parse(fullMessage);
                                 processCompleteMessage(fullData);
-                            } catch (e) {
-                                addLogMessage(`[UI] Blad parsowania zlozonej wiadomosci: ${e}`, 'error');
-                            }
+                            } catch (e) { addLogMessage(`[UI] Blad parsowania zlozonej wiadomosci: ${e}`, 'error'); }
                         }
                     } else {
                         processCompleteMessage(data);
                     }
-                } catch (e) {
-                     addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error');
-                }
+                } catch (e) { addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error'); }
             }
         }
     }
@@ -435,22 +303,6 @@
                 break;
             case 'log':
                 addLogMessage(`[ROBOT] ${data.message}`, data.level);
-                break;
-            case 'single_pwm_result':
-                const p = data.params;
-                const inputId = `minPwm${p.motor.charAt(0).toUpperCase() + p.motor.slice(1)}${p.direction.charAt(0).toUpperCase() + p.direction.slice(1)}Input`;
-                const inputField = document.getElementById(inputId);
-                if (inputField) {
-                    const tuneRow = inputField.closest('.manual-tune-row');
-                    inputField.value = p.value;
-                    addLogMessage(`[UI] Auto-strojenie dla ${p.motor} ${p.direction} zakonczone. Wynik: ${p.value}`, 'success');
-                    sendFullConfigToRobot();
-                    if(tuneRow){
-                        const autoBtn = tuneRow.querySelector('.auto-btn');
-                        autoBtn.disabled = false;
-                        autoBtn.textContent = 'Auto';
-                    }
-                }
                 break;
         }
     }
@@ -498,12 +350,7 @@
                 dataset.data.push(value);
             }
         }
-        chartData.datasets.forEach(ds => {
-            if (ds.data.length < chartData.labels.length) {
-                if (ds.data.length >= 100) ds.data.shift();
-                ds.data.push(null);
-            }
-        });
+        chartData.datasets.forEach(ds => { if (ds.data.length < chartData.labels.length) { if (ds.data.length >= 100) ds.data.shift(); ds.data.push(null); } });
         telemetryChart.update('none');
     }
     
@@ -512,129 +359,42 @@
         container.innerHTML = '';
         Object.keys(availableTelemetry).forEach((key) => {
             const label = document.createElement('label'), checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.value = key;
+            checkbox.type = 'checkbox'; checkbox.value = key;
             checkbox.checked = (key === 'pitch' || key === 'target_angle');
             checkbox.addEventListener('change', (e) => {
                 const varName = e.target.value;
                 if (e.target.checked) {
                     const chartData = telemetryChart.data;
                     if (!chartData.datasets.find(ds => ds.label === availableTelemetry[varName].label)) {
-                        chartData.datasets.push({
-                            label: availableTelemetry[varName].label,
-                            data: Array(chartData.labels.length).fill(null),
-                            borderColor: availableTelemetry[varName].color,
-                            fill: false, tension: 0.1, pointRadius: 0
-                        });
+                        chartData.datasets.push({ label: availableTelemetry[varName].label, data: Array(chartData.labels.length).fill(null), borderColor: availableTelemetry[varName].color, fill: false, tension: 0.1, pointRadius: 0 });
                     }
                 } else {
                     const chartData = telemetryChart.data;
                     const datasetIndex = chartData.datasets.findIndex(ds => ds.label === availableTelemetry[varName].label);
-                    if (datasetIndex > -1) {
-                        chartData.datasets.splice(datasetIndex, 1);
-                    }
+                    if (datasetIndex > -1) { chartData.datasets.splice(datasetIndex, 1); }
                 }
                 telemetryChart.update();
             });
-            label.appendChild(checkbox);
-            label.append(` ${availableTelemetry[key].label}`);
-            container.appendChild(label);
-            if (checkbox.checked) {
-                checkbox.dispatchEvent(new Event('change'));
-            }
+            label.appendChild(checkbox); label.append(` ${availableTelemetry[key].label}`); container.appendChild(label);
+            if (checkbox.checked) { checkbox.dispatchEvent(new Event('change')); }
         });
     }
-
-    function populatePresetSelect() {
-        const select = document.getElementById('pidPresetSelect');
-        select.innerHTML = '';
-        for (const [index, preset] of Object.entries(builtInPresetsData)) {
-            const option = document.createElement('option');
-            option.value = index;
-            option.textContent = preset.name;
-            select.appendChild(option);
-        }
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key.startsWith(CUSTOM_PRESET_PREFIX)) {
-                const presetName = key.substring(CUSTOM_PRESET_PREFIX.length);
-                const option = document.createElement('option');
-                option.value = key;
-                option.textContent = `Wlasny: ${presetName}`;
-                select.appendChild(option);
-            }
-        }
-    }
     
-    async function applySelectedPreset() {
-        const select = document.getElementById('pidPresetSelect');
-        const selectedValue = select.value;
-        let presetData;
-        if (selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) {
-            presetData = JSON.parse(localStorage.getItem(selectedValue));
-        } else {
-            presetData = builtInPresetsData[selectedValue]?.params;
-        }
-        if (presetData) {
-            for (const [key, value] of Object.entries(presetData)) {
-                const input = document.getElementById(key); // Preset keys match input IDs here
-                if (input) {
-                    input.value = value;
-                }
-            }
-            addLogMessage('[UI] Zastosowano wartosci presetu. Wysylam do robota...', 'info');
-            sendFullConfigToRobot();
-        }
-    }
-    
-    function saveCurrentAsPreset() {
-        const presetName = prompt("Podaj nazwe dla nowego presetu:", "");
-        if (presetName && presetName.trim() !== "") {
-            const presetData = {};
-            Object.keys(parameterMapping).forEach(inputId => {
-                const input = document.getElementById(inputId);
-                if (input) {
-                    presetData[inputId] = parseFloat(input.value);
-                }
-            });
-            localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData));
-            addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success');
-            populatePresetSelect();
-        }
-    }
-
-    function deleteSelectedPreset() {
-        const select = document.getElementById('pidPresetSelect');
-        const selectedValue = select.value;
-        if (!selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) {
-            addLogMessage('[UI] Nie mozna usunac wbudowanego presetu.', 'warn');
-            return;
-        }
-        if (confirm(`Czy na pewno chcesz usunac preset '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'?`)) {
-            localStorage.removeItem(selectedValue);
-            addLogMessage(`[UI] Usunieto preset.`, 'info');
-            populatePresetSelect();
-        }
-    }
-
     function setupNumericInputs() {
         document.querySelectorAll('.numeric-input-wrapper').forEach(wrapper => {
-            const container = wrapper.closest('.setting-container') || wrapper.closest('.pwm-input-row');
+            const container = wrapper.closest('.setting-container');
             if (!container) return;
             const input = container.querySelector('input[type=number]');
             const minusBtn = wrapper.querySelector('button:first-child');
             const plusBtn = wrapper.querySelector('button:last-child');
-            if (!input || !minusBtn || !plusBtn || input.disabled) return;
+            if (!input || !minusBtn || !plusBtn) return;
             const step = parseFloat(input.step) || 1;
             const isFloat = input.step.includes('.');
             const updateValue = (amount) => {
                 let current = parseFloat(input.value);
                 if (isNaN(current)) current = 0;
                 let newValue = current + amount;
-                if (isFloat) {
-                    const dp = (step.toString().split('.')[1] || '').length;
-                    newValue = parseFloat(newValue.toFixed(dp));
-                }
+                if (isFloat) { const dp = (step.toString().split('.')[1] || '').length; newValue = parseFloat(newValue.toFixed(dp)); }
                 const min = parseFloat(input.min);
                 const max = parseFloat(input.max);
                 if (!isNaN(min)) newValue = Math.max(min, newValue);
@@ -691,61 +451,21 @@
         }
         
         document.getElementById('loadBtn').addEventListener('click', () => {
-            if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) {
+            if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) {
                 sendBleMessage({ type: 'request_full_config' });
             }
         });
-
+        document.getElementById('clearLogsBtn').addEventListener('click', () => { document.getElementById('log-history').innerHTML = ''; });
         document.getElementById('calibrateMpuBtn')?.addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
-        
-        document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset);
-        document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset);
-        document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset);
-        
         document.querySelectorAll('.help-icon').forEach(icon => {
             icon.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const container = icon.closest('.setting-container');
                 const helpText = container.querySelector('.help-text');
-                if (helpText) {
-                    helpText.classList.toggle('visible');
-                    const accordionContent = container.closest('.accordion-content');
-                    if (accordionContent) updateAccordionHeight(accordionContent);
-                }
+                if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) { if (accordionContent.style.maxHeight !== '0px') { accordionContent.style.maxHeight = accordionContent.scrollHeight + 'px'; } } }
             });
         });
     }
-
-    function setupManualTuneButtons() {
-        document.querySelectorAll('.manual-tune-row').forEach(row => {
-            const motor = row.dataset.motor;
-            const direction = row.dataset.direction;
-            const input = row.querySelector('.tune-input');
-            const testBtn = row.querySelector('.test-btn');
-            const stopBtn = row.querySelector('.stop-btn');
-            const autoBtn = row.querySelector('.auto-btn');
-            testBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: parseInt(input.value) }); });
-            stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); });
-            autoBtn.addEventListener('click', (e) => {
-                if (confirm("UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?")) {
-                    const startValue = parseInt(document.getElementById('pwmTuneStartInput').value);
-                    sendBleMessage({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue });
-                    e.target.disabled = true;
-                    e.target.textContent = 'Szukanie...';
-                    addLogMessage(`[UI] Rozpoczynam auto-strojenie dla ${motor} ${direction}...`, 'info');
-                }
-            });
-        });
-        document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); });
-    }
-    
-    function setupGamepadMappingModal() {
-        document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; });
-        document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; });
-    }
-    function flashElement(element) { if (!element) return; const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element; target.classList.add('gamepad-flash'); setTimeout(() => target.classList.remove('gamepad-flash'), 300); }
-    function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
-    function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
 </script>
 
 </body>
