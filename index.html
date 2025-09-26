@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v2.4 (Final Fix)</title>
+    <title>Robot PID - Panel Sterowania v2.4 (DIAG)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -243,10 +243,10 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 2.4 (UI dla PID) - FINALNA POPRAWKA - Debounce na set_param
+    // WERSJA 2.4 (UI dla PID) - Z ROZBUDOWANA DIAGNOSTYKA
     // =======================================================================================
     
-    let isApplyingConfig = false; // Flaga zapobiegajaca petli zwrotnej
+    let isApplyingConfig = false;
 
     const parameterMapping = {
         'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b',
@@ -411,7 +411,22 @@
         }
     }
 
-    async function sendBleMessage(message) { if (!rxCharacteristic) { return; } try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
+    async function sendBleMessage(message) {
+        // >>>>>>>>>>>>>> LOG DIAGNOSTYCZNY 4 <<<<<<<<<<<<<<
+        console.log('[DIAG] Proba wyslania do robota:', JSON.stringify(message));
+        // >>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<
+
+        if (!rxCharacteristic) { 
+            console.error('[DIAG] Blad: proba wyslania bez polaczenia (rxCharacteristic is null)');
+            return; 
+        } 
+        try { 
+            const encoder = new TextEncoder(); 
+            await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); 
+        } catch (error) { 
+            addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); 
+        } 
+    }
     
     function processCompleteMessage(data) {
         switch (data.type) {
@@ -454,8 +469,6 @@
                      value = (value * 100);
                 }
                 input.value = value;
-                // Programowa zmiana wartosci nie wywoluje 'change' w wiekszosci przegladarek, wiec petla nie powinna wystapic.
-                // Ale gdyby wystepowala, flaga 'isApplyingConfig' by ja zablokowala.
             }
         }
     }
@@ -568,7 +581,7 @@
         if (presetData) {
             isApplyingConfig = true;
             for (const [key, value] of Object.entries(presetData)) {
-                const input = document.getElementById(key); // Preset keys match input IDs here
+                const input = document.getElementById(key);
                 if (input) {
                     input.value = value;
                 }
@@ -657,7 +670,7 @@
     function setupEventListeners() {
         
         const sendSingleParam = (inputId, value) => {
-            if (isApplyingConfig) return; // Podwojne zabezpieczenie
+            if (isApplyingConfig) return;
             const snakeKey = parameterMapping[inputId];
             if (snakeKey) {
                 if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) {
@@ -696,12 +709,11 @@
             document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg));
         }
         
-        // Przycisk "Zapisz na Robocie" teraz wysyla cala konfiguracje
         document.getElementById('saveBtn').addEventListener('click', () => {
              if (confirm("Czy na pewno chcesz wyslac i zapisac cala konfiguracje na robocie?")) {
-                sendFullConfigToRobot(); // Wysyla calosc
+                sendFullConfigToRobot();
                 setTimeout(() => {
-                    sendBleMessage({ type: 'save_tunings' }); // Chwile pozniej zapisuje do EEPROM
+                    sendBleMessage({ type: 'save_tunings' });
                 }, 200);
             }
         });
@@ -761,7 +773,7 @@
     }
     function flashElement(element) { if (!element) return; const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element; target.classList.add('gamepad-flash'); setTimeout(() => target.classList.remove('gamepad-flash'), 300); }
     function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
-    function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
+    function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(localStorage)); }
 </script>
 
 </body>
