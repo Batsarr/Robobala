@@ -662,10 +662,21 @@
     }
 
     function setupEventListeners() {
-        debouncedSendConfig = debounce(sendFullConfigToRobot, 400);
+        // debouncedSendConfig = debounce(sendFullConfigToRobot, 400);
 
         document.querySelectorAll('.config-value').forEach(input => {
-            input.addEventListener('change', debouncedSendConfig);
+            input.addEventListener('change', (e) => {
+                const inputId = e.target.id;
+                const snakeKey = parameterMapping[inputId];
+                if (snakeKey) {
+                    let value = parseFloat(e.target.value);
+                    if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) {
+                        value /= 100.0;
+                    }
+                    // Wysylamy tylko jedna, zmieniona wartosc - to jest mala paczka!
+                    sendBleMessage({ type: 'set_param', key: snakeKey, value: value });
+                }
+            });
         });
 
         joystickCanvas.addEventListener('mousedown', handleJoystickStart);
