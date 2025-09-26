@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v2.4 (DIAG)</title>
+    <title>Robot PID - Panel Sterowania v2.5 (AutoTest)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -85,6 +85,11 @@
         .preset-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
         #applySelectedPresetBtn { background-color: #a2f279; }
         #saveCurrentAsPresetBtn { background-color: #61dafb; }
+        #autotestStatusPanel { background-color: #20232a; padding: 12px; border-radius: 6px; }
+        #autotestStatusPanel h5 { color: #61dafb; margin: 0 0 10px 0; font-size: 1.1em; text-align: left; }
+        #statusProgressBar { width: 100%; -webkit-appearance: none; appearance: none; height: 8px; }
+        #statusProgressBar::-webkit-progress-bar { background-color: #4a4f58; border-radius: 4px; }
+        #statusProgressBar::-webkit-progress-value { background-color: #a2f279; border-radius: 4px; transition: width 0.3s ease; }
     </style>
 </head>
 <body>
@@ -232,6 +237,48 @@
             </div>
         </div>
         
+        <!-- ================= NOWA SEKCJA: AUTO TESTY ================= -->
+        <div class="card">
+            <button class="accordion-header active" onclick="toggleAccordion(this)">Auto Testy PID</button>
+            <div class="accordion-content active">
+                
+                <div class="setting-container">
+                    <label for="autotestSelect">Wybierz Test:</label>
+                    <select id="autotestSelect" style="width: 100%; padding: 5px;">
+                        <option value="none" selected>-- Wybierz opcje --</option>
+                        <option value="balance">1. Strojenie Balansu</option>
+                        <option value="linear" disabled>2. Strojenie Jazdy Liniowej (wkrotce)</option>
+                        <option value="turn" disabled>3. Strojenie Obrotu (wkrotce)</option>
+                        <option value="square_validation" disabled>4. Walidacja: Test Kwadratu (wkrotce)</option>
+                    </select>
+                </div>
+                <div id="autotestOptions">
+                    <!-- Opcje beda dynamicznie wstawiane tutaj przez JS -->
+                </div>
+        
+                <hr style="border-color: #4a4f58; margin: 15px 0;">
+        
+                <div id="autotestStatusPanel">
+                    <h5>Status Sesji</h5>
+                    <div class="info-grid">
+                        <strong>Testowane Parametry:</strong> <span id="statusTestedParams">---</span>
+                        <strong>Najlepszy Wynik:</strong> <span id="statusBestScore" style="font-weight: bold; color: #a2f279;">---</span>
+                        <strong>Postep:</strong> 
+                        <div>
+                            <progress id="statusProgressBar" value="0" max="100"></progress>
+                            <span id="statusProgressText" style="font-size:0.9em;">Oczekuje na start...</span>
+                        </div>
+                        <strong>Status:</strong> <span id="statusStateText" style="font-weight: bold;">Bezczynny</span>
+                    </div>
+                </div>
+        
+                <button id="autotestActionBtn" style="width:100%; margin-top:15px;" disabled>Wybierz test, aby rozpoczac</button>
+                <button id="autotestCancelBtn" style="width:100%; margin-top:10px; background-color:#ff6347; display:none;">Anuluj Sesje</button>
+        
+            </div>
+        </div>
+        <!-- ================= KONIEC NOWEJ SEKCJI ================= -->
+
         <div class="card" id="log-card" style="grid-column: 1 / -1;">
             <h2>Logi Systemowe</h2>
             <div id="log-history"></div>
@@ -243,7 +290,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 2.4 (UI dla PID) - Z ROZBUDOWANA DIAGNOSTYKA
+    // WERSJA 2.5 (UI dla PID) - Z SYSTEMEM AUTO TESTOW
     // =======================================================================================
     
     let isApplyingConfig = false;
@@ -275,6 +322,7 @@
         setupEventListeners();
         setupManualTuneButtons();
         setupGamepadMappingModal();
+        setupAutoTestEventListeners(); // NOWOSC
         loadGamepadMappings();
         renderMappingModal();
         pollGamepad();
@@ -315,12 +363,14 @@
         'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyStopBtn' }, 
         'reset_zero': { label: 'Resetuj Osie (Pion)', elementId: 'resetZeroBtn' }, 
         'trim_plus': { label: 'Korekta Pionu (+)', elementId: 'trimPlusBtn' }, 
-        'trim_minus': { label: 'Korekta Pionu (-)', elementId: 'trimMinusBtn' }
+        'trim_minus': { label: 'Korekta Pionu (-)', elementId: 'trimMinusBtn' },
+        'start_autotest_cycle': { label: 'Uruchom Cykl Auto Testu', elementId: 'autotestActionBtn' } // NOWOSC
     };
     const availableTelemetry = { 
         'pitch': { label: 'Pitch (Kat)', color: '#61dafb' }, 
         'target_angle': { label: 'Zadany Kat', color: '#a2f279' }, 
-        'speed': { label: 'Predkosc', color: '#f7b731' }
+        'speed': { label: 'Predkosc', color: '#f7b731' },
+        'output': { label: 'Wyjscie PID', color: '#ff6347'} // Upewnij sie, ze robot wysyla 'output'
     };
     const builtInPresetsData = { 
         '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 95.0, balanceKiInput: 0.0, balanceKdInput: 3.23, speedKpInput: 0.05, positionKpInput: 2.5, positionKiInput: 0.006, positionKdInput: 1.0 }}, 
@@ -342,54 +392,14 @@
     function startMapping(action, buttonElement) { if (gamepadIndex === null) { addLogMessage("Podlacz gamepada, aby rozpoczac mapowanie!", "warn"); return; } isMappingButton = true; actionToMap = action; document.querySelectorAll('.mapping-button').forEach(btn => btn.textContent = "Przypisz"); buttonElement.textContent = "Czekam..."; addLogMessage(`[UI] Nasluchiwanie na przycisk dla akcji: ${availableActions[action].label}...`, "info"); }
     function renderMappingModal() { const list = document.getElementById('gamepad-mapping-list'); list.innerHTML = ''; for (const [action, config] of Object.entries(availableActions)) { const row = document.createElement('div'); row.className = 'mapping-row'; const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action); row.innerHTML = `<span class="mapping-label">${config.label}</span><span class="mapping-display">${buttonIndex !== undefined ? `Przycisk ${buttonIndex}` : 'Brak'}</span><button class="mapping-button" data-action="${action}">Przypisz</button>`; list.appendChild(row); } list.querySelectorAll('.mapping-button').forEach(button => { button.addEventListener('click', (e) => { const action = e.target.dataset.action; startMapping(action, e.target); }); }); }
     
-    const debounce = (func, delay) => { 
-        let timeout; 
-        return function(...args) { 
-            const context = this; 
-            clearTimeout(timeout); 
-            timeout = setTimeout(() => func.apply(context, args), delay); 
-        }; 
-    };
+    const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
 
     function addLogMessage(message, level = 'info') { const logHistory = document.getElementById('log-history'); if (!logHistory) return; const timestamp = new Date().toLocaleTimeString(); let color = '#fff'; if (level === 'error') color = '#ff6347'; else if (level === 'warn') color = '#f7b731'; else if (level === 'success') color = '#a2f279'; const logEntry = document.createElement('div'); logEntry.style.color = color; logEntry.textContent = `[${timestamp}] ${message}`; logHistory.prepend(logEntry); while (logHistory.children.length > 200) { logHistory.removeChild(logHistory.lastChild); } }
     function clearLogs() { document.getElementById('log-history').innerHTML = ''; }
     function toggleAccordion(header) { const content = header.nextElementSibling; header.classList.toggle('active'); if (content.style.maxHeight && content.style.maxHeight !== '0px') { content.style.maxHeight = '0px'; } else { content.style.maxHeight = content.scrollHeight + "px"; } }
     function updateAccordionHeight(content) { if (content && content.style.maxHeight !== '0px') { content.style.maxHeight = content.scrollHeight + 'px'; } }
     
-    async function connectBLE() {
-        addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info');
-        try {
-            bleDevice = await navigator.bluetooth.requestDevice({
-                filters: [{ name: 'Robobala_PID' }],
-                optionalServices: [SERVICE_UUID]
-            });
-            addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info');
-            document.getElementById('connectBleBtn').disabled = true;
-            document.getElementById('connectionText').textContent = 'Laczenie...';
-            bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
-            const server = await bleDevice.gatt.connect();
-            const service = await server.getPrimaryService(SERVICE_UUID);
-            rxCharacteristic = await service.getCharacteristic(RX_UUID);
-            txCharacteristic = await service.getCharacteristic(TX_UUID);
-            await txCharacteristic.startNotifications();
-            txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification);
-            
-            document.getElementById('connectionStatus').className = 'status-indicator status-ok';
-            document.getElementById('connectionText').textContent = 'Polaczony';
-            addLogMessage('[UI] Polaczono! Zadam konfiguracji...', 'success');
-
-            setTimeout(() => {
-                sendBleMessage({ type: 'request_full_config' });
-            }, 500); 
-
-        } catch (error) {
-            addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error');
-            document.getElementById('connectionStatus').className = 'status-indicator status-error';
-            document.getElementById('connectionText').textContent = 'Blad polaczenia';
-            document.getElementById('connectBleBtn').disabled = false;
-        }
-    }
-
+    async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ name: 'Robobala_PID' }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono! Zadam konfiguracji...', 'success'); setTimeout(() => { sendBleMessage({ type: 'request_full_config' }); }, 500); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
     function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; }
     
     function handleBleNotification(event) {
@@ -403,6 +413,10 @@
             if (line) {
                 try {
                     const data = JSON.parse(line);
+                    // NOWOSC: Przekierowanie danych do sesji testowej, jesli jest aktywna
+                    if (tuningSession && tuningSession.isCollecting) {
+                        tuningSession.recordTelemetry(data);
+                    }
                     processCompleteMessage(data);
                 } catch (e) {
                      addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error');
@@ -411,22 +425,7 @@
         }
     }
 
-    async function sendBleMessage(message) {
-        // >>>>>>>>>>>>>> LOG DIAGNOSTYCZNY 4 <<<<<<<<<<<<<<
-        console.log('[DIAG] Proba wyslania do robota:', JSON.stringify(message));
-        // >>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<
-
-        if (!rxCharacteristic) { 
-            console.error('[DIAG] Blad: proba wyslania bez polaczenia (rxCharacteristic is null)');
-            return; 
-        } 
-        try { 
-            const encoder = new TextEncoder(); 
-            await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); 
-        } catch (error) { 
-            addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); 
-        } 
-    }
+    async function sendBleMessage(message) { if (!rxCharacteristic) { return; } try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
     
     function processCompleteMessage(data) {
         switch (data.type) {
@@ -548,232 +547,337 @@
         });
     }
 
-    function populatePresetSelect() {
-        const select = document.getElementById('pidPresetSelect');
-        select.innerHTML = '';
-        for (const [index, preset] of Object.entries(builtInPresetsData)) {
-            const option = document.createElement('option');
-            option.value = index;
-            option.textContent = preset.name;
-            select.appendChild(option);
-        }
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key.startsWith(CUSTOM_PRESET_PREFIX)) {
-                const presetName = key.substring(CUSTOM_PRESET_PREFIX.length);
-                const option = document.createElement('option');
-                option.value = key;
-                option.textContent = `Wlasny: ${presetName}`;
-                select.appendChild(option);
-            }
-        }
-    }
-    
-    async function applySelectedPreset() {
-        const select = document.getElementById('pidPresetSelect');
-        const selectedValue = select.value;
-        let presetData;
-        if (selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) {
-            presetData = JSON.parse(localStorage.getItem(selectedValue));
-        } else {
-            presetData = builtInPresetsData[selectedValue]?.params;
-        }
-        if (presetData) {
-            isApplyingConfig = true;
-            for (const [key, value] of Object.entries(presetData)) {
-                const input = document.getElementById(key);
-                if (input) {
-                    input.value = value;
-                }
-            }
-            isApplyingConfig = false;
-            addLogMessage('[UI] Zastosowano wartosci presetu. Zapisz na robocie, aby wyslac.', 'info');
-        }
-    }
-    
-    function saveCurrentAsPreset() {
-        const presetName = prompt("Podaj nazwe dla nowego presetu:", "");
-        if (presetName && presetName.trim() !== "") {
-            const presetData = {};
-            Object.keys(parameterMapping).forEach(inputId => {
-                const input = document.getElementById(inputId);
-                if (input) {
-                    presetData[inputId] = parseFloat(input.value);
-                }
-            });
-            localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData));
-            addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success');
-            populatePresetSelect();
-        }
-    }
+    function populatePresetSelect() { const select = document.getElementById('pidPresetSelect'); select.innerHTML = ''; for (const [index, preset] of Object.entries(builtInPresetsData)) { const option = document.createElement('option'); option.value = index; option.textContent = preset.name; select.appendChild(option); } for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key.startsWith(CUSTOM_PRESET_PREFIX)) { const presetName = key.substring(CUSTOM_PRESET_PREFIX.length); const option = document.createElement('option'); option.value = key; option.textContent = `Wlasny: ${presetName}`; select.appendChild(option); } } }
+    async function applySelectedPreset() { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; let presetData; if (selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { presetData = JSON.parse(localStorage.getItem(selectedValue)); } else { presetData = builtInPresetsData[selectedValue]?.params; } if (presetData) { isApplyingConfig = true; for (const [key, value] of Object.entries(presetData)) { const input = document.getElementById(key); if (input) { input.value = value; } } isApplyingConfig = false; addLogMessage('[UI] Zastosowano wartosci presetu. Zapisz na robocie, aby wyslac.', 'info'); } }
+    function saveCurrentAsPreset() { const presetName = prompt("Podaj nazwe dla nowego presetu:", ""); if (presetName && presetName.trim() !== "") { const presetData = {}; Object.keys(parameterMapping).forEach(inputId => { const input = document.getElementById(inputId); if (input) { presetData[inputId] = parseFloat(input.value); } }); localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData)); addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success'); populatePresetSelect(); } }
+    function deleteSelectedPreset() { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; if (!selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { addLogMessage('[UI] Nie mozna usunac wbudowanego presetu.', 'warn'); return; } if (confirm(`Czy na pewno chcesz usunac preset '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'?`)) { localStorage.removeItem(selectedValue); addLogMessage(`[UI] Usunieto preset.`, 'info'); populatePresetSelect(); } }
 
-    function deleteSelectedPreset() {
-        const select = document.getElementById('pidPresetSelect');
-        const selectedValue = select.value;
-        if (!selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) {
-            addLogMessage('[UI] Nie mozna usunac wbudowanego presetu.', 'warn');
-            return;
-        }
-        if (confirm(`Czy na pewno chcesz usunac preset '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'?`)) {
-            localStorage.removeItem(selectedValue);
-            addLogMessage(`[UI] Usunieto preset.`, 'info');
-            populatePresetSelect();
-        }
-    }
+    function setupNumericInputs() { document.querySelectorAll('.numeric-input-wrapper').forEach(wrapper => { const container = wrapper.closest('.setting-container') || wrapper.closest('.pwm-input-row'); if (!container) return; const input = container.querySelector('input[type=number]'); const minusBtn = wrapper.querySelector('button:first-child'); const plusBtn = wrapper.querySelector('button:last-child'); if (!input || !minusBtn || !plusBtn || input.disabled) return; const step = parseFloat(input.step) || 1; const isFloat = input.step.includes('.'); const updateValue = (amount) => { let current = parseFloat(input.value); if (isNaN(current)) current = 0; let newValue = current + amount; if (isFloat) { const dp = (step.toString().split('.')[1] || '').length; newValue = parseFloat(newValue.toFixed(dp)); } const min = parseFloat(input.min); const max = parseFloat(input.max); if (!isNaN(min)) newValue = Math.max(min, newValue); if (!isNaN(max)) newValue = Math.min(max, newValue); input.value = newValue; input.dispatchEvent(new Event('change', { bubbles: true })); }; minusBtn.addEventListener('click', () => updateValue(-step)); plusBtn.addEventListener('click', () => updateValue(step)); }); }
 
-    function setupNumericInputs() {
-        document.querySelectorAll('.numeric-input-wrapper').forEach(wrapper => {
-            const container = wrapper.closest('.setting-container') || wrapper.closest('.pwm-input-row');
-            if (!container) return;
-            const input = container.querySelector('input[type=number]');
-            const minusBtn = wrapper.querySelector('button:first-child');
-            const plusBtn = wrapper.querySelector('button:last-child');
-            if (!input || !minusBtn || !plusBtn || input.disabled) return;
-            const step = parseFloat(input.step) || 1;
-            const isFloat = input.step.includes('.');
-            const updateValue = (amount) => {
-                let current = parseFloat(input.value);
-                if (isNaN(current)) current = 0;
-                let newValue = current + amount;
-                if (isFloat) {
-                    const dp = (step.toString().split('.')[1] || '').length;
-                    newValue = parseFloat(newValue.toFixed(dp));
-                }
-                const min = parseFloat(input.min);
-                const max = parseFloat(input.max);
-                if (!isNaN(min)) newValue = Math.max(min, newValue);
-                if (!isNaN(max)) newValue = Math.min(max, newValue);
-                input.value = newValue;
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-            };
-            minusBtn.addEventListener('click', () => updateValue(-step));
-            plusBtn.addEventListener('click', () => updateValue(step));
-        });
-    }
-
-    function sendFullConfigToRobot() {
-        const params = {};
-        for (const [inputId, snakeKey] of Object.entries(parameterMapping)) {
-            const input = document.getElementById(inputId);
-            if (input) {
-                let value = parseFloat(input.value);
-                if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) {
-                     value /= 100.0;
-                }
-                params[snakeKey] = value;
-            }
-        }
-        addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info');
-        sendBleMessage({ type: 'full_config', params });
-    }
+    function sendFullConfigToRobot() { const params = {}; for (const [inputId, snakeKey] of Object.entries(parameterMapping)) { const input = document.getElementById(inputId); if (input) { let value = parseFloat(input.value); if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) { value /= 100.0; } params[snakeKey] = value; } } addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info'); sendBleMessage({ type: 'full_config', params }); }
 
     function setupEventListeners() {
-        
-        const sendSingleParam = (inputId, value) => {
-            if (isApplyingConfig) return;
-            const snakeKey = parameterMapping[inputId];
-            if (snakeKey) {
-                if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) {
-                    value /= 100.0;
-                }
-                sendBleMessage({ type: 'set_param', key: snakeKey, value: value });
-            }
-        };
-        
+        const sendSingleParam = (inputId, value) => { if (isApplyingConfig) return; const snakeKey = parameterMapping[inputId]; if (snakeKey) { if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) { value /= 100.0; } sendBleMessage({ type: 'set_param', key: snakeKey, value: value }); } };
         const debouncedSendSingleParam = debounce(sendSingleParam, 400);
-
-        document.querySelectorAll('.config-value').forEach(input => {
-            input.addEventListener('change', (e) => {
-                debouncedSendSingleParam(e.target.id, parseFloat(e.target.value));
-            });
-        });
-
-        joystickCanvas.addEventListener('mousedown', handleJoystickStart);
-        document.addEventListener('mousemove', handleJoystickMove);
-        document.addEventListener('mouseup', handleJoystickEnd);
-        joystickCanvas.addEventListener('touchstart', handleJoystickStart, { passive: false });
-        document.addEventListener('touchmove', handleJoystickMove, { passive: false });
-        document.addEventListener('touchend', handleJoystickEnd);
-        document.addEventListener('touchcancel', handleJoystickEnd);
+        document.querySelectorAll('.config-value').forEach(input => { input.addEventListener('change', (e) => { debouncedSendSingleParam(e.target.id, parseFloat(e.target.value)); }); });
+        joystickCanvas.addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); joystickCanvas.addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd);
         document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
-        
-        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => {
-            document.getElementById(id).addEventListener('change', (e) => {
-                const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' };
-                sendBleMessage({ type: typeMap[id], enabled: e.target.checked });
-            });
-        });
-
+        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
         const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'trimRollPlusBtn': { type: 'adjust_roll', value: 1 }, 'trimRollMinusBtn': { type: 'adjust_roll', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
-        for (const [id, msg] of Object.entries(toolButtons)) {
-            document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg));
-        }
-        
-        document.getElementById('saveBtn').addEventListener('click', () => {
-             if (confirm("Czy na pewno chcesz wyslac i zapisac cala konfiguracje na robocie?")) {
-                sendFullConfigToRobot();
-                setTimeout(() => {
-                    sendBleMessage({ type: 'save_tunings' });
-                }, 200);
-            }
-        });
-
-        document.getElementById('loadBtn').addEventListener('click', () => {
-            if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) {
-                sendBleMessage({ type: 'request_full_config' });
-            }
-        });
-
+        for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); }
+        document.getElementById('saveBtn').addEventListener('click', () => { if (confirm("Czy na pewno chcesz wyslac i zapisac cala konfiguracje na robocie?")) { sendFullConfigToRobot(); setTimeout(() => { sendBleMessage({ type: 'save_tunings' }); }, 200); } });
+        document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { sendBleMessage({ type: 'request_full_config' }); } });
         document.getElementById('calibrateMpuBtn')?.addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
-        
-        document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset);
-        document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset);
-        document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset);
-        
-        document.querySelectorAll('.help-icon').forEach(icon => {
-            icon.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const container = icon.closest('.setting-container');
-                const helpText = container.querySelector('.help-text');
-                if (helpText) {
-                    helpText.classList.toggle('visible');
-                    const accordionContent = container.closest('.accordion-content');
-                    if (accordionContent) updateAccordionHeight(accordionContent);
-                }
-            });
-        });
+        document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset);
+        document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); });
     }
 
-    function setupManualTuneButtons() {
-        document.querySelectorAll('.manual-tune-row').forEach(row => {
-            const motor = row.dataset.motor;
-            const direction = row.dataset.direction;
-            const input = row.querySelector('.tune-input');
-            const testBtn = row.querySelector('.test-btn');
-            const stopBtn = row.querySelector('.stop-btn');
-            const autoBtn = row.querySelector('.auto-btn');
-            testBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: parseInt(input.value) }); });
-            stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); });
-            autoBtn.addEventListener('click', (e) => {
-                if (confirm("UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?")) {
-                    const startValue = parseInt(document.getElementById('pwmTuneStartInput').value);
-                    sendBleMessage({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue });
-                    e.target.disabled = true;
-                    e.target.textContent = 'Szukanie...';
-                    addLogMessage(`[UI] Rozpoczynam auto-strojenie dla ${motor} ${direction}...`, 'info');
-                }
-            });
-        });
-        document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); });
-    }
-    
-    function setupGamepadMappingModal() {
-        document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; });
-        document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; });
-    }
+    function setupManualTuneButtons() { document.querySelectorAll('.manual-tune-row').forEach(row => { const motor = row.dataset.motor; const direction = row.dataset.direction; const input = row.querySelector('.tune-input'); const testBtn = row.querySelector('.test-btn'); const stopBtn = row.querySelector('.stop-btn'); const autoBtn = row.querySelector('.auto-btn'); testBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: parseInt(input.value) }); }); stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); }); autoBtn.addEventListener('click', (e) => { if (confirm("UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?")) { const startValue = parseInt(document.getElementById('pwmTuneStartInput').value); sendBleMessage({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue }); e.target.disabled = true; e.target.textContent = 'Szukanie...'; addLogMessage(`[UI] Rozpoczynam auto-strojenie dla ${motor} ${direction}...`, 'info'); } }); }); document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); }); }
+    function setupGamepadMappingModal() { document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; }); document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; }); }
     function flashElement(element) { if (!element) return; const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element; target.classList.add('gamepad-flash'); setTimeout(() => target.classList.remove('gamepad-flash'), 300); }
     function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
-    function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(localStorage)); }
+    function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
+
+    // =======================================================================================
+    // NOWOSC: LOGIKA SYSTEMU AUTO TESTOW
+    // =======================================================================================
+    let tuningSession = null;
+
+    class TuningSession {
+        constructor(testType, options) {
+            this.testType = testType;
+            this.options = options;
+            this.state = 'idle'; // 'idle', 'ready', 'testing', 'analyzing', 'finished'
+            this.isCollecting = false;
+            this.telemetryBuffer = [];
+            this.currentCycle = 0;
+            this.totalCycles = options.totalCycles;
+            this.bestScore = -1.0;
+            this.bestParams = {};
+            this.safeParams = {};
+            this.testParams = {};
+            this.hillClimbState = 'start_kp'; // 'start_kp', 'test_kp_minus', 'test_kd_plus', 'test_kd_minus'
+        }
+
+        recordTelemetry(data) {
+            if (this.isCollecting && data.type === 'telemetry') {
+                this.telemetryBuffer.push(data);
+            }
+        }
+
+        // ... reszta metod klasy
+        start() {
+            addLogMessage(`[AutoTest] Rozpoczynam sesje strojenia: ${this.testType}`, 'info');
+            this.safeParams = {
+                kp: parseFloat(document.getElementById('balanceKpInput').value),
+                kd: parseFloat(document.getElementById('balanceKdInput').value)
+            };
+            this.bestParams = { ...this.safeParams };
+            this.currentCycle = 1;
+            this.prepareNextCycle();
+        }
+
+        prepareNextCycle() {
+            this.state = 'ready';
+            this.testParams = this.generateNextParams();
+            updateAutoTestUI(this);
+        }
+
+        runCycle() {
+            if (this.state !== 'ready') return;
+            this.state = 'testing';
+            this.isCollecting = true;
+            this.telemetryBuffer = [];
+            updateAutoTestUI(this);
+
+            sendBleMessage({ type: 'set_param', key: 'kp_b', value: this.testParams.kp });
+            sendBleMessage({ type: 'set_param', key: 'kd_b', value: this.testParams.kd });
+            addLogMessage(`[AutoTest] Cykl ${this.currentCycle}/${this.totalCycles}. Testuje Kp=${this.testParams.kp.toFixed(2)}, Kd=${this.testParams.kd.toFixed(2)}`, 'info');
+
+            setTimeout(() => {
+                this.finishCycle();
+            }, this.options.cycleDuration * 1000);
+        }
+
+        finishCycle() {
+            this.isCollecting = false;
+            this.state = 'analyzing';
+            updateAutoTestUI(this);
+            
+            // WAZNE: Natychmiastowy powrot do bezpiecznych parametrow
+            sendBleMessage({ type: 'set_param', key: 'kp_b', value: this.safeParams.kp });
+            sendBleMessage({ type: 'set_param', key: 'kd_b', value: this.safeParams.kd });
+            
+            const score = this.calculateFitness();
+            addLogMessage(`[AutoTest] Wynik Fitness: ${score.toFixed(4)}`, 'success');
+
+            if (score > this.bestScore) {
+                this.bestScore = score;
+                this.bestParams = { ...this.testParams };
+                addLogMessage(`[AutoTest] Nowy najlepszy wynik!`, 'success');
+            }
+
+            if (this.currentCycle >= this.totalCycles) {
+                this.state = 'finished';
+                updateAutoTestUI(this);
+            } else {
+                this.currentCycle++;
+                this.prepareNextCycle();
+            }
+        }
+
+        cancel() {
+            this.state = 'idle';
+            this.isCollecting = false;
+            // Przywrocenie bezpiecznych parametrow na wszelki wypadek
+            if(this.safeParams.kp) {
+                sendBleMessage({ type: 'set_param', key: 'kp_b', value: this.safeParams.kp });
+                sendBleMessage({ type: 'set_param', key: 'kd_b', value: this.safeParams.kd });
+            }
+            addLogMessage('[AutoTest] Sesja anulowana przez uzytkownika.', 'warn');
+            updateAutoTestUI(null);
+        }
+
+        generateNextParams() {
+            const step = 0.05; // 5% kroku
+            let nextParams = { ...this.bestParams };
+        
+            switch (this.hillClimbState) {
+                case 'start_kp':
+                    nextParams.kp *= (1 + step);
+                    this.hillClimbState = 'test_kp_minus';
+                    break;
+                case 'test_kp_minus':
+                    nextParams.kp *= (1 - step);
+                    this.hillClimbState = 'test_kd_plus';
+                    break;
+                case 'test_kd_plus':
+                    nextParams.kd *= (1 + step);
+                    this.hillClimbState = 'test_kd_minus';
+                    break;
+                case 'test_kd_minus':
+                    nextParams.kd *= (1 - step);
+                    this.hillClimbState = 'start_kp'; // Zacznij petle od nowa
+                    break;
+            }
+            return nextParams;
+        }
+
+        calculateFitness() {
+            if (this.telemetryBuffer.length < 10) {
+                addLogMessage('[AutoTest] Blad: za malo danych do oceny!', 'error');
+                return 0.0;
+            }
+        
+            const buffer = this.telemetryBuffer;
+            const options = this.options;
+        
+            // Metryki
+            let sumPitch = 0, sumAbsPitch = 0, maxAbsPitch = 0;
+            let sumAbsSpeed = 0;
+            let sumAbsOutputChange = 0;
+            let inZoneSamples = 0;
+            
+            for (let i = 0; i < buffer.length; i++) {
+                const current = buffer[i];
+                const pitch = current.pitch || 0;
+                const speed = current.speed || 0;
+                const output = current.output || 0;
+        
+                sumPitch += pitch;
+                sumAbsPitch += Math.abs(pitch);
+                if (Math.abs(pitch) > maxAbsPitch) maxAbsPitch = Math.abs(pitch);
+                if (Math.abs(pitch) <= options.idealZone) inZoneSamples++;
+                
+                sumAbsSpeed += Math.abs(speed);
+                
+                if (i > 0) {
+                    const prevOutput = buffer[i-1].output || 0;
+                    sumAbsOutputChange += Math.abs(output - prevOutput);
+                }
+            }
+            
+            const count = buffer.length;
+            const avgAbsPitch = sumAbsPitch / count;
+            const avgAbsSpeed = sumAbsSpeed / count;
+            const avgAbsOutputChange = sumAbsOutputChange / (count -1);
+        
+            // Progi nieakceptowalne
+            const unstablePitch = 5.0;  // 5 stopni
+            const poorStabilityPitch = 1.5; // 1.5 stopnia
+            const highJitterSpeed = 100; // 100 imp/s
+            const highEffortOutput = 50; // Srednia zmiana PWM o 50
+            
+            // Oceny skladowe (0-1, gdzie 1 = dobrze)
+            const scoreOvershoot = Math.max(0, 1.0 - (maxAbsPitch / unstablePitch));
+            const scoreStability = Math.max(0, 1.0 - (avgAbsPitch / poorStabilityPitch));
+            const scoreJitter = Math.max(0, 1.0 - (avgAbsSpeed / highJitterSpeed));
+            const scoreEffort = Math.max(0, 1.0 - (avgAbsOutputChange / highEffortOutput));
+            const scoreTimeInZone = inZoneSamples / count;
+
+            // Wynik koncowy - srednia znormalizowanych ocen
+            const finalScore = (scoreOvershoot + scoreStability + scoreJitter + scoreEffort + scoreTimeInZone) / 5.0;
+            
+            return finalScore;
+        }
+
+        applyBestResults() {
+            document.getElementById('balanceKpInput').value = this.bestParams.kp.toFixed(2);
+            document.getElementById('balanceKdInput').value = this.bestParams.kd.toFixed(2);
+            // Wywolanie zdarzenia, aby wyslac wartosci do robota (opcjonalnie)
+            document.getElementById('balanceKpInput').dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true }));
+            addLogMessage('[AutoTest] Zastosowano najlepsze znalezione parametry.', 'success');
+            this.cancel();
+        }
+    }
+
+    function setupAutoTestEventListeners() {
+        const select = document.getElementById('autotestSelect');
+        const optionsDiv = document.getElementById('autotestOptions');
+        const actionBtn = document.getElementById('autotestActionBtn');
+        const cancelBtn = document.getElementById('autotestCancelBtn');
+
+        select.addEventListener('change', () => {
+            const testType = select.value;
+            optionsDiv.innerHTML = '';
+            if (tuningSession) tuningSession.cancel();
+
+            if (testType === 'none') {
+                actionBtn.textContent = 'Wybierz test, aby rozpoczac';
+                actionBtn.disabled = true;
+                return;
+            }
+            
+            if (testType === 'balance') {
+                optionsDiv.innerHTML = `
+                    <div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="10" min="2" max="50" style="width:90px;"></div>
+                    <div class="setting-container"><label for="at_duration">Czas cyklu (s):</label><input id="at_duration" type="number" value="8" min="3" max="20" style="width:90px;"></div>
+                    <div class="setting-container"><label for="at_zone">Strefa idealna (st.):</label><input id="at_zone" type="number" value="0.2" min="0.1" max="1.0" step="0.1" style="width:90px;"></div>
+                `;
+                actionBtn.textContent = 'Rozpocznij Sesje';
+                actionBtn.disabled = false;
+            }
+            updateAccordionHeight(optionsDiv.closest('.accordion-content'));
+        });
+
+        actionBtn.addEventListener('click', () => {
+            if (!tuningSession || tuningSession.state === 'idle') {
+                const options = {
+                    totalCycles: parseInt(document.getElementById('at_cycles').value),
+                    cycleDuration: parseInt(document.getElementById('at_duration').value),
+                    idealZone: parseFloat(document.getElementById('at_zone').value)
+                };
+                tuningSession = new TuningSession('balance', options);
+                tuningSession.start();
+            } else if (tuningSession.state === 'ready') {
+                tuningSession.runCycle();
+            } else if (tuningSession.state === 'finished') {
+                tuningSession.applyBestResults();
+            }
+        });
+
+        cancelBtn.addEventListener('click', () => {
+            if (tuningSession) tuningSession.cancel();
+        });
+    }
+
+    function updateAutoTestUI(session) {
+        const actionBtn = document.getElementById('autotestActionBtn');
+        const cancelBtn = document.getElementById('autotestCancelBtn');
+        const statusParams = document.getElementById('statusTestedParams');
+        const statusBestScore = document.getElementById('statusBestScore');
+        const statusBar = document.getElementById('statusProgressBar');
+        const statusProgressText = document.getElementById('statusProgressText');
+        const statusStateText = document.getElementById('statusStateText');
+
+        if (!session || session.state === 'idle') {
+            statusParams.textContent = '---';
+            statusBestScore.textContent = '---';
+            statusBar.value = 0;
+            statusProgressText.textContent = 'Oczekuje na start...';
+            statusStateText.textContent = 'Bezczynny';
+            actionBtn.textContent = 'Rozpocznij Sesje';
+            actionBtn.disabled = (document.getElementById('autotestSelect').value === 'none');
+            cancelBtn.style.display = 'none';
+            return;
+        }
+
+        cancelBtn.style.display = 'block';
+        statusBar.max = session.totalCycles;
+        statusBar.value = session.currentCycle -1;
+        
+        statusBestScore.textContent = session.bestScore < 0 ? '---' : session.bestScore.toFixed(4);
+        
+        switch (session.state) {
+            case 'ready':
+                statusParams.textContent = `Kp: ${session.testParams.kp.toFixed(2)}, Kd: ${session.testParams.kd.toFixed(2)}`;
+                statusProgressText.textContent = `Cykl ${session.currentCycle}/${session.totalCycles}`;
+                statusStateText.textContent = 'Gotowy do testu';
+                actionBtn.textContent = `Uruchom Cykl ${session.currentCycle}/${session.totalCycles}`;
+                actionBtn.disabled = false;
+                break;
+            case 'testing':
+                statusStateText.textContent = 'Testowanie...';
+                actionBtn.textContent = 'Testowanie...';
+                actionBtn.disabled = true;
+                break;
+            case 'analyzing':
+                statusStateText.textContent = 'Analiza danych...';
+                actionBtn.textContent = 'Analiza danych...';
+                actionBtn.disabled = true;
+                break;
+            case 'finished':
+                statusBar.value = session.totalCycles;
+                statusParams.textContent = `Kp: ${session.bestParams.kp.toFixed(2)}, Kd: ${session.bestParams.kd.toFixed(2)}`;
+                statusProgressText.textContent = `Zakonczono (${session.totalCycles}/${session.totalCycles})`;
+                statusStateText.textContent = 'Sesja zakonczona!';
+                actionBtn.textContent = 'Zastosuj najlepsze parametry';
+                actionBtn.disabled = false;
+                break;
+        }
+    }
+
 </script>
 
 </body>
