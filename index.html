@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v2.2 (Connection Fix)</title>
+    <title>Robot PID - Panel Sterowania v2.4 (Final Fix)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -243,10 +243,10 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 2.2 (UI dla PID) - Ostateczna Poprawka Stabilnosci Polaczenia
+    // WERSJA 2.4 (UI dla PID) - FINALNA POPRAWKA - Debounce na set_param
     // =======================================================================================
     
-    let debouncedSendConfig;
+    let isApplyingConfig = false; // Flaga zapobiegajaca petli zwrotnej
 
     const parameterMapping = {
         'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b',
@@ -291,7 +291,6 @@
     const TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
     
     let bleBuffer = '';
-    let incomingChunks = {};
 
     const joystickCanvas = document.getElementById('joystickCanvas');
     const joystickCtx = joystickCanvas.getContext('2d');
@@ -342,7 +341,16 @@
     
     function startMapping(action, buttonElement) { if (gamepadIndex === null) { addLogMessage("Podlacz gamepada, aby rozpoczac mapowanie!", "warn"); return; } isMappingButton = true; actionToMap = action; document.querySelectorAll('.mapping-button').forEach(btn => btn.textContent = "Przypisz"); buttonElement.textContent = "Czekam..."; addLogMessage(`[UI] Nasluchiwanie na przycisk dla akcji: ${availableActions[action].label}...`, "info"); }
     function renderMappingModal() { const list = document.getElementById('gamepad-mapping-list'); list.innerHTML = ''; for (const [action, config] of Object.entries(availableActions)) { const row = document.createElement('div'); row.className = 'mapping-row'; const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action); row.innerHTML = `<span class="mapping-label">${config.label}</span><span class="mapping-display">${buttonIndex !== undefined ? `Przycisk ${buttonIndex}` : 'Brak'}</span><button class="mapping-button" data-action="${action}">Przypisz</button>`; list.appendChild(row); } list.querySelectorAll('.mapping-button').forEach(button => { button.addEventListener('click', (e) => { const action = e.target.dataset.action; startMapping(action, e.target); }); }); }
-    const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
+    
+    const debounce = (func, delay) => { 
+        let timeout; 
+        return function(...args) { 
+            const context = this; 
+            clearTimeout(timeout); 
+            timeout = setTimeout(() => func.apply(context, args), delay); 
+        }; 
+    };
+
     function addLogMessage(message, level = 'info') { const logHistory = document.getElementById('log-history'); if (!logHistory) return; const timestamp = new Date().toLocaleTimeString(); let color = '#fff'; if (level === 'error') color = '#ff6347'; else if (level === 'warn') color = '#f7b731'; else if (level === 'success') color = '#a2f279'; const logEntry = document.createElement('div'); logEntry.style.color = color; logEntry.textContent = `[${timestamp}] ${message}`; logHistory.prepend(logEntry); while (logHistory.children.length > 200) { logHistory.removeChild(logHistory.lastChild); } }
     function clearLogs() { document.getElementById('log-history').innerHTML = ''; }
     function toggleAccordion(header) { const content = header.nextElementSibling; header.classList.toggle('active'); if (content.style.maxHeight && content.style.maxHeight !== '0px') { content.style.maxHeight = '0px'; } else { content.style.maxHeight = content.scrollHeight + "px"; } }
@@ -395,24 +403,7 @@
             if (line) {
                 try {
                     const data = JSON.parse(line);
-                    if (data.type === 'chunk') {
-                        if (!incomingChunks[data.id]) {
-                            incomingChunks[data.id] = new Array(data.total);
-                        }
-                        incomingChunks[data.id][data.i] = data.data;
-                        if (incomingChunks[data.id].every(chunk => chunk !== undefined)) {
-                            const fullMessage = incomingChunks[data.id].join('');
-                            delete incomingChunks[data.id];
-                            try {
-                                const fullData = JSON.parse(fullMessage);
-                                processCompleteMessage(fullData);
-                            } catch (e) {
-                                addLogMessage(`[UI] Blad parsowania zlozonej wiadomosci: ${e}`, 'error');
-                            }
-                        }
-                    } else {
-                        processCompleteMessage(data);
-                    }
+                    processCompleteMessage(data);
                 } catch (e) {
                      addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error');
                 }
@@ -429,8 +420,9 @@
                 updateChart(data);
                 break;
             case 'full_config':
+                isApplyingConfig = true;
                 applyFullConfig(data.params);
-                addLogMessage("[UI] Konfiguracja zsynchronizowana z robotem.", "info");
+                isApplyingConfig = false;
                 break;
             case 'log':
                 addLogMessage(`[ROBOT] ${data.message}`, data.level);
@@ -443,7 +435,6 @@
                     const tuneRow = inputField.closest('.manual-tune-row');
                     inputField.value = p.value;
                     addLogMessage(`[UI] Auto-strojenie dla ${p.motor} ${p.direction} zakonczone. Wynik: ${p.value}`, 'success');
-                    sendFullConfigToRobot();
                     if(tuneRow){
                         const autoBtn = tuneRow.querySelector('.auto-btn');
                         autoBtn.disabled = false;
@@ -456,15 +447,15 @@
 
     function applyFullConfig(params) {
         for (const [inputId, snakeKey] of Object.entries(parameterMapping)) {
-            if (params[snakeKey] !== undefined) {
-                const input = document.getElementById(inputId);
-                if (input) {
-                    let value = params[snakeKey];
-                    if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) {
-                         value = (value * 100);
-                    }
-                    input.value = value;
+            const input = document.getElementById(inputId);
+            if (input && params[snakeKey] !== undefined) {
+                let value = params[snakeKey];
+                if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) {
+                     value = (value * 100);
                 }
+                input.value = value;
+                // Programowa zmiana wartosci nie wywoluje 'change' w wiekszosci przegladarek, wiec petla nie powinna wystapic.
+                // Ale gdyby wystepowala, flaga 'isApplyingConfig' by ja zablokowala.
             }
         }
     }
@@ -575,14 +566,15 @@
             presetData = builtInPresetsData[selectedValue]?.params;
         }
         if (presetData) {
+            isApplyingConfig = true;
             for (const [key, value] of Object.entries(presetData)) {
                 const input = document.getElementById(key); // Preset keys match input IDs here
                 if (input) {
                     input.value = value;
                 }
             }
-            addLogMessage('[UI] Zastosowano wartosci presetu. Wysylam do robota...', 'info');
-            sendFullConfigToRobot();
+            isApplyingConfig = false;
+            addLogMessage('[UI] Zastosowano wartosci presetu. Zapisz na robocie, aby wyslac.', 'info');
         }
     }
     
@@ -653,29 +645,33 @@
             if (input) {
                 let value = parseFloat(input.value);
                 if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) {
-                     value /= 100;
+                     value /= 100.0;
                 }
                 params[snakeKey] = value;
             }
         }
+        addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info');
         sendBleMessage({ type: 'full_config', params });
     }
 
     function setupEventListeners() {
-        // debouncedSendConfig = debounce(sendFullConfigToRobot, 400);
+        
+        const sendSingleParam = (inputId, value) => {
+            if (isApplyingConfig) return; // Podwojne zabezpieczenie
+            const snakeKey = parameterMapping[inputId];
+            if (snakeKey) {
+                if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) {
+                    value /= 100.0;
+                }
+                sendBleMessage({ type: 'set_param', key: snakeKey, value: value });
+            }
+        };
+        
+        const debouncedSendSingleParam = debounce(sendSingleParam, 400);
 
         document.querySelectorAll('.config-value').forEach(input => {
             input.addEventListener('change', (e) => {
-                const inputId = e.target.id;
-                const snakeKey = parameterMapping[inputId];
-                if (snakeKey) {
-                    let value = parseFloat(e.target.value);
-                    if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) {
-                        value /= 100.0;
-                    }
-                    // Wysylamy tylko jedna, zmieniona wartosc - to jest mala paczka!
-                    sendBleMessage({ type: 'set_param', key: snakeKey, value: value });
-                }
+                debouncedSendSingleParam(e.target.id, parseFloat(e.target.value));
             });
         });
 
@@ -695,13 +691,23 @@
             });
         });
 
-        const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'trimRollPlusBtn': { type: 'adjust_roll', value: 1 }, 'trimRollMinusBtn': { type: 'adjust_roll', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' }, 'saveBtn': { type: 'save_tunings' } };
+        const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'trimRollPlusBtn': { type: 'adjust_roll', value: 1 }, 'trimRollMinusBtn': { type: 'adjust_roll', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
         for (const [id, msg] of Object.entries(toolButtons)) {
             document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg));
         }
         
+        // Przycisk "Zapisz na Robocie" teraz wysyla cala konfiguracje
+        document.getElementById('saveBtn').addEventListener('click', () => {
+             if (confirm("Czy na pewno chcesz wyslac i zapisac cala konfiguracje na robocie?")) {
+                sendFullConfigToRobot(); // Wysyla calosc
+                setTimeout(() => {
+                    sendBleMessage({ type: 'save_tunings' }); // Chwile pozniej zapisuje do EEPROM
+                }, 200);
+            }
+        });
+
         document.getElementById('loadBtn').addEventListener('click', () => {
-            if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian. Kontynuowac?")) {
+            if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) {
                 sendBleMessage({ type: 'request_full_config' });
             }
         });
