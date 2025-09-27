@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v3.1 (Inteligentny AutoTest)</title>
+    <title>Robot PID - Panel Sterowania v3.2 (Final)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -269,7 +269,6 @@
                 </div>
 
                 <div id="autotestOptions" style="margin-top: 15px;">
-                    <!-- Opcje beda dynamicznie wstawiane tutaj przez JS -->
                 </div>
         
                 <hr style="border-color: #4a4f58; margin: 15px 0;">
@@ -278,7 +277,6 @@
                     <h5>Status Sesji</h5>
                     <div class="info-grid">
                         <strong>Testowane Parametry:</strong> <span id="statusTestedParams">---</span>
-                        <!-- ULEPSZENIE I: Dodano podglad najlepszych znalezionych parametrow -->
                         <strong>Najlepsze Znalezione:</strong> <span id="statusBestParams" style="color: #61dafb;">---</span>
                         <strong>Najlepszy Wynik:</strong> <span id="statusBestScore" style="font-weight: bold; color: #a2f279;">---</span>
                         <strong>Postep:</strong> 
@@ -315,12 +313,11 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 3.1 (UI dla PID) - INTELIGENTNY AUTO TEST - POPRAWKA GATT
+    // WERSJA 3.2 (UI dla PID) - FINALNA - Poprawki BLE i algorytmu
     // =======================================================================================
     
-    // ... (CALA LOGIKA JAVASCRIPT ZNAJDUJE SIE PONIZEJ)
-</script>
-<script>
+    // ... CALA LOGIKA JAVASCRIPT ZNAJDUJE SIE PONIZEJ ...
+
     // =======================================================================================
     // === BLOK 1: INICJALIZACJA I PODSTAWOWE FUNKCJE ===
     // =======================================================================================
@@ -613,7 +610,14 @@
         ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
         const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
         for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); }
-        document.getElementById('saveBtn').addEventListener('click', () => { if (confirm("Czy na pewno chcesz wyslac i zapisac cala konfiguracje na robocie?")) { sendFullConfigToRobot(); setTimeout(() => { sendBleMessage({ type: 'save_tunings' }); }, 200); } });
+        
+        // --- FINALNA POPRAWKA: Uproszczona logika przycisku Zapisz ---
+        document.getElementById('saveBtn').addEventListener('click', () => {
+            if (confirm("Czy na pewno chcesz trwale zapisac biezaca konfiguracje znajdujaca sie na robocie do jego pamieci EEPROM?")) {
+                sendBleMessage({ type: 'save_tunings' });
+            }
+        });
+
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { sendBleMessage({ type: 'request_full_config' }); } });
         document.getElementById('calibrateMpuBtn')?.addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
         document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset);
@@ -627,7 +631,7 @@
     function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
 
     // =======================================================================================
-    // === BLOK 2: LOGIKA SYSTEMU AUTO TESTOW ===
+    // === BLOK 2: LOGIKA SYSTEMU AUTO TESTOW (Z ULEPSZENIAMI) ===
     // =======================================================================================
     let tuningSession = null;
 </script>
@@ -667,11 +671,10 @@
             this.paramIndex = 0;
             this.lastChange = 1;
             this.cycleTimeout = null;
-            // ULEPSZENIE III: Zmienne dla inteligentnego algorytmu
             this.stepSizes = {};
             this.stagnationCounter = 0;
-            this.initialStepMultiplier = 0.1; // Zaczynamy od duzych krokow (10%)
-            this.minStepMultiplier = 0.01; // Minimalny krok (1%)
+            this.initialStepMultiplier = 0.1; 
+            this.minStepMultiplier = 0.01;
         }
 
         recordTelemetry(data) { if (this.isCollecting && data.type === 'telemetry') this.telemetryBuffer.push(data); }
@@ -691,7 +694,6 @@
             for(const key in this.paramsToTune) {
                 const inputId = this.paramsToTune[key].id;
                 this.safeParams[key] = parseFloat(document.getElementById(inputId).value);
-                // ULEPSZENIE III: Inicjalizacja rozmiarow krokow
                 this.stepSizes[key] = this.initialStepMultiplier;
             }
             this.bestParams = { ...this.safeParams };
@@ -721,15 +723,14 @@
                 }
             }, 15000);
 
-            // ULEPSZENIE II: Sekwencja zapobiegajaca szarpnieciu
             Object.entries(this.testParams).forEach(([key, value]) => {
                 sendBleMessage({ type: 'set_param', key: key, value: value });
             });
-            sendBleMessage({ type: 'reset_pids' }); // Nowa komenda resetu PID
+            sendBleMessage({ type: 'reset_pids' }); 
             
             addLogMessage(`[AutoTest] Cykl ${this.currentCycle}/${this.totalCycles}. Testuje: ${JSON.stringify(this.testParams)}`, 'info');
 
-            setTimeout(() => { // Dajemy czas na reset i dopiero ruszamy
+            setTimeout(() => {
                 if (this.testType === 'balance') {
                     setTimeout(() => this.finishCycle(), this.options.cycleDuration * 1000);
                 } else if (this.testType === 'linear') {
@@ -739,7 +740,7 @@
                 } else if (this.testType === 'square_validation') {
                     sendBleMessage({ type: 'execute_square_closed', side_cm: 20 });
                 }
-            }, 300); // Zwiekszone opoznienie dla pewnosci
+            }, 300);
         }
 
         finishCycle() {
@@ -758,28 +759,24 @@
             
             const currentParamKey = this.paramKeys[this.paramIndex];
 
-            // ULEPSZENIE III: Logika inteligentnego algorytmu
             if (score > this.bestScore) {
                 this.bestScore = score;
                 this.bestParams = { ...this.testParams };
-                this.stagnationCounter = 0; // Reset stagnacji
-                // Mozemy lekko zwiekszyc krok, by isc za ciosem, ale w granicach rozsadku
+                this.stagnationCounter = 0;
                 this.stepSizes[currentParamKey] = Math.min(this.initialStepMultiplier, this.stepSizes[currentParamKey] * 1.2); 
                 addLogMessage(`[AutoTest] Nowy najlepszy wynik!`, 'success');
-                this.lastChange = 1; // Idz w tym samym kierunku
+                this.lastChange = 1;
                 this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length;
             } else {
                 this.stagnationCounter++;
-                // Zmniejsz krok, bo przeszlismy za daleko
                 this.stepSizes[currentParamKey] = Math.max(this.minStepMultiplier, this.stepSizes[currentParamKey] * 0.7);
                 addLogMessage(`[AutoTest] Brak poprawy. Zmniejszam krok dla ${currentParamKey}. Stagnacja: ${this.stagnationCounter}`, 'warn');
                 
-                this.lastChange *= -1; // Zmien kierunek
-                if (this.lastChange === 1) { // Jesli juz raz zmienilismy kierunek i dalej zle
+                this.lastChange *= -1;
+                if (this.lastChange === 1) {
                      this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length;
                 }
                 
-                // Jesli stagnacja trwa za dlugo, przeskocz do losowego parametru
                 if (this.stagnationCounter >= 3) {
                     addLogMessage(`[AutoTest] Wykryto stagnacje! Przeskakuje do losowego parametru.`, 'warn');
                     this.paramIndex = Math.floor(Math.random() * this.paramKeys.length);
@@ -829,7 +826,6 @@
             let nextParams = { ...this.bestParams };
             const currentParamKey = this.paramKeys[this.paramIndex];
             const baseValue = this.bestParams[currentParamKey];
-            // ULEPSZENIE III: Uzyj adaptacyjnego rozmiaru kroku
             const step = Math.max(Math.abs(baseValue * this.stepSizes[currentParamKey]), this.paramsToTune[currentParamKey].step) * this.lastChange;
 
             nextParams[currentParamKey] += step;
@@ -978,7 +974,7 @@
         const actionBtn = document.getElementById('autotestActionBtn');
         const cancelBtn = document.getElementById('autotestCancelBtn');
         const statusParams = document.getElementById('statusTestedParams');
-        const statusBestParams = document.getElementById('statusBestParams'); // ULEPSZENIE I
+        const statusBestParams = document.getElementById('statusBestParams');
         const statusBestScore = document.getElementById('statusBestScore');
         const statusBar = document.getElementById('statusProgressBar');
         const statusProgressText = document.getElementById('statusProgressText');
@@ -986,7 +982,7 @@
 
         if (!session || session.state === 'idle') {
             statusParams.textContent = '---';
-            statusBestParams.textContent = '---'; // ULEPSZENIE I
+            statusBestParams.textContent = '---';
             statusBestScore.textContent = '---';
             statusBar.value = 0;
             statusProgressText.textContent = 'Wybierz test i rozpocznij...';
@@ -1010,7 +1006,6 @@
         
         statusBestScore.textContent = session.bestScore < 0 ? '---' : session.bestScore.toFixed(4);
         
-        // ULEPSZENIE I: Aktualizacja podgladu najlepszych parametrow
         let bestParamsText = Object.entries(session.bestParams).map(([key, val]) => `${key}: ${val.toFixed(3)}`).join(', ');
         statusBestParams.textContent = bestParamsText;
 
