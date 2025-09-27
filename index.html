@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v2.7 (Full AutoTest)</title>
+    <title>Robot PID - Panel Sterowania v3.0 (Advanced AutoTest)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -27,6 +27,8 @@
         .slider.round:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
         input:checked + .slider { background-color: #a2f279; }
         input:checked + .slider:before { transform: translateX(22px); }
+        input[type="checkbox"].slider-checkbox + .slider { background-color: #4a4f58; }
+        input[type="checkbox"].slider-checkbox:checked + .slider { background-color: #a2f279; }
         input:disabled + .slider { background-color: #4a4f58; cursor: not-allowed; }
         fieldset { border: 1px solid #4a4f58; border-radius: 8px; margin-top: 15px; padding: 10px 15px; }
         legend { color: #61dafb; font-weight: bold; padding: 0 10px; font-size: 1.1em; }
@@ -98,6 +100,10 @@
         .radio-selector-item input[type="radio"]:checked + label { background-color: #61dafb; color: #282c34; font-weight: bold; }
         .radio-selector-item input[type="radio"]:checked + label::before { border-color: #282c34; }
         .radio-selector-item input[type="radio"]:checked + label::after { opacity: 1; }
+        #validationResultPanel { display: none; background-color: #20232a; padding: 12px; border-radius: 6px; margin-top: 15px; }
+        #validationResultPanel h5 { color: #61dafb; margin: 0 0 10px 0; font-size: 1.1em; text-align: left; }
+        #validationResultPanel p { margin: 5px 0; text-align: left;}
+        #validationResultPanel strong { color: #a2f279; }
     </style>
 </head>
 <body>
@@ -121,7 +127,6 @@
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
             <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Resetuj Osie</button>
             <div class="trim-controls"> <button id="trimMinusBtn">-</button> <span>Korekta Pionu (Pitch)</span> <button id="trimPlusBtn">+</button> </div>
-            <div class="trim-controls"> <button id="trimRollMinusBtn">-</button> <span>Korekta Przechylu (Roll)</span> <button id="trimRollPlusBtn">+</button> </div>
             <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
             <button id="emergencyStopBtn">STOP AWARYJNY</button>
         </div>
@@ -135,8 +140,8 @@
             </div>
             <div class="info-grid">
                 <strong>Kat (Pitch):</strong> <div class="angle-display"><span id="angleVal">0.0 &deg;</span><div class="angle-indicator-wrapper"><div id="angleIndicator" class="angle-indicator-needle"></div></div></div>
+                <strong>Kat (Yaw):</strong> <span id="yawVal">0.0 &deg;</span>
                 <strong>Predkosc (imp/s):</strong> <span id="speedVal">0</span>
-                <strong>Zadany Kat:</strong> <span id="targetAngleVal">0.0 &deg;</span>
                 <strong>Enkoder L:</strong> <span id="encoderLeftVal">0</span>
                 <strong>Enkoder P:</strong> <span id="encoderRightVal">0</span>
             </div>
@@ -202,7 +207,7 @@
 
                 <button class="accordion-header" onclick="toggleAccordion(this)">4. PID Obrotu i Kursu</button>
                 <div class="accordion-content">
-                    <div class="parameter-group"><h5>PID Obrotu (D-Pad)</h5>
+                    <div class="parameter-group"><h5>PID Obrotu (Autonomiczny)</h5>
                         <div class="setting-container"> <label for="rotationKpInput">Kp - Sila obrotu</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationKpInput" step="0.1" value="1.0"><button>+</button></div> </div>
                         <div class="setting-container"> <label for="rotationKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationKdInput" step="0.1" value="1.0"><button>+</button></div> </div>
                     </div>
@@ -211,17 +216,12 @@
                         <div class="setting-container"> <label for="headingKiInput">Ki - Precyzja</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKiInput" step="0.005" value="0.02"><button>+</button></div> </div>
                         <div class="setting-container"> <label for="headingKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKdInput" step="0.01" value="0.1"><button>+</button></div> </div>
                     </div>
-                    <div class="parameter-group"><h5>PID Korekty Przechylu (Roll, podczas skretu)</h5>
-                        <div class="setting-container"> <label for="rollKpInput">Kp - Sila</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rollKpInput" step="0.5" value="15.0"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="rollKiInput">Ki - Precyzja</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rollKiInput" step="0.01" value="0.0"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="rollKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rollKdInput" step="0.05" value="0.5"><button>+</button></div> </div>
-                    </div>
                 </div>
 
                 <button class="accordion-header" onclick="toggleAccordion(this)">5. Parametry Sprzetowe i Mechaniczne</button>
                 <div class="accordion-content"> 
-                    <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" step="0.1" value="8.0"><button>+</button></div> </div> 
-                    <div class="setting-container"> <label for="trackWidthInput">Rozstaw kol (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="trackWidthInput" step="0.1" value="13.0"><button>+</button></div> </div> 
+                    <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" step="0.1" value="8.2"><button>+</button></div> </div> 
+                    <div class="setting-container"> <label for="trackWidthInput">Rozstaw kol (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="trackWidthInput" step="0.1" value="12.5"><button>+</button></div> </div> 
                     <div class="setting-container"> <label for="encoderPprInput">Impulsy na obrot (PPR)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="encoderPprInput" step="10" value="820"><button>+</button></div> </div> 
                     <hr style="border-color: #4a4f58; margin: 10px 0;">
                     <div class="setting-container"> <label for="turnToRollTargetInput">Kat przechylu przy skrecie (st.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="turnToRollTargetInput" step="0.1" value="5.0"><button>+</button></div> </div> 
@@ -260,7 +260,7 @@
                     </div>
                     <div class="radio-selector-item">
                         <input type="radio" id="test-turn" name="autotest-type" value="turn">
-                        <label for="test-turn">3. Strojenie Obrotu</label>
+                        <label for="test-turn">3. Strojenie Obrotu i Kursu</label>
                     </div>
                      <div class="radio-selector-item">
                         <input type="radio" id="test-square" name="autotest-type" value="square_validation">
@@ -287,6 +287,14 @@
                         <strong>Status:</strong> <span id="statusStateText" style="font-weight: bold;">Bezczynny</span>
                     </div>
                 </div>
+                
+                <div id="validationResultPanel">
+                    <h5>Wynik Walidacji Kwadratu</h5>
+                    <p><strong>Blad Pozycji Koncowej:</strong> <span id="validationPosError">---</span> cm</p>
+                    <p><strong>Blad Kursu Koncowego:</strong> <span id="validationYawError">---</span> st.</p>
+                    <hr style="border-color: #4a4f58; margin: 10px 0;">
+                    <p id="validationSuggestion" style="font-style: italic;">---</p>
+                </div>
         
                 <button id="autotestActionBtn" style="width:100%; margin-top:15px;" disabled>Wybierz test, aby rozpoczac</button>
                 <button id="autotestCancelBtn" style="width:100%; margin-top:10px; background-color:#ff6347; display:none;">Anuluj Sesje</button>
@@ -305,9 +313,15 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 2.7 (UI dla PID) - PELNA IMPLEMENTACJA AUTO TESTOW
+    // WERSJA 3.0 (UI dla PID) - PELNA IMPLEMENTACJA AUTO TESTOW
     // =======================================================================================
     
+    // ... (CALA LOGIKA JAVASCRIPT ZOSTANIE WSTAWIONA TUTAJ)
+</script>
+<script>
+    // =======================================================================================
+    // === BLOK 1: INICJALIZACJA I PODSTAWOWE FUNKCJE ===
+    // =======================================================================================
     let isApplyingConfig = false;
     let lastKnownRobotState = 'IDLE';
 
@@ -316,12 +330,11 @@
         'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 
         'joystickAngleSensitivityInput': 'joystick_angle_sensitivity',
         'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s',
-        'maxTargetAngleFromSpeedPID': 'max_target_angle_from_speed_pid', 'speedDeadbandInput': 'speed_pid_deadband',
+        'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedDeadbandInput': 'speed_pid_deadband',
         'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p',
         'maxTargetSpeedFromPosPID': 'max_target_speed_from_pos_pid', 'positionDeadbandInput': 'position_pid_deadband',
         'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r',
         'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h',
-        'rollKpInput': 'kp_roll', 'rollKiInput': 'ki_roll', 'rollKdInput': 'kd_roll',
         'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick',
         'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone',
         'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr',
@@ -353,24 +366,17 @@
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
     const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
     const TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
-    
     let bleBuffer = '';
-
-    const joystickCanvas = document.getElementById('joystickCanvas');
-    const joystickCtx = joystickCanvas.getContext('2d');
     let joystickCenter, joystickRadius, knobRadius, isDragging = false;
     let lastJoystickSendTime = 0;
     const JOYSTICK_SEND_INTERVAL = 25;
-    
     let gamepadIndex = null;
     let lastGamepadState = [];
-    let lastGamepadAxes = { x: 0, y: 0 };
     let gamepadMappings = {};
-    const GAMEPAD_MAPPING_KEY = 'pid_gamepad_mappings_v2';
-    const GAMEPAD_AXIS_THRESHOLD = 0.15;
+    const GAMEPAD_MAPPING_KEY = 'pid_gamepad_mappings_v3';
     let isMappingButton = false;
     let actionToMap = null;
-    const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v2_';
+    const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v3_';
 
     const availableActions = { 
         'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' }, 
@@ -384,7 +390,7 @@
     };
     const availableTelemetry = { 
         'pitch': { label: 'Pitch (Kat)', color: '#61dafb' }, 
-        'target_angle': { label: 'Zadany Kat', color: '#a2f279' }, 
+        'yaw': { label: 'Yaw (Kurs)', color: '#f368e0' }, 
         'speed': { label: 'Predkosc', color: '#f7b731' },
         'output': { label: 'Wyjscie PID', color: '#ff6347'}
     };
@@ -394,14 +400,14 @@
         '3': { name: "3. PID Agresywny (Sztywny)", params: { balanceKpInput: 110.0, balanceKiInput: 0.0, balanceKdInput: 4.0, speedKpInput: 0.07, positionKpInput: 3.5, positionKiInput: 0.01, positionKdInput: 1.5 }}
     };
 
-    function initJoystick() { const wrapper = document.getElementById('joystickWrapper'); const size = wrapper.clientWidth; joystickCanvas.width = size; joystickCanvas.height = size; joystickCenter = { x: size / 2, y: size / 2 }; joystickRadius = size / 2 * 0.75; knobRadius = size / 2 * 0.25; drawJoystick(joystickCenter.x, joystickCenter.y); }
-    function drawJoystick(x, y) { joystickCtx.clearRect(0, 0, joystickCanvas.width, joystickCanvas.height); joystickCtx.beginPath(); joystickCtx.arc(joystickCenter.x, joystickCenter.y, joystickRadius, 0, 2 * Math.PI); joystickCtx.fillStyle = 'rgba(255, 255, 255, 0.1)'; joystickCtx.fill(); joystickCtx.beginPath(); joystickCtx.arc(x, y, knobRadius, 0, 2 * Math.PI); joystickCtx.fillStyle = '#61dafb'; joystickCtx.fill(); }
-    function getJoystickPosition(event) { const rect = joystickCanvas.getBoundingClientRect(); const touch = event.touches ? event.touches[0] : event; return { x: touch.clientX - rect.left, y: touch.clientY - rect.top }; }
+    function initJoystick() { const wrapper = document.getElementById('joystickWrapper'); const size = wrapper.clientWidth; const joystickCanvas = document.getElementById('joystickCanvas'); const joystickCtx = joystickCanvas.getContext('2d'); joystickCanvas.width = size; joystickCanvas.height = size; joystickCenter = { x: size / 2, y: size / 2 }; joystickRadius = size / 2 * 0.75; knobRadius = size / 2 * 0.25; drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y); }
+    function drawJoystick(ctx, x, y) { ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); ctx.beginPath(); ctx.arc(joystickCenter.x, joystickCenter.y, joystickRadius, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.fill(); ctx.beginPath(); ctx.arc(x, y, knobRadius, 0, 2 * Math.PI); ctx.fillStyle = '#61dafb'; ctx.fill(); }
+    function getJoystickPosition(event) { const rect = document.getElementById('joystickCanvas').getBoundingClientRect(); const touch = event.touches ? event.touches[0] : event; return { x: touch.clientX - rect.left, y: touch.clientY - rect.top }; }
     function handleJoystickStart(event) { event.preventDefault(); isDragging = true; }
-    function handleJoystickMove(event) { if (!isDragging) return; event.preventDefault(); let { x, y } = getJoystickPosition(event); const dx = x - joystickCenter.x; const dy = y - joystickCenter.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; } drawJoystick(x, y); const now = Date.now(); if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) { const joyX = (x - joystickCenter.x) / joystickRadius; const joyY = -(y - joystickCenter.y) / joystickRadius; sendBleMessage({ type: 'joystick', x: joyX, y: joyY }); lastJoystickSendTime = now; } }
-    function handleJoystickEnd(event) { if (!isDragging) return; event.preventDefault(); isDragging = false; drawJoystick(joystickCenter.x, joystickCenter.y); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
+    function handleJoystickMove(event) { if (!isDragging) return; event.preventDefault(); const joystickCanvas = document.getElementById('joystickCanvas'); const joystickCtx = joystickCanvas.getContext('2d'); let { x, y } = getJoystickPosition(event); const dx = x - joystickCenter.x; const dy = y - joystickCenter.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; } drawJoystick(joystickCtx, x, y); const now = Date.now(); if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) { const joyX = (x - joystickCenter.x) / joystickRadius; const joyY = -(y - joystickCenter.y) / joystickRadius; sendBleMessage({ type: 'joystick', x: joyX, y: joyY }); lastJoystickSendTime = now; } }
+    function handleJoystickEnd(event) { if (!isDragging) return; event.preventDefault(); isDragging = false; const joystickCanvas = document.getElementById('joystickCanvas'); const joystickCtx = joystickCanvas.getContext('2d'); drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
     
-    function pollGamepad() { if (gamepadIndex !== null) { const gp = navigator.getGamepads()[gamepadIndex]; if (gp) { if (isMappingButton && actionToMap) { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { Object.keys(gamepadMappings).forEach(key => { if (gamepadMappings[key] === actionToMap) delete gamepadMappings[key]; }); gamepadMappings[i] = actionToMap; saveGamepadMappings(); addLogMessage(`[UI] Akcja '${availableActions[actionToMap].label}' przypisana do przycisku ${i}.`, 'success'); isMappingButton = false; actionToMap = null; renderMappingModal(); } }); } else { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { const action = gamepadMappings[i]; if (action && availableActions[action]) { const element = document.getElementById(availableActions[action].elementId); if (element && !element.disabled) { element.click(); flashElement(element); } } } }); } lastGamepadState = gp.buttons.map(b => b.pressed); let x = gp.axes[0]; let y = gp.axes[1]; if (Math.abs(x) < GAMEPAD_AXIS_THRESHOLD) x = 0; if (Math.abs(y) < GAMEPAD_AXIS_THRESHOLD) y = 0; if (x !== lastGamepadAxes.x || y !== lastGamepadAxes.y) { sendBleMessage({ type: 'joystick', x: x, y: -y }); lastGamepadAxes = { x, y }; } } } requestAnimationFrame(pollGamepad); }
+    function pollGamepad() { if (gamepadIndex !== null) { const gp = navigator.getGamepads()[gamepadIndex]; if (!gp) return; if (isMappingButton && actionToMap) { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { Object.keys(gamepadMappings).forEach(key => { if (gamepadMappings[key] === actionToMap) delete gamepadMappings[key]; }); gamepadMappings[i] = actionToMap; saveGamepadMappings(); addLogMessage(`[UI] Akcja '${availableActions[actionToMap].label}' przypisana do przycisku ${i}.`, 'success'); isMappingButton = false; actionToMap = null; renderMappingModal(); } }); } else { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { const action = gamepadMappings[i]; if (action && availableActions[action]) { const element = document.getElementById(availableActions[action].elementId); if (element && !element.disabled) { element.click(); flashElement(element); } } } }); } lastGamepadState = gp.buttons.map(b => b.pressed); let x = gp.axes[0] || 0; let y = gp.axes[1] || 0; if (Math.abs(x) < 0.15) x = 0; if (Math.abs(y) < 0.15) y = 0; sendBleMessage({ type: 'joystick', x: x, y: -y }); } requestAnimationFrame(pollGamepad); }
     window.addEventListener('gamepadconnected', (e) => { gamepadIndex = e.gamepad.index; document.getElementById('gamepadStatus').textContent = 'Polaczony'; document.getElementById('gamepadStatus').style.color = '#a2f279'; addLogMessage(`[UI] Gamepad polaczony: ${e.gamepad.id}`, 'success'); });
     window.addEventListener('gamepaddisconnected', (e) => { gamepadIndex = null; document.getElementById('gamepadStatus').textContent = 'Brak'; document.getElementById('gamepadStatus').style.color = '#f7b731'; addLogMessage('[UI] Gamepad rozlaczony.', 'warn'); });
     
@@ -409,7 +415,6 @@
     function renderMappingModal() { const list = document.getElementById('gamepad-mapping-list'); list.innerHTML = ''; for (const [action, config] of Object.entries(availableActions)) { const row = document.createElement('div'); row.className = 'mapping-row'; const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action); row.innerHTML = `<span class="mapping-label">${config.label}</span><span class="mapping-display">${buttonIndex !== undefined ? `Przycisk ${buttonIndex}` : 'Brak'}</span><button class="mapping-button" data-action="${action}">Przypisz</button>`; list.appendChild(row); } list.querySelectorAll('.mapping-button').forEach(button => { button.addEventListener('click', (e) => { const action = e.target.dataset.action; startMapping(action, e.target); }); }); }
     
     const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
-
     function addLogMessage(message, level = 'info') { const logHistory = document.getElementById('log-history'); if (!logHistory) return; const timestamp = new Date().toLocaleTimeString(); let color = '#fff'; if (level === 'error') color = '#ff6347'; else if (level === 'warn') color = '#f7b731'; else if (level === 'success') color = '#a2f279'; const logEntry = document.createElement('div'); logEntry.style.color = color; logEntry.textContent = `[${timestamp}] ${message}`; logHistory.prepend(logEntry); while (logHistory.children.length > 200) { logHistory.removeChild(logHistory.lastChild); } }
     function clearLogs() { document.getElementById('log-history').innerHTML = ''; }
     function toggleAccordion(header) { const content = header.nextElementSibling; header.classList.toggle('active'); if (content.style.maxHeight && content.style.maxHeight !== '0px') { content.style.maxHeight = '0px'; } else { content.style.maxHeight = content.scrollHeight + "px"; } }
@@ -429,18 +434,14 @@
             if (line) {
                 try {
                     const data = JSON.parse(line);
-                    if (tuningSession && tuningSession.isCollecting) {
-                        tuningSession.recordTelemetry(data);
-                    }
+                    if (tuningSession && tuningSession.isCollecting) tuningSession.recordTelemetry(data);
                     processCompleteMessage(data);
-                } catch (e) {
-                     addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error');
-                }
+                } catch (e) { addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error'); }
             }
         }
     }
 
-    async function sendBleMessage(message) { if (!rxCharacteristic) { return; } try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
+    async function sendBleMessage(message) { if (!rxCharacteristic) return; try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
     
     function processCompleteMessage(data) {
         if(data.type === 'telemetry' && data.robot_state) {
@@ -465,18 +466,14 @@
             case 'single_pwm_result':
                 const p = data.params;
                 const inputId = `minPwm${p.motor.charAt(0).toUpperCase() + p.motor.slice(1)}${p.direction.charAt(0).toUpperCase() + p.direction.slice(1)}Input`;
-                const inputField = document.getElementById(inputId);
-                if (inputField) {
-                    const tuneRow = inputField.closest('.manual-tune-row');
-                    inputField.value = p.value;
-                    addLogMessage(`[UI] Auto-strojenie dla ${p.motor} ${p.direction} zakonczone. Wynik: ${p.value}`, 'success');
-                    if(tuneRow){
-                        const autoBtn = tuneRow.querySelector('.auto-btn');
-                        autoBtn.disabled = false;
-                        autoBtn.textContent = 'Auto';
-                    }
-                }
+                document.getElementById(inputId).value = p.value;
+                addLogMessage(`[UI] Auto-strojenie dla ${p.motor} ${p.direction} zakonczone. Wynik: ${p.value}`, 'success');
                 break;
+            case 'validation_result':
+                 if(tuningSession && tuningSession.testType === 'square_validation') {
+                    tuningSession.processValidationResult(data);
+                 }
+                 break;
         }
     }
 
@@ -499,8 +496,8 @@
             document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0';
             document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`;
         }
+        if (data.yaw !== undefined) document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' \u00B0';
         if (data.speed !== undefined) document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0);
-        if (data.target_angle !== undefined) document.getElementById('targetAngleVal').textContent = parseFloat(data.target_angle).toFixed(1) + ' \u00B0';
         if (data.encoder_left !== undefined) document.getElementById('encoderLeftVal').textContent = data.encoder_left;
         if (data.encoder_right !== undefined) document.getElementById('encoderRightVal').textContent = data.encoder_right;
         const emergencyBanner = document.getElementById('emergency-banner');
@@ -537,34 +534,23 @@
             const label = document.createElement('label'), checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.value = key;
-            checkbox.checked = (key === 'pitch' || key === 'target_angle');
+            checkbox.checked = (key === 'pitch');
             checkbox.addEventListener('change', (e) => {
                 const varName = e.target.value;
                 if (e.target.checked) {
-                    const chartData = telemetryChart.data;
-                    if (!chartData.datasets.find(ds => ds.label === availableTelemetry[varName].label)) {
-                        chartData.datasets.push({
-                            label: availableTelemetry[varName].label,
-                            data: Array(chartData.labels.length).fill(null),
-                            borderColor: availableTelemetry[varName].color,
-                            fill: false, tension: 0.1, pointRadius: 0
-                        });
+                    if (!telemetryChart.data.datasets.find(ds => ds.label === availableTelemetry[varName].label)) {
+                        telemetryChart.data.datasets.push({ label: availableTelemetry[varName].label, data: Array(telemetryChart.data.labels.length).fill(null), borderColor: availableTelemetry[varName].color, fill: false, tension: 0.1, pointRadius: 0 });
                     }
                 } else {
-                    const chartData = telemetryChart.data;
-                    const datasetIndex = chartData.datasets.findIndex(ds => ds.label === availableTelemetry[varName].label);
-                    if (datasetIndex > -1) {
-                        chartData.datasets.splice(datasetIndex, 1);
-                    }
+                    const datasetIndex = telemetryChart.data.datasets.findIndex(ds => ds.label === availableTelemetry[varName].label);
+                    if (datasetIndex > -1) telemetryChart.data.datasets.splice(datasetIndex, 1);
                 }
                 telemetryChart.update();
             });
             label.appendChild(checkbox);
             label.append(` ${availableTelemetry[key].label}`);
             container.appendChild(label);
-            if (checkbox.checked) {
-                checkbox.dispatchEvent(new Event('change'));
-            }
+            if (checkbox.checked) checkbox.dispatchEvent(new Event('change'));
         });
     }
 
@@ -581,10 +567,10 @@
         const sendSingleParam = (inputId, value) => { if (isApplyingConfig) return; const snakeKey = parameterMapping[inputId]; if (snakeKey) { if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) { value /= 100.0; } sendBleMessage({ type: 'set_param', key: snakeKey, value: value }); } };
         const debouncedSendSingleParam = debounce(sendSingleParam, 400);
         document.querySelectorAll('.config-value').forEach(input => { input.addEventListener('change', (e) => { debouncedSendSingleParam(e.target.id, parseFloat(e.target.value)); }); });
-        joystickCanvas.addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); joystickCanvas.addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd);
+        document.getElementById('joystickCanvas').addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); document.getElementById('joystickCanvas').addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd);
         document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
         ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
-        const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'trimRollPlusBtn': { type: 'adjust_roll', value: 1 }, 'trimRollMinusBtn': { type: 'adjust_roll', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
+        const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
         for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); }
         document.getElementById('saveBtn').addEventListener('click', () => { if (confirm("Czy na pewno chcesz wyslac i zapisac cala konfiguracje na robocie?")) { sendFullConfigToRobot(); setTimeout(() => { sendBleMessage({ type: 'save_tunings' }); }, 200); } });
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { sendBleMessage({ type: 'request_full_config' }); } });
@@ -599,64 +585,37 @@
     function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
     function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
 
+    // =======================================================================================
+    // === BLOK 2: LOGIKA SYSTEMU AUTO TESTOW ===
+    // =======================================================================================
     let tuningSession = null;
-
-    // KLASA TuningSession została rozbudowana
-    class TuningSession {
-        // ... (implementacja klasy wklejona w nastepnym bloku)
-    }
-
-    // FUNKCJA setupAutoTestEventListeners została rozbudowana
-    function setupAutoTestEventListeners() {
-        // ... (implementacja wklejona w nastepnym bloku)
-    }
-
-    // FUNKCJA updateAutoTestUI została rozbudowana
-    function updateAutoTestUI(session) {
-        // ... (implementacja wklejona w nastepnym bloku)
-    }
+    // ... (reszta logiki w kolejnym bloku)
 </script>
 <script>
-    // =======================================================================================
-    // NOWA, KOMPLETNA LOGIKA SYSTEMU AUTO TESTOW
-    // =======================================================================================
     const testConfigurations = {
         'balance': {
             label: 'Strojenie Balansu',
-            paramsToTune: {
-                kp_b: { id: 'balanceKpInput', step: 5.0 },
-                kd_b: { id: 'balanceKdInput', step: 0.2 }
-            }
+            paramsToTune: { kp_b: { id: 'balanceKpInput', step: 5.0 }, kd_b: { id: 'balanceKdInput', step: 0.2 } }
         },
         'linear': {
             label: 'Strojenie Jazdy Liniowej',
-            paramsToTune: {
-                kp_p: { id: 'positionKpInput', step: 0.2 },
-                kd_p: { id: 'positionKdInput', step: 0.1 },
-                kp_s: { id: 'speedKpInput', step: 0.005 }
-            }
+            paramsToTune: { kp_s: { id: 'speedKpInput', step: 0.005 }, kp_p: { id: 'positionKpInput', step: 0.2 }, kd_p: { id: 'positionKdInput', step: 0.1 }, max_target_angle_from_speed_pid: { id: 'maxTargetAngleInput', step: 0.5 } }
         },
         'turn': {
-            label: 'Strojenie Obrotu',
-            paramsToTune: {
-                kp_r: { id: 'rotationKpInput', step: 0.1 },
-                kd_r: { id: 'rotationKdInput', step: 0.1 }
-            }
+            label: 'Strojenie Obrotu i Kursu',
+            paramsToTune: { kp_r: { id: 'rotationKpInput', step: 0.1 }, kd_r: { id: 'rotationKdInput', step: 0.1 }, kp_h: { id: 'headingKpInput', step: 0.1 }, ki_h: { id: 'headingKiInput', step: 0.005 }, kd_h: { id: 'headingKdInput', step: 0.01 } }
         },
-        'square_validation': {
-            label: 'Walidacja: Test Kwadratu',
-            paramsToTune: {} // Brak strojenia, tylko walidacja
-        }
+        'square_validation': { label: 'Walidacja: Test Kwadratu', paramsToTune: {} }
     };
     
     class TuningSession {
-        constructor(testType, options, paramsToTune) {
+        constructor(testType, options) {
             this.testType = testType;
+            this.config = testConfigurations[testType];
             this.options = options;
-            this.paramsToTune = paramsToTune;
-            this.paramKeys = Object.keys(paramsToTune);
-
-            this.state = 'idle'; // 'idle', 'ready', 'testing', 'analyzing', 'finished'
+            this.paramsToTune = this.config.paramsToTune;
+            this.paramKeys = Object.keys(this.paramsToTune);
+            this.state = 'idle';
             this.isCollecting = false;
             this.telemetryBuffer = [];
             this.currentCycle = 0;
@@ -676,13 +635,12 @@
             const isRobotIdle = newState.includes('IDLE') || newState.includes('TRZYMA_POZYCJE');
             const wasRobotWorking = previousState.includes('RUCH') || previousState.includes('OBROT');
             if(isRobotIdle && wasRobotWorking) {
-                // Robot zakonczyl zadanie autonomiczne, konczymy cykl
-                this.finishCycle();
+                setTimeout(() => this.finishCycle(), 250); // Opóźnienie na ustabilizowanie odczytów
             }
         }
 
         start() {
-            addLogMessage(`[AutoTest] Rozpoczynam sesje: ${testConfigurations[this.testType].label}`, 'info');
+            addLogMessage(`[AutoTest] Rozpoczynam sesje: ${this.config.label}`, 'info');
             this.safeParams = {};
             for(const key in this.paramsToTune) {
                 const inputId = this.paramsToTune[key].id;
@@ -706,36 +664,33 @@
             this.telemetryBuffer = [];
             updateAutoTestUI(this);
 
-            // Wyslij testowane parametry do robota
-            for(const key in this.testParams) {
-                sendBleMessage({ type: 'set_param', key: key, value: this.testParams[key] });
-            }
+            Object.entries(this.testParams).forEach(([key, value]) => {
+                sendBleMessage({ type: 'set_param', key: key, value: value });
+            });
             addLogMessage(`[AutoTest] Cykl ${this.currentCycle}/${this.totalCycles}. Testuje: ${JSON.stringify(this.testParams)}`, 'info');
 
-            // Uruchom odpowiedni test
-            if (this.testType === 'balance') {
-                 setTimeout(() => this.finishCycle(), this.options.cycleDuration * 1000);
-            } else if (this.testType === 'linear') {
-                sendBleMessage({ type: 'execute_move', distance_cm: this.options.distance });
-            } else if (this.testType === 'turn') {
-                sendBleMessage({ type: 'execute_rotate', angle_deg: this.options.angle });
-            } else if (this.testType === 'square_validation') {
-                // Ta logika bedzie bardziej skomplikowana (sekwencja)
-                addLogMessage(`[AutoTest] Walidacja nie jest jeszcze zaimplementowana.`, 'warn');
-                this.finishCycle();
-            }
+            setTimeout(() => { // Dajmy czas na zaaplikowanie parametrow
+                if (this.testType === 'balance') {
+                    setTimeout(() => this.finishCycle(), this.options.cycleDuration * 1000);
+                } else if (this.testType === 'linear') {
+                    sendBleMessage({ type: 'execute_move', distance_cm: this.options.distance, and_return: this.options.returnToZero });
+                } else if (this.testType === 'turn') {
+                    sendBleMessage({ type: 'execute_square_open', side_cm: this.options.side, speed: this.options.speed });
+                } else if (this.testType === 'square_validation') {
+                    sendBleMessage({ type: 'execute_square_closed', side_cm: 20 });
+                }
+            }, 200);
         }
 
         finishCycle() {
-            if (!this.isCollecting) return; // Zapobiega podwojnemu wywolaniu
+            if (!this.isCollecting) return;
             this.isCollecting = false;
             this.state = 'analyzing';
             updateAutoTestUI(this);
             
-            // WAZNE: Natychmiastowy powrot do bezpiecznych parametrow
-            for(const key in this.safeParams) {
-                 sendBleMessage({ type: 'set_param', key: key, value: this.safeParams[key] });
-            }
+            Object.entries(this.safeParams).forEach(([key, value]) => {
+                 sendBleMessage({ type: 'set_param', key: key, value: value });
+            });
             
             const score = this.calculateFitness();
             addLogMessage(`[AutoTest] Wynik Fitness: ${score.toFixed(4)}`, 'success');
@@ -748,9 +703,7 @@
                 this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length;
             } else {
                 this.lastChange *= -1;
-                if(this.lastChange === 1) { // Wyprobowano + i - bez skutku
-                     this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length;
-                }
+                if(this.lastChange === 1) this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length;
             }
 
             if (this.currentCycle >= this.totalCycles) {
@@ -758,29 +711,46 @@
                 updateAutoTestUI(this);
             } else {
                 this.currentCycle++;
-                setTimeout(() => this.prepareNextCycle(), 200); // Krotka pauza przed nastepna proba
+                setTimeout(() => this.prepareNextCycle(), 200);
             }
+        }
+        
+        processValidationResult(data) {
+            const { pos_error_cm, yaw_error_deg } = data;
+            document.getElementById('validationResultPanel').style.display = 'block';
+            document.getElementById('validationPosError').textContent = pos_error_cm.toFixed(2);
+            document.getElementById('validationYawError').textContent = yaw_error_deg.toFixed(2);
+            let suggestion = "Test zakonczony.";
+            if (Math.abs(pos_error_cm) > 2.0) {
+                 suggestion = "Duzy blad pozycji. Sprawdz parametry mechaniczne lub uruchom Test Obrotu i Kursu.";
+            } else if (Math.abs(yaw_error_deg) > 10.0) {
+                 suggestion = "Duzy blad kursu. Uruchom Test Obrotu i Kursu, aby poprawic precyzje.";
+            } else {
+                suggestion = "Wynik bardzo dobry! Parametry sa dobrze zestrojone.";
+            }
+            document.getElementById('validationSuggestion').textContent = suggestion;
+            this.state = 'finished';
+            updateAutoTestUI(this);
         }
 
         cancel() {
-            this.state = 'idle';
-            this.isCollecting = false;
+            this.state = 'idle'; this.isCollecting = false;
             if(Object.keys(this.safeParams).length > 0) {
-                for(const key in this.safeParams) {
-                    sendBleMessage({ type: 'set_param', key: key, value: this.safeParams[key] });
-                }
+                Object.entries(this.safeParams).forEach(([key, value]) => sendBleMessage({ type: 'set_param', key, value }));
             }
             addLogMessage('[AutoTest] Sesja anulowana przez uzytkownika.', 'warn');
             updateAutoTestUI(null);
         }
 
         generateNextParams() {
-            const stepMultiplier = 0.05; // 5% kroku
+            if (this.paramKeys.length === 0) return {};
+            const stepMultiplier = 0.05;
             let nextParams = { ...this.bestParams };
             const currentParamKey = this.paramKeys[this.paramIndex];
             const baseValue = this.bestParams[currentParamKey];
             const step = Math.max(Math.abs(baseValue * stepMultiplier), this.paramsToTune[currentParamKey].step) * this.lastChange;
             nextParams[currentParamKey] += step;
+            if (nextParams[currentParamKey] < 0 && !['kd_b', 'kd_p', 'kd_r', 'kd_h'].includes(currentParamKey)) nextParams[currentParamKey] = 0; // Zapobiegaj ujemnym Kp/Ki
             return nextParams;
         }
 
@@ -793,56 +763,57 @@
         }
 
         calculateBalanceFitness() {
-            // ... (logika taka sama jak w poprzedniej wersji)
-            const buffer = this.telemetryBuffer;
-            const options = this.options;
+            const { telemetryBuffer: buffer, options } = this;
             let sumAbsPitch = 0, maxAbsPitch = 0, sumAbsSpeed = 0, sumAbsOutputChange = 0, inZoneSamples = 0;
-            for (let i = 0; i < buffer.length; i++) {
-                const { pitch = 0, speed = 0, output = 0 } = buffer[i];
+            buffer.forEach((d, i) => {
+                const { pitch = 0, speed = 0, output = 0 } = d;
                 sumAbsPitch += Math.abs(pitch);
                 if (Math.abs(pitch) > maxAbsPitch) maxAbsPitch = Math.abs(pitch);
                 if (Math.abs(pitch) <= options.idealZone) inZoneSamples++;
                 sumAbsSpeed += Math.abs(speed);
                 if (i > 0) sumAbsOutputChange += Math.abs(output - (buffer[i-1].output || 0));
-            }
+            });
             const count = buffer.length;
             const avgAbsPitch = sumAbsPitch / count, avgAbsSpeed = sumAbsSpeed / count, avgAbsOutputChange = sumAbsOutputChange / (count -1);
-            const unstablePitch = 5.0, poorStabilityPitch = 1.5, highJitterSpeed = 100, highEffortOutput = 50;
-            const scoreOvershoot = Math.max(0, 1.0 - (maxAbsPitch / unstablePitch));
-            const scoreStability = Math.max(0, 1.0 - (avgAbsPitch / poorStabilityPitch));
-            const scoreJitter = Math.max(0, 1.0 - (avgAbsSpeed / highJitterSpeed));
-            const scoreEffort = Math.max(0, 1.0 - (avgAbsOutputChange / highEffortOutput));
+            const scoreOvershoot = Math.max(0, 1 - (maxAbsPitch / 5.0));
+            const scoreStability = Math.max(0, 1 - (avgAbsPitch / 1.5));
+            const scoreJitter = Math.max(0, 1 - (avgAbsSpeed / 100));
+            const scoreEffort = Math.max(0, 1 - (avgAbsOutputChange / 50));
             const scoreTimeInZone = inZoneSamples / count;
             return (scoreOvershoot + scoreStability + scoreJitter + scoreEffort + scoreTimeInZone) / 5.0;
         }
         
         calculateLinearFitness() {
-            const buffer = this.telemetryBuffer;
-            if(buffer.length === 0) return 0;
+            const { telemetryBuffer: buffer, options } = this;
+            const startL = buffer[0].encoder_left, startR = buffer[0].encoder_right;
+            const endL = buffer[buffer.length-1].encoder_left, endR = buffer[buffer.length-1].encoder_right;
+            const pulsesPerCm = parseFloat(document.getElementById('encoderPprInput').value) / (Math.PI * parseFloat(document.getElementById('wheelDiameterInput').value));
+            const targetPulses = options.distance * pulsesPerCm;
             
-            const startPosition = (buffer[0].encoder_left + buffer[0].encoder_right) / 2;
-            const endPosition = (buffer[buffer.length-1].encoder_left + buffer[buffer.length-1].encoder_right) / 2;
+            const travelledPulses = ((endL - startL) + (endR - startR)) / 2;
+            const positionError = options.returnToZero ? Math.abs(((endL-startL) + (endR-startR))/2) : Math.abs(targetPulses - travelledPulses);
             
-            const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value);
-            const ppr = parseFloat(document.getElementById('encoderPprInput').value);
-            const pulsesPerCm = ppr / (Math.PI * wheelDiameter);
-            const targetPulses = this.options.distance * pulsesPerCm;
-            
-            const positionError = Math.abs(targetPulses - (endPosition - startPosition));
-            const maxAllowedError = 1.0 * pulsesPerCm; // 1 cm tolerancji
-            
-            const scoreAccuracy = Math.max(0, 1.0 - (positionError / maxAllowedError));
-            
-            // Dodatkowo uzyjemy oceny balansu podczas ruchu
-            const balanceScoreDuringMove = this.calculateBalanceFitness();
-
-            return (scoreAccuracy * 0.7) + (balanceScoreDuringMove * 0.3); // Precyzja wazniejsza
+            const scoreAccuracy = Math.max(0, 1 - (positionError / (2 * pulsesPerCm))); // Tolerancja bledu 2cm
+            const balanceScore = this.calculateBalanceFitness();
+            return (scoreAccuracy * 0.7) + (balanceScore * 0.3);
         }
 
         calculateTurnFitness() {
-            // Ta funkcja bedzie wymagala wysylania z robota kata YAW. Na razie symulacja.
-            addLogMessage('[AutoTest] UWAGA: Obliczanie fitness dla obrotu jest uproszczone!', 'warn');
-            return Math.random() * 0.2 + 0.7; // Zwraca losowy, ale dobry wynik
+            const { telemetryBuffer: buffer } = this;
+            let totalYawError = 0;
+            let turnCount = 0;
+            let lastYaw = buffer[0].yaw || 0;
+            buffer.forEach(d => {
+                if (d.robot_state === "OBROT" && Math.abs((d.yaw || 0) - lastYaw) > 80) { // Wykryj skok o 90 stopni
+                    totalYawError += Math.abs(90 - Math.abs((d.yaw || 0) - lastYaw));
+                    turnCount++;
+                    lastYaw = d.yaw || 0;
+                }
+            });
+            const avgYawError = turnCount > 0 ? totalYawError / turnCount : 90;
+            const scoreAccuracy = Math.max(0, 1 - (avgYawError / 15.0)); // Tolerancja 15 stopni
+            const balanceScore = this.calculateBalanceFitness();
+            return (scoreAccuracy * 0.6) + (balanceScore * 0.4);
         }
 
         applyBestResults() {
@@ -870,20 +841,14 @@
 
                 actionBtn.disabled = false;
                 actionBtn.textContent = 'Rozpocznij Sesje';
+                document.getElementById('validationResultPanel').style.display = 'none';
 
                 if (testType === 'balance') {
-                    optionsDiv.innerHTML = `
-                        <div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="10" min="2" max="50" style="width:90px;"></div>
-                        <div class="setting-container"><label for="at_duration">Czas cyklu (s):</label><input id="at_duration" type="number" value="8" min="3" max="20" style="width:90px;"></div>
-                        <div class="setting-container"><label for="at_zone">Strefa idealna (st.):</label><input id="at_zone" type="number" value="0.2" min="0.1" max="1.0" step="0.1" style="width:90px;"></div>`;
+                    optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="10" min="2" max="50" style="width:90px;"></div><div class="setting-container"><label for="at_duration">Czas trwania cyklu (s):</label><input id="at_duration" type="number" value="5" min="3" max="20" style="width:90px;"></div>`;
                 } else if (testType === 'linear') {
-                     optionsDiv.innerHTML = `
-                        <div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="10" min="2" max="50" style="width:90px;"></div>
-                        <div class="setting-container"><label for="at_distance">Dystans (cm):</label><input id="at_distance" type="number" value="20" min="10" max="100" style="width:90px;"></div>`;
+                     optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="10" min="2" max="50" style="width:90px;"></div><div class="setting-container"><label for="at_distance">Dystans (cm):</label><input id="at_distance" type="number" value="20" min="10" max="100" style="width:90px;"></div><div class="control-row"><span class="control-label">Powrot na start</span><label class="switch"><input type="checkbox" id="at_return" class="slider-checkbox"><span class="slider round"></span></label></div>`;
                 } else if (testType === 'turn') {
-                     optionsDiv.innerHTML = `
-                        <div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="10" min="2" max="50" style="width:90px;"></div>
-                        <div class="setting-container"><label for="at_angle">Kat obrotu (st.):</label><input id="at_angle" type="number" value="90" min="30" max="360" style="width:90px;"></div>`;
+                     optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="20" min="2" max="50" style="width:90px;"></div><div class="setting-container"><label for="at_side">Dlugosc boku (cm):</label><input id="at_side" type="number" value="20" min="10" max="50" style="width:90px;"></div><div class="setting-container"><label for="at_speed">Predkosc (imp/s):</label><input id="at_speed" type="number" value="400" min="100" max="1500" style="width:90px;"></div>`;
                 } else if (testType === 'square_validation') {
                      optionsDiv.innerHTML = `<p>Test walidacyjny uruchomi sekwencje jazdy po kwadracie o boku 20cm.</p>`;
                      actionBtn.textContent = 'Uruchom Walidacje';
@@ -904,11 +869,12 @@
                 let options = {};
                 if(document.getElementById('at_cycles')) options.totalCycles = parseInt(document.getElementById('at_cycles').value);
                 if(document.getElementById('at_duration')) options.cycleDuration = parseInt(document.getElementById('at_duration').value);
-                if(document.getElementById('at_zone')) options.idealZone = parseFloat(document.getElementById('at_zone').value);
                 if(document.getElementById('at_distance')) options.distance = parseInt(document.getElementById('at_distance').value);
-                if(document.getElementById('at_angle')) options.angle = parseInt(document.getElementById('at_angle').value);
+                if(document.getElementById('at_return')) options.returnToZero = document.getElementById('at_return').checked;
+                if(document.getElementById('at_side')) options.side = parseInt(document.getElementById('at_side').value);
+                if(document.getElementById('at_speed')) options.speed = parseInt(document.getElementById('at_speed').value);
 
-                tuningSession = new TuningSession(testType, options, config.paramsToTune);
+                tuningSession = new TuningSession(testType, options);
                 tuningSession.start();
 
             } else if (tuningSession.state === 'ready') {
@@ -940,13 +906,14 @@
             statusStateText.textContent = 'Bezczynny';
             const selectedRadio = document.querySelector('input[name="autotest-type"]:checked');
             if(selectedRadio) {
-                actionBtn.textContent = 'Rozpocznij Sesje';
+                actionBtn.textContent = selectedRadio.value === 'square_validation' ? 'Uruchom Walidacje' : 'Rozpocznij Sesje';
                 actionBtn.disabled = false;
             } else {
                  actionBtn.textContent = 'Wybierz test, aby rozpoczac';
                  actionBtn.disabled = true;
             }
             cancelBtn.style.display = 'none';
+            document.getElementById('validationResultPanel').style.display = 'none';
             return;
         }
 
@@ -977,12 +944,18 @@
                 break;
             case 'finished':
                 statusBar.value = session.totalCycles;
-                let bestParamsText = Object.entries(session.bestParams).map(([key, val]) => `${key}: ${val.toFixed(3)}`).join(', ');
-                statusParams.textContent = bestParamsText;
-                statusProgressText.textContent = `Zakonczono (${session.totalCycles}/${session.totalCycles})`;
-                statusStateText.textContent = 'Sesja zakonczona!';
-                actionBtn.textContent = 'Zastosuj najlepsze parametry';
-                actionBtn.disabled = false;
+                if(session.testType !== 'square_validation') {
+                    let bestParamsText = Object.entries(session.bestParams).map(([key, val]) => `${key}: ${val.toFixed(3)}`).join(', ');
+                    statusParams.textContent = bestParamsText;
+                    statusProgressText.textContent = `Zakonczono (${session.totalCycles}/${session.totalCycles})`;
+                    statusStateText.textContent = 'Sesja zakonczona!';
+                    actionBtn.textContent = 'Zastosuj najlepsze parametry';
+                    actionBtn.disabled = false;
+                } else {
+                    statusStateText.textContent = 'Walidacja zakonczona.';
+                    actionBtn.textContent = 'Uruchom ponownie';
+                    actionBtn.disabled = false;
+                }
                 break;
         }
     }
