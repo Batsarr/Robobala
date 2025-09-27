@@ -313,7 +313,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 3.0 (UI dla PID) - PELNA IMPLEMENTACJA AUTO TESTOW - POPRAWIONA
+    // WERSJA 3.0 (UI dla PID) - PELNA IMPLEMENTACJA AUTO TESTOW - POPRAWKA GATT
     // =======================================================================================
     
     // ... (CALA LOGIKA JAVASCRIPT ZNAJDUJE SIE PONIZEJ)
@@ -378,6 +378,12 @@
     let actionToMap = null;
     const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v3_';
 
+    // --- POPRAWKA GATT: Zmienne do obslugi kolejki komunikatow BLE ---
+    let bleMessageQueue = [];
+    let isSendingBleMessage = false;
+    const BLE_SEND_INTERVAL = 50; // 50ms przerwy miedzy komendami
+    // ------------------------------------------------------------------
+
     const availableActions = { 
         'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' }, 
         'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' }, 
@@ -421,7 +427,7 @@
     function updateAccordionHeight(content) { if (content && content.style.maxHeight !== '0px') { content.style.maxHeight = content.scrollHeight + 'px'; } }
     
     async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono! Zadam konfiguracji...', 'success'); setTimeout(() => { sendBleMessage({ type: 'request_full_config' }); }, 500); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
-    function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; }
+    function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; bleMessageQueue = []; isSendingBleMessage = false; }
     
     function handleBleNotification(event) {
         const value = event.target.value;
@@ -440,9 +446,40 @@
             }
         }
     }
-
-    async function sendBleMessage(message) { if (!rxCharacteristic) return; try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
     
+    // --- POPRAWKA GATT: Nowy system wysylania z kolejka ---
+    async function _sendRawBleMessage(message) {
+        if (!rxCharacteristic) return;
+        try {
+            const encoder = new TextEncoder();
+            await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n'));
+        } catch (error) {
+            addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error');
+            // W przypadku bledu, mimo wszystko kontynuuj kolejke, aby sie nie zablokowala
+        }
+    }
+
+    async function processBleQueue() {
+        if (isSendingBleMessage || bleMessageQueue.length === 0 || !rxCharacteristic) {
+            return;
+        }
+        isSendingBleMessage = true;
+        const message = bleMessageQueue.shift();
+        
+        await _sendRawBleMessage(message);
+
+        setTimeout(() => {
+            isSendingBleMessage = false;
+            processBleQueue();
+        }, BLE_SEND_INTERVAL);
+    }
+
+    function sendBleMessage(message) {
+        bleMessageQueue.push(message);
+        processBleQueue();
+    }
+    // --- Koniec poprawki GATT ---
+
     function processCompleteMessage(data) {
         if(data.type === 'telemetry' && data.robot_state) {
             const previousState = lastKnownRobotState;
@@ -469,7 +506,6 @@
                 document.getElementById(inputId).value = p.value;
                 addLogMessage(`[UI] Auto-strojenie dla ${p.motor} ${p.direction} zakonczone. Wynik: ${p.value}`, 'success');
                 
-                // --- POPRAWKA: Resetowanie przycisku 'Auto' po otrzymaniu wyniku ---
                 const row = document.querySelector(`.manual-tune-row[data-motor="${p.motor}"][data-direction="${p.direction}"]`);
                 if (row) {
                     const autoBtn = row.querySelector('.auto-btn');
@@ -636,7 +672,7 @@
             this.testParams = {};
             this.paramIndex = 0;
             this.lastChange = 1;
-            this.cycleTimeout = null; // Uchwyt dla watchdoga
+            this.cycleTimeout = null;
         }
 
         recordTelemetry(data) { if (this.isCollecting && data.type === 'telemetry') this.telemetryBuffer.push(data); }
@@ -646,7 +682,7 @@
             const isRobotIdle = newState.includes('IDLE') || newState.includes('TRZYMA_POZYCJE');
             const wasRobotWorking = previousState.includes('RUCH') || previousState.includes('OBROT');
             if(isRobotIdle && wasRobotWorking) {
-                setTimeout(() => this.finishCycle(), 250); // Opoznienie na ustabilizowanie odczytow
+                setTimeout(() => this.finishCycle(), 250);
             }
         }
 
@@ -675,20 +711,19 @@
             this.telemetryBuffer = [];
             updateAutoTestUI(this);
 
-            // --- POPRAWKA: Ustawienie timeout'u (watchdoga) dla cyklu testowego ---
             this.cycleTimeout = setTimeout(() => {
                 if (this.isCollecting) {
                     addLogMessage('[AutoTest] Timeout cyklu! Wymuszam zakonczenie i analize.', 'warn');
                     this.finishCycle();
                 }
-            }, 15000); // 15 sekundowy watchdog na cykl
+            }, 15000);
 
             Object.entries(this.testParams).forEach(([key, value]) => {
                 sendBleMessage({ type: 'set_param', key: key, value: value });
             });
             addLogMessage(`[AutoTest] Cykl ${this.currentCycle}/${this.totalCycles}. Testuje: ${JSON.stringify(this.testParams)}`, 'info');
 
-            setTimeout(() => { // Dajmy czas na zaaplikowanie parametrow
+            setTimeout(() => {
                 if (this.testType === 'balance') {
                     setTimeout(() => this.finishCycle(), this.options.cycleDuration * 1000);
                 } else if (this.testType === 'linear') {
@@ -703,12 +738,11 @@
 
         finishCycle() {
             if (!this.isCollecting) return;
-            clearTimeout(this.cycleTimeout); // POPRAWKA: Wyczysc watchdog, bo cykl zakonczyl sie poprawnie
+            clearTimeout(this.cycleTimeout);
             this.isCollecting = false;
             this.state = 'analyzing';
             updateAutoTestUI(this);
             
-            // Wazne: przywracamy bezpieczne parametry przed kolejna iteracja
             Object.entries(this.safeParams).forEach(([key, value]) => {
                  sendBleMessage({ type: 'set_param', key: key, value: value });
             });
@@ -720,11 +754,11 @@
                 this.bestScore = score;
                 this.bestParams = { ...this.testParams };
                 addLogMessage(`[AutoTest] Nowy najlepszy wynik!`, 'success');
-                this.lastChange = 1; // Idz w tym samym kierunku
-                this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length; // Zmien parametr
+                this.lastChange = 1;
+                this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length;
             } else {
-                this.lastChange *= -1; // Wynik sie pogorszyl, zmien kierunek
-                if(this.lastChange === 1) this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length; // Jesli wrocilismy, zmien parametr
+                this.lastChange *= -1;
+                if(this.lastChange === 1) this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length;
             }
 
             if (this.currentCycle >= this.totalCycles) {
@@ -755,7 +789,7 @@
         }
 
         cancel() {
-            clearTimeout(this.cycleTimeout); // POPRAWKA: Wyczysc watchdog przy anulowaniu
+            clearTimeout(this.cycleTimeout);
             this.state = 'idle'; this.isCollecting = false;
             if(Object.keys(this.safeParams).length > 0) {
                 Object.entries(this.safeParams).forEach(([key, value]) => sendBleMessage({ type: 'set_param', key, value }));
@@ -765,15 +799,14 @@
         }
 
         generateNextParams() {
-            // Prosty algorytm wspinaczkowy (Hill Climbing)
             if (this.paramKeys.length === 0) return {};
-            const stepMultiplier = 0.05; // 5% zmiany wzgledem biezacej wartosci
+            const stepMultiplier = 0.05;
             let nextParams = { ...this.bestParams };
             const currentParamKey = this.paramKeys[this.paramIndex];
             const baseValue = this.bestParams[currentParamKey];
             const step = Math.max(Math.abs(baseValue * stepMultiplier), this.paramsToTune[currentParamKey].step) * this.lastChange;
             nextParams[currentParamKey] += step;
-            if (nextParams[currentParamKey] < 0 && !['kd_b', 'kd_p', 'kd_r', 'kd_h'].includes(currentParamKey)) nextParams[currentParamKey] = 0; // Zapobiegaj ujemnym Kp/Ki
+            if (nextParams[currentParamKey] < 0 && !['kd_b', 'kd_p', 'kd_r', 'kd_h'].includes(currentParamKey)) nextParams[currentParamKey] = 0;
             return nextParams;
         }
 
@@ -798,11 +831,11 @@
             });
             const count = buffer.length;
             const avgAbsPitch = sumAbsPitch / count, avgAbsSpeed = sumAbsSpeed / count, avgAbsOutputChange = sumAbsOutputChange / (count -1);
-            const scoreOvershoot = Math.max(0, 1 - (maxAbsPitch / 5.0)); // Kara za przeregulowanie powyzej 5 stopni
-            const scoreStability = Math.max(0, 1 - (avgAbsPitch / 1.5)); // Kara za srednie odchylenie powyzej 1.5 stopnia
-            const scoreJitter = Math.max(0, 1 - (avgAbsSpeed / 100)); // Kara za niepotrzebne ruchy (predkosc)
-            const scoreEffort = Math.max(0, 1 - (avgAbsOutputChange / 50)); // Kara za "nerwowe" sterowanie
-            const scoreTimeInZone = inZoneSamples / count; // Nagroda za czas w idealnej strefie
+            const scoreOvershoot = Math.max(0, 1 - (maxAbsPitch / 5.0));
+            const scoreStability = Math.max(0, 1 - (avgAbsPitch / 1.5));
+            const scoreJitter = Math.max(0, 1 - (avgAbsSpeed / 100));
+            const scoreEffort = Math.max(0, 1 - (avgAbsOutputChange / 50));
+            const scoreTimeInZone = inZoneSamples / count;
             return (scoreOvershoot + scoreStability + scoreJitter + scoreEffort + scoreTimeInZone) / 5.0;
         }
         
@@ -816,9 +849,9 @@
             const travelledPulses = ((endL - startL) + (endR - startR)) / 2;
             const positionError = options.returnToZero ? Math.abs(((endL-startL) + (endR-startR))/2) : Math.abs(targetPulses - travelledPulses);
             
-            const scoreAccuracy = Math.max(0, 1 - (positionError / (2 * pulsesPerCm))); // Tolerancja bledu 2cm
+            const scoreAccuracy = Math.max(0, 1 - (positionError / (2 * pulsesPerCm)));
             const balanceScore = this.calculateBalanceFitness();
-            return (scoreAccuracy * 0.7) + (balanceScore * 0.3); // Dokladnosc jest wazniejsza, ale balans tez sie liczy
+            return (scoreAccuracy * 0.7) + (balanceScore * 0.3);
         }
 
         calculateTurnFitness() {
@@ -827,14 +860,14 @@
             let turnCount = 0;
             let lastYaw = buffer[0].yaw || 0;
             buffer.forEach(d => {
-                if (d.robot_state === "OBROT" && Math.abs((d.yaw || 0) - lastYaw) > 80) { // Wykryj skok o ~90 stopni
+                if (d.robot_state === "OBROT" && Math.abs((d.yaw || 0) - lastYaw) > 80) {
                     totalYawError += Math.abs(90 - Math.abs((d.yaw || 0) - lastYaw));
                     turnCount++;
                     lastYaw = d.yaw || 0;
                 }
             });
             const avgYawError = turnCount > 0 ? totalYawError / turnCount : 90;
-            const scoreAccuracy = Math.max(0, 1 - (avgYawError / 15.0)); // Tolerancja 15 stopni
+            const scoreAccuracy = Math.max(0, 1 - (avgYawError / 15.0));
             const balanceScore = this.calculateBalanceFitness();
             return (scoreAccuracy * 0.6) + (balanceScore * 0.4);
         }
