@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v3.3 (Camera Status)</title>
+    <title>Robot PID - Panel Sterowania v3.5 (Bez PL Znakow)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -104,6 +104,22 @@
         #validationResultPanel h5 { color: #61dafb; margin: 0 0 10px 0; font-size: 1.1em; text-align: left; }
         #validationResultPanel p { margin: 5px 0; text-align: left;}
         #validationResultPanel strong { color: #a2f279; }
+        .dpad-container { display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; gap: 5px; max-width: 150px; margin: 15px auto; }
+        .dpad-btn { background-color: #61dafb; color: #282c34; border-radius: 5px; font-size: 2em; line-height: 1; padding: 5px; cursor: pointer; border: none; }
+        .dpad-btn:hover { background-color: #a2f279; }
+        #dpad-up { grid-column: 2; grid-row: 1; }
+        #dpad-left { grid-column: 1; grid-row: 2; }
+        #dpad-right { grid-column: 3; grid-row: 2; }
+        #dpad-down { grid-column: 2; grid-row: 3; }
+        #dpad-stop { grid-column: 2; grid-row: 2; background-color: #ff6347; color: white; }
+        .dpad-input-group { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin: 10px 0; }
+        .dpad-input-group label { text-align: right; font-weight: bold; color: #a2f279; }
+        .dpad-input-group input { width: 100%; box-sizing: border-box; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 5px; padding: 4px; }
+        .sequence-step { display: grid; grid-template-columns: 1fr 100px auto; gap: 10px; align-items: center; background-color: #2a2f35; padding: 8px; border-radius: 6px; margin-bottom: 8px; transition: background-color: 0.3s; }
+        .sequence-step.executing { background-color: #a2f279; color: #282c34; }
+        .sequence-step.executing select, .sequence-step.executing input { color: #282c34; border-color: #282c34; }
+        .sequence-step select, .sequence-step input { width: 100%; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 4px; padding: 5px; }
+        .sequence-step .remove-step-btn { background-color: #ff6347; padding: 5px 10px; }
     </style>
 </head>
 <body>
@@ -136,7 +152,6 @@
             <div class="status-grid">
                 <strong>Polaczenie:</strong> <div><span id="connectionStatus" class="status-indicator status-disconnected"></span> <span id="connectionText">Rozlaczony</span></div>
                 <strong>Gamepad:</strong> <span id="gamepadStatus" style="font-weight:bold; color: #f7b731;">Brak</span>
-                <!-- ULEPSZENIE: Dodano status kamery -->
                 <strong>Kamera Flow:</strong> <div><span id="cameraStatus" class="status-indicator status-disconnected"></span> <span id="cameraText">Brak Danych</span></div>
                 <strong>Tryb Pracy:</strong> <span id="robotStateVal" style="font-weight:bold; color: #61dafb;">IDLE</span>
             </div>
@@ -183,9 +198,9 @@
 
                 <button class="accordion-header" onclick="toggleAccordion(this)">2. PID Balansu (Podstawowy)</button>
                 <div class="accordion-content"> 
-                    <div class="setting-container"> <label for="balanceKpInput">Kp - Sila<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKpInput" step="1" value="95"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Sztywnosc utrzymania pionu. Zwieksz dla szybszej reakcji na wychylenie. Zbyt duza wartosc powoduje oscylacje.</div> </div> 
-                    <div class="setting-container"> <label for="balanceKiInput">Ki - Korekta<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKiInput" step="0.01" value="0"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Usuwa dlugotrwaly blad (np. gdy robot dryfuje). Zwiekszaj bardzo ostroznie, czesto nie jest potrzebny.</div> </div> 
-                    <div class="setting-container"> <label for="balanceKdInput">Kd - Tlumienie<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKdInput" step="0.01" value="3.23"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Hamuje oscylacje i uspokaja robota. Przewiduje przyszly blad. Zbyt duza wartosc spowalnia reakcje.</div> </div> 
+                    <div class="setting-container"> <label for="balanceKpInput">Kp - Sila<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKpInput" step="0.0001" value="97.1850"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Sztywnosc utrzymania pionu. Zwieksz dla szybszej reakcji na wychylenie. Zbyt duza wartosc powoduje oscylacje.</div> </div> 
+                    <div class="setting-container"> <label for="balanceKiInput">Ki - Korekta<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKiInput" step="0.01" value="0.0"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Usuwa dlugotrwaly blad (np. gdy robot dryfuje). Zwiekszaj bardzo ostroznie, czesto nie jest potrzebny.</div> </div> 
+                    <div class="setting-container"> <label for="balanceKdInput">Kd - Tlumienie<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKdInput" step="0.0001" value="3.0039"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Hamuje oscylacje i uspokaja robota. Przewiduje przyszly blad. Zbyt duza wartosc spowalnia reakcje.</div> </div> 
                     <div class="setting-container"> <label for="balanceFilterAlphaInput">Filtr Pochodnej (%)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceFilterAlphaInput" min="1" max="100" step="1" value="100"><button>+</button></div> <div class="help-text">Wygladza odczyt pochodnej, redukujac wplyw szumow. 100% = brak filtrowania. Zmniejsz, jesli robot jest nerwowy.</div> </div>
                 </div>
 
@@ -248,9 +263,10 @@
         </div>
         
         <div class="card">
+            <h2>Auto Testy i Sterowanie Autonomiczne</h2>
+
             <button class="accordion-header" onclick="toggleAccordion(this)">Auto Testy PID</button>
             <div class="accordion-content">
-                
                 <div id="autotestSelector" class="radio-selector-group">
                     <div class="radio-selector-item">
                         <input type="radio" id="test-balance" name="autotest-type" value="balance">
@@ -300,8 +316,39 @@
         
                 <button id="autotestActionBtn" style="width:100%; margin-top:15px;" disabled>Wybierz test, aby rozpoczac</button>
                 <button id="autotestCancelBtn" style="width:100%; margin-top:10px; background-color:#ff6347; display:none;">Anuluj Sesje</button>
-        
             </div>
+
+            <button class="accordion-header" onclick="toggleAccordion(this)">Sterowanie Autonomiczne</button>
+            <div class="accordion-content">
+               <fieldset>
+                   <legend>Sterowanie Precyzyjne (D-Pad)</legend>
+                   <div class="dpad-input-group">
+                       <label for="dpadDistInput">Dystans (cm):</label>
+                       <input type="number" id="dpadDistInput" value="20">
+                   </div>
+                   <div class="dpad-input-group">
+                       <label for="dpadAngleInput">Kat (st.):</label>
+                       <input type="number" id="dpadAngleInput" value="90">
+                   </div>
+                   <div class="dpad-container">
+                       <button id="dpad-up" class="dpad-btn" data-dpad="up">&#8593;</button>
+                       <button id="dpad-left" class="dpad-btn" data-dpad="left">&#8592;</button>
+                       <button id="dpad-stop" class="dpad-btn" data-dpad="stop">&#215;</button>
+                       <button id="dpad-right" class="dpad-btn" data-dpad="right">&#8594;</button>
+                       <button id="dpad-down" class="dpad-btn" data-dpad="down">&#8595;</button>
+                   </div>
+               </fieldset>
+               <fieldset style="margin-top: 15px;">
+                   <legend>Kreator Sekwencji Ruchow</legend>
+                   <div id="sequence-list"></div>
+                   <button id="add-sequence-step-btn" style="width:100%; margin: 10px 0;">Dodaj Krok</button>
+                   <div style="display:flex; gap:10px; justify-content:center;">
+                       <button id="run-sequence-btn" style="background-color: #a2f279;">Uruchom</button>
+                       <button id="stop-sequence-btn" style="background-color: #ff6347;" disabled>Zatrzymaj</button>
+                       <button id="clear-sequence-btn" style="background-color: #f7b731;">Wyczysc</button>
+                   </div>
+               </fieldset>
+           </div>
         </div>
 
         <div class="card" id="log-card" style="grid-column: 1 / -1;">
@@ -315,59 +362,14 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 3.3 (UI dla PID) - FINALNA Z KAMERA - Poprawki BLE i algorytmu
-    // =======================================================================================
-    
-    // ... CALA LOGIKA JAVASCRIPT ZNAJDUJE SIE PONIZEJ ...
-
-    // =======================================================================================
-    // === BLOK 1: INICJALIZACJA I PODSTAWOWE FUNKCJE ===
-    // =======================================================================================
-    // ... caly Blok 1 jest identyczny jak w poprzedniej odpowiedzi, z wyjatkiem jednej funkcji ...
-    
-    function updateTelemetryUI(data) {
-        if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
-        if (data.pitch !== undefined) {
-            document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0';
-            document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`;
-        }
-        if (data.yaw !== undefined) document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' \u00B0';
-        if (data.speed !== undefined) document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0);
-        if (data.encoder_left !== undefined) document.getElementById('encoderLeftVal').textContent = data.encoder_left;
-        if (data.encoder_right !== undefined) document.getElementById('encoderRightVal').textContent = data.encoder_right;
-        
-        // --- ULEPSZENIE: Obsluga statusu kamery ---
-        if (data.camera_ok !== undefined) {
-            const cameraStatus = document.getElementById('cameraStatus');
-            const cameraText = document.getElementById('cameraText');
-            if (cameraStatus && cameraText) {
-                if (data.camera_ok) {
-                    cameraStatus.className = 'status-indicator status-ok';
-                    cameraText.textContent = 'Aktywna';
-                } else {
-                    cameraStatus.className = 'status-indicator status-error';
-                    cameraText.textContent = 'Brak Danych';
-                }
-            }
-        }
-
-        const emergencyBanner = document.getElementById('emergency-banner');
-        if (emergencyBanner) emergencyBanner.style.display = data.emergency_stop ? 'block' : 'none';
-    }
-
-    // ... cala reszta JavaScriptu (Blok 1 i Blok 2) jest identyczna jak w poprzedniej odpowiedzi ...
-    // Skopiuj je tutaj. Dla pewnosci, ponizej wklejam caly kompletny kod JS.
-</script>
-
-<script>
-    // Skopiuj tutaj caly kod JavaScript z poprzedniej odpowiedzi o "ulepszonym algorytmie".
-    // Dla pewnosci i kompletnosci, wklejam go ponizej w calosci.
-
-    // =======================================================================================
-    // === BLOK 1: INICJALIZACJA I PODSTAWOWE FUNKCJE ===
+    // WERSJA 3.5 (UI dla PID) - Sterowanie Autonomiczne, brak PL, nowe wartosci PID
     // =======================================================================================
     let isApplyingConfig = false;
     let lastKnownRobotState = 'IDLE';
+
+    let isSequenceRunning = false;
+    let currentSequenceStep = 0;
+    const MAX_SEQUENCE_STEPS = 10;
 
     const parameterMapping = {
         'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b',
@@ -396,6 +398,8 @@
         setupManualTuneButtons();
         setupGamepadMappingModal();
         setupAutoTestEventListeners();
+        setupDpadControls(); 
+        setupSequenceControls(); 
         loadGamepadMappings();
         renderMappingModal();
         pollGamepad();
@@ -443,7 +447,7 @@
         'output': { label: 'Wyjscie PID', color: '#ff6347'}
     };
     const builtInPresetsData = { 
-        '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 95.0, balanceKiInput: 0.0, balanceKdInput: 3.23, speedKpInput: 0.05, positionKpInput: 2.5, positionKiInput: 0.006, positionKdInput: 1.0 }}, 
+        '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 97.1850, balanceKiInput: 0.0, balanceKdInput: 3.0039, speedKpInput: 0.05, positionKpInput: 2.5, positionKiInput: 0.006, positionKdInput: 1.0 }}, 
         '2': { name: "2. PID Mieciutki (Plynny)", params: { balanceKpInput: 80.0, balanceKiInput: 0.0, balanceKdInput: 2.8, speedKpInput: 0.03, positionKpInput: 1.8, positionKiInput: 0.004, positionKdInput: 0.8 }}, 
         '3': { name: "3. PID Agresywny (Sztywny)", params: { balanceKpInput: 110.0, balanceKiInput: 0.0, balanceKdInput: 4.0, speedKpInput: 0.07, positionKpInput: 3.5, positionKiInput: 0.01, positionKdInput: 1.5 }}
     };
@@ -518,8 +522,8 @@
     }
 
     function processCompleteMessage(data) {
-        if(data.type === 'telemetry' && data.robot_state) {
-            const previousState = lastKnownRobotState;
+        const previousState = lastKnownRobotState;
+        if (data.type === 'telemetry' && data.robot_state) {
             lastKnownRobotState = data.robot_state;
             if(tuningSession) tuningSession.onStateChange(previousState, lastKnownRobotState);
         }
@@ -528,6 +532,7 @@
             case 'telemetry':
                 updateTelemetryUI(data);
                 updateChart(data);
+                checkAndExecuteNextSequenceStep(previousState);
                 break;
             case 'full_config':
                 isApplyingConfig = true;
@@ -689,9 +694,16 @@
     function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
     function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
 
-    // =======================================================================================
-    // === BLOK 2: LOGIKA SYSTEMU AUTO TESTOW (Z ULEPSZENIAMI) ===
-    // =======================================================================================
+    function setupDpadControls() { document.querySelectorAll('.dpad-btn').forEach(btn => { btn.addEventListener('click', (e) => { const action = e.currentTarget.dataset.dpad; if (action === 'up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'stop') sendBleMessage({ type: 'command_stop' }); }); }); }
+    function setupSequenceControls() { document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep); document.getElementById('run-sequence-btn').addEventListener('click', runSequence); document.getElementById('stop-sequence-btn').addEventListener('click', stopSequenceExecution); document.getElementById('clear-sequence-btn').addEventListener('click', clearSequence); }
+    function addSequenceStep() { const list = document.getElementById('sequence-list'); if (list.children.length >= MAX_SEQUENCE_STEPS) return; const stepDiv = document.createElement('div'); stepDiv.className = 'sequence-step'; stepDiv.innerHTML = ` <select class="sequence-type"> <option value="move_fwd">Przod (cm)</option><option value="move_bwd">Tyl (cm)</option> <option value="rotate_r">Obrot Prawo (st.)</option><option value="rotate_l">Obrot Lewo (st.)</option> </select> <input type="number" class="sequence-value" value="20"> <button class="remove-step-btn">&times;</button> `; list.appendChild(stepDiv); updateAccordionHeight(list.closest('.accordion-content')); stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => { stepDiv.remove(); updateAccordionHeight(list.closest('.accordion-content')); }); }
+    function runSequence() { if (isSequenceRunning) return; if (lastKnownRobotState !== 'TRZYMA_POZYCJE' && lastKnownRobotState !== 'BALANSUJE') { addLogMessage(`[UI] Nie mozna rozpoczac sekwencji. Robot w stanie '${lastKnownRobotState}'.`, 'error'); return; } const steps = document.querySelectorAll('.sequence-step'); if (steps.length === 0) return; isSequenceRunning = true; currentSequenceStep = 0; updateSequenceUI(); addLogMessage(`[UI] Rozpoczeto sekwencje z ${steps.length} krokow.`, 'info'); executeNextSequenceStep(); }
+    function stopSequenceExecution() { if (!isSequenceRunning) return; isSequenceRunning = false; sendBleMessage({ type: 'command_stop' }); updateSequenceUI(); addLogMessage('[UI] Sekwencja zatrzymana.', 'warn'); }
+    function clearSequence() { if (isSequenceRunning) stopSequenceExecution(); const list = document.getElementById('sequence-list'); list.innerHTML = ''; updateAccordionHeight(list.closest('.accordion-content')); }
+    function updateSequenceUI() { document.querySelectorAll('.sequence-step').forEach((step, index) => { step.classList.toggle('executing', isSequenceRunning && index === currentSequenceStep); }); document.getElementById('run-sequence-btn').disabled = isSequenceRunning; document.getElementById('add-sequence-step-btn').disabled = isSequenceRunning; document.getElementById('clear-sequence-btn').disabled = isSequenceRunning; document.getElementById('stop-sequence-btn').disabled = !isSequenceRunning; }
+    function checkAndExecuteNextSequenceStep(previousState) { if (!isSequenceRunning) return; const isRobotReadyForNextStep = lastKnownRobotState === 'TRZYMA_POZYCJE' || lastKnownRobotState === 'BALANSUJE'; const wasRobotWorking = previousState === 'RUCH_AUTONOMICZNY' || previousState === 'OBROT_AUTONOMICZNY'; if (isRobotReadyForNextStep && wasRobotWorking) { addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info'); currentSequenceStep++; executeNextSequenceStep(); } }
+    function executeNextSequenceStep() { const steps = document.querySelectorAll('.sequence-step'); if (!isSequenceRunning || currentSequenceStep >= steps.length) { if (isSequenceRunning) { isSequenceRunning = false; addLogMessage('[UI] Sekwencja ukonczona.', 'success'); } updateSequenceUI(); return; } updateSequenceUI(); const stepNode = steps[currentSequenceStep]; const type = stepNode.querySelector('.sequence-type').value; const value = parseFloat(stepNode.querySelector('.sequence-value').value); let command = {}; switch (type) { case 'move_fwd': command = { type: 'execute_move', distance_cm: value }; break; case 'move_bwd': command = { type: 'execute_move', distance_cm: -value }; break; case 'rotate_r': command = { type: 'execute_rotate', angle_deg: value }; break; case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -value }; break; } addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info'); sendBleMessage(command); }
+    
     let tuningSession = null;
 </script>
 <script>
@@ -944,7 +956,7 @@
             let turnCount = 0;
             let lastYaw = buffer[0].yaw || 0;
             buffer.forEach(d => {
-                if (d.robot_state === "OBROT" && Math.abs((d.yaw || 0) - lastYaw) > 80) {
+                if (d.robot_state === "OBROT_AUTONOMICZNY" && Math.abs((d.yaw || 0) - lastYaw) > 80) {
                     totalYawError += Math.abs(90 - Math.abs((d.yaw || 0) - lastYaw));
                     turnCount++;
                     lastYaw = d.yaw || 0;
