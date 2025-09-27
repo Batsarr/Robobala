@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v3.0 (Advanced AutoTest)</title>
+    <title>Robot PID - Panel Sterowania v3.1 (Inteligentny AutoTest)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -278,6 +278,8 @@
                     <h5>Status Sesji</h5>
                     <div class="info-grid">
                         <strong>Testowane Parametry:</strong> <span id="statusTestedParams">---</span>
+                        <!-- ULEPSZENIE I: Dodano podglad najlepszych znalezionych parametrow -->
+                        <strong>Najlepsze Znalezione:</strong> <span id="statusBestParams" style="color: #61dafb;">---</span>
                         <strong>Najlepszy Wynik:</strong> <span id="statusBestScore" style="font-weight: bold; color: #a2f279;">---</span>
                         <strong>Postep:</strong> 
                         <div>
@@ -313,7 +315,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 3.0 (UI dla PID) - PELNA IMPLEMENTACJA AUTO TESTOW - POPRAWKA GATT
+    // WERSJA 3.1 (UI dla PID) - INTELIGENTNY AUTO TEST - POPRAWKA GATT
     // =======================================================================================
     
     // ... (CALA LOGIKA JAVASCRIPT ZNAJDUJE SIE PONIZEJ)
@@ -378,18 +380,16 @@
     let actionToMap = null;
     const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v3_';
 
-    // --- POPRAWKA GATT: Zmienne do obslugi kolejki komunikatow BLE ---
     let bleMessageQueue = [];
     let isSendingBleMessage = false;
-    const BLE_SEND_INTERVAL = 50; // 50ms przerwy miedzy komendami
-    // ------------------------------------------------------------------
+    const BLE_SEND_INTERVAL = 50;
 
     const availableActions = { 
         'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' }, 
         'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' }, 
         'toggle_speed_mode': { label: 'Wlacz/Wylacz Tryb Predkosci', elementId: 'speedModeSwitch' }, 
         'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyStopBtn' }, 
-        'reset_zero': { label: 'Resetuj Osie (Pion)', elementId: 'resetZeroBtn' }, 
+        'reset_zero': { label: 'Resetuj Osie', elementId: 'resetZeroBtn' }, 
         'trim_plus': { label: 'Korekta Pionu (+)', elementId: 'trimPlusBtn' }, 
         'trim_minus': { label: 'Korekta Pionu (-)', elementId: 'trimMinusBtn' },
         'start_autotest_cycle': { label: 'Uruchom Cykl Auto Testu', elementId: 'autotestActionBtn' }
@@ -447,7 +447,6 @@
         }
     }
     
-    // --- POPRAWKA GATT: Nowy system wysylania z kolejka ---
     async function _sendRawBleMessage(message) {
         if (!rxCharacteristic) return;
         try {
@@ -455,7 +454,6 @@
             await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n'));
         } catch (error) {
             addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error');
-            // W przypadku bledu, mimo wszystko kontynuuj kolejke, aby sie nie zablokowala
         }
     }
 
@@ -465,9 +463,7 @@
         }
         isSendingBleMessage = true;
         const message = bleMessageQueue.shift();
-        
         await _sendRawBleMessage(message);
-
         setTimeout(() => {
             isSendingBleMessage = false;
             processBleQueue();
@@ -478,7 +474,6 @@
         bleMessageQueue.push(message);
         processBleQueue();
     }
-    // --- Koniec poprawki GATT ---
 
     function processCompleteMessage(data) {
         if(data.type === 'telemetry' && data.robot_state) {
@@ -635,7 +630,6 @@
     // === BLOK 2: LOGIKA SYSTEMU AUTO TESTOW ===
     // =======================================================================================
     let tuningSession = null;
-    // ... (reszta logiki znajduje sie ponizej)
 </script>
 <script>
     const testConfigurations = {
@@ -673,6 +667,11 @@
             this.paramIndex = 0;
             this.lastChange = 1;
             this.cycleTimeout = null;
+            // ULEPSZENIE III: Zmienne dla inteligentnego algorytmu
+            this.stepSizes = {};
+            this.stagnationCounter = 0;
+            this.initialStepMultiplier = 0.1; // Zaczynamy od duzych krokow (10%)
+            this.minStepMultiplier = 0.01; // Minimalny krok (1%)
         }
 
         recordTelemetry(data) { if (this.isCollecting && data.type === 'telemetry') this.telemetryBuffer.push(data); }
@@ -692,9 +691,13 @@
             for(const key in this.paramsToTune) {
                 const inputId = this.paramsToTune[key].id;
                 this.safeParams[key] = parseFloat(document.getElementById(inputId).value);
+                // ULEPSZENIE III: Inicjalizacja rozmiarow krokow
+                this.stepSizes[key] = this.initialStepMultiplier;
             }
             this.bestParams = { ...this.safeParams };
             this.currentCycle = 1;
+            this.paramIndex = 0;
+            this.stagnationCounter = 0;
             this.prepareNextCycle();
         }
 
@@ -718,12 +721,15 @@
                 }
             }, 15000);
 
+            // ULEPSZENIE II: Sekwencja zapobiegajaca szarpnieciu
             Object.entries(this.testParams).forEach(([key, value]) => {
                 sendBleMessage({ type: 'set_param', key: key, value: value });
             });
+            sendBleMessage({ type: 'reset_pids' }); // Nowa komenda resetu PID
+            
             addLogMessage(`[AutoTest] Cykl ${this.currentCycle}/${this.totalCycles}. Testuje: ${JSON.stringify(this.testParams)}`, 'info');
 
-            setTimeout(() => {
+            setTimeout(() => { // Dajemy czas na reset i dopiero ruszamy
                 if (this.testType === 'balance') {
                     setTimeout(() => this.finishCycle(), this.options.cycleDuration * 1000);
                 } else if (this.testType === 'linear') {
@@ -733,7 +739,7 @@
                 } else if (this.testType === 'square_validation') {
                     sendBleMessage({ type: 'execute_square_closed', side_cm: 20 });
                 }
-            }, 200);
+            }, 300); // Zwiekszone opoznienie dla pewnosci
         }
 
         finishCycle() {
@@ -749,16 +755,36 @@
             
             const score = this.calculateFitness();
             addLogMessage(`[AutoTest] Wynik Fitness: ${score.toFixed(4)}`, 'success');
+            
+            const currentParamKey = this.paramKeys[this.paramIndex];
 
+            // ULEPSZENIE III: Logika inteligentnego algorytmu
             if (score > this.bestScore) {
                 this.bestScore = score;
                 this.bestParams = { ...this.testParams };
+                this.stagnationCounter = 0; // Reset stagnacji
+                // Mozemy lekko zwiekszyc krok, by isc za ciosem, ale w granicach rozsadku
+                this.stepSizes[currentParamKey] = Math.min(this.initialStepMultiplier, this.stepSizes[currentParamKey] * 1.2); 
                 addLogMessage(`[AutoTest] Nowy najlepszy wynik!`, 'success');
-                this.lastChange = 1;
+                this.lastChange = 1; // Idz w tym samym kierunku
                 this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length;
             } else {
-                this.lastChange *= -1;
-                if(this.lastChange === 1) this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length;
+                this.stagnationCounter++;
+                // Zmniejsz krok, bo przeszlismy za daleko
+                this.stepSizes[currentParamKey] = Math.max(this.minStepMultiplier, this.stepSizes[currentParamKey] * 0.7);
+                addLogMessage(`[AutoTest] Brak poprawy. Zmniejszam krok dla ${currentParamKey}. Stagnacja: ${this.stagnationCounter}`, 'warn');
+                
+                this.lastChange *= -1; // Zmien kierunek
+                if (this.lastChange === 1) { // Jesli juz raz zmienilismy kierunek i dalej zle
+                     this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length;
+                }
+                
+                // Jesli stagnacja trwa za dlugo, przeskocz do losowego parametru
+                if (this.stagnationCounter >= 3) {
+                    addLogMessage(`[AutoTest] Wykryto stagnacje! Przeskakuje do losowego parametru.`, 'warn');
+                    this.paramIndex = Math.floor(Math.random() * this.paramKeys.length);
+                    this.stagnationCounter = 0;
+                }
             }
 
             if (this.currentCycle >= this.totalCycles) {
@@ -800,11 +826,12 @@
 
         generateNextParams() {
             if (this.paramKeys.length === 0) return {};
-            const stepMultiplier = 0.05;
             let nextParams = { ...this.bestParams };
             const currentParamKey = this.paramKeys[this.paramIndex];
             const baseValue = this.bestParams[currentParamKey];
-            const step = Math.max(Math.abs(baseValue * stepMultiplier), this.paramsToTune[currentParamKey].step) * this.lastChange;
+            // ULEPSZENIE III: Uzyj adaptacyjnego rozmiaru kroku
+            const step = Math.max(Math.abs(baseValue * this.stepSizes[currentParamKey]), this.paramsToTune[currentParamKey].step) * this.lastChange;
+
             nextParams[currentParamKey] += step;
             if (nextParams[currentParamKey] < 0 && !['kd_b', 'kd_p', 'kd_r', 'kd_h'].includes(currentParamKey)) nextParams[currentParamKey] = 0;
             return nextParams;
@@ -820,23 +847,25 @@
 
         calculateBalanceFitness() {
             const { telemetryBuffer: buffer, options } = this;
-            let sumAbsPitch = 0, maxAbsPitch = 0, sumAbsSpeed = 0, sumAbsOutputChange = 0, inZoneSamples = 0;
+            let sumAbsPitch = 0, maxAbsPitch = 0, sumAbsSpeed = 0, sumAbsOutputChange = 0;
             buffer.forEach((d, i) => {
                 const { pitch = 0, speed = 0, output = 0 } = d;
                 sumAbsPitch += Math.abs(pitch);
                 if (Math.abs(pitch) > maxAbsPitch) maxAbsPitch = Math.abs(pitch);
-                if (Math.abs(pitch) <= options.idealZone) inZoneSamples++;
                 sumAbsSpeed += Math.abs(speed);
                 if (i > 0) sumAbsOutputChange += Math.abs(output - (buffer[i-1].output || 0));
             });
             const count = buffer.length;
-            const avgAbsPitch = sumAbsPitch / count, avgAbsSpeed = sumAbsSpeed / count, avgAbsOutputChange = sumAbsOutputChange / (count -1);
+            const avgAbsPitch = sumAbsPitch / count;
+            const avgAbsSpeed = sumAbsSpeed / count;
+            const avgAbsOutputChange = sumAbsOutputChange / (count -1);
+            
             const scoreOvershoot = Math.max(0, 1 - (maxAbsPitch / 5.0));
             const scoreStability = Math.max(0, 1 - (avgAbsPitch / 1.5));
             const scoreJitter = Math.max(0, 1 - (avgAbsSpeed / 100));
             const scoreEffort = Math.max(0, 1 - (avgAbsOutputChange / 50));
-            const scoreTimeInZone = inZoneSamples / count;
-            return (scoreOvershoot + scoreStability + scoreJitter + scoreEffort + scoreTimeInZone) / 5.0;
+            
+            return (scoreOvershoot * 0.3) + (scoreStability * 0.4) + (scoreJitter * 0.15) + (scoreEffort * 0.15);
         }
         
         calculateLinearFitness() {
@@ -900,11 +929,11 @@
                 document.getElementById('validationResultPanel').style.display = 'none';
 
                 if (testType === 'balance') {
-                    optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="10" min="2" max="50" style="width:90px;"></div><div class="setting-container"><label for="at_duration">Czas trwania cyklu (s):</label><input id="at_duration" type="number" value="5" min="3" max="20" style="width:90px;"></div>`;
+                    optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="20" min="2" max="100" style="width:90px;"></div><div class="setting-container"><label for="at_duration">Czas trwania cyklu (s):</label><input id="at_duration" type="number" value="5" min="3" max="20" style="width:90px;"></div>`;
                 } else if (testType === 'linear') {
-                     optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="10" min="2" max="50" style="width:90px;"></div><div class="setting-container"><label for="at_distance">Dystans (cm):</label><input id="at_distance" type="number" value="20" min="10" max="100" style="width:90px;"></div><div class="control-row"><span class="control-label">Powrot na start</span><label class="switch"><input type="checkbox" id="at_return" class="slider-checkbox"><span class="slider round"></span></label></div>`;
+                     optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="20" min="2" max="100" style="width:90px;"></div><div class="setting-container"><label for="at_distance">Dystans (cm):</label><input id="at_distance" type="number" value="20" min="10" max="100" style="width:90px;"></div><div class="control-row"><span class="control-label">Powrot na start</span><label class="switch"><input type="checkbox" id="at_return" class="slider-checkbox"><span class="slider round"></span></label></div>`;
                 } else if (testType === 'turn') {
-                     optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="20" min="2" max="50" style="width:90px;"></div><div class="setting-container"><label for="at_side">Dlugosc boku (cm):</label><input id="at_side" type="number" value="20" min="10" max="50" style="width:90px;"></div><div class="setting-container"><label for="at_speed">Predkosc (imp/s):</label><input id="at_speed" type="number" value="400" min="100" max="1500" style="width:90px;"></div>`;
+                     optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="30" min="2" max="100" style="width:90px;"></div><div class="setting-container"><label for="at_side">Dlugosc boku (cm):</label><input id="at_side" type="number" value="20" min="10" max="50" style="width:90px;"></div><div class="setting-container"><label for="at_speed">Predkosc (imp/s):</label><input id="at_speed" type="number" value="400" min="100" max="1500" style="width:90px;"></div>`;
                 } else if (testType === 'square_validation') {
                      optionsDiv.innerHTML = `<p>Test walidacyjny uruchomi sekwencje jazdy po kwadracie o boku 20cm.</p>`;
                      actionBtn.textContent = 'Uruchom Walidacje';
@@ -949,6 +978,7 @@
         const actionBtn = document.getElementById('autotestActionBtn');
         const cancelBtn = document.getElementById('autotestCancelBtn');
         const statusParams = document.getElementById('statusTestedParams');
+        const statusBestParams = document.getElementById('statusBestParams'); // ULEPSZENIE I
         const statusBestScore = document.getElementById('statusBestScore');
         const statusBar = document.getElementById('statusProgressBar');
         const statusProgressText = document.getElementById('statusProgressText');
@@ -956,6 +986,7 @@
 
         if (!session || session.state === 'idle') {
             statusParams.textContent = '---';
+            statusBestParams.textContent = '---'; // ULEPSZENIE I
             statusBestScore.textContent = '---';
             statusBar.value = 0;
             statusProgressText.textContent = 'Wybierz test i rozpocznij...';
@@ -979,6 +1010,10 @@
         
         statusBestScore.textContent = session.bestScore < 0 ? '---' : session.bestScore.toFixed(4);
         
+        // ULEPSZENIE I: Aktualizacja podgladu najlepszych parametrow
+        let bestParamsText = Object.entries(session.bestParams).map(([key, val]) => `${key}: ${val.toFixed(3)}`).join(', ');
+        statusBestParams.textContent = bestParamsText;
+
         switch (session.state) {
             case 'ready':
                 let paramsText = Object.entries(session.testParams).map(([key, val]) => `${key}: ${val.toFixed(3)}`).join(', ');
@@ -1001,8 +1036,7 @@
             case 'finished':
                 statusBar.value = session.totalCycles;
                 if(session.testType !== 'square_validation') {
-                    let bestParamsText = Object.entries(session.bestParams).map(([key, val]) => `${key}: ${val.toFixed(3)}`).join(', ');
-                    statusParams.textContent = bestParamsText;
+                    statusParams.textContent = "Zakonczono";
                     statusProgressText.textContent = `Zakonczono (${session.totalCycles}/${session.totalCycles})`;
                     statusStateText.textContent = 'Sesja zakonczona!';
                     actionBtn.textContent = 'Zastosuj najlepsze parametry';
