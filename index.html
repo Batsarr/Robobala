@@ -313,10 +313,10 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 3.0 (UI dla PID) - PELNA IMPLEMENTACJA AUTO TESTOW
+    // WERSJA 3.0 (UI dla PID) - PELNA IMPLEMENTACJA AUTO TESTOW - POPRAWIONA
     // =======================================================================================
     
-    // ... (CALA LOGIKA JAVASCRIPT ZOSTANIE WSTAWIONA TUTAJ)
+    // ... (CALA LOGIKA JAVASCRIPT ZNAJDUJE SIE PONIZEJ)
 </script>
 <script>
     // =======================================================================================
@@ -468,6 +468,16 @@
                 const inputId = `minPwm${p.motor.charAt(0).toUpperCase() + p.motor.slice(1)}${p.direction.charAt(0).toUpperCase() + p.direction.slice(1)}Input`;
                 document.getElementById(inputId).value = p.value;
                 addLogMessage(`[UI] Auto-strojenie dla ${p.motor} ${p.direction} zakonczone. Wynik: ${p.value}`, 'success');
+                
+                // --- POPRAWKA: Resetowanie przycisku 'Auto' po otrzymaniu wyniku ---
+                const row = document.querySelector(`.manual-tune-row[data-motor="${p.motor}"][data-direction="${p.direction}"]`);
+                if (row) {
+                    const autoBtn = row.querySelector('.auto-btn');
+                    if (autoBtn) {
+                        autoBtn.disabled = false;
+                        autoBtn.textContent = 'Auto';
+                    }
+                }
                 break;
             case 'validation_result':
                  if(tuningSession && tuningSession.testType === 'square_validation') {
@@ -589,7 +599,7 @@
     // === BLOK 2: LOGIKA SYSTEMU AUTO TESTOW ===
     // =======================================================================================
     let tuningSession = null;
-    // ... (reszta logiki w kolejnym bloku)
+    // ... (reszta logiki znajduje sie ponizej)
 </script>
 <script>
     const testConfigurations = {
@@ -626,6 +636,7 @@
             this.testParams = {};
             this.paramIndex = 0;
             this.lastChange = 1;
+            this.cycleTimeout = null; // Uchwyt dla watchdoga
         }
 
         recordTelemetry(data) { if (this.isCollecting && data.type === 'telemetry') this.telemetryBuffer.push(data); }
@@ -635,7 +646,7 @@
             const isRobotIdle = newState.includes('IDLE') || newState.includes('TRZYMA_POZYCJE');
             const wasRobotWorking = previousState.includes('RUCH') || previousState.includes('OBROT');
             if(isRobotIdle && wasRobotWorking) {
-                setTimeout(() => this.finishCycle(), 250); // Opóźnienie na ustabilizowanie odczytów
+                setTimeout(() => this.finishCycle(), 250); // Opoznienie na ustabilizowanie odczytow
             }
         }
 
@@ -664,6 +675,14 @@
             this.telemetryBuffer = [];
             updateAutoTestUI(this);
 
+            // --- POPRAWKA: Ustawienie timeout'u (watchdoga) dla cyklu testowego ---
+            this.cycleTimeout = setTimeout(() => {
+                if (this.isCollecting) {
+                    addLogMessage('[AutoTest] Timeout cyklu! Wymuszam zakonczenie i analize.', 'warn');
+                    this.finishCycle();
+                }
+            }, 15000); // 15 sekundowy watchdog na cykl
+
             Object.entries(this.testParams).forEach(([key, value]) => {
                 sendBleMessage({ type: 'set_param', key: key, value: value });
             });
@@ -684,10 +703,12 @@
 
         finishCycle() {
             if (!this.isCollecting) return;
+            clearTimeout(this.cycleTimeout); // POPRAWKA: Wyczysc watchdog, bo cykl zakonczyl sie poprawnie
             this.isCollecting = false;
             this.state = 'analyzing';
             updateAutoTestUI(this);
             
+            // Wazne: przywracamy bezpieczne parametry przed kolejna iteracja
             Object.entries(this.safeParams).forEach(([key, value]) => {
                  sendBleMessage({ type: 'set_param', key: key, value: value });
             });
@@ -699,11 +720,11 @@
                 this.bestScore = score;
                 this.bestParams = { ...this.testParams };
                 addLogMessage(`[AutoTest] Nowy najlepszy wynik!`, 'success');
-                this.lastChange = 1;
-                this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length;
+                this.lastChange = 1; // Idz w tym samym kierunku
+                this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length; // Zmien parametr
             } else {
-                this.lastChange *= -1;
-                if(this.lastChange === 1) this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length;
+                this.lastChange *= -1; // Wynik sie pogorszyl, zmien kierunek
+                if(this.lastChange === 1) this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length; // Jesli wrocilismy, zmien parametr
             }
 
             if (this.currentCycle >= this.totalCycles) {
@@ -734,6 +755,7 @@
         }
 
         cancel() {
+            clearTimeout(this.cycleTimeout); // POPRAWKA: Wyczysc watchdog przy anulowaniu
             this.state = 'idle'; this.isCollecting = false;
             if(Object.keys(this.safeParams).length > 0) {
                 Object.entries(this.safeParams).forEach(([key, value]) => sendBleMessage({ type: 'set_param', key, value }));
@@ -743,8 +765,9 @@
         }
 
         generateNextParams() {
+            // Prosty algorytm wspinaczkowy (Hill Climbing)
             if (this.paramKeys.length === 0) return {};
-            const stepMultiplier = 0.05;
+            const stepMultiplier = 0.05; // 5% zmiany wzgledem biezacej wartosci
             let nextParams = { ...this.bestParams };
             const currentParamKey = this.paramKeys[this.paramIndex];
             const baseValue = this.bestParams[currentParamKey];
@@ -775,11 +798,11 @@
             });
             const count = buffer.length;
             const avgAbsPitch = sumAbsPitch / count, avgAbsSpeed = sumAbsSpeed / count, avgAbsOutputChange = sumAbsOutputChange / (count -1);
-            const scoreOvershoot = Math.max(0, 1 - (maxAbsPitch / 5.0));
-            const scoreStability = Math.max(0, 1 - (avgAbsPitch / 1.5));
-            const scoreJitter = Math.max(0, 1 - (avgAbsSpeed / 100));
-            const scoreEffort = Math.max(0, 1 - (avgAbsOutputChange / 50));
-            const scoreTimeInZone = inZoneSamples / count;
+            const scoreOvershoot = Math.max(0, 1 - (maxAbsPitch / 5.0)); // Kara za przeregulowanie powyzej 5 stopni
+            const scoreStability = Math.max(0, 1 - (avgAbsPitch / 1.5)); // Kara za srednie odchylenie powyzej 1.5 stopnia
+            const scoreJitter = Math.max(0, 1 - (avgAbsSpeed / 100)); // Kara za niepotrzebne ruchy (predkosc)
+            const scoreEffort = Math.max(0, 1 - (avgAbsOutputChange / 50)); // Kara za "nerwowe" sterowanie
+            const scoreTimeInZone = inZoneSamples / count; // Nagroda za czas w idealnej strefie
             return (scoreOvershoot + scoreStability + scoreJitter + scoreEffort + scoreTimeInZone) / 5.0;
         }
         
@@ -795,7 +818,7 @@
             
             const scoreAccuracy = Math.max(0, 1 - (positionError / (2 * pulsesPerCm))); // Tolerancja bledu 2cm
             const balanceScore = this.calculateBalanceFitness();
-            return (scoreAccuracy * 0.7) + (balanceScore * 0.3);
+            return (scoreAccuracy * 0.7) + (balanceScore * 0.3); // Dokladnosc jest wazniejsza, ale balans tez sie liczy
         }
 
         calculateTurnFitness() {
@@ -804,7 +827,7 @@
             let turnCount = 0;
             let lastYaw = buffer[0].yaw || 0;
             buffer.forEach(d => {
-                if (d.robot_state === "OBROT" && Math.abs((d.yaw || 0) - lastYaw) > 80) { // Wykryj skok o 90 stopni
+                if (d.robot_state === "OBROT" && Math.abs((d.yaw || 0) - lastYaw) > 80) { // Wykryj skok o ~90 stopni
                     totalYawError += Math.abs(90 - Math.abs((d.yaw || 0) - lastYaw));
                     turnCount++;
                     lastYaw = d.yaw || 0;
