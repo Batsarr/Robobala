@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v2.5 (AutoTest)</title>
+    <title>Robot PID - Panel Sterowania v2.6 (UI-Fix)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -90,6 +90,16 @@
         #statusProgressBar { width: 100%; -webkit-appearance: none; appearance: none; height: 8px; }
         #statusProgressBar::-webkit-progress-bar { background-color: #4a4f58; border-radius: 4px; }
         #statusProgressBar::-webkit-progress-value { background-color: #a2f279; border-radius: 4px; transition: width 0.3s ease; }
+        
+        /* NOWE STYLE DLA LISTY WYBORU */
+        .radio-selector-group { display: flex; flex-direction: column; gap: 8px; }
+        .radio-selector-item input[type="radio"] { display: none; }
+        .radio-selector-item label { display: block; padding: 10px; background-color: #4a4f58; color: #fff; border-radius: 5px; cursor: pointer; transition: background-color 0.3s, color 0.3s; text-align: left; padding-left: 35px; position: relative; }
+        .radio-selector-item label::before { content: ''; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; border: 2px solid #61dafb; border-radius: 50%; transition: border-color 0.3s; }
+        .radio-selector-item label::after { content: ''; position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 10px; height: 10px; background-color: #a2f279; border-radius: 50%; opacity: 0; transition: opacity 0.3s; }
+        .radio-selector-item input[type="radio"]:checked + label { background-color: #61dafb; color: #282c34; font-weight: bold; }
+        .radio-selector-item input[type="radio"]:checked + label::before { border-color: #282c34; }
+        .radio-selector-item input[type="radio"]:checked + label::after { opacity: 1; }
     </style>
 </head>
 <body>
@@ -237,22 +247,30 @@
             </div>
         </div>
         
-        <!-- ================= NOWA SEKCJA: AUTO TESTY ================= -->
         <div class="card">
-            <button class="accordion-header active" onclick="toggleAccordion(this)">Auto Testy PID</button>
-            <div class="accordion-content active">
+            <button class="accordion-header" onclick="toggleAccordion(this)">Auto Testy PID</button>
+            <div class="accordion-content">
                 
-                <div class="setting-container">
-                    <label for="autotestSelect">Wybierz Test:</label>
-                    <select id="autotestSelect" style="width: 100%; padding: 5px;">
-                        <option value="none" selected>-- Wybierz opcje --</option>
-                        <option value="balance">1. Strojenie Balansu</option>
-                        <option value="linear" disabled>2. Strojenie Jazdy Liniowej (wkrotce)</option>
-                        <option value="turn" disabled>3. Strojenie Obrotu (wkrotce)</option>
-                        <option value="square_validation" disabled>4. Walidacja: Test Kwadratu (wkrotce)</option>
-                    </select>
+                <div id="autotestSelector" class="radio-selector-group">
+                    <div class="radio-selector-item">
+                        <input type="radio" id="test-balance" name="autotest-type" value="balance">
+                        <label for="test-balance">1. Strojenie Balansu</label>
+                    </div>
+                    <div class="radio-selector-item">
+                        <input type="radio" id="test-linear" name="autotest-type" value="linear">
+                        <label for="test-linear">2. Strojenie Jazdy Liniowej</label>
+                    </div>
+                    <div class="radio-selector-item">
+                        <input type="radio" id="test-turn" name="autotest-type" value="turn">
+                        <label for="test-turn">3. Strojenie Obrotu</label>
+                    </div>
+                     <div class="radio-selector-item">
+                        <input type="radio" id="test-square" name="autotest-type" value="square_validation">
+                        <label for="test-square">4. Walidacja: Test Kwadratu</label>
+                    </div>
                 </div>
-                <div id="autotestOptions">
+
+                <div id="autotestOptions" style="margin-top: 15px;">
                     <!-- Opcje beda dynamicznie wstawiane tutaj przez JS -->
                 </div>
         
@@ -266,7 +284,7 @@
                         <strong>Postep:</strong> 
                         <div>
                             <progress id="statusProgressBar" value="0" max="100"></progress>
-                            <span id="statusProgressText" style="font-size:0.9em;">Oczekuje na start...</span>
+                            <span id="statusProgressText" style="font-size:0.9em;">Wybierz test i rozpocznij...</span>
                         </div>
                         <strong>Status:</strong> <span id="statusStateText" style="font-weight: bold;">Bezczynny</span>
                     </div>
@@ -277,7 +295,6 @@
         
             </div>
         </div>
-        <!-- ================= KONIEC NOWEJ SEKCJI ================= -->
 
         <div class="card" id="log-card" style="grid-column: 1 / -1;">
             <h2>Logi Systemowe</h2>
@@ -290,7 +307,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 2.5 (UI dla PID) - Z SYSTEMEM AUTO TESTOW
+    // WERSJA 2.6 (UI dla PID) - Z POPRAWIONYM INTERFEJSEM AUTO TESTOW
     // =======================================================================================
     
     let isApplyingConfig = false;
@@ -322,7 +339,7 @@
         setupEventListeners();
         setupManualTuneButtons();
         setupGamepadMappingModal();
-        setupAutoTestEventListeners(); // NOWOSC
+        setupAutoTestEventListeners();
         loadGamepadMappings();
         renderMappingModal();
         pollGamepad();
@@ -364,13 +381,13 @@
         'reset_zero': { label: 'Resetuj Osie (Pion)', elementId: 'resetZeroBtn' }, 
         'trim_plus': { label: 'Korekta Pionu (+)', elementId: 'trimPlusBtn' }, 
         'trim_minus': { label: 'Korekta Pionu (-)', elementId: 'trimMinusBtn' },
-        'start_autotest_cycle': { label: 'Uruchom Cykl Auto Testu', elementId: 'autotestActionBtn' } // NOWOSC
+        'start_autotest_cycle': { label: 'Uruchom Cykl Auto Testu', elementId: 'autotestActionBtn' }
     };
     const availableTelemetry = { 
         'pitch': { label: 'Pitch (Kat)', color: '#61dafb' }, 
         'target_angle': { label: 'Zadany Kat', color: '#a2f279' }, 
         'speed': { label: 'Predkosc', color: '#f7b731' },
-        'output': { label: 'Wyjscie PID', color: '#ff6347'} // Upewnij sie, ze robot wysyla 'output'
+        'output': { label: 'Wyjscie PID', color: '#ff6347'}
     };
     const builtInPresetsData = { 
         '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 95.0, balanceKiInput: 0.0, balanceKdInput: 3.23, speedKpInput: 0.05, positionKpInput: 2.5, positionKiInput: 0.006, positionKdInput: 1.0 }}, 
@@ -399,7 +416,7 @@
     function toggleAccordion(header) { const content = header.nextElementSibling; header.classList.toggle('active'); if (content.style.maxHeight && content.style.maxHeight !== '0px') { content.style.maxHeight = '0px'; } else { content.style.maxHeight = content.scrollHeight + "px"; } }
     function updateAccordionHeight(content) { if (content && content.style.maxHeight !== '0px') { content.style.maxHeight = content.scrollHeight + 'px'; } }
     
-    async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ name: 'Robobala_PID' }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono! Zadam konfiguracji...', 'success'); setTimeout(() => { sendBleMessage({ type: 'request_full_config' }); }, 500); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
+    async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono! Zadam konfiguracji...', 'success'); setTimeout(() => { sendBleMessage({ type: 'request_full_config' }); }, 500); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
     function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; }
     
     function handleBleNotification(event) {
@@ -413,7 +430,6 @@
             if (line) {
                 try {
                     const data = JSON.parse(line);
-                    // NOWOSC: Przekierowanie danych do sesji testowej, jesli jest aktywna
                     if (tuningSession && tuningSession.isCollecting) {
                         tuningSession.recordTelemetry(data);
                     }
@@ -578,238 +594,66 @@
     function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
     function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
 
-    // =======================================================================================
-    // NOWOSC: LOGIKA SYSTEMU AUTO TESTOW
-    // =======================================================================================
     let tuningSession = null;
 
     class TuningSession {
-        constructor(testType, options) {
-            this.testType = testType;
-            this.options = options;
-            this.state = 'idle'; // 'idle', 'ready', 'testing', 'analyzing', 'finished'
-            this.isCollecting = false;
-            this.telemetryBuffer = [];
-            this.currentCycle = 0;
-            this.totalCycles = options.totalCycles;
-            this.bestScore = -1.0;
-            this.bestParams = {};
-            this.safeParams = {};
-            this.testParams = {};
-            this.hillClimbState = 'start_kp'; // 'start_kp', 'test_kp_minus', 'test_kd_plus', 'test_kd_minus'
-        }
-
-        recordTelemetry(data) {
-            if (this.isCollecting && data.type === 'telemetry') {
-                this.telemetryBuffer.push(data);
-            }
-        }
-
-        // ... reszta metod klasy
-        start() {
-            addLogMessage(`[AutoTest] Rozpoczynam sesje strojenia: ${this.testType}`, 'info');
-            this.safeParams = {
-                kp: parseFloat(document.getElementById('balanceKpInput').value),
-                kd: parseFloat(document.getElementById('balanceKdInput').value)
-            };
-            this.bestParams = { ...this.safeParams };
-            this.currentCycle = 1;
-            this.prepareNextCycle();
-        }
-
-        prepareNextCycle() {
-            this.state = 'ready';
-            this.testParams = this.generateNextParams();
-            updateAutoTestUI(this);
-        }
-
-        runCycle() {
-            if (this.state !== 'ready') return;
-            this.state = 'testing';
-            this.isCollecting = true;
-            this.telemetryBuffer = [];
-            updateAutoTestUI(this);
-
-            sendBleMessage({ type: 'set_param', key: 'kp_b', value: this.testParams.kp });
-            sendBleMessage({ type: 'set_param', key: 'kd_b', value: this.testParams.kd });
-            addLogMessage(`[AutoTest] Cykl ${this.currentCycle}/${this.totalCycles}. Testuje Kp=${this.testParams.kp.toFixed(2)}, Kd=${this.testParams.kd.toFixed(2)}`, 'info');
-
-            setTimeout(() => {
-                this.finishCycle();
-            }, this.options.cycleDuration * 1000);
-        }
-
-        finishCycle() {
-            this.isCollecting = false;
-            this.state = 'analyzing';
-            updateAutoTestUI(this);
-            
-            // WAZNE: Natychmiastowy powrot do bezpiecznych parametrow
-            sendBleMessage({ type: 'set_param', key: 'kp_b', value: this.safeParams.kp });
-            sendBleMessage({ type: 'set_param', key: 'kd_b', value: this.safeParams.kd });
-            
-            const score = this.calculateFitness();
-            addLogMessage(`[AutoTest] Wynik Fitness: ${score.toFixed(4)}`, 'success');
-
-            if (score > this.bestScore) {
-                this.bestScore = score;
-                this.bestParams = { ...this.testParams };
-                addLogMessage(`[AutoTest] Nowy najlepszy wynik!`, 'success');
-            }
-
-            if (this.currentCycle >= this.totalCycles) {
-                this.state = 'finished';
-                updateAutoTestUI(this);
-            } else {
-                this.currentCycle++;
-                this.prepareNextCycle();
-            }
-        }
-
-        cancel() {
-            this.state = 'idle';
-            this.isCollecting = false;
-            // Przywrocenie bezpiecznych parametrow na wszelki wypadek
-            if(this.safeParams.kp) {
-                sendBleMessage({ type: 'set_param', key: 'kp_b', value: this.safeParams.kp });
-                sendBleMessage({ type: 'set_param', key: 'kd_b', value: this.safeParams.kd });
-            }
-            addLogMessage('[AutoTest] Sesja anulowana przez uzytkownika.', 'warn');
-            updateAutoTestUI(null);
-        }
-
-        generateNextParams() {
-            const step = 0.05; // 5% kroku
-            let nextParams = { ...this.bestParams };
-        
-            switch (this.hillClimbState) {
-                case 'start_kp':
-                    nextParams.kp *= (1 + step);
-                    this.hillClimbState = 'test_kp_minus';
-                    break;
-                case 'test_kp_minus':
-                    nextParams.kp *= (1 - step);
-                    this.hillClimbState = 'test_kd_plus';
-                    break;
-                case 'test_kd_plus':
-                    nextParams.kd *= (1 + step);
-                    this.hillClimbState = 'test_kd_minus';
-                    break;
-                case 'test_kd_minus':
-                    nextParams.kd *= (1 - step);
-                    this.hillClimbState = 'start_kp'; // Zacznij petle od nowa
-                    break;
-            }
-            return nextParams;
-        }
-
-        calculateFitness() {
-            if (this.telemetryBuffer.length < 10) {
-                addLogMessage('[AutoTest] Blad: za malo danych do oceny!', 'error');
-                return 0.0;
-            }
-        
-            const buffer = this.telemetryBuffer;
-            const options = this.options;
-        
-            // Metryki
-            let sumPitch = 0, sumAbsPitch = 0, maxAbsPitch = 0;
-            let sumAbsSpeed = 0;
-            let sumAbsOutputChange = 0;
-            let inZoneSamples = 0;
-            
-            for (let i = 0; i < buffer.length; i++) {
-                const current = buffer[i];
-                const pitch = current.pitch || 0;
-                const speed = current.speed || 0;
-                const output = current.output || 0;
-        
-                sumPitch += pitch;
-                sumAbsPitch += Math.abs(pitch);
-                if (Math.abs(pitch) > maxAbsPitch) maxAbsPitch = Math.abs(pitch);
-                if (Math.abs(pitch) <= options.idealZone) inZoneSamples++;
-                
-                sumAbsSpeed += Math.abs(speed);
-                
-                if (i > 0) {
-                    const prevOutput = buffer[i-1].output || 0;
-                    sumAbsOutputChange += Math.abs(output - prevOutput);
-                }
-            }
-            
-            const count = buffer.length;
-            const avgAbsPitch = sumAbsPitch / count;
-            const avgAbsSpeed = sumAbsSpeed / count;
-            const avgAbsOutputChange = sumAbsOutputChange / (count -1);
-        
-            // Progi nieakceptowalne
-            const unstablePitch = 5.0;  // 5 stopni
-            const poorStabilityPitch = 1.5; // 1.5 stopnia
-            const highJitterSpeed = 100; // 100 imp/s
-            const highEffortOutput = 50; // Srednia zmiana PWM o 50
-            
-            // Oceny skladowe (0-1, gdzie 1 = dobrze)
-            const scoreOvershoot = Math.max(0, 1.0 - (maxAbsPitch / unstablePitch));
-            const scoreStability = Math.max(0, 1.0 - (avgAbsPitch / poorStabilityPitch));
-            const scoreJitter = Math.max(0, 1.0 - (avgAbsSpeed / highJitterSpeed));
-            const scoreEffort = Math.max(0, 1.0 - (avgAbsOutputChange / highEffortOutput));
-            const scoreTimeInZone = inZoneSamples / count;
-
-            // Wynik koncowy - srednia znormalizowanych ocen
-            const finalScore = (scoreOvershoot + scoreStability + scoreJitter + scoreEffort + scoreTimeInZone) / 5.0;
-            
-            return finalScore;
-        }
-
-        applyBestResults() {
-            document.getElementById('balanceKpInput').value = this.bestParams.kp.toFixed(2);
-            document.getElementById('balanceKdInput').value = this.bestParams.kd.toFixed(2);
-            // Wywolanie zdarzenia, aby wyslac wartosci do robota (opcjonalnie)
-            document.getElementById('balanceKpInput').dispatchEvent(new Event('change', { bubbles: true }));
-            document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true }));
-            addLogMessage('[AutoTest] Zastosowano najlepsze znalezione parametry.', 'success');
-            this.cancel();
-        }
+        constructor(testType, options) { this.testType = testType; this.options = options; this.state = 'idle'; this.isCollecting = false; this.telemetryBuffer = []; this.currentCycle = 0; this.totalCycles = options.totalCycles; this.bestScore = -1.0; this.bestParams = {}; this.safeParams = {}; this.testParams = {}; this.hillClimbState = 'start_kp'; }
+        recordTelemetry(data) { if (this.isCollecting && data.type === 'telemetry') { this.telemetryBuffer.push(data); } }
+        start() { addLogMessage(`[AutoTest] Rozpoczynam sesje strojenia: ${this.testType}`, 'info'); this.safeParams = { kp: parseFloat(document.getElementById('balanceKpInput').value), kd: parseFloat(document.getElementById('balanceKdInput').value) }; this.bestParams = { ...this.safeParams }; this.currentCycle = 1; this.prepareNextCycle(); }
+        prepareNextCycle() { this.state = 'ready'; this.testParams = this.generateNextParams(); updateAutoTestUI(this); }
+        runCycle() { if (this.state !== 'ready') return; this.state = 'testing'; this.isCollecting = true; this.telemetryBuffer = []; updateAutoTestUI(this); sendBleMessage({ type: 'set_param', key: 'kp_b', value: this.testParams.kp }); sendBleMessage({ type: 'set_param', key: 'kd_b', value: this.testParams.kd }); addLogMessage(`[AutoTest] Cykl ${this.currentCycle}/${this.totalCycles}. Testuje Kp=${this.testParams.kp.toFixed(2)}, Kd=${this.testParams.kd.toFixed(2)}`, 'info'); setTimeout(() => { this.finishCycle(); }, this.options.cycleDuration * 1000); }
+        finishCycle() { this.isCollecting = false; this.state = 'analyzing'; updateAutoTestUI(this); sendBleMessage({ type: 'set_param', key: 'kp_b', value: this.safeParams.kp }); sendBleMessage({ type: 'set_param', key: 'kd_b', value: this.safeParams.kd }); const score = this.calculateFitness(); addLogMessage(`[AutoTest] Wynik Fitness: ${score.toFixed(4)}`, 'success'); if (score > this.bestScore) { this.bestScore = score; this.bestParams = { ...this.testParams }; addLogMessage(`[AutoTest] Nowy najlepszy wynik!`, 'success'); } if (this.currentCycle >= this.totalCycles) { this.state = 'finished'; updateAutoTestUI(this); } else { this.currentCycle++; this.prepareNextCycle(); } }
+        cancel() { this.state = 'idle'; this.isCollecting = false; if(this.safeParams.kp) { sendBleMessage({ type: 'set_param', key: 'kp_b', value: this.safeParams.kp }); sendBleMessage({ type: 'set_param', key: 'kd_b', value: this.safeParams.kd }); } addLogMessage('[AutoTest] Sesja anulowana przez uzytkownika.', 'warn'); updateAutoTestUI(null); }
+        generateNextParams() { const step = 0.05; let nextParams = { ...this.bestParams }; switch (this.hillClimbState) { case 'start_kp': nextParams.kp *= (1 + step); this.hillClimbState = 'test_kp_minus'; break; case 'test_kp_minus': nextParams.kp *= (1 - step); this.hillClimbState = 'test_kd_plus'; break; case 'test_kd_plus': nextParams.kd *= (1 + step); this.hillClimbState = 'test_kd_minus'; break; case 'test_kd_minus': nextParams.kd *= (1 - step); this.hillClimbState = 'start_kp'; break; } return nextParams; }
+        calculateFitness() { if (this.telemetryBuffer.length < 10) { addLogMessage('[AutoTest] Blad: za malo danych do oceny!', 'error'); return 0.0; } const buffer = this.telemetryBuffer; const options = this.options; let sumPitch = 0, sumAbsPitch = 0, maxAbsPitch = 0; let sumAbsSpeed = 0; let sumAbsOutputChange = 0; let inZoneSamples = 0; for (let i = 0; i < buffer.length; i++) { const current = buffer[i]; const pitch = current.pitch || 0; const speed = current.speed || 0; const output = current.output || 0; sumPitch += pitch; sumAbsPitch += Math.abs(pitch); if (Math.abs(pitch) > maxAbsPitch) maxAbsPitch = Math.abs(pitch); if (Math.abs(pitch) <= options.idealZone) inZoneSamples++; sumAbsSpeed += Math.abs(speed); if (i > 0) { const prevOutput = buffer[i-1].output || 0; sumAbsOutputChange += Math.abs(output - prevOutput); } } const count = buffer.length; const avgAbsPitch = sumAbsPitch / count; const avgAbsSpeed = sumAbsSpeed / count; const avgAbsOutputChange = sumAbsOutputChange / (count -1); const unstablePitch = 5.0; const poorStabilityPitch = 1.5; const highJitterSpeed = 100; const highEffortOutput = 50; const scoreOvershoot = Math.max(0, 1.0 - (maxAbsPitch / unstablePitch)); const scoreStability = Math.max(0, 1.0 - (avgAbsPitch / poorStabilityPitch)); const scoreJitter = Math.max(0, 1.0 - (avgAbsSpeed / highJitterSpeed)); const scoreEffort = Math.max(0, 1.0 - (avgAbsOutputChange / highEffortOutput)); const scoreTimeInZone = inZoneSamples / count; const finalScore = (scoreOvershoot + scoreStability + scoreJitter + scoreEffort + scoreTimeInZone) / 5.0; return finalScore; }
+        applyBestResults() { document.getElementById('balanceKpInput').value = this.bestParams.kp.toFixed(2); document.getElementById('balanceKdInput').value = this.bestParams.kd.toFixed(2); document.getElementById('balanceKpInput').dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true })); addLogMessage('[AutoTest] Zastosowano najlepsze znalezione parametry.', 'success'); this.cancel(); }
     }
 
     function setupAutoTestEventListeners() {
-        const select = document.getElementById('autotestSelect');
         const optionsDiv = document.getElementById('autotestOptions');
         const actionBtn = document.getElementById('autotestActionBtn');
         const cancelBtn = document.getElementById('autotestCancelBtn');
+        const radioButtons = document.querySelectorAll('input[name="autotest-type"]');
 
-        select.addEventListener('change', () => {
-            const testType = select.value;
-            optionsDiv.innerHTML = '';
-            if (tuningSession) tuningSession.cancel();
+        radioButtons.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const testType = e.target.value;
+                optionsDiv.innerHTML = '';
+                if (tuningSession) tuningSession.cancel();
 
-            if (testType === 'none') {
-                actionBtn.textContent = 'Wybierz test, aby rozpoczac';
-                actionBtn.disabled = true;
-                return;
-            }
-            
-            if (testType === 'balance') {
-                optionsDiv.innerHTML = `
-                    <div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="10" min="2" max="50" style="width:90px;"></div>
-                    <div class="setting-container"><label for="at_duration">Czas cyklu (s):</label><input id="at_duration" type="number" value="8" min="3" max="20" style="width:90px;"></div>
-                    <div class="setting-container"><label for="at_zone">Strefa idealna (st.):</label><input id="at_zone" type="number" value="0.2" min="0.1" max="1.0" step="0.1" style="width:90px;"></div>
-                `;
-                actionBtn.textContent = 'Rozpocznij Sesje';
-                actionBtn.disabled = false;
-            }
-            updateAccordionHeight(optionsDiv.closest('.accordion-content'));
+                // TODO: Dodac logike dla pozostalych testow
+                if (testType === 'balance') {
+                    optionsDiv.innerHTML = `
+                        <div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="10" min="2" max="50" style="width:90px;"></div>
+                        <div class="setting-container"><label for="at_duration">Czas cyklu (s):</label><input id="at_duration" type="number" value="8" min="3" max="20" style="width:90px;"></div>
+                        <div class="setting-container"><label for="at_zone">Strefa idealna (st.):</label><input id="at_zone" type="number" value="0.2" min="0.1" max="1.0" step="0.1" style="width:90px;"></div>
+                    `;
+                    actionBtn.textContent = 'Rozpocznij Sesje';
+                    actionBtn.disabled = false;
+                } else {
+                     optionsDiv.innerHTML = `<p style="color:#f7b731;">Opcje dla tego testu nie sa jeszcze zaimplementowane.</p>`;
+                     actionBtn.textContent = 'Test niedostepny';
+                     actionBtn.disabled = true;
+                }
+                updateAccordionHeight(optionsDiv.closest('.accordion-content'));
+            });
         });
 
         actionBtn.addEventListener('click', () => {
             if (!tuningSession || tuningSession.state === 'idle') {
-                const options = {
-                    totalCycles: parseInt(document.getElementById('at_cycles').value),
-                    cycleDuration: parseInt(document.getElementById('at_duration').value),
-                    idealZone: parseFloat(document.getElementById('at_zone').value)
-                };
-                tuningSession = new TuningSession('balance', options);
-                tuningSession.start();
+                const selectedRadio = document.querySelector('input[name="autotest-type"]:checked');
+                if (!selectedRadio) return;
+                
+                // TODO: Dodac logike dla pozostalych testow
+                if(selectedRadio.value === 'balance') {
+                    const options = {
+                        totalCycles: parseInt(document.getElementById('at_cycles').value),
+                        cycleDuration: parseInt(document.getElementById('at_duration').value),
+                        idealZone: parseFloat(document.getElementById('at_zone').value)
+                    };
+                    tuningSession = new TuningSession('balance', options);
+                    tuningSession.start();
+                }
             } else if (tuningSession.state === 'ready') {
                 tuningSession.runCycle();
             } else if (tuningSession.state === 'finished') {
@@ -835,10 +679,17 @@
             statusParams.textContent = '---';
             statusBestScore.textContent = '---';
             statusBar.value = 0;
-            statusProgressText.textContent = 'Oczekuje na start...';
+            statusProgressText.textContent = 'Wybierz test i rozpocznij...';
             statusStateText.textContent = 'Bezczynny';
-            actionBtn.textContent = 'Rozpocznij Sesje';
-            actionBtn.disabled = (document.getElementById('autotestSelect').value === 'none');
+            const selectedRadio = document.querySelector('input[name="autotest-type"]:checked');
+            if(selectedRadio) {
+                actionBtn.textContent = 'Rozpocznij Sesje';
+                // TODO: Wlaczac/wylaczac w zaleznosci od implementacji
+                actionBtn.disabled = selectedRadio.value !== 'balance';
+            } else {
+                 actionBtn.textContent = 'Wybierz test, aby rozpoczac';
+                 actionBtn.disabled = true;
+            }
             cancelBtn.style.display = 'none';
             return;
         }
