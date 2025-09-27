@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v3.2 (Final)</title>
+    <title>Robot PID - Panel Sterowania v3.3 (Camera Status)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -136,6 +136,8 @@
             <div class="status-grid">
                 <strong>Polaczenie:</strong> <div><span id="connectionStatus" class="status-indicator status-disconnected"></span> <span id="connectionText">Rozlaczony</span></div>
                 <strong>Gamepad:</strong> <span id="gamepadStatus" style="font-weight:bold; color: #f7b731;">Brak</span>
+                <!-- ULEPSZENIE: Dodano status kamery -->
+                <strong>Kamera Flow:</strong> <div><span id="cameraStatus" class="status-indicator status-disconnected"></span> <span id="cameraText">Brak Danych</span></div>
                 <strong>Tryb Pracy:</strong> <span id="robotStateVal" style="font-weight:bold; color: #61dafb;">IDLE</span>
             </div>
             <div class="info-grid">
@@ -313,10 +315,53 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 3.2 (UI dla PID) - FINALNA - Poprawki BLE i algorytmu
+    // WERSJA 3.3 (UI dla PID) - FINALNA Z KAMERA - Poprawki BLE i algorytmu
     // =======================================================================================
     
     // ... CALA LOGIKA JAVASCRIPT ZNAJDUJE SIE PONIZEJ ...
+
+    // =======================================================================================
+    // === BLOK 1: INICJALIZACJA I PODSTAWOWE FUNKCJE ===
+    // =======================================================================================
+    // ... caly Blok 1 jest identyczny jak w poprzedniej odpowiedzi, z wyjatkiem jednej funkcji ...
+    
+    function updateTelemetryUI(data) {
+        if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
+        if (data.pitch !== undefined) {
+            document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0';
+            document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`;
+        }
+        if (data.yaw !== undefined) document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' \u00B0';
+        if (data.speed !== undefined) document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0);
+        if (data.encoder_left !== undefined) document.getElementById('encoderLeftVal').textContent = data.encoder_left;
+        if (data.encoder_right !== undefined) document.getElementById('encoderRightVal').textContent = data.encoder_right;
+        
+        // --- ULEPSZENIE: Obsluga statusu kamery ---
+        if (data.camera_ok !== undefined) {
+            const cameraStatus = document.getElementById('cameraStatus');
+            const cameraText = document.getElementById('cameraText');
+            if (cameraStatus && cameraText) {
+                if (data.camera_ok) {
+                    cameraStatus.className = 'status-indicator status-ok';
+                    cameraText.textContent = 'Aktywna';
+                } else {
+                    cameraStatus.className = 'status-indicator status-error';
+                    cameraText.textContent = 'Brak Danych';
+                }
+            }
+        }
+
+        const emergencyBanner = document.getElementById('emergency-banner');
+        if (emergencyBanner) emergencyBanner.style.display = data.emergency_stop ? 'block' : 'none';
+    }
+
+    // ... cala reszta JavaScriptu (Blok 1 i Blok 2) jest identyczna jak w poprzedniej odpowiedzi ...
+    // Skopiuj je tutaj. Dla pewnosci, ponizej wklejam caly kompletny kod JS.
+</script>
+
+<script>
+    // Skopiuj tutaj caly kod JavaScript z poprzedniej odpowiedzi o "ulepszonym algorytmie".
+    // Dla pewnosci i kompletnosci, wklejam go ponizej w calosci.
 
     // =======================================================================================
     // === BLOK 1: INICJALIZACJA I PODSTAWOWE FUNKCJE ===
@@ -538,6 +583,21 @@
         if (data.speed !== undefined) document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0);
         if (data.encoder_left !== undefined) document.getElementById('encoderLeftVal').textContent = data.encoder_left;
         if (data.encoder_right !== undefined) document.getElementById('encoderRightVal').textContent = data.encoder_right;
+        
+        if (data.camera_ok !== undefined) {
+            const cameraStatus = document.getElementById('cameraStatus');
+            const cameraText = document.getElementById('cameraText');
+            if (cameraStatus && cameraText) {
+                if (data.camera_ok) {
+                    cameraStatus.className = 'status-indicator status-ok';
+                    cameraText.textContent = 'Aktywna';
+                } else {
+                    cameraStatus.className = 'status-indicator status-error';
+                    cameraText.textContent = 'Brak Danych';
+                }
+            }
+        }
+
         const emergencyBanner = document.getElementById('emergency-banner');
         if (emergencyBanner) emergencyBanner.style.display = data.emergency_stop ? 'block' : 'none';
     }
@@ -611,7 +671,6 @@
         const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
         for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); }
         
-        // --- FINALNA POPRAWKA: Uproszczona logika przycisku Zapisz ---
         document.getElementById('saveBtn').addEventListener('click', () => {
             if (confirm("Czy na pewno chcesz trwale zapisac biezaca konfiguracje znajdujaca sie na robocie do jego pamieci EEPROM?")) {
                 sendBleMessage({ type: 'save_tunings' });
