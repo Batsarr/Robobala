@@ -809,7 +809,7 @@
                 } else if (this.testType === 'turn') {
                     sendBleMessage({ type: 'execute_square_open', side_cm: this.options.side, speed: this.options.speed });
                 } else if (this.testType === 'square_validation') {
-                    sendBleMessage({ type: 'execute_square_closed', side_cm: 20 });
+                    sendBleMessage({ type: 'execute_square_test', side_cm: 20 });
                 }
             }, 300);
         }
