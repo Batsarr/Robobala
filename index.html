@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v5.1 (Final)</title>
+    <title>Robot PID - Panel Sterowania v5.2 (Final)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -301,7 +301,7 @@
                 <button class="accordion-header" onclick="toggleAccordion(this)">6. Kalibracja PWM Silnikow</button>
                 <div class="accordion-content"> 
                     <div class="pwm-info"> <strong>Info:</strong> Uzyj przycisku <strong>"Auto"</strong>, aby automatycznie znalezc prog startowy silnika, lub <strong>"Testuj"</strong>, aby sprawdzic recznie wpisana wartosc. <strong>Wazne:</strong> Przed testem podnies robota, aby kola mogly sie swobodnie krecic! </div> 
-                     <div class="setting-container"> <label for="pwmTuneStartInput">Rozpocznij auto-szukanie od PWM</label> <div class="numeric-input-wrapper"> <button id="pwmTuneStartMinus">-</button> <input type="number" id="pwmTuneStartInput" min="1" max="800" step="10" value="400"> <button id="pwmTuneStartPlus">+</button> </div> </div> <hr style="border-color: #4a4f58; margin: 15px 0;">
+                     <div class="setting-container"> <label for="pwmTuneStartInput">Rozpocznij auto-szukanie od PWM</label> <div class="numeric-input-wrapper"> <button id="pwmTuneStartMinus">-</button> <input type="number" id="pwmTuneStartInput" min="1" max="800" step="10" value="600"> <button id="pwmTuneStartPlus">+</button> </div> </div> <hr style="border-color: #4a4f58; margin: 15px 0;">
                     <div class="manual-tune-row" data-motor="left" data-direction="fwd"> <div class="pwm-input-row"> <label>Lewy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftFwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div> 
                     <div class="manual-tune-row" data-motor="left" data-direction="bwd"> <div class="pwm-input-row"> <label>Lewy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftBwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div> 
                     <div class="manual-tune-row" data-motor="right" data-direction="fwd"> <div class="pwm-input-row"> <label>Prawy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightFwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div> 
@@ -322,7 +322,7 @@
             <button class="accordion-header" onclick="toggleAccordion(this)">Krok 1: Pierwsze Strojenie (Odkrywanie Z-N)</button>
             <div class="accordion-content">
                 <div class="info-panel">
-                    <strong>Cel:</strong> Automatyczne znalezienie podstawowych, dzialajacych parametrow PID dla balansu (Kp, Ki, Kd). Robot sam wprowadzi sie w oscylacje, aby zbadac swoja fizyke. Wynik tego testu to idealny punkt startowy dla dalszej, precyzyjnej optymalizacji.
+                    <strong>Cel:</strong> Automatyczne znalezienie podstawowych, dzialajacych parametrow PID dla balansu (Kp, Kd). Robot sam wprowadzi sie w oscylacje, aby zbadac swoja fizyke. Wynik tego testu to idealny punkt startowy dla dalszej, precyzyjnej optymalizacji.
                 </div>
                 <div id="znTuningStatusPanel">
                     <h5>Status Procedury Odkrywania</h5>
@@ -339,7 +339,6 @@
                         <strong>Okres Krytyczny (Tu):</strong> <span id="znTuResult"></span>
                         <hr style="grid-column: 1 / -1; border-color: #4a4f58;">
                         <strong>Sugerowane Kp:</strong> <span id="znKpSuggest"></span>
-                        <strong>Sugerowane Ki:</strong> <span id="znKiSuggest"></span>
                         <strong>Sugerowane Kd:</strong> <span id="znKdSuggest"></span>
                     </div>
                     <button id="applyZnResultsBtn" class="apply-zn-btn">Zastosuj Sugerowane Wartosci</button>
@@ -416,7 +415,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 5.1 (UI dla PID) - Poprawna struktura kart, hybrydowe strojenie, zwiniete sekcje
+    // WERSJA 5.2 (UI dla PID) - Poprawiona struktura kart, ulepszone strojenie
     // =======================================================================================
     let isApplyingConfig = false;
     let lastKnownRobotState = 'IDLE';
@@ -459,10 +458,6 @@
         renderMappingModal();
         pollGamepad();
         window.addEventListener('resize', initJoystick);
-        document.querySelectorAll('.accordion-header.active').forEach(header => {
-            const content = header.nextElementSibling;
-            if (content) { content.style.maxHeight = content.scrollHeight + "px"; }
-        });
     });
 
     let bleDevice, rxCharacteristic, txCharacteristic;
@@ -581,7 +576,7 @@
             if (data.robot_state) {
                 lastKnownRobotState = data.robot_state;
                 if(lastKnownRobotState === 'AUTOSTROJENIE' && !isZnTuningRunning) {
-                    isZnTuningRunning = true; // Sync state if started from robot
+                    isZnTuningRunning = true;
                     document.getElementById('znStatusText').textContent = 'Strojenie w toku...';
                     document.getElementById('znTuningActionBtn').disabled = true;
                     document.getElementById('znTuningCancelBtn').style.display = 'block';
@@ -844,13 +839,11 @@
         resultPanel.style.display = 'block';
 
         const kp = 0.6 * ku;
-        const ki = 2 * kp / tu;
         const kd = kp * tu / 8;
 
         document.getElementById('znKuResult').textContent = ku.toFixed(4);
         document.getElementById('znTuResult').textContent = tu.toFixed(4) + " s";
         document.getElementById('znKpSuggest').textContent = kp.toFixed(4);
-        document.getElementById('znKiSuggest').textContent = ki.toFixed(4);
         document.getElementById('znKdSuggest').textContent = kd.toFixed(4);
 
         updateAccordionHeight(resultPanel.closest('.accordion-content'));
@@ -861,12 +854,11 @@
         if (ku <= 0 || tu <= 0) return;
 
         const kp = 0.6 * ku;
-        const ki = 2 * kp / tu;
         const kd = kp * tu / 8;
 
         isApplyingConfig = true;
         document.getElementById('balanceKpInput').value = kp.toFixed(4);
-        document.getElementById('balanceKiInput').value = ki.toFixed(4);
+        document.getElementById('balanceKiInput').value = 0.0;
         document.getElementById('balanceKdInput').value = kd.toFixed(4);
         isApplyingConfig = false;
 
@@ -874,7 +866,7 @@
         document.getElementById('balanceKiInput').dispatchEvent(new Event('change', { bubbles: true }));
         document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true }));
         
-        addLogMessage('[UI] Zastosowano sugerowane wartosci PID balansu.', 'info');
+        addLogMessage('[UI] Zastosowano sugerowane wartosci Kp i Kd. Ki ustawiono na 0.', 'info');
     }
     
     const testConfigurations = {
@@ -884,11 +876,11 @@
         },
         'linear': {
             label: 'Optymalizuj Jazde Liniowa',
-            paramsToTune: { kp_s: { id: 'speedKpInput', step: 0.005 }, kp_p: { id: 'positionKpInput', step: 0.2 }, kd_p: { id: 'positionKdInput', step: 0.1 }, max_target_angle_from_speed_pid: { id: 'maxTargetAngleInput', step: 0.5 } }
+            paramsToTune: { kp_s: { id: 'speedKpInput', step: 0.005 }, kp_p: { id: 'positionKpInput', step: 0.2 }, kd_p: { id: 'positionKdInput', step: 0.1 } }
         },
         'turn': {
             label: 'Optymalizuj Obrot i Kurs',
-            paramsToTune: { kp_r: { id: 'rotationKpInput', step: 0.1 }, kd_r: { id: 'rotationKdInput', step: 0.1 }, kp_h: { id: 'headingKpInput', step: 0.1 }, ki_h: { id: 'headingKiInput', step: 0.005 }, kd_h: { id: 'headingKdInput', step: 0.01 } }
+            paramsToTune: { kp_r: { id: 'rotationKpInput', step: 0.1 }, kd_r: { id: 'rotationKdInput', step: 0.1 }, kp_h: { id: 'headingKpInput', step: 0.1 } }
         },
         'square_validation': { label: 'Walidacja: Test Kwadratu', paramsToTune: {} }
     };
@@ -986,8 +978,8 @@
                  sendBleMessage({ type: 'set_param', key: key, value: value });
             });
             
-            const score = this.calculateFitness();
-            addLogMessage(`[AutoTest] Wynik Fitness: ${score.toFixed(4)}`, 'success');
+            const { score, components } = this.calculateBalanceFitness();
+            addLogMessage(`[AutoTest] Wynik: ${score.toFixed(4)} (Stabilnosc: ${components.stability.toFixed(2)}, Spokoj: ${components.stillness.toFixed(2)}, Przekroczenie: ${components.overshoot.toFixed(2)}, Wysilek: ${components.effort.toFixed(2)})`, 'success');
             
             const currentParamKey = this.paramKeys[this.paramIndex];
 
@@ -996,21 +988,17 @@
                 this.bestParams = { ...this.testParams };
                 this.stagnationCounter = 0;
                 this.stepSizes[currentParamKey] = Math.min(this.initialStepMultiplier, this.stepSizes[currentParamKey] * 1.2); 
-                addLogMessage(`[AutoTest] Nowy najlepszy wynik!`, 'success');
                 this.lastChange = 1;
                 this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length;
             } else {
                 this.stagnationCounter++;
                 this.stepSizes[currentParamKey] = Math.max(this.minStepMultiplier, this.stepSizes[currentParamKey] * 0.7);
-                addLogMessage(`[AutoTest] Brak poprawy. Zmniejszam krok dla ${currentParamKey}. Stagnacja: ${this.stagnationCounter}`, 'warn');
-                
                 this.lastChange *= -1;
                 if (this.lastChange === 1) {
                      this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length;
                 }
                 
                 if (this.stagnationCounter >= 3) {
-                    addLogMessage(`[AutoTest] Wykryto stagnacje! Przeskakuje do losowego parametru.`, 'warn');
                     this.paramIndex = Math.floor(Math.random() * this.paramKeys.length);
                     this.stagnationCounter = 0;
                 }
@@ -1025,24 +1013,6 @@
             }
         }
         
-        processValidationResult(data) {
-            const { pos_error_cm, yaw_error_deg } = data;
-            document.getElementById('validationResultPanel').style.display = 'block';
-            document.getElementById('validationPosError').textContent = pos_error_cm.toFixed(2);
-            document.getElementById('validationYawError').textContent = yaw_error_deg.toFixed(2);
-            let suggestion = "Test zakonczony.";
-            if (Math.abs(pos_error_cm) > 2.0) {
-                 suggestion = "Duzy blad pozycji. Sprawdz parametry mechaniczne lub uruchom Test Obrotu i Kursu.";
-            } else if (Math.abs(yaw_error_deg) > 10.0) {
-                 suggestion = "Duzy blad kursu. Uruchom Test Obrotu i Kursu, aby poprawic precyzje.";
-            } else {
-                suggestion = "Wynik bardzo dobry! Parametry sa dobrze zestrojone.";
-            }
-            document.getElementById('validationSuggestion').textContent = suggestion;
-            this.state = 'finished';
-            updateAutoTestUI(this);
-        }
-
         cancel() {
             clearTimeout(this.cycleTimeout);
             this.state = 'idle'; this.isCollecting = false;
@@ -1065,70 +1035,44 @@
             return nextParams;
         }
 
-        calculateFitness() {
-            if (this.telemetryBuffer.length < 10) return 0.0;
-            if (this.testType === 'balance') return this.calculateBalanceFitness();
-            if (this.testType === 'linear') return this.calculateLinearFitness();
-            if (this.testType === 'turn') return this.calculateTurnFitness();
-            return 0.0;
-        }
-
         calculateBalanceFitness() {
-            const { telemetryBuffer: buffer, options } = this;
-            let sumAbsPitch = 0, maxAbsPitch = 0, sumAbsSpeed = 0, sumAbsOutputChange = 0;
+            if (this.telemetryBuffer.length < 10) return { score: 0.0, components: {} };
+
+            const { telemetryBuffer: buffer } = this;
+            let sumAbsPitch = 0, maxAbsPitch = 0, sumAbsOutputChange = 0, stillSamples = 0;
+            const stillnessThreshold = 1023 * 0.05; // 5% of max PWM
+
             buffer.forEach((d, i) => {
-                const { pitch = 0, speed = 0, output = 0 } = d;
+                const pitch = d.pitch || 0;
+                const output = d.output || 0;
                 sumAbsPitch += Math.abs(pitch);
                 if (Math.abs(pitch) > maxAbsPitch) maxAbsPitch = Math.abs(pitch);
-                sumAbsSpeed += Math.abs(speed);
                 if (i > 0) sumAbsOutputChange += Math.abs(output - (buffer[i-1].output || 0));
+                if (Math.abs(output) < stillnessThreshold) stillSamples++;
             });
+
             const count = buffer.length;
             const avgAbsPitch = sumAbsPitch / count;
-            const avgAbsSpeed = sumAbsSpeed / count;
-            const avgAbsOutputChange = sumAbsOutputChange / (count -1);
-            
-            const scoreOvershoot = Math.max(0, 1 - (maxAbsPitch / 5.0));
+            const avgAbsOutputChange = sumAbsOutputChange / (count > 1 ? count - 1 : 1);
+
             const scoreStability = Math.max(0, 1 - (avgAbsPitch / 1.5));
-            const scoreJitter = Math.max(0, 1 - (avgAbsSpeed / 100));
+            const scoreOvershoot = Math.max(0, 1 - (maxAbsPitch / 5.0)); 
+            const scoreStillness = stillSamples / count;
             const scoreEffort = Math.max(0, 1 - (avgAbsOutputChange / 50));
+
+            const finalScore = (scoreStability * 0.35) + (scoreStillness * 0.35) + (scoreOvershoot * 0.2) + (scoreEffort * 0.1);
             
-            return (scoreOvershoot * 0.3) + (scoreStability * 0.4) + (scoreJitter * 0.15) + (scoreEffort * 0.15);
+            return {
+                score: finalScore,
+                components: {
+                    stability: scoreStability,
+                    stillness: scoreStillness,
+                    overshoot: scoreOvershoot,
+                    effort: scoreEffort
+                }
+            };
         }
         
-        calculateLinearFitness() {
-            const { telemetryBuffer: buffer, options } = this;
-            const startL = buffer[0].encoder_left, startR = buffer[0].encoder_right;
-            const endL = buffer[buffer.length-1].encoder_left, endR = buffer[buffer.length-1].encoder_right;
-            const pulsesPerCm = parseFloat(document.getElementById('encoderPprInput').value) / (Math.PI * parseFloat(document.getElementById('wheelDiameterInput').value));
-            const targetPulses = options.distance * pulsesPerCm;
-            
-            const travelledPulses = ((endL - startL) + (endR - startR)) / 2;
-            const positionError = Math.abs(targetPulses - travelledPulses);
-            
-            const scoreAccuracy = Math.max(0, 1 - (positionError / (2 * pulsesPerCm)));
-            const balanceScore = this.calculateBalanceFitness();
-            return (scoreAccuracy * 0.7) + (balanceScore * 0.3);
-        }
-
-        calculateTurnFitness() {
-            const { telemetryBuffer: buffer } = this;
-            let totalYawError = 0;
-            let turnCount = 0;
-            let lastYaw = buffer[0].yaw || 0;
-            buffer.forEach(d => {
-                if (d.robot_state === "OBROT_AUTONOMICZNY" && Math.abs((d.yaw || 0) - lastYaw) > 80) {
-                    totalYawError += Math.abs(90 - Math.abs((d.yaw || 0) - lastYaw));
-                    turnCount++;
-                    lastYaw = d.yaw || 0;
-                }
-            });
-            const avgYawError = turnCount > 0 ? totalYawError / turnCount : 90;
-            const scoreAccuracy = Math.max(0, 1 - (avgYawError / 15.0));
-            const balanceScore = this.calculateBalanceFitness();
-            return (scoreAccuracy * 0.6) + (balanceScore * 0.3);
-        }
-
         applyBestResults() {
             for(const key in this.bestParams) {
                 const inputId = this.paramsToTune[key].id;
