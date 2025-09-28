@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v5.0 (Finalna Struktura)</title>
+    <title>Robot PID - Panel Sterowania v5.1 (Final)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -121,7 +121,6 @@
         .sequence-step select, .sequence-step input { width: 100%; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 4px; padding: 5px; }
         .sequence-step .remove-step-btn { background-color: #ff6347; padding: 5px 10px; }
 
-        /* NOWE STYLE DLA ZN-TUNING */
         #znTuningStatusPanel { background-color: #20232a; padding: 12px; border-radius: 6px; }
         #znTuningStatusPanel h5 { color: #61dafb; margin: 0 0 10px 0; font-size: 1.1em; text-align: left; }
         #znResultPanel { display: none; background-color: #20232a; padding: 12px; border-radius: 6px; margin-top: 15px; }
@@ -185,8 +184,8 @@
 
         <!-- 3. WYKRES TELEMETRYCZNY -->
         <div class="card">
-            <button class="accordion-header active" onclick="toggleAccordion(this)">Wykres Telemetryczny</button>
-            <div class="accordion-content active">
+            <button class="accordion-header" onclick="toggleAccordion(this)">Wykres Telemetryczny</button>
+            <div class="accordion-content">
                 <div id="chart-wrapper"><canvas id="telemetryChart"></canvas></div>
                 <div class="chart-controls" id="chartControls"></div>
             </div>
@@ -194,35 +193,37 @@
         
         <!-- 4. STEROWANIE AUTONOMICZNE -->
         <div class="card">
-            <h2>Sterowanie Autonomiczne</h2>
-            <fieldset>
-                <legend>Sterowanie Precyzyjne (D-Pad)</legend>
-                <div class="dpad-input-group">
-                    <label for="dpadDistInput">Dystans (cm):</label>
-                    <input type="number" id="dpadDistInput" value="20">
-                </div>
-                <div class="dpad-input-group">
-                    <label for="dpadAngleInput">Kat (st.):</label>
-                    <input type="number" id="dpadAngleInput" value="90">
-                </div>
-                <div class="dpad-container">
-                    <button id="dpad-up" class="dpad-btn" data-dpad="up">&#8593;</button>
-                    <button id="dpad-left" class="dpad-btn" data-dpad="left">&#8592;</button>
-                    <button id="dpad-stop" class="dpad-btn" data-dpad="stop">&#215;</button>
-                    <button id="dpad-right" class="dpad-btn" data-dpad="right">&#8594;</button>
-                    <button id="dpad-down" class="dpad-btn" data-dpad="down">&#8595;</button>
-                </div>
-            </fieldset>
-            <fieldset style="margin-top: 15px;">
-                <legend>Kreator Sekwencji Ruchow</legend>
-                <div id="sequence-list"></div>
-                <button id="add-sequence-step-btn" style="width:100%; margin: 10px 0;">Dodaj Krok</button>
-                <div style="display:flex; gap:10px; justify-content:center;">
-                    <button id="run-sequence-btn" style="background-color: #a2f279;">Uruchom</button>
-                    <button id="stop-sequence-btn" style="background-color: #ff6347;" disabled>Zatrzymaj</button>
-                    <button id="clear-sequence-btn" style="background-color: #f7b731;">Wyczysc</button>
-                </div>
-            </fieldset>
+             <button class="accordion-header" onclick="toggleAccordion(this)">Sterowanie Autonomiczne</button>
+            <div class="accordion-content">
+               <fieldset>
+                   <legend>Sterowanie Precyzyjne (D-Pad)</legend>
+                   <div class="dpad-input-group">
+                       <label for="dpadDistInput">Dystans (cm):</label>
+                       <input type="number" id="dpadDistInput" value="20">
+                   </div>
+                   <div class="dpad-input-group">
+                       <label for="dpadAngleInput">Kat (st.):</label>
+                       <input type="number" id="dpadAngleInput" value="90">
+                   </div>
+                   <div class="dpad-container">
+                       <button id="dpad-up" class="dpad-btn" data-dpad="up">&#8593;</button>
+                       <button id="dpad-left" class="dpad-btn" data-dpad="left">&#8592;</button>
+                       <button id="dpad-stop" class="dpad-btn" data-dpad="stop">&#215;</button>
+                       <button id="dpad-right" class="dpad-btn" data-dpad="right">&#8594;</button>
+                       <button id="dpad-down" class="dpad-btn" data-dpad="down">&#8595;</button>
+                   </div>
+               </fieldset>
+               <fieldset style="margin-top: 15px;">
+                   <legend>Kreator Sekwencji Ruchow</legend>
+                   <div id="sequence-list"></div>
+                   <button id="add-sequence-step-btn" style="width:100%; margin: 10px 0;">Dodaj Krok</button>
+                   <div style="display:flex; gap:10px; justify-content:center;">
+                       <button id="run-sequence-btn" style="background-color: #a2f279;">Uruchom</button>
+                       <button id="stop-sequence-btn" style="background-color: #ff6347;" disabled>Zatrzymaj</button>
+                       <button id="clear-sequence-btn" style="background-color: #f7b731;">Wyczysc</button>
+                   </div>
+               </fieldset>
+           </div>
         </div>
 
         <!-- 5. KONFIGURACJA -->
@@ -318,8 +319,8 @@
         <div class="card">
             <h2>Auto Strojenie</h2>
 
-            <button class="accordion-header active" onclick="toggleAccordion(this)">Krok 1: Pierwsze Strojenie (Odkrywanie Z-N)</button>
-            <div class="accordion-content active">
+            <button class="accordion-header" onclick="toggleAccordion(this)">Krok 1: Pierwsze Strojenie (Odkrywanie Z-N)</button>
+            <div class="accordion-content">
                 <div class="info-panel">
                     <strong>Cel:</strong> Automatyczne znalezienie podstawowych, dzialajacych parametrow PID dla balansu (Kp, Ki, Kd). Robot sam wprowadzi sie w oscylacje, aby zbadac swoja fizyke. Wynik tego testu to idealny punkt startowy dla dalszej, precyzyjnej optymalizacji.
                 </div>
@@ -415,7 +416,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 5.0 (UI dla PID) - Prawidlowa struktura kart, hybrydowe strojenie
+    // WERSJA 5.1 (UI dla PID) - Poprawna struktura kart, hybrydowe strojenie, zwiniete sekcje
     // =======================================================================================
     let isApplyingConfig = false;
     let lastKnownRobotState = 'IDLE';
@@ -431,7 +432,7 @@
         'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s',
         'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedDeadbandInput': 'speed_pid_deadband',
         'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p',
-        'maxTargetSpeedFromPosPID': 'max_target_speed_from_pos_pid', 'positionDeadbandInput': 'position_pid_deadband',
+        'maxTargetSpeedInput': 'max_target_speed_from_pos_pid', 'positionDeadbandInput': 'position_pid_deadband',
         'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r',
         'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h',
         'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick',
@@ -577,10 +578,18 @@
     function processCompleteMessage(data) {
         const previousState = lastKnownRobotState;
         if (data.type === 'telemetry') {
-            if (data.robot_state) lastKnownRobotState = data.robot_state;
+            if (data.robot_state) {
+                lastKnownRobotState = data.robot_state;
+                if(lastKnownRobotState === 'AUTOSTROJENIE' && !isZnTuningRunning) {
+                    isZnTuningRunning = true; // Sync state if started from robot
+                    document.getElementById('znStatusText').textContent = 'Strojenie w toku...';
+                    document.getElementById('znTuningActionBtn').disabled = true;
+                    document.getElementById('znTuningCancelBtn').style.display = 'block';
+                }
+            }
             if (tuningSession && tuningSession.isCollecting) tuningSession.recordTelemetry(data);
-            if(lastKnownRobotState === 'AUTOSTROJENIE') {
-                document.getElementById('znKpTestVal').textContent = parseFloat(data.output).toFixed(2);
+            if(isZnTuningRunning && data.output !== undefined) {
+                 document.getElementById('znKpTestVal').textContent = data.output.toFixed(2);
             }
         }
 
@@ -761,14 +770,11 @@
     function executeNextSequenceStep() { const steps = document.querySelectorAll('.sequence-step'); if (!isSequenceRunning || currentSequenceStep >= steps.length) { if (isSequenceRunning) { isSequenceRunning = false; addLogMessage('[UI] Sekwencja ukonczona.', 'success'); } updateSequenceUI(); return; } updateSequenceUI(); const stepNode = steps[currentSequenceStep]; const type = stepNode.querySelector('.sequence-type').value; const value = parseFloat(stepNode.querySelector('.sequence-value').value); let command = {}; switch (type) { case 'move_fwd': command = { type: 'execute_move', distance_cm: value }; break; case 'move_bwd': command = { type: 'execute_move', distance_cm: -value }; break; case 'rotate_r': command = { type: 'execute_rotate', angle_deg: value }; break; case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -value }; break; } addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info'); sendBleMessage(command); }
     
     let tuningSession = null;
-</script>
-<script>
+    
     // =======================================================================================
     // SKRYPT DLA SEKCJI AUTO-STROJENIA (ZN + OPTYMALIZACJA)
     // =======================================================================================
     
-    // ----- Zmienne i funkcje dla KROKU 1: Strojenie Zieglera-Nicholsa -----
-
     let isZnTuningRunning = false;
     let znResults = { ku: 0, tu: 0 };
 
@@ -837,7 +843,6 @@
         const resultPanel = document.getElementById('znResultPanel');
         resultPanel.style.display = 'block';
 
-        // Oblicz sugerowane wartosci PID (klasyczna metoda)
         const kp = 0.6 * ku;
         const ki = 2 * kp / tu;
         const kd = kp * tu / 8;
@@ -865,16 +870,13 @@
         document.getElementById('balanceKdInput').value = kd.toFixed(4);
         isApplyingConfig = false;
 
-        // Wyzwol zdarzenia change, aby wyslac nowe wartosci do robota
         document.getElementById('balanceKpInput').dispatchEvent(new Event('change', { bubbles: true }));
         document.getElementById('balanceKiInput').dispatchEvent(new Event('change', { bubbles: true }));
         document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true }));
         
         addLogMessage('[UI] Zastosowano sugerowane wartosci PID balansu.', 'info');
     }
-
-    // ----- Zmienne i funkcje dla KROKU 2: Optymalizacja (Auto Testy PID) -----
-
+    
     const testConfigurations = {
         'balance': {
             label: 'Optymalizuj Balans',
@@ -917,15 +919,6 @@
         }
 
         recordTelemetry(data) { if (this.isCollecting && data.type === 'telemetry') this.telemetryBuffer.push(data); }
-
-        onStateChange(previousState, newState) {
-            if (!this.isCollecting) return;
-            const isRobotIdle = newState.includes('IDLE') || newState.includes('TRZYMA_POZYCJE');
-            const wasRobotWorking = previousState.includes('RUCH') || previousState.includes('OBROT');
-            if(isRobotIdle && wasRobotWorking) {
-                setTimeout(() => this.finishCycle(), 250);
-            }
-        }
 
         start() {
             addLogMessage(`[AutoTest] Rozpoczynam sesje: ${this.config.label}`, 'info');
@@ -973,11 +966,11 @@
                 if (this.testType === 'balance') {
                     setTimeout(() => this.finishCycle(), this.options.cycleDuration * 1000);
                 } else if (this.testType === 'linear') {
-                    sendBleMessage({ type: 'execute_move', distance_cm: this.options.distance, and_return: this.options.returnToZero });
+                    sendBleMessage({ type: 'execute_move', distance_cm: this.options.distance });
                 } else if (this.testType === 'turn') {
-                    sendBleMessage({ type: 'execute_square_open', side_cm: this.options.side, speed: this.options.speed });
+                    sendBleMessage({ type: 'execute_rotate', angle_deg: 90 });
                 } else if (this.testType === 'square_validation') {
-                    sendBleMessage({ type: 'execute_square_test', side_cm: 20 });
+                    sendBleMessage({ type: 'execute_move', distance_cm: 20 });
                 }
             }, 300);
         }
@@ -1111,7 +1104,7 @@
             const targetPulses = options.distance * pulsesPerCm;
             
             const travelledPulses = ((endL - startL) + (endR - startR)) / 2;
-            const positionError = options.returnToZero ? Math.abs(((endL-startL) + (endR-startR))/2) : Math.abs(targetPulses - travelledPulses);
+            const positionError = Math.abs(targetPulses - travelledPulses);
             
             const scoreAccuracy = Math.max(0, 1 - (positionError / (2 * pulsesPerCm)));
             const balanceScore = this.calculateBalanceFitness();
@@ -1166,9 +1159,9 @@
                 if (testType === 'balance') {
                     optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="20" min="2" max="100" style="width:90px;"></div><div class="setting-container"><label for="at_duration">Czas trwania cyklu (s):</label><input id="at_duration" type="number" value="5" min="3" max="20" style="width:90px;"></div>`;
                 } else if (testType === 'linear') {
-                     optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="20" min="2" max="100" style="width:90px;"></div><div class="setting-container"><label for="at_distance">Dystans (cm):</label><input id="at_distance" type="number" value="20" min="10" max="100" style="width:90px;"></div><div class="control-row"><span class="control-label">Powrot na start</span><label class="switch"><input type="checkbox" id="at_return" class="slider-checkbox"><span class="slider round"></span></label></div>`;
+                     optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="20" min="2" max="100" style="width:90px;"></div><div class="setting-container"><label for="at_distance">Dystans (cm):</label><input id="at_distance" type="number" value="20" min="10" max="100" style="width:90px;"></div>`;
                 } else if (testType === 'turn') {
-                     optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="30" min="2" max="100" style="width:90px;"></div><div class="setting-container"><label for="at_side">Dlugosc boku (cm):</label><input id="at_side" type="number" value="20" min="10" max="50" style="width:90px;"></div><div class="setting-container"><label for="at_speed">Predkosc (imp/s):</label><input id="at_speed" type="number" value="400" min="100" max="1500" style="width:90px;"></div>`;
+                     optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="30" min="2" max="100" style="width:90px;"></div>`;
                 } else if (testType === 'square_validation') {
                      optionsDiv.innerHTML = `<p>Test walidacyjny uruchomi sekwencje jazdy po kwadracie o boku 20cm.</p>`;
                      actionBtn.textContent = 'Uruchom Walidacje';
@@ -1190,10 +1183,7 @@
                 if(document.getElementById('at_cycles')) options.totalCycles = parseInt(document.getElementById('at_cycles').value);
                 if(document.getElementById('at_duration')) options.cycleDuration = parseInt(document.getElementById('at_duration').value);
                 if(document.getElementById('at_distance')) options.distance = parseInt(document.getElementById('at_distance').value);
-                if(document.getElementById('at_return')) options.returnToZero = document.getElementById('at_return').checked;
-                if(document.getElementById('at_side')) options.side = parseInt(document.getElementById('at_side').value);
-                if(document.getElementById('at_speed')) options.speed = parseInt(document.getElementById('at_speed').value);
-
+                
                 tuningSession = new TuningSession(testType, options);
                 tuningSession.start();
 
