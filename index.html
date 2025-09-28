@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v3.5 (Bez PL Znakow)</title>
+    <title>Robot PID - Panel Sterowania v5.0 (Finalna Struktura)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -120,6 +120,18 @@
         .sequence-step.executing select, .sequence-step.executing input { color: #282c34; border-color: #282c34; }
         .sequence-step select, .sequence-step input { width: 100%; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 4px; padding: 5px; }
         .sequence-step .remove-step-btn { background-color: #ff6347; padding: 5px 10px; }
+
+        /* NOWE STYLE DLA ZN-TUNING */
+        #znTuningStatusPanel { background-color: #20232a; padding: 12px; border-radius: 6px; }
+        #znTuningStatusPanel h5 { color: #61dafb; margin: 0 0 10px 0; font-size: 1.1em; text-align: left; }
+        #znResultPanel { display: none; background-color: #20232a; padding: 12px; border-radius: 6px; margin-top: 15px; }
+        #znResultPanel h5 { color: #61dafb; margin: 0 0 10px 0; text-align: left; }
+        .zn-result-grid { display: grid; grid-template-columns: auto 1fr; gap: 5px 15px; text-align: left; }
+        .zn-result-grid strong { color: #a2f279; }
+        .zn-result-grid span { font-weight: bold; color: #fff; }
+        .apply-zn-btn { background-color: #a2f279; margin-top: 10px; width: 100%; }
+        .info-panel { background-color: #20232a; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #f7b731; text-align: left; font-size: 0.9em; line-height: 1.4;}
+
     </style>
 </head>
 <body>
@@ -134,6 +146,7 @@
 
     <h1>Robot PID - Panel Sterowania</h1>
     <div class="main-grid">
+        <!-- 1. STEROWANIE -->
         <div class="card" id="controls-card">
             <h2>Sterowanie</h2>
             <div id="joystickWrapper"><canvas id="joystickCanvas"></canvas></div>
@@ -146,6 +159,8 @@
             <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
             <button id="emergencyStopBtn">STOP AWARYJNY</button>
         </div>
+
+        <!-- 2. STATUS ROBOTA -->
         <div class="card">
             <h2>Status Robota</h2>
             <button id="connectBleBtn" style="width: 100%; margin-bottom: 15px;">POLACZ Z ROBOTEM</button>
@@ -167,13 +182,50 @@
                 <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Kalibruj MPU (DMP)</button>
             </fieldset>
         </div>
+
+        <!-- 3. WYKRES TELEMETRYCZNY -->
         <div class="card">
-            <button class="accordion-header" onclick="toggleAccordion(this)">Wykres Telemetryczny</button>
-            <div class="accordion-content">
+            <button class="accordion-header active" onclick="toggleAccordion(this)">Wykres Telemetryczny</button>
+            <div class="accordion-content active">
                 <div id="chart-wrapper"><canvas id="telemetryChart"></canvas></div>
                 <div class="chart-controls" id="chartControls"></div>
             </div>
         </div>
+        
+        <!-- 4. STEROWANIE AUTONOMICZNE -->
+        <div class="card">
+            <h2>Sterowanie Autonomiczne</h2>
+            <fieldset>
+                <legend>Sterowanie Precyzyjne (D-Pad)</legend>
+                <div class="dpad-input-group">
+                    <label for="dpadDistInput">Dystans (cm):</label>
+                    <input type="number" id="dpadDistInput" value="20">
+                </div>
+                <div class="dpad-input-group">
+                    <label for="dpadAngleInput">Kat (st.):</label>
+                    <input type="number" id="dpadAngleInput" value="90">
+                </div>
+                <div class="dpad-container">
+                    <button id="dpad-up" class="dpad-btn" data-dpad="up">&#8593;</button>
+                    <button id="dpad-left" class="dpad-btn" data-dpad="left">&#8592;</button>
+                    <button id="dpad-stop" class="dpad-btn" data-dpad="stop">&#215;</button>
+                    <button id="dpad-right" class="dpad-btn" data-dpad="right">&#8594;</button>
+                    <button id="dpad-down" class="dpad-btn" data-dpad="down">&#8595;</button>
+                </div>
+            </fieldset>
+            <fieldset style="margin-top: 15px;">
+                <legend>Kreator Sekwencji Ruchow</legend>
+                <div id="sequence-list"></div>
+                <button id="add-sequence-step-btn" style="width:100%; margin: 10px 0;">Dodaj Krok</button>
+                <div style="display:flex; gap:10px; justify-content:center;">
+                    <button id="run-sequence-btn" style="background-color: #a2f279;">Uruchom</button>
+                    <button id="stop-sequence-btn" style="background-color: #ff6347;" disabled>Zatrzymaj</button>
+                    <button id="clear-sequence-btn" style="background-color: #f7b731;">Wyczysc</button>
+                </div>
+            </fieldset>
+        </div>
+
+        <!-- 5. KONFIGURACJA -->
         <div class="card">
             <h2>Konfiguracja</h2>
             <fieldset>
@@ -262,23 +314,57 @@
             </div>
         </div>
         
+        <!-- 6. AUTO STROJENIE -->
         <div class="card">
-            <h2>Auto Testy i Sterowanie Autonomiczne</h2>
+            <h2>Auto Strojenie</h2>
 
-            <button class="accordion-header" onclick="toggleAccordion(this)">Auto Testy PID</button>
+            <button class="accordion-header active" onclick="toggleAccordion(this)">Krok 1: Pierwsze Strojenie (Odkrywanie Z-N)</button>
+            <div class="accordion-content active">
+                <div class="info-panel">
+                    <strong>Cel:</strong> Automatyczne znalezienie podstawowych, dzialajacych parametrow PID dla balansu (Kp, Ki, Kd). Robot sam wprowadzi sie w oscylacje, aby zbadac swoja fizyke. Wynik tego testu to idealny punkt startowy dla dalszej, precyzyjnej optymalizacji.
+                </div>
+                <div id="znTuningStatusPanel">
+                    <h5>Status Procedury Odkrywania</h5>
+                    <div class="info-grid">
+                        <strong>Status:</strong> <span id="znStatusText" style="font-weight: bold;">Bezczynny</span>
+                        <strong>Testowane Kp:</strong> <span id="znKpTestVal">---</span>
+                    </div>
+                </div>
+                
+                <div id="znResultPanel">
+                    <h5>Wynik Odkrywania</h5>
+                    <div class="zn-result-grid">
+                        <strong>Wzmocnienie Krytyczne (Ku):</strong> <span id="znKuResult"></span>
+                        <strong>Okres Krytyczny (Tu):</strong> <span id="znTuResult"></span>
+                        <hr style="grid-column: 1 / -1; border-color: #4a4f58;">
+                        <strong>Sugerowane Kp:</strong> <span id="znKpSuggest"></span>
+                        <strong>Sugerowane Ki:</strong> <span id="znKiSuggest"></span>
+                        <strong>Sugerowane Kd:</strong> <span id="znKdSuggest"></span>
+                    </div>
+                    <button id="applyZnResultsBtn" class="apply-zn-btn">Zastosuj Sugerowane Wartosci</button>
+                </div>
+
+                <button id="znTuningActionBtn" style="width:100%; margin-top:15px; background-color: #f7b731;">Rozpocznij Odkrywanie</button>
+                <button id="znTuningCancelBtn" style="width:100%; margin-top:10px; background-color:#ff6347; display:none;">Anuluj</button>
+            </div>
+
+            <button class="accordion-header" onclick="toggleAccordion(this)">Krok 2: Optymalizacja (Auto Testy PID)</button>
             <div class="accordion-content">
+                <div class="info-panel" style="border-left-color: #a2f279;">
+                    <strong>Cel:</strong> Precyzyjne dostrojenie parametrow PID do konkretnego zadania (np. idealnie stabilny balans, szybki i celny przejazd). Uzyj tej opcji, gdy robot juz potrafi samodzielnie stac (np. po "Pierwszym Strojeniu").
+                </div>
                 <div id="autotestSelector" class="radio-selector-group">
                     <div class="radio-selector-item">
                         <input type="radio" id="test-balance" name="autotest-type" value="balance">
-                        <label for="test-balance">1. Strojenie Balansu</label>
+                        <label for="test-balance">1. Optymalizuj Balans</label>
                     </div>
                     <div class="radio-selector-item">
                         <input type="radio" id="test-linear" name="autotest-type" value="linear">
-                        <label for="test-linear">2. Strojenie Jazdy Liniowej</label>
+                        <label for="test-linear">2. Optymalizuj Jazde Liniowa</label>
                     </div>
                     <div class="radio-selector-item">
                         <input type="radio" id="test-turn" name="autotest-type" value="turn">
-                        <label for="test-turn">3. Strojenie Obrotu i Kursu</label>
+                        <label for="test-turn">3. Optymalizuj Obrot i Kurs</label>
                     </div>
                      <div class="radio-selector-item">
                         <input type="radio" id="test-square" name="autotest-type" value="square_validation">
@@ -286,13 +372,11 @@
                     </div>
                 </div>
 
-                <div id="autotestOptions" style="margin-top: 15px;">
-                </div>
-        
+                <div id="autotestOptions" style="margin-top: 15px;"></div>
                 <hr style="border-color: #4a4f58; margin: 15px 0;">
         
                 <div id="autotestStatusPanel">
-                    <h5>Status Sesji</h5>
+                    <h5>Status Sesji Optymalizacji</h5>
                     <div class="info-grid">
                         <strong>Testowane Parametry:</strong> <span id="statusTestedParams">---</span>
                         <strong>Najlepsze Znalezione:</strong> <span id="statusBestParams" style="color: #61dafb;">---</span>
@@ -315,42 +399,11 @@
                 </div>
         
                 <button id="autotestActionBtn" style="width:100%; margin-top:15px;" disabled>Wybierz test, aby rozpoczac</button>
-                <button id="autotestCancelBtn" style="width:100%; margin-top:10px; background-color:#ff6347; display:none;">Anuluj Sesje</button>
+                <button id="autotestCancelBtn" style="width:100%; margin-top:10px; background-color:#ff6347; display:none;">Anuluj Sesje Optymalizacji</button>
             </div>
-
-            <button class="accordion-header" onclick="toggleAccordion(this)">Sterowanie Autonomiczne</button>
-            <div class="accordion-content">
-               <fieldset>
-                   <legend>Sterowanie Precyzyjne (D-Pad)</legend>
-                   <div class="dpad-input-group">
-                       <label for="dpadDistInput">Dystans (cm):</label>
-                       <input type="number" id="dpadDistInput" value="20">
-                   </div>
-                   <div class="dpad-input-group">
-                       <label for="dpadAngleInput">Kat (st.):</label>
-                       <input type="number" id="dpadAngleInput" value="90">
-                   </div>
-                   <div class="dpad-container">
-                       <button id="dpad-up" class="dpad-btn" data-dpad="up">&#8593;</button>
-                       <button id="dpad-left" class="dpad-btn" data-dpad="left">&#8592;</button>
-                       <button id="dpad-stop" class="dpad-btn" data-dpad="stop">&#215;</button>
-                       <button id="dpad-right" class="dpad-btn" data-dpad="right">&#8594;</button>
-                       <button id="dpad-down" class="dpad-btn" data-dpad="down">&#8595;</button>
-                   </div>
-               </fieldset>
-               <fieldset style="margin-top: 15px;">
-                   <legend>Kreator Sekwencji Ruchow</legend>
-                   <div id="sequence-list"></div>
-                   <button id="add-sequence-step-btn" style="width:100%; margin: 10px 0;">Dodaj Krok</button>
-                   <div style="display:flex; gap:10px; justify-content:center;">
-                       <button id="run-sequence-btn" style="background-color: #a2f279;">Uruchom</button>
-                       <button id="stop-sequence-btn" style="background-color: #ff6347;" disabled>Zatrzymaj</button>
-                       <button id="clear-sequence-btn" style="background-color: #f7b731;">Wyczysc</button>
-                   </div>
-               </fieldset>
-           </div>
         </div>
 
+        <!-- 7. LOGI -->
         <div class="card" id="log-card" style="grid-column: 1 / -1;">
             <h2>Logi Systemowe</h2>
             <div id="log-history"></div>
@@ -362,7 +415,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 3.5 (UI dla PID) - Sterowanie Autonomiczne, brak PL, nowe wartosci PID
+    // WERSJA 5.0 (UI dla PID) - Prawidlowa struktura kart, hybrydowe strojenie
     // =======================================================================================
     let isApplyingConfig = false;
     let lastKnownRobotState = 'IDLE';
@@ -400,6 +453,7 @@
         setupAutoTestEventListeners();
         setupDpadControls(); 
         setupSequenceControls(); 
+        setupZnTuningControls();
         loadGamepadMappings();
         renderMappingModal();
         pollGamepad();
@@ -486,7 +540,6 @@
             if (line) {
                 try {
                     const data = JSON.parse(line);
-                    if (tuningSession && tuningSession.isCollecting) tuningSession.recordTelemetry(data);
                     processCompleteMessage(data);
                 } catch (e) { addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error'); }
             }
@@ -523,9 +576,12 @@
 
     function processCompleteMessage(data) {
         const previousState = lastKnownRobotState;
-        if (data.type === 'telemetry' && data.robot_state) {
-            lastKnownRobotState = data.robot_state;
-            if(tuningSession) tuningSession.onStateChange(previousState, lastKnownRobotState);
+        if (data.type === 'telemetry') {
+            if (data.robot_state) lastKnownRobotState = data.robot_state;
+            if (tuningSession && tuningSession.isCollecting) tuningSession.recordTelemetry(data);
+            if(lastKnownRobotState === 'AUTOSTROJENIE') {
+                document.getElementById('znKpTestVal').textContent = parseFloat(data.output).toFixed(2);
+            }
         }
 
         switch (data.type) {
@@ -547,7 +603,6 @@
                 const inputId = `minPwm${p.motor.charAt(0).toUpperCase() + p.motor.slice(1)}${p.direction.charAt(0).toUpperCase() + p.direction.slice(1)}Input`;
                 document.getElementById(inputId).value = p.value;
                 addLogMessage(`[UI] Auto-strojenie dla ${p.motor} ${p.direction} zakonczone. Wynik: ${p.value}`, 'success');
-                
                 const row = document.querySelector(`.manual-tune-row[data-motor="${p.motor}"][data-direction="${p.direction}"]`);
                 if (row) {
                     const autoBtn = row.querySelector('.auto-btn');
@@ -562,6 +617,9 @@
                     tuningSession.processValidationResult(data);
                  }
                  break;
+            case 'zn_tuning_result':
+                handleZnTuningResult(data.ku, data.tu);
+                break;
         }
     }
 
@@ -588,7 +646,6 @@
         if (data.speed !== undefined) document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0);
         if (data.encoder_left !== undefined) document.getElementById('encoderLeftVal').textContent = data.encoder_left;
         if (data.encoder_right !== undefined) document.getElementById('encoderRightVal').textContent = data.encoder_right;
-        
         if (data.camera_ok !== undefined) {
             const cameraStatus = document.getElementById('cameraStatus');
             const cameraText = document.getElementById('cameraText');
@@ -602,7 +659,6 @@
                 }
             }
         }
-
         const emergencyBanner = document.getElementById('emergency-banner');
         if (emergencyBanner) emergencyBanner.style.display = data.emergency_stop ? 'block' : 'none';
     }
@@ -707,17 +763,129 @@
     let tuningSession = null;
 </script>
 <script>
+    // =======================================================================================
+    // SKRYPT DLA SEKCJI AUTO-STROJENIA (ZN + OPTYMALIZACJA)
+    // =======================================================================================
+    
+    // ----- Zmienne i funkcje dla KROKU 1: Strojenie Zieglera-Nicholsa -----
+
+    let isZnTuningRunning = false;
+    let znResults = { ku: 0, tu: 0 };
+
+    function setupZnTuningControls() {
+        const actionBtn = document.getElementById('znTuningActionBtn');
+        const cancelBtn = document.getElementById('znTuningCancelBtn');
+        const applyBtn = document.getElementById('applyZnResultsBtn');
+
+        actionBtn.addEventListener('click', () => {
+            if (!isZnTuningRunning) {
+                if (lastKnownRobotState !== 'BALANSUJE' && lastKnownRobotState !== 'TRZYMA_POZYCJE') {
+                    addLogMessage('[UI] BLAD: Aby rozpoczac strojenie, robot musi byc w stanie balansu.', 'error');
+                    return;
+                }
+                if (confirm("UWAGA! Ta procedura wprowadzi robota w kontrolowane oscylacje. Upewnij sie, ze ma wystarczajaco duzo miejsca. Kontynuowac?")) {
+                    startZnTuning();
+                }
+            }
+        });
+
+        cancelBtn.addEventListener('click', () => {
+            if (isZnTuningRunning) {
+                cancelZnTuning();
+            }
+        });
+
+        applyBtn.addEventListener('click', () => {
+            if (znResults.ku > 0 && znResults.tu > 0) {
+                applyZnResults();
+            }
+        });
+    }
+    
+    function startZnTuning() {
+        isZnTuningRunning = true;
+        document.getElementById('znStatusText').textContent = "Rozpoczynanie...";
+        document.getElementById('znTuningActionBtn').disabled = true;
+        document.getElementById('znTuningCancelBtn').style.display = 'block';
+        document.getElementById('znResultPanel').style.display = 'none';
+        addLogMessage('[UI] Wysylam polecenie rozpoczecia strojenia Z-N do robota...', 'info');
+        sendBleMessage({ type: 'start_zn_tuning' });
+    }
+
+    function cancelZnTuning() {
+        isZnTuningRunning = false;
+        document.getElementById('znStatusText').textContent = "Anulowanie...";
+        addLogMessage('[UI] Wysylam polecenie anulowania strojenia do robota...', 'warn');
+        sendBleMessage({ type: 'cancel_tuning' });
+        resetZnTuningUI();
+    }
+
+    function resetZnTuningUI() {
+        isZnTuningRunning = false;
+        document.getElementById('znStatusText').textContent = "Bezczynny";
+        document.getElementById('znKpTestVal').textContent = "---";
+        document.getElementById('znTuningActionBtn').disabled = false;
+        document.getElementById('znTuningActionBtn').textContent = "Rozpocznij Odkrywanie";
+        document.getElementById('znTuningCancelBtn').style.display = 'none';
+    }
+
+    function handleZnTuningResult(ku, tu) {
+        addLogMessage(`[UI] Otrzymano wynik strojenia Z-N: Ku=${ku.toFixed(4)}, Tu=${tu.toFixed(4)}`, 'success');
+        resetZnTuningUI();
+        
+        znResults = { ku, tu };
+        const resultPanel = document.getElementById('znResultPanel');
+        resultPanel.style.display = 'block';
+
+        // Oblicz sugerowane wartosci PID (klasyczna metoda)
+        const kp = 0.6 * ku;
+        const ki = 2 * kp / tu;
+        const kd = kp * tu / 8;
+
+        document.getElementById('znKuResult').textContent = ku.toFixed(4);
+        document.getElementById('znTuResult').textContent = tu.toFixed(4) + " s";
+        document.getElementById('znKpSuggest').textContent = kp.toFixed(4);
+        document.getElementById('znKiSuggest').textContent = ki.toFixed(4);
+        document.getElementById('znKdSuggest').textContent = kd.toFixed(4);
+
+        updateAccordionHeight(resultPanel.closest('.accordion-content'));
+    }
+
+    function applyZnResults() {
+        const { ku, tu } = znResults;
+        if (ku <= 0 || tu <= 0) return;
+
+        const kp = 0.6 * ku;
+        const ki = 2 * kp / tu;
+        const kd = kp * tu / 8;
+
+        isApplyingConfig = true;
+        document.getElementById('balanceKpInput').value = kp.toFixed(4);
+        document.getElementById('balanceKiInput').value = ki.toFixed(4);
+        document.getElementById('balanceKdInput').value = kd.toFixed(4);
+        isApplyingConfig = false;
+
+        // Wyzwol zdarzenia change, aby wyslac nowe wartosci do robota
+        document.getElementById('balanceKpInput').dispatchEvent(new Event('change', { bubbles: true }));
+        document.getElementById('balanceKiInput').dispatchEvent(new Event('change', { bubbles: true }));
+        document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true }));
+        
+        addLogMessage('[UI] Zastosowano sugerowane wartosci PID balansu.', 'info');
+    }
+
+    // ----- Zmienne i funkcje dla KROKU 2: Optymalizacja (Auto Testy PID) -----
+
     const testConfigurations = {
         'balance': {
-            label: 'Strojenie Balansu',
+            label: 'Optymalizuj Balans',
             paramsToTune: { kp_b: { id: 'balanceKpInput', step: 5.0 }, kd_b: { id: 'balanceKdInput', step: 0.2 } }
         },
         'linear': {
-            label: 'Strojenie Jazdy Liniowej',
+            label: 'Optymalizuj Jazde Liniowa',
             paramsToTune: { kp_s: { id: 'speedKpInput', step: 0.005 }, kp_p: { id: 'positionKpInput', step: 0.2 }, kd_p: { id: 'positionKdInput', step: 0.1 }, max_target_angle_from_speed_pid: { id: 'maxTargetAngleInput', step: 0.5 } }
         },
         'turn': {
-            label: 'Strojenie Obrotu i Kursu',
+            label: 'Optymalizuj Obrot i Kurs',
             paramsToTune: { kp_r: { id: 'rotationKpInput', step: 0.1 }, kd_r: { id: 'rotationKdInput', step: 0.1 }, kp_h: { id: 'headingKpInput', step: 0.1 }, ki_h: { id: 'headingKiInput', step: 0.005 }, kd_h: { id: 'headingKdInput', step: 0.01 } }
         },
         'square_validation': { label: 'Walidacja: Test Kwadratu', paramsToTune: {} }
@@ -888,7 +1056,7 @@
             if(Object.keys(this.safeParams).length > 0) {
                 Object.entries(this.safeParams).forEach(([key, value]) => sendBleMessage({ type: 'set_param', key, value }));
             }
-            addLogMessage('[AutoTest] Sesja anulowana przez uzytkownika.', 'warn');
+            addLogMessage('[AutoTest] Sesja optymalizacji anulowana przez uzytkownika.', 'warn');
             updateAutoTestUI(null);
         }
 
@@ -965,7 +1133,7 @@
             const avgYawError = turnCount > 0 ? totalYawError / turnCount : 90;
             const scoreAccuracy = Math.max(0, 1 - (avgYawError / 15.0));
             const balanceScore = this.calculateBalanceFitness();
-            return (scoreAccuracy * 0.6) + (balanceScore * 0.4);
+            return (scoreAccuracy * 0.6) + (balanceScore * 0.3);
         }
 
         applyBestResults() {
@@ -992,7 +1160,7 @@
                 if (tuningSession) tuningSession.cancel();
 
                 actionBtn.disabled = false;
-                actionBtn.textContent = 'Rozpocznij Sesje';
+                actionBtn.textContent = 'Rozpocznij Sesje Optymalizacji';
                 document.getElementById('validationResultPanel').style.display = 'none';
 
                 if (testType === 'balance') {
@@ -1060,7 +1228,7 @@
             statusStateText.textContent = 'Bezczynny';
             const selectedRadio = document.querySelector('input[name="autotest-type"]:checked');
             if(selectedRadio) {
-                actionBtn.textContent = selectedRadio.value === 'square_validation' ? 'Uruchom Walidacje' : 'Rozpocznij Sesje';
+                actionBtn.textContent = selectedRadio.value === 'square_validation' ? 'Uruchom Walidacje' : 'Rozpocznij Sesje Optymalizacji';
                 actionBtn.disabled = false;
             } else {
                  actionBtn.textContent = 'Wybierz test, aby rozpoczac';
