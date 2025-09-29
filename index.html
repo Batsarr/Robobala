@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v8.2 (Async Genetic Optimizer)</title>
+    <title>Robot PID - Panel Sterowania v8.3 (Pauza i ulepszone UI)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/genetic-js/lib/genetic.js"></script>
     
@@ -129,6 +129,7 @@
         #weights-budget { font-weight: bold; }
         #weights-budget.invalid { color: #ff6347; }
         #weights-budget.valid { color: #a2f279; }
+        .ga-button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
     </style>
 </head>
 <body>
@@ -316,8 +317,9 @@
 
             <button class="accordion-header" onclick="toggleAccordion(this)">Krok 1: Pierwsze Strojenie (Odkrywanie Z-N)</button>
             <div class="accordion-content">
-                <div class="info-panel">
-                    <strong>Cel:</strong> Automatyczne znalezienie podstawowych, dzialajacych parametrow PID dla balansu (Kp, Kd). Robot sam wprowadzi sie w oscylacje, aby zbadac swoja fizyke. Wynik tego testu to idealny punkt startowy dla dalszej, precyzyjnej optymalizacji.
+                <div class="setting-container">
+                    <label>Cel Procedury<span class="help-icon">?</span></label>
+                    <div class="help-text">Automatyczne znalezienie podstawowych, dzialajacych parametrow PID dla balansu (Kp, Kd). Robot sam wprowadzi sie w oscylacje, aby zbadac swoja fizyke. Wynik tego testu to idealny punkt startowy dla dalszej, precyzyjnej optymalizacji.</div>
                 </div>
                 <div id="znTuningStatusPanel">
                     <h5>Status Procedury Odkrywania</h5>
@@ -345,8 +347,9 @@
 
             <button class="accordion-header" onclick="toggleAccordion(this)">Krok 2: Optymalizacja i Testy Wydajnosciowe</button>
             <div class="accordion-content">
-                <div class="info-panel" style="border-left-color: #a2f279;">
-                    <strong>Cel:</strong> Uruchomienie inteligentnej optymalizacji petli balansu (algorytm genetyczny) lub wykonanie precyzyjnych testow wydajnosciowych dla petli predkosci i pozycji.
+                <div class="setting-container" style="margin-bottom: 15px;">
+                    <label>Cel Optymalizacji/Testow<span class="help-icon">?</span></label>
+                     <div class="help-text">Uruchomienie inteligentnej optymalizacji petli balansu (algorytm genetyczny) lub wykonanie precyzyjnych testow wydajnosciowych dla petli predkosci i pozycji.</div>
                 </div>
                 
                 <div id="autotestSelector" class="radio-selector-group">
@@ -452,9 +455,15 @@
                         <strong>Status:</strong> <span id="statusStateText" style="font-weight: bold;">Bezczynny</span>
                     </div>
                 </div>
-                        
-                <button id="autotestActionBtn" style="width:100%; margin-top:15px;">Rozpocznij Optymalizacje</button>
-                <button id="autotestCancelBtn" style="width:100%; margin-top:10px; background-color:#ff6347; display:none;">Anuluj Sesje</button>
+                
+                <div id="ga-controls-standard">
+                    <button id="autotestActionBtn" style="width:100%; margin-top:15px;">Rozpocznij Optymalizacje</button>
+                </div>
+                <div id="ga-controls-running" style="display: none;" class="ga-button-row">
+                    <button id="ga_pause_resume_btn" style="background-color: #f7b731;">Pauzuj po Osobniku</button>
+                    <button id="ga_stop_btn" style="background-color: #ff6347;">Zatrzymaj Sesje</button>
+                </div>
+
             </div>
         </div>
 
@@ -470,7 +479,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 8.2 (UI dla PID) - Asynchroniczny optymalizator genetyczny
+    // WERSJA 8.3 (UI dla PID) - Pauza, ulepszone UI, asynchroniczny silnik
     // =======================================================================================
     
     // Zmienne globalne i mapowania (pozostaja bez zmian)
@@ -793,6 +802,7 @@
 
     let genetic;
     let isGeneticOptimizationRunning = false;
+    let isGeneticPaused = false; // NOWA ZMIENNA STANU PAUZY
     let telemetryForGenetic = [];
     let bestOverallScore = -Infinity;
     let bestPhenotype = null;
@@ -802,24 +812,42 @@
         const radios = document.querySelectorAll('input[name="autotest-type"]');
         radios.forEach(radio => radio.addEventListener('change', renderAutotestOptions));
 
+        // Listener dla glownego przycisku akcji (tylko dla testow, ktore nie sa GA)
         const actionBtn = document.getElementById('autotestActionBtn');
         actionBtn.addEventListener('click', () => {
             const selectedTest = document.querySelector('input[name="autotest-type"]:checked').value;
-            switch(selectedTest) {
-                case 'balance':
-                    startGeneticOptimization();
-                    break;
-                case 'position':
-                    runPositionTest();
-                    break;
-                case 'speed':
-                    runSpeedTest();
-                    break;
+            if (selectedTest === 'position') {
+                runPositionTest();
+            } else if (selectedTest === 'speed') {
+                runSpeedTest();
             }
         });
 
-        const cancelBtn = document.getElementById('autotestCancelBtn');
-        cancelBtn.addEventListener('click', () => {
+        // Listenery dla przyciskow kontrolnych GA
+        const startBtn = document.getElementById('autotestActionBtn'); // Ten sam przycisk uzywany do startu GA
+        startBtn.addEventListener('click', () => {
+             const selectedTest = document.querySelector('input[name="autotest-type"]:checked').value;
+             if (selectedTest === 'balance') startGeneticOptimization();
+        });
+        
+        const pauseResumeBtn = document.getElementById('ga_pause_resume_btn');
+        pauseResumeBtn.addEventListener('click', () => {
+            isGeneticPaused = !isGeneticPaused;
+            if (isGeneticPaused) {
+                pauseResumeBtn.textContent = 'Wznow Optymalizacje';
+                pauseResumeBtn.style.backgroundColor = '#a2f279'; // zielony
+                document.getElementById('statusStateText').textContent = 'Pauza';
+                addLogMessage('[Genetic] Optymalizacja wstrzymana przez uzytkownika.', 'warn');
+            } else {
+                pauseResumeBtn.textContent = 'Pauzuj po Osobniku';
+                pauseResumeBtn.style.backgroundColor = '#f7b731'; // zolty
+                document.getElementById('statusStateText').textContent = 'Optymalizacja...';
+                addLogMessage('[Genetic] Wznowiono optymalizacje.', 'info');
+            }
+        });
+
+        const stopBtn = document.getElementById('ga_stop_btn');
+        stopBtn.addEventListener('click', () => {
             if (isGeneticOptimizationRunning) {
                 cancelGeneticOptimization();
             }
@@ -836,25 +864,30 @@
         const positionPanel = document.getElementById('positionTestOptionsPanel');
         const speedPanel = document.getElementById('speedTestOptionsPanel');
         const statusPanel = document.getElementById('autotestStatusPanel');
+
+        const standardControls = document.getElementById('ga-controls-standard');
+        const runningControls = document.getElementById('ga-controls-running');
         const actionBtn = document.getElementById('autotestActionBtn');
-        const cancelBtn = document.getElementById('autotestCancelBtn');
         
         // Ukryj wszystko na start
-        [geneticPanel, positionPanel, speedPanel, statusPanel, cancelBtn].forEach(el => el.style.display = 'none');
+        [geneticPanel, positionPanel, speedPanel, statusPanel, standardControls, runningControls].forEach(el => el.style.display = 'none');
         actionBtn.disabled = false;
         
         switch(selectedTest) {
             case 'balance':
                 geneticPanel.style.display = 'block';
                 statusPanel.style.display = 'block';
+                standardControls.style.display = 'block';
                 actionBtn.textContent = 'Rozpocznij Optymalizacje';
                 break;
             case 'position':
                 positionPanel.style.display = 'block';
+                standardControls.style.display = 'block';
                 actionBtn.textContent = 'Uruchom Test Pozycji';
                 break;
             case 'speed':
                 speedPanel.style.display = 'block';
+                standardControls.style.display = 'block';
                 actionBtn.textContent = 'Uruchom Test Predkosci';
                 break;
         }
@@ -916,10 +949,10 @@
         }
 
         isGeneticOptimizationRunning = true;
+        isGeneticPaused = false;
         bestOverallScore = -Infinity;
         bestPhenotype = null;
 
-        // Pobranie konfiguracji z UI
         const generations = parseInt(document.getElementById('gaGenerationsInput').value);
         const populationSize = parseInt(document.getElementById('gaPopulationInput').value);
         
@@ -935,7 +968,7 @@
             size: populationSize,
             crossover: 0.4,
             mutation: 0.3,
-            iterations: generations, // Uzywamy wartosci z UI
+            iterations: generations,
             fittestAlwaysSurvives: true,
         });
 
@@ -965,45 +998,34 @@
             return Genotype;
         })();
         
-        // Usunieto `genetic.fitness` i `genetic.evolve()` stad
-        
-        document.getElementById('autotestActionBtn').disabled = true;
-        document.getElementById('autotestCancelBtn').style.display = 'block';
+        document.getElementById('ga-controls-standard').style.display = 'none';
+        document.getElementById('ga-controls-running').style.display = 'grid';
         document.getElementById('statusStateText').textContent = 'Optymalizacja...';
         addLogMessage(`[Genetic] Rozpoczynam optymalizacje: ${generations} pokolen, ${populationSize} osobnikow.`, 'success');
         
-        // Uruchomienie nowej, recznej petli
         runEvolutionLoop(generations, populationSize);
     }
 
     async function evaluatePhenotype(phenotype) {
-        // Ta funkcja testuje jednego osobnika i zwraca jego ocene
         telemetryForGenetic = [];
-
-        // Wyslij parametry do robota
         sendBleMessage({ type: 'set_param', key: 'kp_b', value: phenotype.kp_b });
         sendBleMessage({ type: 'set_param', key: 'kd_b', value: phenotype.kd_b });
         sendBleMessage({ type: 'set_param', key: 'balance_pid_derivative_filter_alpha', value: phenotype.balance_pid_derivative_filter_alpha });
 
-        // Asynchroniczne oczekiwanie
         await new Promise(resolve => setTimeout(resolve, 2500));
 
-        // Sprawdzenie, czy robot sie nie przewrocil
         if (lastKnownRobotState !== 'BALANSUJE' && lastKnownRobotState !== 'TRZYMA_POZYCJE') {
              addLogMessage('[Genetic] Wykryto utrate stabilnosci! Osobnik ukarany. Trwa odzyskiwanie...', 'warn');
-             // Przywroc bezpieczne parametry i sprobuj wstac
              applyPhenotype(safeStartParams);
              sendBleMessage({ type: 'balance_toggle', enabled: true });
-             await new Promise(resolve => setTimeout(resolve, 2000)); // Czas na odzyskanie stabilnosci
-             return -1000; // Zwraca bardzo niska ocene
+             await new Promise(resolve => setTimeout(resolve, 2000));
+             return -1000;
         }
 
-        // Oblicz wynik na podstawie zebranych danych (logika jak poprzednio)
-        if (telemetryForGenetic.length < 20) return 0; // Za malo danych
+        if (telemetryForGenetic.length < 20) return 0;
         
         let sumAbsPitch = 0, maxAbsPitch = 0, sumAbsOutputChange = 0, stillSamples = 0;
         const stillnessThreshold = 0.05 * 1023;
-
         telemetryForGenetic.forEach((d, i) => {
             const pitch = d.pitch || 0;
             const output = d.output || 0;
@@ -1012,41 +1034,39 @@
             if (i > 0) sumAbsOutputChange += Math.abs(output - (telemetryForGenetic[i-1].output || 0));
             if (Math.abs(output) < stillnessThreshold) stillSamples++;
         });
-
         const count = telemetryForGenetic.length;
         const avgAbsPitch = sumAbsPitch / count;
         const avgAbsOutputChange = sumAbsOutputChange / (count > 1 ? count - 1 : 1);
-
         const weightS = parseFloat(document.getElementById('weightStability').value);
         const weightC = parseFloat(document.getElementById('weightStillness').value);
         const weightP = parseFloat(document.getElementById('weightOvershoot').value);
         const weightW = parseFloat(document.getElementById('weightEffort').value);
-
         const stabilityScore = Math.max(0, 1 - (avgAbsPitch / 2.0));
         const overshootScore = Math.max(0, 1 - (maxAbsPitch / 5.0));
         const stillnessScore = stillSamples / count;
         const effortScore = Math.max(0, 1 - (avgAbsOutputChange / 100.0));
-        
         return (stabilityScore * weightS) + (stillnessScore * weightC) + (overshootScore * weightP) + (effortScore * weightW);
     }
 
     async function runEvolutionLoop(generations, populationSize) {
-        // Glowna petla sterujaca ewolucja
         let population = [new genetic.Genotype(safeStartParams.kp_b, safeStartParams.kd_b, safeStartParams.balance_pid_derivative_filter_alpha)];
-        
-        // Wypelnij reszte populacji losowymi osobnikami
         while (population.length < populationSize) {
             population.push(new genetic.Genotype());
         }
         
         for (let i = 0; i < generations; i++) {
-            if (!isGeneticOptimizationRunning) break; // Pozwala na anulowanie
-            
+            if (!isGeneticOptimizationRunning) break;
             document.getElementById('statusGeneration').textContent = `${i + 1} / ${generations}`;
             
-            // Ocen kazdego osobnika w populacji
             let evaluatedPopulation = [];
             for (let j = 0; j < population.length; j++) {
+                if (!isGeneticOptimizationRunning) break;
+                
+                // Pętla pauzy - czeka tutaj, jesli isGeneticPaused jest true
+                while (isGeneticPaused) {
+                    await new Promise(resolve => setTimeout(resolve, 200)); // Czekaj 200ms i sprawdz ponownie
+                    if (!isGeneticOptimizationRunning) break; // Pozwala na anulowanie w trakcie pauzy
+                }
                 if (!isGeneticOptimizationRunning) break;
                 
                 const progress = ((i * populationSize) + j + 1) / (generations * populationSize) * 100;
@@ -1060,9 +1080,7 @@
             }
              if (!isGeneticOptimizationRunning) break;
             
-            // Sortuj populacje po ocenie
             evaluatedPopulation.sort((a, b) => b.score - a.score);
-            
             const bestOfGeneration = evaluatedPopulation[0];
             document.getElementById('statusBestGenScore').textContent = bestOfGeneration.score.toFixed(4);
             addLogMessage(`[Genetic] Pokolenie ${i + 1} zakonczone. Najlepszy wynik: ${bestOfGeneration.score.toFixed(4)}`, 'info');
@@ -1073,14 +1091,10 @@
                 document.getElementById('statusBestScore').textContent = bestOverallScore.toFixed(4);
             }
             
-            // Stworz nastepne pokolenie
             let newPopulation = [];
-            
-            // Elitaryzm - zachowaj najlepszego
             if (genetic.configuration.fittestAlwaysSurvives) {
                 newPopulation.push(bestOfGeneration);
             }
-            
             while (newPopulation.length < populationSize) {
                 const parent1 = genetic.select1(evaluatedPopulation)[0];
                 const parent2 = genetic.select2(evaluatedPopulation, [parent1])[0];
@@ -1101,11 +1115,12 @@
     function finishGeneticOptimization(fittest) {
         if (!fittest) {
             addLogMessage('[Genetic] Zakonczono, ale nie znaleziono najlepszego rozwiazania.', 'warn');
-            cancelGeneticOptimization();
+            if (isGeneticOptimizationRunning) cancelGeneticOptimization();
             return;
         }
         
         isGeneticOptimizationRunning = false;
+        isGeneticPaused = false;
         addLogMessage(`[Genetic] Optymalizacja zakonczona! Najlepszy wynik: ${bestOverallScore.toFixed(4)}`, 'success');
         addLogMessage(`[Genetic] Najlepsze parametry: Kp=${fittest.kp_b.toFixed(4)}, Kd=${fittest.kd_b.toFixed(4)}, Filtr=${(fittest.balance_pid_derivative_filter_alpha*100).toFixed(1)}%`, 'info');
 
@@ -1113,31 +1128,30 @@
         document.getElementById('statusProgressBar').value = 100;
         document.getElementById('statusProgressText').textContent = 'Optymalizacja zakonczona.';
         
+        document.getElementById('ga-controls-running').style.display = 'none';
+        document.getElementById('ga-controls-standard').style.display = 'block';
         const actionBtn = document.getElementById('autotestActionBtn');
-        actionBtn.disabled = false;
         actionBtn.textContent = 'Zastosuj Najlepsze Parametry';
         
-        // Uzywamy .onclick, aby nadpisac istniejacy listener i uniknac wielokrotnych wywolan
         actionBtn.onclick = () => {
             applyPhenotype(fittest);
-            actionBtn.textContent = 'Rozpocznij Optymalizacje';
-            // Przywroc oryginalny listener
-            actionBtn.onclick = null;
-            setupAutoTestEventListeners(); // Ponownie podpinamy oryginalne listenery
+            renderAutotestOptions();
+            actionBtn.onclick = null; // Usun ten specjalny handler
         };
     }
 
     function cancelGeneticOptimization() {
         if (!isGeneticOptimizationRunning) return;
         isGeneticOptimizationRunning = false;
+        isGeneticPaused = false;
         
         addLogMessage('[Genetic] Optymalizacja anulowana przez uzytkownika. Przywracam parametry poczatkowe.', 'warn');
         applyPhenotype(safeStartParams);
 
         document.getElementById('statusStateText').textContent = 'Anulowano';
-        document.getElementById('autotestActionBtn').disabled = false;
+        document.getElementById('ga-controls-running').style.display = 'none';
+        document.getElementById('ga-controls-standard').style.display = 'block';
         document.getElementById('autotestActionBtn').textContent = 'Rozpocznij Optymalizacje';
-        document.getElementById('autotestCancelBtn').style.display = 'none';
     }
 
     function applyPhenotype(phenotype) {
