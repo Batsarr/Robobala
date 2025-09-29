@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v8.1 (Full Genetic Optimizer + Tester)</title>
+    <title>Robot PID - Panel Sterowania v8.2 (Async Genetic Optimizer)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/genetic-js/lib/genetic.js"></script>
     
@@ -390,6 +390,27 @@
                                 <div class="help-text">Zwieksz, aby zminimalizowac agresywnosc i zuzycie energii przez silniki.</div>
                             </div>
                         </fieldset>
+                        <fieldset style="margin-top: 15px;">
+                            <legend>Parametry Algorytmu Genetycznego</legend>
+                            <div class="setting-container">
+                                <label for="gaGenerationsInput">Liczba pokolen<span class="help-icon">?</span></label>
+                                <div class="numeric-input-wrapper">
+                                    <button>-</button>
+                                    <input type="number" id="gaGenerationsInput" min="2" max="50" step="1" value="10">
+                                    <button>+</button>
+                                </div>
+                                <div class="help-text">Ile cykli ewolucji ma przejsc algorytm. Wiecej = potencjalnie lepszy wynik, ale dluzszy czas.</div>
+                            </div>
+                            <div class="setting-container">
+                                <label for="gaPopulationInput">Liczba osobnikow<span class="help-icon">?</span></label>
+                                <div class="numeric-input-wrapper">
+                                    <button>-</button>
+                                    <input type="number" id="gaPopulationInput" min="4" max="20" step="1" value="10">
+                                    <button>+</button>
+                                </div>
+                                <div class="help-text">Ile rozwiazan (zestawow PID) bedzie testowanych w kazdym pokoleniu.</div>
+                            </div>
+                        </fieldset>
                     </div>
                     <!-- Panel dla Testu Pozycji -->
                     <div id="positionTestOptionsPanel" style="display: none;">
@@ -449,7 +470,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 8.1 (UI dla PID) - Zintegrowany optymalizator genetyczny i testery wydajnosci
+    // WERSJA 8.2 (UI dla PID) - Asynchroniczny optymalizator genetyczny
     // =======================================================================================
     
     // Zmienne globalne i mapowania (pozostaja bez zmian)
@@ -519,7 +540,7 @@
     let actionToMap = null;
     const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v3_';
 
-    // Definicje akcji i telemetrii (bez zmian)
+    // Definicje akcji i telemetrii (przetlumaczone)
     const availableActions = { 
         'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' }, 
         'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' }, 
@@ -889,10 +910,18 @@
             addLogMessage('[UI] BLAD: Aby rozpoczac optymalizacje, robot musi byc w stanie balansu.', 'error');
             return;
         }
-        
+
+        if (!confirm("UWAGA! Optymalizacja bedzie testowac parametry, ktore moga byc niestabilne. Upewnij sie, ze robot ma duzo wolnego miejsca i jestes gotow go asekurowac. Kontynuowac?")) {
+            return;
+        }
+
         isGeneticOptimizationRunning = true;
         bestOverallScore = -Infinity;
         bestPhenotype = null;
+
+        // Pobranie konfiguracji z UI
+        const generations = parseInt(document.getElementById('gaGenerationsInput').value);
+        const populationSize = parseInt(document.getElementById('gaPopulationInput').value);
         
         safeStartParams = {
             kp_b: parseFloat(document.getElementById('balanceKpInput').value),
@@ -902,16 +931,14 @@
 
         genetic = Genetic.create();
         
-        // Konfiguracja algorytmu
         genetic.configure({
-            size: 10,
+            size: populationSize,
             crossover: 0.4,
             mutation: 0.3,
-            iterations: 10,
+            iterations: generations, // Uzywamy wartosci z UI
             fittestAlwaysSurvives: true,
         });
 
-        // Definicja "fenotypu" - osobnika w populacji
         genetic.Genotype = (function() {
             function Genotype(kp, kd, filter) {
                 this.kp_b = kp !== undefined ? kp : Math.random() * (safeStartParams.kp_b * 1.5 - safeStartParams.kp_b * 0.5) + safeStartParams.kp_b * 0.5;
@@ -938,104 +965,170 @@
             return Genotype;
         })();
         
-        genetic.fitness = async function(phenotype) {
-            telemetryForGenetic = [];
-            
-            // Wyslij parametry do robota
-            sendBleMessage({ type: 'set_param', key: 'kp_b', value: phenotype.kp_b });
-            sendBleMessage({ type: 'set_param', key: 'kd_b', value: phenotype.kd_b });
-            sendBleMessage({ type: 'set_param', key: 'balance_pid_derivative_filter_alpha', value: phenotype.balance_pid_derivative_filter_alpha });
-
-            await new Promise(resolve => setTimeout(resolve, 2500)); // Czas na zebranie danych
-
-            // Oblicz wynik na podstawie zebranych danych
-            if (telemetryForGenetic.length < 20) return 0;
-            
-            let sumAbsPitch = 0, maxAbsPitch = 0, sumAbsOutputChange = 0, stillSamples = 0;
-            const stillnessThreshold = 0.05 * 1023; // 5% of max PWM
-
-            telemetryForGenetic.forEach((d, i) => {
-                const pitch = d.pitch || 0;
-                const output = d.output || 0;
-                sumAbsPitch += Math.abs(pitch);
-                if (Math.abs(pitch) > maxAbsPitch) maxAbsPitch = Math.abs(pitch);
-                if (i > 0) sumAbsOutputChange += Math.abs(output - (telemetryForGenetic[i-1].output || 0));
-                if (Math.abs(output) < stillnessThreshold) stillSamples++;
-            });
-
-            const count = telemetryForGenetic.length;
-            const avgAbsPitch = sumAbsPitch / count;
-            const avgAbsOutputChange = sumAbsOutputChange / (count > 1 ? count - 1 : 1);
-
-            const weightS = parseFloat(document.getElementById('weightStability').value);
-            const weightC = parseFloat(document.getElementById('weightStillness').value);
-            const weightP = parseFloat(document.getElementById('weightOvershoot').value);
-            const weightW = parseFloat(document.getElementById('weightEffort').value);
-
-            const stabilityScore = Math.max(0, 1 - (avgAbsPitch / 2.0));
-            const overshootScore = Math.max(0, 1 - (maxAbsPitch / 5.0));
-            const stillnessScore = stillSamples / count;
-            const effortScore = Math.max(0, 1 - (avgAbsOutputChange / 100.0));
-            
-            return (stabilityScore * weightS) + (stillnessScore * weightC) + (overshootScore * weightP) + (effortScore * weightW);
-        };
-
-        // UI update
+        // Usunieto `genetic.fitness` i `genetic.evolve()` stad
+        
         document.getElementById('autotestActionBtn').disabled = true;
         document.getElementById('autotestCancelBtn').style.display = 'block';
         document.getElementById('statusStateText').textContent = 'Optymalizacja...';
+        addLogMessage(`[Genetic] Rozpoczynam optymalizacje: ${generations} pokolen, ${populationSize} osobnikow.`, 'success');
         
-        let lastGeneration = 0;
-        genetic.notification = function(pop, generation, stats) {
-            document.getElementById('statusGeneration').textContent = `${generation + 1} / ${this.configuration.iterations}`;
-            document.getElementById('statusBestGenScore').textContent = stats.fittest.toFixed(4);
+        // Uruchomienie nowej, recznej petli
+        runEvolutionLoop(generations, populationSize);
+    }
+
+    async function evaluatePhenotype(phenotype) {
+        // Ta funkcja testuje jednego osobnika i zwraca jego ocene
+        telemetryForGenetic = [];
+
+        // Wyslij parametry do robota
+        sendBleMessage({ type: 'set_param', key: 'kp_b', value: phenotype.kp_b });
+        sendBleMessage({ type: 'set_param', key: 'kd_b', value: phenotype.kd_b });
+        sendBleMessage({ type: 'set_param', key: 'balance_pid_derivative_filter_alpha', value: phenotype.balance_pid_derivative_filter_alpha });
+
+        // Asynchroniczne oczekiwanie
+        await new Promise(resolve => setTimeout(resolve, 2500));
+
+        // Sprawdzenie, czy robot sie nie przewrocil
+        if (lastKnownRobotState !== 'BALANSUJE' && lastKnownRobotState !== 'TRZYMA_POZYCJE') {
+             addLogMessage('[Genetic] Wykryto utrate stabilnosci! Osobnik ukarany. Trwa odzyskiwanie...', 'warn');
+             // Przywroc bezpieczne parametry i sprobuj wstac
+             applyPhenotype(safeStartParams);
+             sendBleMessage({ type: 'balance_toggle', enabled: true });
+             await new Promise(resolve => setTimeout(resolve, 2000)); // Czas na odzyskanie stabilnosci
+             return -1000; // Zwraca bardzo niska ocene
+        }
+
+        // Oblicz wynik na podstawie zebranych danych (logika jak poprzednio)
+        if (telemetryForGenetic.length < 20) return 0; // Za malo danych
+        
+        let sumAbsPitch = 0, maxAbsPitch = 0, sumAbsOutputChange = 0, stillSamples = 0;
+        const stillnessThreshold = 0.05 * 1023;
+
+        telemetryForGenetic.forEach((d, i) => {
+            const pitch = d.pitch || 0;
+            const output = d.output || 0;
+            sumAbsPitch += Math.abs(pitch);
+            if (Math.abs(pitch) > maxAbsPitch) maxAbsPitch = Math.abs(pitch);
+            if (i > 0) sumAbsOutputChange += Math.abs(output - (telemetryForGenetic[i-1].output || 0));
+            if (Math.abs(output) < stillnessThreshold) stillSamples++;
+        });
+
+        const count = telemetryForGenetic.length;
+        const avgAbsPitch = sumAbsPitch / count;
+        const avgAbsOutputChange = sumAbsOutputChange / (count > 1 ? count - 1 : 1);
+
+        const weightS = parseFloat(document.getElementById('weightStability').value);
+        const weightC = parseFloat(document.getElementById('weightStillness').value);
+        const weightP = parseFloat(document.getElementById('weightOvershoot').value);
+        const weightW = parseFloat(document.getElementById('weightEffort').value);
+
+        const stabilityScore = Math.max(0, 1 - (avgAbsPitch / 2.0));
+        const overshootScore = Math.max(0, 1 - (maxAbsPitch / 5.0));
+        const stillnessScore = stillSamples / count;
+        const effortScore = Math.max(0, 1 - (avgAbsOutputChange / 100.0));
+        
+        return (stabilityScore * weightS) + (stillnessScore * weightC) + (overshootScore * weightP) + (effortScore * weightW);
+    }
+
+    async function runEvolutionLoop(generations, populationSize) {
+        // Glowna petla sterujaca ewolucja
+        let population = [new genetic.Genotype(safeStartParams.kp_b, safeStartParams.kd_b, safeStartParams.balance_pid_derivative_filter_alpha)];
+        
+        // Wypelnij reszte populacji losowymi osobnikami
+        while (population.length < populationSize) {
+            population.push(new genetic.Genotype());
+        }
+        
+        for (let i = 0; i < generations; i++) {
+            if (!isGeneticOptimizationRunning) break; // Pozwala na anulowanie
             
-            if (stats.fittest > bestOverallScore) {
-                bestOverallScore = stats.fittest;
-                bestPhenotype = pop[0].phenotype;
+            document.getElementById('statusGeneration').textContent = `${i + 1} / ${generations}`;
+            
+            // Ocen kazdego osobnika w populacji
+            let evaluatedPopulation = [];
+            for (let j = 0; j < population.length; j++) {
+                if (!isGeneticOptimizationRunning) break;
+                
+                const progress = ((i * populationSize) + j + 1) / (generations * populationSize) * 100;
+                document.getElementById('statusProgressBar').value = progress;
+                document.getElementById('statusProgressText').textContent = `Testowanie osobnika ${j + 1}/${populationSize} (Pokolenie ${i + 1})...`;
+                
+                const score = await evaluatePhenotype(population[j]);
+                let evaluatedPhenotype = population[j];
+                evaluatedPhenotype.score = score;
+                evaluatedPopulation.push(evaluatedPhenotype);
+            }
+             if (!isGeneticOptimizationRunning) break;
+            
+            // Sortuj populacje po ocenie
+            evaluatedPopulation.sort((a, b) => b.score - a.score);
+            
+            const bestOfGeneration = evaluatedPopulation[0];
+            document.getElementById('statusBestGenScore').textContent = bestOfGeneration.score.toFixed(4);
+            addLogMessage(`[Genetic] Pokolenie ${i + 1} zakonczone. Najlepszy wynik: ${bestOfGeneration.score.toFixed(4)}`, 'info');
+
+            if (bestOfGeneration.score > bestOverallScore) {
+                bestOverallScore = bestOfGeneration.score;
+                bestPhenotype = bestOfGeneration;
                 document.getElementById('statusBestScore').textContent = bestOverallScore.toFixed(4);
             }
             
-            let progress = ((generation * pop.length) + (pop.findIndex(p => p.score === undefined) + 1)) / (this.configuration.iterations * pop.length) * 100;
-            document.getElementById('statusProgressBar').value = progress;
-            document.getElementById('statusProgressText').textContent = `Testowanie osobnika w pokoleniu ${generation + 1}...`;
+            // Stworz nastepne pokolenie
+            let newPopulation = [];
             
-            if (generation > lastGeneration) {
-                addLogMessage(`[Genetic] Pokolenie ${generation} zakonczone. Najlepszy wynik: ${stats.fittest.toFixed(4)}`, 'info');
-                lastGeneration = generation;
+            // Elitaryzm - zachowaj najlepszego
+            if (genetic.configuration.fittestAlwaysSurvives) {
+                newPopulation.push(bestOfGeneration);
             }
-        };
+            
+            while (newPopulation.length < populationSize) {
+                const parent1 = genetic.select1(evaluatedPopulation)[0];
+                const parent2 = genetic.select2(evaluatedPopulation, [parent1])[0];
+                const children = parent1.mate(parent2);
+                newPopulation.push(children[0].mutate(genetic.configuration.mutation));
+                if (newPopulation.length < populationSize) {
+                    newPopulation.push(children[1].mutate(genetic.configuration.mutation));
+                }
+            }
+            population = newPopulation;
+        }
 
-        addLogMessage('[Genetic] Rozpoczynam optymalizacje genetyczna...', 'success');
-        genetic.evolve({ seed: new genetic.Genotype(safeStartParams.kp_b, safeStartParams.kd_b, safeStartParams.balance_pid_derivative_filter_alpha) })
-            .then(function(fittest) {
-                finishGeneticOptimization(fittest);
-            });
+        if (isGeneticOptimizationRunning) {
+            finishGeneticOptimization(bestPhenotype);
+        }
     }
 
     function finishGeneticOptimization(fittest) {
+        if (!fittest) {
+            addLogMessage('[Genetic] Zakonczono, ale nie znaleziono najlepszego rozwiazania.', 'warn');
+            cancelGeneticOptimization();
+            return;
+        }
+        
         isGeneticOptimizationRunning = false;
         addLogMessage(`[Genetic] Optymalizacja zakonczona! Najlepszy wynik: ${bestOverallScore.toFixed(4)}`, 'success');
-        addLogMessage(`[Genetic] Najlepsze parametry: Kp=${bestPhenotype.kp_b.toFixed(4)}, Kd=${bestPhenotype.kd_b.toFixed(4)}, Filtr=${(bestPhenotype.balance_pid_derivative_filter_alpha*100).toFixed(1)}%`, 'info');
+        addLogMessage(`[Genetic] Najlepsze parametry: Kp=${fittest.kp_b.toFixed(4)}, Kd=${fittest.kd_b.toFixed(4)}, Filtr=${(fittest.balance_pid_derivative_filter_alpha*100).toFixed(1)}%`, 'info');
 
         document.getElementById('statusStateText').textContent = 'Zakonczono';
         document.getElementById('statusProgressBar').value = 100;
         document.getElementById('statusProgressText').textContent = 'Optymalizacja zakonczona.';
-        document.getElementById('autotestActionBtn').disabled = false;
-        document.getElementById('autotestActionBtn').textContent = 'Zastosuj Najlepsze Parametry';
         
-        actionBtn = document.getElementById('autotestActionBtn');
-        const applyBestHandler = () => {
-            applyPhenotype(bestPhenotype);
+        const actionBtn = document.getElementById('autotestActionBtn');
+        actionBtn.disabled = false;
+        actionBtn.textContent = 'Zastosuj Najlepsze Parametry';
+        
+        // Uzywamy .onclick, aby nadpisac istniejacy listener i uniknac wielokrotnych wywolan
+        actionBtn.onclick = () => {
+            applyPhenotype(fittest);
             actionBtn.textContent = 'Rozpocznij Optymalizacje';
-            actionBtn.removeEventListener('click', applyBestHandler);
+            // Przywroc oryginalny listener
+            actionBtn.onclick = null;
+            setupAutoTestEventListeners(); // Ponownie podpinamy oryginalne listenery
         };
-        actionBtn.addEventListener('click', applyBestHandler);
     }
-    
+
     function cancelGeneticOptimization() {
         if (!isGeneticOptimizationRunning) return;
-        genetic.stop();
         isGeneticOptimizationRunning = false;
         
         addLogMessage('[Genetic] Optymalizacja anulowana przez uzytkownika. Przywracam parametry poczatkowe.', 'warn');
