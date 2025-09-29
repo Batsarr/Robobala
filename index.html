@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v8.3 (Pauza i ulepszone UI)</title>
+    <title>Robot PID - Panel Sterowania v8.4 (UI Fixes & Hardening)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/genetic-js/lib/genetic.js"></script>
     
@@ -314,7 +314,7 @@
         <div class="card">
             <h2>Auto Strojenie</h2>
 
-            <button class="accordion-header" onclick="toggleAccordion(this)">Krok 1: Pierwsze Strojenie (Odkrywanie Z-N)</button>
+            <button class="accordion-header" onclick="toggleAccordion(this)">1: Pierwsze Strojenie (Odkrywanie Z-N)</button>
             <div class="accordion-content">
                 <div class="setting-container">
                     <label>Cel Procedury<span class="help-icon">?</span></label>
@@ -344,7 +344,7 @@
                 <button id="znTuningCancelBtn" style="width:100%; margin-top:10px; background-color:#ff6347; display:none;">Anuluj</button>
             </div>
 
-            <button class="accordion-header" onclick="toggleAccordion(this)">Krok 2: Optymalizacja i Testy Wydajnosciowe</button>
+            <button class="accordion-header" onclick="toggleAccordion(this)">2: Optymalizacja i Testy Wydajnosciowe</button>
             <div class="accordion-content">
                 <div class="setting-container" style="margin-bottom: 15px;">
                     <label>Cel Optymalizacji/Testow<span class="help-icon">?</span></label>
@@ -478,10 +478,9 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 8.3 (UI dla PID) - Pauza, ulepszone UI, asynchroniczny silnik
+    // WERSJA 8.4 (UI dla PID) - UI Fixes & Hardening
     // =======================================================================================
     
-    // Zmienne globalne i mapowania (pozostaja bez zmian)
     let isApplyingConfig = false;
     let lastKnownRobotState = 'IDLE';
     let isSequenceRunning = false;
@@ -504,7 +503,6 @@
         'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd'
     };
     
-    // Inicjalizacja po zaladowaniu DOM
     document.addEventListener('DOMContentLoaded', () => {
         initJoystick();
         setupChartControls();
@@ -513,7 +511,7 @@
         setupEventListeners();
         setupManualTuneButtons();
         setupGamepadMappingModal();
-        setupAutoTestEventListeners(); // Zmodyfikowana funkcja
+        setupAutoTestEventListeners();
         setupDpadControls(); 
         setupSequenceControls(); 
         setupZnTuningControls();
@@ -521,12 +519,9 @@
         renderMappingModal();
         pollGamepad();
         window.addEventListener('resize', initJoystick);
-        
-        // Inicjalizacja widoku Auto-Strojenia
         renderAutotestOptions();
     });
 
-    // Stale i zmienne BLE (bez zmian)
     let bleDevice, rxCharacteristic, txCharacteristic;
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
     const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
@@ -536,7 +531,6 @@
     let isSendingBleMessage = false;
     const BLE_SEND_INTERVAL = 20;
 
-    // Zmienne Joysticka i Gamepada (bez zmian)
     let joystickCenter, joystickRadius, knobRadius, isDragging = false;
     let lastJoystickSendTime = 0;
     const JOYSTICK_SEND_INTERVAL = 20;
@@ -548,7 +542,6 @@
     let actionToMap = null;
     const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v3_';
 
-    // Definicje akcji i telemetrii (przetlumaczone)
     const availableActions = { 
         'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' }, 
         'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' }, 
@@ -567,14 +560,10 @@
         'output': { label: 'Wyjscie PID', color: '#ff6347'}
     };
     const builtInPresetsData = { 
-        '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 97.1850, balanceKiInput: 0.0, balanceKdInput: 3.0039, speedKpInput: 0.0, positionKpInput: 0.0, positionKiInput: 0.0, positionKdInput: 0.0 }}, 
-        '2': { name: "2. PID Mieciutki (Plynny)", params: { balanceKpInput: 80.0, balanceKiInput: 0.0, balanceKdInput: 2.8, speedKpInput: 0.0, positionKpInput: 0.0, positionKiInput: 0.0, positionKdInput: 0.0 }}, 
-        '3': { name: "3. PID Agresywny (Sztywny)", params: { balanceKpInput: 110.0, balanceKiInput: 0.0, balanceKdInput: 4.0, speedKpInput: 0.0, positionKpInput: 0.0, positionKiInput: 0.0, positionKdInput: 0.0 }}
+        '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 97.1850, balanceKiInput: 0.0, balanceKdInput: 3.0039 }}, 
+        '2': { name: "2. PID Mieciutki (Plynny)", params: { balanceKpInput: 80.0, balanceKiInput: 0.0, balanceKdInput: 2.8 }}, 
+        '3': { name: "3. PID Agresywny (Sztywny)", params: { balanceKpInput: 110.0, balanceKiInput: 0.0, balanceKdInput: 4.0 }}
     };
-
-    // =======================================================================================
-    // === SEKCJA FUNKCJI PODSTAWOWYCH (UI, BLE, Gamepad, itp.) - BEZ WIEKSZYCH ZMIAN ===
-    // =======================================================================================
 
     function initJoystick() { const wrapper = document.getElementById('joystickWrapper'); const size = wrapper.clientWidth; const joystickCanvas = document.getElementById('joystickCanvas'); const joystickCtx = joystickCanvas.getContext('2d'); joystickCanvas.width = size; joystickCanvas.height = size; joystickCenter = { x: size / 2, y: size / 2 }; joystickRadius = size / 2 * 0.75; knobRadius = size / 2 * 0.25; drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y); }
     function drawJoystick(ctx, x, y) { ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); ctx.beginPath(); ctx.arc(joystickCenter.x, joystickCenter.y, joystickRadius, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.fill(); ctx.beginPath(); ctx.arc(x, y, knobRadius, 0, 2 * Math.PI); ctx.fillStyle = '#61dafb'; ctx.fill(); }
@@ -621,21 +610,12 @@
     function sendBleMessage(message) { bleMessageQueue.push(message); processBleQueue(); }
 
     function processCompleteMessage(data) {
+        if (!data || !data.type) return;
+
         if (data.type === 'telemetry') {
-            if (data.robot_state) {
-                lastKnownRobotState = data.robot_state;
-                if(lastKnownRobotState === 'AUTOSTROJENIE' && !isZnTuningRunning) {
-                    isZnTuningRunning = true;
-                    document.getElementById('znStatusText').textContent = 'Strojenie w toku...';
-                    document.getElementById('znTuningActionBtn').disabled = true;
-                    document.getElementById('znTuningCancelBtn').style.display = 'block';
-                }
-            }
-            if(isGeneticOptimizationRunning && data.pitch !== undefined && data.output !== undefined){
-                telemetryForGenetic.push({pitch: data.pitch, output: data.output});
-            }
-            if(isZnTuningRunning && data.output !== undefined) {
-                 document.getElementById('znKpTestVal').textContent = data.output.toFixed(2);
+            lastKnownRobotState = data.robot_state || lastKnownRobotState;
+            if (isGeneticOptimizationRunning && data.pitch !== undefined && data.output !== undefined) {
+                telemetryForGenetic.push({ pitch: data.pitch, output: data.output });
             }
         }
 
@@ -646,29 +626,39 @@
                 checkAndExecuteNextSequenceStep(lastKnownRobotState);
                 break;
             case 'full_config':
-                isApplyingConfig = true;
-                applyFullConfig(data.params);
-                isApplyingConfig = false;
+                if (data.params) {
+                    isApplyingConfig = true;
+                    applyFullConfig(data.params);
+                    isApplyingConfig = false;
+                    addLogMessage('[UI] Konfiguracja z robota zostala zastosowana.', 'success');
+                }
                 break;
             case 'log':
                 addLogMessage(`[ROBOT] ${data.message}`, data.level);
                 break;
             case 'single_pwm_result':
-                const p = data.params;
-                const inputId = `minPwm${p.motor.charAt(0).toUpperCase() + p.motor.slice(1)}${p.direction.charAt(0).toUpperCase() + p.direction.slice(1)}Input`;
-                document.getElementById(inputId).value = p.value;
-                addLogMessage(`[UI] Auto-strojenie dla ${p.motor} ${p.direction} zakonczone. Wynik: ${p.value}`, 'success');
-                const row = document.querySelector(`.manual-tune-row[data-motor="${p.motor}"][data-direction="${p.direction}"]`);
-                if (row) {
-                    const autoBtn = row.querySelector('.auto-btn');
-                    if (autoBtn) {
-                        autoBtn.disabled = false;
-                        autoBtn.textContent = 'Auto';
+                if (data.params) {
+                    const p = data.params;
+                    const inputId = `minPwm${p.motor.charAt(0).toUpperCase() + p.motor.slice(1)}${p.direction.charAt(0).toUpperCase() + p.direction.slice(1)}Input`;
+                    document.getElementById(inputId).value = p.value;
+                    addLogMessage(`[UI] Auto-strojenie dla ${p.motor} ${p.direction} zakonczone. Wynik: ${p.value}`, 'success');
+                    const row = document.querySelector(`.manual-tune-row[data-motor="${p.motor}"][data-direction="${p.direction}"]`);
+                    if (row) {
+                        const autoBtn = row.querySelector('.auto-btn');
+                        if (autoBtn) {
+                            autoBtn.disabled = false;
+                            autoBtn.textContent = 'Auto';
+                        }
                     }
                 }
                 break;
             case 'zn_tuning_result':
-                handleZnTuningResult(data.ku, data.tu);
+                if (data.ku !== undefined && data.tu !== undefined) {
+                    handleZnTuningResult(data.ku, data.tu);
+                }
+                break;
+            case 'ack':
+                // Tutaj w przyszlosci bedzie obsluga potwierdzen
                 break;
         }
     }
@@ -775,7 +765,7 @@
     function executeNextSequenceStep() { const steps = document.querySelectorAll('.sequence-step'); if (!isSequenceRunning || currentSequenceStep >= steps.length) { if (isSequenceRunning) { isSequenceRunning = false; addLogMessage('[UI] Sekwencja ukonczona.', 'success'); } updateSequenceUI(); return; } updateSequenceUI(); const stepNode = steps[currentSequenceStep]; const type = stepNode.querySelector('.sequence-type').value; const value = parseFloat(stepNode.querySelector('.sequence-value').value); let command = {}; switch (type) { case 'move_fwd': command = { type: 'execute_move', distance_cm: value }; break; case 'move_bwd': command = { type: 'execute_move', distance_cm: -value }; break; case 'rotate_r': command = { type: 'execute_rotate', angle_deg: value }; break; case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -value }; break; } addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info'); sendBleMessage(command); }
     
     // =======================================================================================
-    // === SEKCJA STROJENIA KROK 1: ZIEGLER-NICHOLS - BEZ ZMIAN ===
+    // === SEKCJA STROJENIA KROK 1: ZIEGLER-NICHOLS ===
     // =======================================================================================
     let isZnTuningRunning = false;
     let znResults = { ku: 0, tu: 0 };
@@ -796,7 +786,7 @@
     function applyZnResults() { const { ku, tu } = znResults; if (ku <= 0 || tu <= 0) return; const kp = 0.6 * ku; const kd = kp * tu / 8; isApplyingConfig = true; document.getElementById('balanceKpInput').value = kp.toFixed(4); document.getElementById('balanceKiInput').value = 0.0; document.getElementById('balanceKdInput').value = kd.toFixed(4); isApplyingConfig = false; document.getElementById('balanceKpInput').dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('balanceKiInput').dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true })); addLogMessage('[UI] Zastosowano sugerowane wartosci Kp i Kd. Ki ustawiono na 0.', 'info'); }
     
     // =======================================================================================
-    // === SEKCJA STROJENIA KROK 2: OPTYMALIZACJA I TESTY - NOWY I ZMODYFIKOWANY KOD ===
+    // === SEKCJA STROJENIA KROK 2: OPTYMALIZACJA I TESTY ===
     // =======================================================================================
 
     let genetic;
@@ -812,7 +802,7 @@
         radios.forEach(radio => radio.addEventListener('change', renderAutotestOptions));
 
         const actionBtn = document.getElementById('autotestActionBtn');
-        actionBtn.addEventListener('click', () => {
+        actionBtn.onclick = () => { // Uzywamy onclick, aby latwo nadpisac funkcjonalnosc
             const selectedTest = document.querySelector('input[name="autotest-type"]:checked').value;
             if (selectedTest === 'balance') {
                 startGeneticOptimization();
@@ -821,19 +811,19 @@
             } else if (selectedTest === 'speed') {
                 runSpeedTest();
             }
-        });
+        };
 
         const pauseResumeBtn = document.getElementById('ga_pause_resume_btn');
         pauseResumeBtn.addEventListener('click', () => {
             isGeneticPaused = !isGeneticPaused;
             if (isGeneticPaused) {
                 pauseResumeBtn.textContent = 'Wznow Optymalizacje';
-                pauseResumeBtn.style.backgroundColor = '#a2f279'; // zielony
+                pauseResumeBtn.style.backgroundColor = '#a2f279';
                 document.getElementById('statusStateText').textContent = 'Pauza';
                 addLogMessage('[Genetic] Optymalizacja wstrzymana przez uzytkownika.', 'warn');
             } else {
                 pauseResumeBtn.textContent = 'Pauzuj po Osobniku';
-                pauseResumeBtn.style.backgroundColor = '#f7b731'; // zolty
+                pauseResumeBtn.style.backgroundColor = '#f7b731';
                 document.getElementById('statusStateText').textContent = 'Optymalizacja...';
                 addLogMessage('[Genetic] Wznowiono optymalizacje.', 'info');
             }
@@ -893,10 +883,7 @@
             return;
         }
         addLogMessage(`[UI] Uruchamiam test odrzucania zaklocen z impulsem ${impulse}`, 'info');
-        sendBleMessage({
-            type: 'execute_position_test_impulse',
-            impulse_power: impulse
-        });
+        sendBleMessage({ type: 'execute_position_test_impulse', impulse_power: impulse });
     }
 
     function runSpeedTest() {
@@ -907,24 +894,15 @@
             return;
         }
         addLogMessage(`[UI] Uruchamiam test predkosci: dystans ${distance}cm, predkosc ${speed}cm/s`, 'info');
-        sendBleMessage({
-            type: 'execute_speed_test_run',
-            distance_cm: distance,
-            speed_cmps: speed
-        });
+        sendBleMessage({ type: 'execute_speed_test_run', distance_cm: distance, speed_cmps: speed });
     }
 
     function updateWeightsBudget() {
         const budgetEl = document.getElementById('weights-budget');
         const sum = Array.from(document.querySelectorAll('.weight-input')).reduce((acc, input) => acc + parseFloat(input.value), 0);
         budgetEl.textContent = sum.toFixed(1);
-        if (Math.abs(sum - 10.0) > 0.01) {
-            budgetEl.classList.add('invalid');
-            budgetEl.classList.remove('valid');
-        } else {
-            budgetEl.classList.remove('invalid');
-            budgetEl.classList.add('valid');
-        }
+        budgetEl.classList.toggle('invalid', Math.abs(sum - 10.0) > 0.01);
+        budgetEl.classList.toggle('valid', Math.abs(sum - 10.0) <= 0.01);
     }
 
     async function startGeneticOptimization() {
@@ -953,14 +931,7 @@
         };
 
         genetic = Genetic.create();
-        
-        genetic.configure({
-            size: populationSize,
-            crossover: 0.4,
-            mutation: 0.3,
-            iterations: generations,
-            fittestAlwaysSurvives: true,
-        });
+        genetic.configure({ size: populationSize, crossover: 0.4, mutation: 0.3, iterations: generations, fittestAlwaysSurvives: true });
 
         genetic.Genotype = (function() {
             function Genotype(kp, kd, filter) {
@@ -1126,6 +1097,7 @@
             applyPhenotype(fittest);
             renderAutotestOptions();
             actionBtn.onclick = null;
+            setupAutoTestEventListeners();
         };
     }
 
@@ -1140,7 +1112,10 @@
         document.getElementById('statusStateText').textContent = 'Anulowano';
         document.getElementById('ga-controls-running').style.display = 'none';
         document.getElementById('ga-controls-standard').style.display = 'block';
-        document.getElementById('autotestActionBtn').textContent = 'Rozpocznij Optymalizacje';
+        const actionBtn = document.getElementById('autotestActionBtn');
+        actionBtn.textContent = 'Rozpocznij Optymalizacje';
+        actionBtn.onclick = null;
+        setupAutoTestEventListeners();
     }
 
     function applyPhenotype(phenotype) {
