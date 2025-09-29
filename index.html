@@ -301,7 +301,7 @@
                 <button class="accordion-header" onclick="toggleAccordion(this)">6. Kalibracja PWM Silnikow</button>
                 <div class="accordion-content"> 
                     <div class="pwm-info"> <strong>Info:</strong> Uzyj przycisku <strong>"Auto"</strong>, aby automatycznie znalezc prog startowy silnika, lub <strong>"Testuj"</strong>, aby sprawdzic recznie wpisana wartosc. <strong>Wazne:</strong> Przed testem podnies robota, aby kola mogly sie swobodnie krecic! </div> 
-                     <div class="setting-container"> <label for="pwmTuneStartInput">Rozpocznij auto-szukanie od PWM</label> <div class="numeric-input-wrapper"> <button id="pwmTuneStartMinus">-</button> <input type="number" id="pwmTuneStartInput" min="1" max="800" step="10" value="600"> <button id="pwmTuneStartPlus">+</button> </div> </div> <hr style="border-color: #4a4f58; margin: 15px 0;">
+                     <div class="setting-container"> <label for="pwmTuneStartInput">Rozpocznij auto-szukanie od PWM</label> <div class="numeric-input-wrapper"> <button id="pwmTuneStartMinus">-</button> <input type="number" id="pwmTuneStartInput" min="1" max="800" step="1" value="600"> <button id="pwmTuneStartPlus">+</button> </div> </div> <hr style="border-color: #4a4f58; margin: 15px 0;">
                     <div class="manual-tune-row" data-motor="left" data-direction="fwd"> <div class="pwm-input-row"> <label>Lewy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftFwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div> 
                     <div class="manual-tune-row" data-motor="left" data-direction="bwd"> <div class="pwm-input-row"> <label>Lewy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftBwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div> 
                     <div class="manual-tune-row" data-motor="right" data-direction="fwd"> <div class="pwm-input-row"> <label>Prawy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightFwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div> 
@@ -358,28 +358,19 @@
                         <input type="radio" id="test-balance" name="autotest-type" value="balance">
                         <label for="test-balance">1. Optymalizuj Balans</label>
                     </div>
-                    <div class="radio-selector-item">
-                        <input type="radio" id="test-linear" name="autotest-type" value="linear">
-                        <label for="test-linear">2. Optymalizuj Jazde Liniowa</label>
-                    </div>
-                    <div class="radio-selector-item">
-                        <input type="radio" id="test-turn" name="autotest-type" value="turn">
-                        <label for="test-turn">3. Optymalizuj Obrot i Kurs</label>
-                    </div>
-                     <div class="radio-selector-item">
-                        <input type="radio" id="test-square" name="autotest-type" value="square_validation">
-                        <label for="test-square">4. Walidacja: Test Kwadratu</label>
-                    </div>
                 </div>
 
-                <div id="autotestOptions" style="margin-top: 15px;"></div>
+                <div id="autotestOptions" style="margin-top: 15px;">
+                    <div class="setting-container"><label for="at_cycles">Liczba cykli optymalizacji:</label><input id="at_cycles" type="number" value="30" min="5" max="100" style="width:90px;"></div>
+                    <div class="setting-container"><label for="at_duration">Czas trwania cyklu (s):</label><input id="at_duration" type="number" value="4" min="2" max="10" style="width:90px;"></div>
+                </div>
                 <hr style="border-color: #4a4f58; margin: 15px 0;">
         
                 <div id="autotestStatusPanel">
                     <h5>Status Sesji Optymalizacji</h5>
                     <div class="info-grid">
-                        <strong>Testowane Parametry:</strong> <span id="statusTestedParams">---</span>
-                        <strong>Najlepsze Znalezione:</strong> <span id="statusBestParams" style="color: #61dafb;">---</span>
+                        <strong>Temperatura:</strong> <span id="statusTemperature">---</span>
+                        <strong>Prawdopodob. Skoku:</strong> <span id="statusJumpChance">---</span>
                         <strong>Najlepszy Wynik:</strong> <span id="statusBestScore" style="font-weight: bold; color: #a2f279;">---</span>
                         <strong>Postep:</strong> 
                         <div>
@@ -389,16 +380,8 @@
                         <strong>Status:</strong> <span id="statusStateText" style="font-weight: bold;">Bezczynny</span>
                     </div>
                 </div>
-                
-                <div id="validationResultPanel">
-                    <h5>Wynik Walidacji Kwadratu</h5>
-                    <p><strong>Blad Pozycji Koncowej:</strong> <span id="validationPosError">---</span> cm</p>
-                    <p><strong>Blad Kursu Koncowego:</strong> <span id="validationYawError">---</span> st.</p>
-                    <hr style="border-color: #4a4f58; margin: 10px 0;">
-                    <p id="validationSuggestion" style="font-style: italic;">---</p>
-                </div>
-        
-                <button id="autotestActionBtn" style="width:100%; margin-top:15px;" disabled>Wybierz test, aby rozpoczac</button>
+                        
+                <button id="autotestActionBtn" style="width:100%; margin-top:15px;">Rozpocznij Optymalizacje Balansu</button>
                 <button id="autotestCancelBtn" style="width:100%; margin-top:10px; background-color:#ff6347; display:none;">Anuluj Sesje Optymalizacji</button>
             </div>
         </div>
@@ -415,7 +398,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 5.2 (UI dla PID) - Poprawiona struktura kart, ulepszone strojenie
+    // WERSJA 5.2 (UI dla PID) - Finalna z inteligentna optymalizacja
     // =======================================================================================
     let isApplyingConfig = false;
     let lastKnownRobotState = 'IDLE';
@@ -519,10 +502,10 @@
     const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
     function addLogMessage(message, level = 'info') { const logHistory = document.getElementById('log-history'); if (!logHistory) return; const timestamp = new Date().toLocaleTimeString(); let color = '#fff'; if (level === 'error') color = '#ff6347'; else if (level === 'warn') color = '#f7b731'; else if (level === 'success') color = '#a2f279'; const logEntry = document.createElement('div'); logEntry.style.color = color; logEntry.textContent = `[${timestamp}] ${message}`; logHistory.prepend(logEntry); while (logHistory.children.length > 200) { logHistory.removeChild(logHistory.lastChild); } }
     function clearLogs() { document.getElementById('log-history').innerHTML = ''; }
-    function toggleAccordion(header) { const content = header.nextElementSibling; header.classList.toggle('active'); if (content.style.maxHeight && content.style.maxHeight !== '0px') { content.style.maxHeight = '0px'; } else { content.style.maxHeight = content.scrollHeight + "px"; } }
+    function toggleAccordion(header) { const content = header.nextElementSibling; header.classList.toggle('active'); if (content.style.maxHeight && content.style.maxHeight !== '0px') { content.style.maxHeight = '0px'; content.style.padding = '0px 15px'; } else { content.style.maxHeight = content.scrollHeight + "px"; content.style.padding = '15px'; } }
     function updateAccordionHeight(content) { if (content && content.style.maxHeight !== '0px') { content.style.maxHeight = content.scrollHeight + 'px'; } }
     
-    async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono! Zadam konfiguracji...', 'success'); setTimeout(() => { sendBleMessage({ type: 'request_full_config' }); }, 500); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
+    async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono!', 'success'); setTimeout(() => { addLogMessage('[UI] Automatycznie synchronizuje konfiguracje...', 'info'); sendBleMessage({ type: 'request_full_config' }); }, 500); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
     function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; bleMessageQueue = []; isSendingBleMessage = false; }
     
     function handleBleNotification(event) {
@@ -616,11 +599,6 @@
                     }
                 }
                 break;
-            case 'validation_result':
-                 if(tuningSession && tuningSession.testType === 'square_validation') {
-                    tuningSession.processValidationResult(data);
-                 }
-                 break;
             case 'zn_tuning_result':
                 handleZnTuningResult(data.ku, data.tu);
                 break;
@@ -872,17 +850,11 @@
     const testConfigurations = {
         'balance': {
             label: 'Optymalizuj Balans',
-            paramsToTune: { kp_b: { id: 'balanceKpInput', step: 5.0 }, kd_b: { id: 'balanceKdInput', step: 0.2 } }
-        },
-        'linear': {
-            label: 'Optymalizuj Jazde Liniowa',
-            paramsToTune: { kp_s: { id: 'speedKpInput', step: 0.005 }, kp_p: { id: 'positionKpInput', step: 0.2 }, kd_p: { id: 'positionKdInput', step: 0.1 } }
-        },
-        'turn': {
-            label: 'Optymalizuj Obrot i Kurs',
-            paramsToTune: { kp_r: { id: 'rotationKpInput', step: 0.1 }, kd_r: { id: 'rotationKdInput', step: 0.1 }, kp_h: { id: 'headingKpInput', step: 0.1 } }
-        },
-        'square_validation': { label: 'Walidacja: Test Kwadratu', paramsToTune: {} }
+            paramsToTune: { 
+                kp_b: { id: 'balanceKpInput', range: 0.3 }, // Zmieniaj o +/- 30%
+                kd_b: { id: 'balanceKdInput', range: 0.3 } 
+            }
+        }
     };
     
     class TuningSession {
@@ -899,15 +871,12 @@
             this.totalCycles = options.totalCycles;
             this.bestScore = -1.0;
             this.bestParams = {};
+            this.currentParams = {};
             this.safeParams = {};
-            this.testParams = {};
-            this.paramIndex = 0;
-            this.lastChange = 1;
             this.cycleTimeout = null;
-            this.stepSizes = {};
-            this.stagnationCounter = 0;
-            this.initialStepMultiplier = 0.1; 
-            this.minStepMultiplier = 0.01;
+            
+            this.temperature = 1.0;
+            this.coolingRate = 0.95;
         }
 
         recordTelemetry(data) { if (this.isCollecting && data.type === 'telemetry') this.telemetryBuffer.push(data); }
@@ -918,99 +887,83 @@
             for(const key in this.paramsToTune) {
                 const inputId = this.paramsToTune[key].id;
                 this.safeParams[key] = parseFloat(document.getElementById(inputId).value);
-                this.stepSizes[key] = this.initialStepMultiplier;
             }
             this.bestParams = { ...this.safeParams };
+            this.currentParams = { ...this.safeParams };
             this.currentCycle = 1;
-            this.paramIndex = 0;
-            this.stagnationCounter = 0;
-            this.prepareNextCycle();
-        }
+            this.temperature = 1.0;
 
-        prepareNextCycle() {
-            this.state = 'ready';
-            this.testParams = this.generateNextParams();
-            updateAutoTestUI(this);
+            this.runCycle();
         }
 
         runCycle() {
-            if (this.state !== 'ready') return;
+            if (this.currentCycle > this.totalCycles) {
+                this.state = 'finished';
+                updateAutoTestUI(this);
+                return;
+            }
+
             this.state = 'testing';
             this.isCollecting = true;
             this.telemetryBuffer = [];
+            
+            this.currentParams = this.generateNextParams();
             updateAutoTestUI(this);
 
             this.cycleTimeout = setTimeout(() => {
                 if (this.isCollecting) {
-                    addLogMessage('[AutoTest] Timeout cyklu! Wymuszam zakonczenie i analize.', 'warn');
-                    this.finishCycle();
+                    addLogMessage('[AutoTest] Timeout cyklu! Anuluje probe.', 'warn');
+                    this.finishCycle(true); // true = failed cycle
                 }
-            }, 15000);
+            }, (this.options.cycleDuration + 2) * 1000);
 
-            Object.entries(this.testParams).forEach(([key, value]) => {
+            Object.entries(this.currentParams).forEach(([key, value]) => {
                 sendBleMessage({ type: 'set_param', key: key, value: value });
             });
             sendBleMessage({ type: 'reset_pids' }); 
             
-            addLogMessage(`[AutoTest] Cykl ${this.currentCycle}/${this.totalCycles}. Testuje: ${JSON.stringify(this.testParams)}`, 'info');
-
             setTimeout(() => {
-                if (this.testType === 'balance') {
-                    setTimeout(() => this.finishCycle(), this.options.cycleDuration * 1000);
-                } else if (this.testType === 'linear') {
-                    sendBleMessage({ type: 'execute_move', distance_cm: this.options.distance });
-                } else if (this.testType === 'turn') {
-                    sendBleMessage({ type: 'execute_rotate', angle_deg: 90 });
-                } else if (this.testType === 'square_validation') {
-                    sendBleMessage({ type: 'execute_move', distance_cm: 20 });
-                }
+                 setTimeout(() => this.finishCycle(false), this.options.cycleDuration * 1000);
             }, 300);
         }
 
-        finishCycle() {
+        finishCycle(failed = false) {
             if (!this.isCollecting) return;
             clearTimeout(this.cycleTimeout);
             this.isCollecting = false;
             this.state = 'analyzing';
             updateAutoTestUI(this);
-            
-            Object.entries(this.safeParams).forEach(([key, value]) => {
-                 sendBleMessage({ type: 'set_param', key: key, value: value });
-            });
+
+            if (failed) {
+                 this.temperature *= this.coolingRate;
+                 this.currentCycle++;
+                 setTimeout(() => this.runCycle(), 200);
+                 return;
+            }
             
             const { score, components } = this.calculateBalanceFitness();
-            addLogMessage(`[AutoTest] Wynik: ${score.toFixed(4)} (Stabilnosc: ${components.stability.toFixed(2)}, Spokoj: ${components.stillness.toFixed(2)}, Przekroczenie: ${components.overshoot.toFixed(2)}, Wysilek: ${components.effort.toFixed(2)})`, 'success');
-            
-            const currentParamKey = this.paramKeys[this.paramIndex];
+            let logMsg = `[AutoTest] Wynik: ${score.toFixed(4)} (S:${components.stability.toFixed(2)}, C:${components.stillness.toFixed(2)}, P:${components.overshoot.toFixed(2)}, W:${components.effort.toFixed(2)})`;
 
             if (score > this.bestScore) {
                 this.bestScore = score;
-                this.bestParams = { ...this.testParams };
-                this.stagnationCounter = 0;
-                this.stepSizes[currentParamKey] = Math.min(this.initialStepMultiplier, this.stepSizes[currentParamKey] * 1.2); 
-                this.lastChange = 1;
-                this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length;
+                this.bestParams = { ...this.currentParams };
+                logMsg += " - NOWY NAJLEPSZY!";
             } else {
-                this.stagnationCounter++;
-                this.stepSizes[currentParamKey] = Math.max(this.minStepMultiplier, this.stepSizes[currentParamKey] * 0.7);
-                this.lastChange *= -1;
-                if (this.lastChange === 1) {
-                     this.paramIndex = (this.paramIndex + 1) % this.paramKeys.length;
-                }
-                
-                if (this.stagnationCounter >= 3) {
-                    this.paramIndex = Math.floor(Math.random() * this.paramKeys.length);
-                    this.stagnationCounter = 0;
+                const delta = score - this.bestScore;
+                const acceptanceProb = Math.exp(delta / this.temperature);
+                if (Math.random() < acceptanceProb) {
+                    this.bestScore = score;
+                    this.bestParams = { ...this.currentParams };
+                    logMsg += ` - AKCEPTUJE GORSZY (P=${acceptanceProb.toFixed(2)})`;
+                } else {
+                    logMsg += " - ODRZUCONO";
                 }
             }
-
-            if (this.currentCycle >= this.totalCycles) {
-                this.state = 'finished';
-                updateAutoTestUI(this);
-            } else {
-                this.currentCycle++;
-                setTimeout(() => this.prepareNextCycle(), 200);
-            }
+            addLogMessage(logMsg, 'success');
+            
+            this.temperature *= this.coolingRate;
+            this.currentCycle++;
+            setTimeout(() => this.runCycle(), 200);
         }
         
         cancel() {
@@ -1024,23 +977,22 @@
         }
 
         generateNextParams() {
-            if (this.paramKeys.length === 0) return {};
             let nextParams = { ...this.bestParams };
-            const currentParamKey = this.paramKeys[this.paramIndex];
-            const baseValue = this.bestParams[currentParamKey];
-            const step = Math.max(Math.abs(baseValue * this.stepSizes[currentParamKey]), this.paramsToTune[currentParamKey].step) * this.lastChange;
+            const paramToChange = this.paramKeys[Math.floor(Math.random() * this.paramKeys.length)];
+            const baseValue = nextParams[paramToChange];
+            const range = this.config.paramsToTune[paramToChange].range * baseValue * this.temperature;
+            const change = (Math.random() * 2 - 1) * range;
 
-            nextParams[currentParamKey] += step;
-            if (nextParams[currentParamKey] < 0 && !['kd_b', 'kd_p', 'kd_r', 'kd_h'].includes(currentParamKey)) nextParams[currentParamKey] = 0;
+            nextParams[paramToChange] += change;
+            if (nextParams[paramToChange] < 0) nextParams[paramToChange] = 0;
             return nextParams;
         }
 
         calculateBalanceFitness() {
-            if (this.telemetryBuffer.length < 10) return { score: 0.0, components: {} };
-
+            if (this.telemetryBuffer.length < 10) return { score: 0.0, components: { stability:0, stillness:0, overshoot:0, effort:0 } };
             const { telemetryBuffer: buffer } = this;
             let sumAbsPitch = 0, maxAbsPitch = 0, sumAbsOutputChange = 0, stillSamples = 0;
-            const stillnessThreshold = 1023 * 0.05; // 5% of max PWM
+            const stillnessThreshold = 1023 * 0.05;
 
             buffer.forEach((d, i) => {
                 const pitch = d.pitch || 0;
@@ -1059,17 +1011,11 @@
             const scoreOvershoot = Math.max(0, 1 - (maxAbsPitch / 5.0)); 
             const scoreStillness = stillSamples / count;
             const scoreEffort = Math.max(0, 1 - (avgAbsOutputChange / 50));
-
             const finalScore = (scoreStability * 0.35) + (scoreStillness * 0.35) + (scoreOvershoot * 0.2) + (scoreEffort * 0.1);
             
             return {
                 score: finalScore,
-                components: {
-                    stability: scoreStability,
-                    stillness: scoreStillness,
-                    overshoot: scoreOvershoot,
-                    effort: scoreEffort
-                }
+                components: { stability: scoreStability, stillness: scoreStillness, overshoot: scoreOvershoot, effort: scoreEffort }
             };
         }
         
@@ -1085,54 +1031,17 @@
     }
 
     function setupAutoTestEventListeners() {
-        const optionsDiv = document.getElementById('autotestOptions');
         const actionBtn = document.getElementById('autotestActionBtn');
         const cancelBtn = document.getElementById('autotestCancelBtn');
-        const radioButtons = document.querySelectorAll('input[name="autotest-type"]');
-
-        radioButtons.forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                const testType = e.target.value;
-                optionsDiv.innerHTML = '';
-                if (tuningSession) tuningSession.cancel();
-
-                actionBtn.disabled = false;
-                actionBtn.textContent = 'Rozpocznij Sesje Optymalizacji';
-                document.getElementById('validationResultPanel').style.display = 'none';
-
-                if (testType === 'balance') {
-                    optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="20" min="2" max="100" style="width:90px;"></div><div class="setting-container"><label for="at_duration">Czas trwania cyklu (s):</label><input id="at_duration" type="number" value="5" min="3" max="20" style="width:90px;"></div>`;
-                } else if (testType === 'linear') {
-                     optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="20" min="2" max="100" style="width:90px;"></div><div class="setting-container"><label for="at_distance">Dystans (cm):</label><input id="at_distance" type="number" value="20" min="10" max="100" style="width:90px;"></div>`;
-                } else if (testType === 'turn') {
-                     optionsDiv.innerHTML = `<div class="setting-container"><label for="at_cycles">Liczba cykli:</label><input id="at_cycles" type="number" value="30" min="2" max="100" style="width:90px;"></div>`;
-                } else if (testType === 'square_validation') {
-                     optionsDiv.innerHTML = `<p>Test walidacyjny uruchomi sekwencje jazdy po kwadracie o boku 20cm.</p>`;
-                     actionBtn.textContent = 'Uruchom Walidacje';
-                }
-                updateAccordionHeight(optionsDiv.closest('.accordion-content'));
-            });
-        });
 
         actionBtn.addEventListener('click', () => {
             if (!tuningSession || tuningSession.state === 'idle') {
-                const selectedRadio = document.querySelector('input[name="autotest-type"]:checked');
-                if (!selectedRadio) return;
-                
-                const testType = selectedRadio.value;
-                const config = testConfigurations[testType];
-                if(!config) return;
-
                 let options = {};
-                if(document.getElementById('at_cycles')) options.totalCycles = parseInt(document.getElementById('at_cycles').value);
-                if(document.getElementById('at_duration')) options.cycleDuration = parseInt(document.getElementById('at_duration').value);
-                if(document.getElementById('at_distance')) options.distance = parseInt(document.getElementById('at_distance').value);
-                
-                tuningSession = new TuningSession(testType, options);
-                tuningSession.start();
+                options.totalCycles = parseInt(document.getElementById('at_cycles').value);
+                options.cycleDuration = parseInt(document.getElementById('at_duration').value);
 
-            } else if (tuningSession.state === 'ready') {
-                tuningSession.runCycle();
+                tuningSession = new TuningSession('balance', options);
+                tuningSession.start();
             } else if (tuningSession.state === 'finished') {
                 tuningSession.applyBestResults();
             }
@@ -1146,30 +1055,23 @@
     function updateAutoTestUI(session) {
         const actionBtn = document.getElementById('autotestActionBtn');
         const cancelBtn = document.getElementById('autotestCancelBtn');
-        const statusParams = document.getElementById('statusTestedParams');
-        const statusBestParams = document.getElementById('statusBestParams');
+        const statusTemp = document.getElementById('statusTemperature');
+        const statusJump = document.getElementById('statusJumpChance');
         const statusBestScore = document.getElementById('statusBestScore');
         const statusBar = document.getElementById('statusProgressBar');
         const statusProgressText = document.getElementById('statusProgressText');
         const statusStateText = document.getElementById('statusStateText');
 
         if (!session || session.state === 'idle') {
-            statusParams.textContent = '---';
-            statusBestParams.textContent = '---';
+            statusTemp.textContent = '---';
+            statusJump.textContent = '---';
             statusBestScore.textContent = '---';
             statusBar.value = 0;
-            statusProgressText.textContent = 'Wybierz test i rozpocznij...';
+            statusProgressText.textContent = 'Gotowy do rozpoczecia...';
             statusStateText.textContent = 'Bezczynny';
-            const selectedRadio = document.querySelector('input[name="autotest-type"]:checked');
-            if(selectedRadio) {
-                actionBtn.textContent = selectedRadio.value === 'square_validation' ? 'Uruchom Walidacje' : 'Rozpocznij Sesje Optymalizacji';
-                actionBtn.disabled = false;
-            } else {
-                 actionBtn.textContent = 'Wybierz test, aby rozpoczac';
-                 actionBtn.disabled = true;
-            }
+            actionBtn.textContent = 'Rozpocznij Optymalizacje Balansu';
+            actionBtn.disabled = false;
             cancelBtn.style.display = 'none';
-            document.getElementById('validationResultPanel').style.display = 'none';
             return;
         }
 
@@ -1178,42 +1080,27 @@
         statusBar.value = session.currentCycle -1;
         
         statusBestScore.textContent = session.bestScore < 0 ? '---' : session.bestScore.toFixed(4);
+        statusTemp.textContent = session.temperature.toFixed(3);
         
-        let bestParamsText = Object.entries(session.bestParams).map(([key, val]) => `${key}: ${val.toFixed(3)}`).join(', ');
-        statusBestParams.textContent = bestParamsText;
+        const jumpChance = Math.exp(-1 / session.temperature) * 100;
+        statusJump.textContent = `${jumpChance.toFixed(1)} %`;
+        
+        statusProgressText.textContent = `Cykl ${session.currentCycle}/${session.totalCycles}`;
 
         switch (session.state) {
-            case 'ready':
-                let paramsText = Object.entries(session.testParams).map(([key, val]) => `${key}: ${val.toFixed(3)}`).join(', ');
-                statusParams.textContent = paramsText;
-                statusProgressText.textContent = `Cykl ${session.currentCycle}/${session.totalCycles}`;
-                statusStateText.textContent = 'Gotowy do testu';
-                actionBtn.textContent = `Uruchom Cykl ${session.currentCycle}/${session.totalCycles}`;
-                actionBtn.disabled = false;
-                break;
             case 'testing':
                 statusStateText.textContent = 'Testowanie...';
-                actionBtn.textContent = 'Testowanie...';
                 actionBtn.disabled = true;
                 break;
             case 'analyzing':
                 statusStateText.textContent = 'Analiza danych...';
-                actionBtn.textContent = 'Analiza danych...';
                 actionBtn.disabled = true;
                 break;
             case 'finished':
                 statusBar.value = session.totalCycles;
-                if(session.testType !== 'square_validation') {
-                    statusParams.textContent = "Zakonczono";
-                    statusProgressText.textContent = `Zakonczono (${session.totalCycles}/${session.totalCycles})`;
-                    statusStateText.textContent = 'Sesja zakonczona!';
-                    actionBtn.textContent = 'Zastosuj najlepsze parametry';
-                    actionBtn.disabled = false;
-                } else {
-                    statusStateText.textContent = 'Walidacja zakonczona.';
-                    actionBtn.textContent = 'Uruchom ponownie';
-                    actionBtn.disabled = false;
-                }
+                statusStateText.textContent = 'Sesja zakonczona!';
+                actionBtn.textContent = 'Zastosuj najlepsze parametry';
+                actionBtn.disabled = false;
                 break;
         }
     }
