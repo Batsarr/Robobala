@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v8.5 (Poprawki GA i UI)</title>
+    <title>Robot PID - Panel Sterowania v8.6 (Hardened GA)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/genetic-js/lib/genetic.js"></script>
     
@@ -481,7 +481,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 8.5 (Poprawki GA i UI)
+    // WERSJA 8.6 (Hardened GA)
     // =======================================================================================
     
     let isApplyingConfig = false;
@@ -805,10 +805,12 @@
         radios.forEach(radio => radio.addEventListener('change', renderAutotestOptions));
 
         const actionBtn = document.getElementById('autotestActionBtn');
-        actionBtn.onclick = () => { // Uzywamy onclick, aby latwo nadpisac funkcjonalnosc
+        actionBtn.onclick = () => {
             const selectedTest = document.querySelector('input[name="autotest-type"]:checked').value;
             if (selectedTest === 'balance') {
-                startGeneticOptimization();
+                if (confirm("UWAGA! Optymalizacja bedzie testowac parametry, ktore moga byc niestabilne. Upewnij sie, ze robot ma duzo wolnego miejsca i jestes gotow go asekurowac. Kontynuowac?")) {
+                    startGeneticOptimization();
+                }
             } else if (selectedTest === 'position') {
                 runPositionTest();
             } else if (selectedTest === 'speed') {
@@ -909,15 +911,28 @@
     }
 
     async function startGeneticOptimization() {
-        if (isGeneticOptimizationRunning) return;
+        addLogMessage('[Genetic] Inicjowanie procedury optymalizacji...', 'info');
+        if (isGeneticOptimizationRunning) {
+            addLogMessage('[Genetic] Blad: Optymalizacja jest juz w toku.', 'warn');
+            return;
+        }
+        
         if (lastKnownRobotState !== 'BALANSUJE' && lastKnownRobotState !== 'TRZYMA_POZYCJE') {
-            addLogMessage('[UI] BLAD: Aby rozpoczac optymalizacje, robot musi byc w stanie balansu.', 'error');
+            addLogMessage(`[Genetic] Blad: Robot musi byc w stanie 'BALANSUJE', a jest w '${lastKnownRobotState}'.`, 'error');
             return;
         }
 
-        if (!confirm("UWAGA! Optymalizacja bedzie testowac parametry, ktore moga byc niestabilne. Upewnij sie, ze robot ma duzo wolnego miejsca i jestes gotow go asekurowac. Kontynuowac?")) {
+        const kp_b = parseFloat(document.getElementById('balanceKpInput').value);
+        const kd_b = parseFloat(document.getElementById('balanceKdInput').value);
+        const filter_alpha = parseFloat(document.getElementById('balanceFilterAlphaInput').value) / 100;
+
+        if (isNaN(kp_b) || isNaN(kd_b) || isNaN(filter_alpha)) {
+            addLogMessage('[Genetic] BLAD KRYTYCZNY: Wartosci Kp, Kd lub filtra w formularzu sa nieprawidlowe (nie sa liczba). Popraw je i sprobuj ponownie.', 'error');
             return;
         }
+
+        safeStartParams = { kp_b, kd_b, balance_pid_derivative_filter_alpha: filter_alpha };
+        addLogMessage(`[Genetic] Zapisano bezpieczne parametry startowe: Kp=${safeStartParams.kp_b}, Kd=${safeStartParams.kd_b}, Filtr=${safeStartParams.balance_pid_derivative_filter_alpha.toFixed(2)}`, 'info');
 
         isGeneticOptimizationRunning = true;
         isGeneticPaused = false;
@@ -927,33 +942,21 @@
         const generations = parseInt(document.getElementById('gaGenerationsInput').value);
         const populationSize = parseInt(document.getElementById('gaPopulationInput').value);
         
-        safeStartParams = {
-            kp_b: parseFloat(document.getElementById('balanceKpInput').value),
-            kd_b: parseFloat(document.getElementById('balanceKdInput').value),
-            balance_pid_derivative_filter_alpha: parseFloat(document.getElementById('balanceFilterAlphaInput').value) / 100
-        };
-
         genetic = Genetic.create();
         genetic.configure({ size: populationSize, crossover: 0.4, mutation: 0.3, iterations: generations, fittestAlwaysSurvives: true });
 
         genetic.Genotype = (function() {
             function Genotype(kp, kd, filter) {
-                this.kp_b = kp !== undefined ? kp : Math.random() * (safeStartParams.kp_b * 1.5 - safeStartParams.kp_b * 0.5) + safeStartParams.kp_b * 0.5;
-                this.kd_b = kd !== undefined ? kd : Math.random() * (safeStartParams.kd_b * 1.5 - safeStartParams.kd_b * 0.5) + safeStartParams.kd_b * 0.5;
-                this.balance_pid_derivative_filter_alpha = filter !== undefined ? filter : Math.random() * (0.8 - 0.1) + 0.1;
+                this.kp_b = kp;
+                this.kd_b = kd;
+                this.balance_pid_derivative_filter_alpha = filter;
                 return this;
             }
-            Genotype.prototype.rand = function() { 
-                const kp_variation = safeStartParams.kp_b * 0.25;
-                const kd_variation = safeStartParams.kd_b * 0.25;
-                const filter_variation = 0.2;
-
-                const new_kp = safeStartParams.kp_b + (Math.random() - 0.5) * 2 * kp_variation;
-                const new_kd = safeStartParams.kd_b + (Math.random() - 0.5) * 2 * kd_variation;
-                const new_filter = safeStartParams.balance_pid_derivative_filter_alpha + (Math.random() - 0.5) * 2 * filter_variation;
-                
-                return new Genotype(new_kp, new_kd, new_filter);
+            
+            Genotype.prototype.clone = function() {
+                return new Genotype(this.kp_b, this.kd_b, this.balance_pid_derivative_filter_alpha);
             };
+
             Genotype.prototype.mutate = function(prob) {
                 if (Math.random() < prob) this.kp_b += (Math.random()-0.5) * 0.1 * this.kp_b;
                 if (Math.random() < prob) this.kd_b += (Math.random()-0.5) * 0.1 * this.kd_b;
@@ -963,6 +966,7 @@
                 this.balance_pid_derivative_filter_alpha = Math.max(0.01, Math.min(1.0, this.balance_pid_derivative_filter_alpha));
                 return this;
             };
+
             Genotype.prototype.mate = function(other) {
                 const kp_b = Math.random() < 0.5 ? this.kp_b : other.kp_b;
                 const kd_b = Math.random() < 0.5 ? this.kd_b : other.kd_b;
@@ -1034,7 +1038,7 @@
         const basePhenotype = new genetic.Genotype(safeStartParams.kp_b, safeStartParams.kd_b, safeStartParams.balance_pid_derivative_filter_alpha);
         population.push(basePhenotype);
         while (population.length < populationSize) {
-            population.push(basePhenotype.mutate(0.85));
+            population.push(basePhenotype.clone().mutate(0.85));
         }
         
         for (let i = 0; i < generations; i++) {
