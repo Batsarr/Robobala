@@ -1,1350 +1,1092 @@
-#include <Arduino.h>
-#include "freertos/FreeRTOS.h"
-#include <Wire.h>
-#include <EEPROM.h>
-#include <rom/crc.h>
-#include <ArduinoJson.h>
-#include "esp_system.h"
-#include <atomic>
-#include "driver/gpio.h"
-#include "driver/ledc.h" 
-#include "freertos/queue.h"
-#include "MPU6050_6Axis_MotionApps20.h" 
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEServer.h>
-#include <BLE2902.h>
-#include <math.h>
-#include <HardwareSerial.h>
-
-// =========================================================================
-// === SEKCJA KONFIGURACYJNA ===
-// =========================================================================
-
-// --- Konfiguracja Kamery Optical Flow ---
-#define CAMERA_RX_PIN 7
-#define CAMERA_TX_PIN 6 
-#define CAMERA_BAUD_RATE 57600
-HardwareSerial CameraSerial(1);
-
-// --- Definicje Pinow ---
-#define MPU_SDA 0
-#define MPU_SCL 1
-#define MPU_INT_PIN 10
-#define MOTOR_L_IN1 2
-#define MOTOR_L_IN2 3
-#define MOTOR_R_IN1 8
-#define MOTOR_R_IN2 9
-#define ENCODER_L_A 5
-#define ENCODER_L_B 4
-#define ENCODER_R_A 20
-#define ENCODER_R_B 21
-
-// --- Konfiguracja Sprzetowa ---
-#define PWM_FREQ 30000
-#define PWM_RESOLUTION 10
-#define PWM_MAX_VALUE 1023
-#define ENCODER_L_INVERTED true
-#define ENCODER_R_INVERTED false
-#define MOTOR_R_INVERT_LOGIC true
-#define ENCODER_DEBOUNCE_MICROS 400
-
-#define LEDC_CHANNEL_L_IN1 2
-#define LEDC_CHANNEL_L_IN2 3
-#define LEDC_CHANNEL_R_IN1 0
-#define LEDC_CHANNEL_R_IN2 1
-
-// --- Konfiguracja BLE ---
-#define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHARACTERISTIC_UUID_TX "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-#define CHARACTERISTIC_UUID_RX "beb5483e-36e1-4688-b7f5-ea07361b26a9"
-#define ROBOT_BLE_NAME "RoboBala" // nie zmieniac!!!!
-#define BLE_PACKET_MAX_SIZE 512
-#define BLE_TX_QUEUE_SIZE 20
-#define BLE_TX_DELAY_MS 25
-
-// --- Stale Systemowe i Bezpieczenstwa ---
-const unsigned long LOOP_INTERVAL_MICROS = 5000; 
-const TickType_t LOOP_INTERVAL_TICKS = pdMS_TO_TICKS(5);
-#define CRITICAL_ANGLE_LIMIT 60.0f
-#define CRITICAL_GYRO_LIMIT 350.0f
-const float ZERO_ADJUST_STEP = 0.05f;
-const unsigned long JOYSTICK_TIMEOUT = 100;
-#define TELEMETRY_INTERVAL_MS 100
-#define MAX_JSON_SIZE 2048
-#define SMALL_JSON_SIZE 512
-#define LIFT_DETECTION_THRESHOLD_G 0.3f
-#define LIFT_DETECTION_DURATION_MS 300
-
-// =========================================================================
-// === Konfiguracja Modulu Auto-Strojenia (Ziegler-Nichols) ===
-// =========================================================================
-#define ZN_KP_INCREASE_STEP 0.2f       
-#define ZN_OSC_AMPLITUDE_THRESHOLD 2.0f
-#define ZN_OSC_DETECTION_CYCLES 5        
-#define ZN_MEASUREMENT_SAMPLES 10      
-
-// --- Struktury ---
-struct PIDController {
-  float Kp = 0.0f, Ki = 0.0f, Kd = 0.0f;
-  float integral = 0.0f, prev_input = 0.0f;
-  float min_out = 0.0f, max_out = 0.0f, integral_limit = 0.0f;
-  float deadband = 0.0f;
-  float last_output = 0.0f;
-  float derivative_filter_alpha = 1.0f;
-  float filtered_derivative = 0.0f;
-  bool is_idle = false;
-
-  void configure(float p, float i, float d, float min, float max, float int_limit, float filter_alpha = 1.0f) {
-    Kp = p; Ki = i; Kd = d; min_out = min; max_out = max; integral_limit = int_limit; derivative_filter_alpha = filter_alpha;
-  }
-
-  void setIdle(bool idle) { 
-    if (idle && !is_idle) { 
-        filtered_derivative = 0.0f; 
-    } 
-    is_idle = idle; 
-  }
-
-  float compute(float setpoint, float input, float dt) {
-    if (dt <= 0) return last_output;
-    float error = setpoint - input;
-    if (abs(error) < deadband) { 
-        error = 0.0f; 
-    }
-    float p_out = Kp * error;
-    float d_out = 0.0f;
-    if (!is_idle) {
-      float raw_derivative = (input - prev_input) / dt;
-      filtered_derivative = (1.0f - derivative_filter_alpha) * filtered_derivative + derivative_filter_alpha * raw_derivative;
-      d_out = -Kd * filtered_derivative;
-    }
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Robot PID - Panel Sterowania v5.3 (Final)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    if (!is_idle) {
-      integral += error * dt;
-      integral = constrain(integral, -integral_limit, integral_limit);
-    }
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
+        h1 { color: #61dafb; font-size: 1.8em; }
+        h2 { color: #61dafb; font-size: 1.4em; margin-top: 0; margin-bottom: 15px; }
+        .main-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 15px; align-items: start; max-width: 1920px; margin: auto; }
+        .card { background-color: #3a3f47; border-radius: 8px; padding: 15px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+        .info-grid, .status-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px; text-align: left; font-size: 1em; margin-top: 10px; align-items: center;}
+        .info-grid strong, .status-grid strong { color: #a2f279; }
+        button { background-color: #61dafb; color: #282c34; border: none; padding: 8px 12px; border-radius: 5px; font-weight: bold; cursor: pointer; transition: background-color 0.3s, opacity 0.3s, box-shadow 0.2s; font-size: 0.9em; }
+        button:hover { background-color: #a2f279; }
+        button:disabled { background-color: #4a4f58; color: #888; cursor: not-allowed; opacity: 0.6; }
+        .gamepad-flash { box-shadow: 0 0 10px 3px #a2f279 !important; }
+        #emergencyStopBtn { background-color: #ff6347; color: white; width: 100%; margin-top: 15px; }
+        .control-row { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-top: 10px; }
+        .control-label { font-size: 1.1em; font-weight: bold; }
+        .switch { position: relative; display: inline-block; width: 50px; height: 28px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider.round { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ff6347; transition: .4s; border-radius: 28px; }
+        .slider.round:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #a2f279; }
+        input:checked + .slider:before { transform: translateX(22px); }
+        input[type="checkbox"].slider-checkbox + .slider { background-color: #4a4f58; }
+        input[type="checkbox"].slider-checkbox:checked + .slider { background-color: #a2f279; }
+        input:disabled + .slider { background-color: #4a4f58; cursor: not-allowed; }
+        fieldset { border: 1px solid #4a4f58; border-radius: 8px; margin-top: 15px; padding: 10px 15px; }
+        legend { color: #61dafb; font-weight: bold; padding: 0 10px; font-size: 1.1em; }
+        #joystickWrapper { position: relative; width: 180px; height: 180px; border-radius: 50%; background-color: #4a4f58; border: 3px solid #61dafb; margin: 15px auto; touch-action: none; }
+        #joystickCanvas { width: 100%; height: 100%; display: block; }
+        #chart-wrapper { position: relative; height: 320px; border-radius: 8px; overflow: hidden; background-color: #20232a; }
+        #log-history { text-align: left; height: 350px; overflow-y: auto; background-color: #20232a; padding: 10px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; }
+        .status-indicator { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+        .status-ok { background-color: #a2f279; }
+        .status-warn { background-color: #f7b731; }
+        .status-error { background-color: #ff6347; }
+        .status-disconnected { background-color: #888; }
+        #emergency-banner { display: none; background-color: #ff6347; color: white; padding: 10px; font-weight: bold; position: fixed; top: 0; left: 0; width: 100%; z-index: 1000; }
+        .angle-display { display: flex; align-items: center; justify-content: space-between; }
+        .angle-indicator-wrapper { position: relative; width: 34px; height: 34px; background-color: #20232a; border-radius: 50%; border: 1px solid #61dafb; }
+        .angle-indicator-needle { position: absolute; bottom: 50%; left: calc(50% - 1px); width: 2px; height: 50%; background-color: #ff6347; transform-origin: bottom center; transition: transform 0.1s linear; }
+        .chart-controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 10px; font-size: 0.9em; }
+        .chart-controls label { color: #fff; }
+        .setting-container { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin: 8px 0; }
+        .setting-container label { font-size: 1em; font-weight: bold; color: #a2f279; text-align: left; }
+        .numeric-input-wrapper { display: flex; align-items: center; flex-shrink: 0; }
+        .numeric-input-wrapper button { background-color: #4a4f58; color: #61dafb; padding: 4px 8px; font-size: 1em; line-height: 1; min-width: 30px; }
+        .numeric-input-wrapper input[type=number] { width: 90px; text-align: center; font-size: 1em; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 5px; margin: 0 4px; padding: 4px; -moz-appearance: textfield; }
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        .manual-tune-row { background-color: #2a2f35; padding: 10px; border-radius: 6px; margin-bottom: 12px; }
+        .pwm-input-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .pwm-input-row label { font-weight: bold; color: #a2f279; }
+        .pwm-button-row { display: flex; justify-content: flex-end; gap: 10px; }
+        .pwm-button-row button { flex-grow: 1; max-width: 100px; }
+        .test-btn { background-color: #a2f279; }
+        .stop-btn { background-color: #ff6347; }
+        .auto-btn { background-color: #f7b731; }
+        .trim-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+        .trim-controls span { font-weight: bold; }
+        .trim-controls button { min-width: 40px; font-size: 1.2em; }
+        .accordion-header { background-color: #4a4f58; color: #61dafb; cursor: pointer; padding: 12px 15px; border: none; text-align: left; outline: none; font-size: 1.1em; font-weight: bold; width: 100%; border-radius: 8px; margin-top: 5px; transition: background-color 0.3s; position: relative; }
+        .accordion-header:hover { background-color: #5a6068; }
+        .accordion-header.active { background-color: #61dafb; color: #282c34; border-bottom-left-radius: 0; border-bottom-right-radius: 0;}
+        .accordion-header::after { content: '+'; position: absolute; right: 15px; font-size: 1.4em; transition: transform 0.3s; }
+        .accordion-header.active::after { content: '-'; }
+        .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out, padding 0.2s ease-out; background-color: #3a3f47; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; padding: 0 15px; }
+        .accordion-content.active { padding: 15px; }
+        .pwm-info { background-color: #20232a; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #61dafb; }
+        .pwm-info strong { color: #a2f279; }
+        .parameter-group { background-color: #20232a; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
+        .parameter-group h5 { color: #61dafb; margin: 0 0 8px 0; font-size: 1.1em; }
+        .help-icon { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background-color: #61dafb; color: #282c34; font-size: 12px; font-weight: bold; text-align: center; line-height: 16px; margin-left: 8px; cursor: pointer; user-select: none; }
+        .help-text { background-color: #20232a; color: #fff; border-radius: 6px; padding: 10px; border: 1px solid #61dafb; margin-top: 8px; text-align: left; font-size: 0.9em; line-height: 1.4; width: 100%; box-sizing: border-box; max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease-out; padding-top: 0; padding-bottom: 0; grid-column: 1 / -1; }
+        .help-text.visible { max-height: 200px; padding-top: 10px; padding-bottom: 10px; }
+        .modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); z-index: 2000; display: none; justify-content: center; align-items: center; }
+        .modal-content { background-color: #3a3f47; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        .mapping-row { display: grid; grid-template-columns: 1fr 100px 100px; gap: 10px; align-items: center; margin-bottom: 10px; }
+        .mapping-label { text-align: left; font-weight: bold; }
+        .mapping-button { font-size: 0.8em; padding: 6px 8px; }
+        .mapping-display { background-color: #20232a; padding: 6px; border-radius: 4px; font-family: monospace; }
+        .preset-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        #applySelectedPresetBtn { background-color: #a2f279; }
+        #saveCurrentAsPresetBtn { background-color: #61dafb; }
+        #autotestStatusPanel { background-color: #20232a; padding: 12px; border-radius: 6px; }
+        #autotestStatusPanel h5 { color: #61dafb; margin: 0 0 10px 0; font-size: 1.1em; text-align: left; }
+        #statusProgressBar { width: 100%; -webkit-appearance: none; appearance: none; height: 8px; }
+        #statusProgressBar::-webkit-progress-bar { background-color: #4a4f58; border-radius: 4px; }
+        #statusProgressBar::-webkit-progress-value { background-color: #a2f279; border-radius: 4px; transition: width 0.3s ease; }
+        .dpad-container { display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; gap: 5px; max-width: 150px; margin: 15px auto; }
+        .dpad-btn { background-color: #61dafb; color: #282c34; border-radius: 5px; font-size: 2em; line-height: 1; padding: 5px; cursor: pointer; border: none; }
+        .dpad-btn:hover { background-color: #a2f279; }
+        #dpad-up { grid-column: 2; grid-row: 1; }
+        #dpad-left { grid-column: 1; grid-row: 2; }
+        #dpad-right { grid-column: 3; grid-row: 2; }
+        #dpad-down { grid-column: 2; grid-row: 3; }
+        #dpad-stop { grid-column: 2; grid-row: 2; background-color: #ff6347; color: white; }
+        .dpad-input-group { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin: 10px 0; }
+        .dpad-input-group label { text-align: right; font-weight: bold; color: #a2f279; }
+        .dpad-input-group input { width: 100%; box-sizing: border-box; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 5px; padding: 4px; }
+        .sequence-step { display: grid; grid-template-columns: 1fr 100px auto; gap: 10px; align-items: center; background-color: #2a2f35; padding: 8px; border-radius: 6px; margin-bottom: 8px; transition: background-color: 0.3s; }
+        .sequence-step.executing { background-color: #a2f279; color: #282c34; }
+        .sequence-step.executing select, .sequence-step.executing input { color: #282c34; border-color: #282c34; }
+        .sequence-step select, .sequence-step input { width: 100%; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 4px; padding: 5px; }
+        .sequence-step .remove-step-btn { background-color: #ff6347; padding: 5px 10px; }
+        #znTuningStatusPanel { background-color: #20232a; padding: 12px; border-radius: 6px; }
+        #znTuningStatusPanel h5 { color: #61dafb; margin: 0 0 10px 0; font-size: 1.1em; text-align: left; }
+        #znResultPanel { display: none; background-color: #20232a; padding: 12px; border-radius: 6px; margin-top: 15px; }
+        #znResultPanel h5 { color: #61dafb; margin: 0 0 10px 0; text-align: left; }
+        .zn-result-grid { display: grid; grid-template-columns: auto 1fr; gap: 5px 15px; text-align: left; }
+        .zn-result-grid strong { color: #a2f279; }
+        .zn-result-grid span { font-weight: bold; color: #fff; }
+        .apply-zn-btn { background-color: #a2f279; margin-top: 10px; width: 100%; }
+        .info-panel { background-color: #20232a; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #f7b731; text-align: left; font-size: 0.9em; line-height: 1.4;}
 
-    float i_out = Ki * integral;
-    float output = p_out + i_out + d_out;
-    float constrained_output = constrain(output, min_out, max_out);
+    </style>
+</head>
+<body>
+    <div id="emergency-banner">ZATRZYMANIE AWARYJNE</div>
+    <div id="gamepad-mapping-modal" class="modal-backdrop">
+        <div class="modal-content">
+            <h2>Mapowanie Przyciskow Gamepada</h2>
+            <div id="gamepad-mapping-list"></div>
+            <button id="close-modal-btn" style="margin-top: 20px;">Zamknij</button>
+        </div>
+    </div>
 
-    if (Ki > 0.0f && output != constrained_output && !is_idle) {
-      integral += (constrained_output - output) / Ki;
-      integral = constrain(integral, -integral_limit, integral_limit);
-    }
+    <h1>Robot PID - Panel Sterowania</h1>
+    <div class="main-grid">
+        <!-- 1. STEROWANIE -->
+        <div class="card" id="controls-card">
+            <h2>Sterowanie</h2>
+            <div id="joystickWrapper"><canvas id="joystickCanvas"></canvas></div>
+            <div class="control-row"><span class="control-label">Balansowanie</span><label class="switch"><input type="checkbox" id="balanceSwitch"><span class="slider round"></span></label></div>
+            <div class="control-row"><span class="control-label">Trzymaj Pozycje</span><label class="switch"><input type="checkbox" id="holdPositionSwitch"><span class="slider round"></span></label></div>
+            <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
+            <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
+            <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Resetuj Osie</button>
+            <div class="trim-controls"> <button id="trimMinusBtn">-</button> <span>Korekta Pionu (Pitch)</span> <button id="trimPlusBtn">+</button> </div>
+            <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
+            <button id="emergencyStopBtn">STOP AWARYJNY</button>
+        </div>
 
-    prev_input = input;
-    last_output = constrained_output;
-    return last_output;
-  }
-  
-  float compute_p_only(float setpoint, float input) {
-    float error = setpoint - input;
-    last_output = Kp * error;
-    return last_output;
-  }
+        <!-- 2. STATUS ROBOTA -->
+        <div class="card">
+            <h2>Status Robota</h2>
+            <button id="connectBleBtn" style="width: 100%; margin-bottom: 15px;">POLACZ Z ROBOTEM</button>
+            <div class="status-grid">
+                <strong>Polaczenie:</strong> <div><span id="connectionStatus" class="status-indicator status-disconnected"></span> <span id="connectionText">Rozlaczony</span></div>
+                <strong>Gamepad:</strong> <span id="gamepadStatus" style="font-weight:bold; color: #f7b731;">Brak</span>
+                <strong>Kamera Flow:</strong> <div><span id="cameraStatus" class="status-indicator status-disconnected"></span> <span id="cameraText">Brak Danych</span></div>
+                <strong>Tryb Pracy:</strong> <span id="robotStateVal" style="font-weight:bold; color: #61dafb;">IDLE</span>
+            </div>
+            <div class="info-grid">
+                <strong>Kat (Pitch):</strong> <div class="angle-display"><span id="angleVal">0.0 &deg;</span><div class="angle-indicator-wrapper"><div id="angleIndicator" class="angle-indicator-needle"></div></div></div>
+                <strong>Kat (Yaw):</strong> <span id="yawVal">0.0 &deg;</span>
+                <strong>Predkosc (imp/s):</strong> <span id="speedVal">0</span>
+                <strong>Enkoder L:</strong> <span id="encoderLeftVal">0</span>
+                <strong>Enkoder P:</strong> <span id="encoderRightVal">0</span>
+            </div>
+             <fieldset style="margin-top: 15px;">
+                <legend>Diagnostyka</legend>
+                <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Kalibruj MPU (DMP)</button>
+            </fieldset>
+        </div>
 
-  void reset() {
-    integral = 0.0f; 
-    prev_input = 0.0f; 
-    last_output = 0.0f; 
-    filtered_derivative = 0.0f; 
-    is_idle = false;
-  }
-};
+        <!-- 3. WYKRES TELEMETRYCZNY -->
+        <div class="card">
+            <button class="accordion-header" onclick="toggleAccordion(this)">Wykres Telemetryczny</button>
+            <div class="accordion-content">
+                <div id="chart-wrapper"><canvas id="telemetryChart"></canvas></div>
+                <div class="chart-controls" id="chartControls"></div>
+            </div>
+        </div>
+        
+        <!-- 4. STEROWANIE AUTONOMICZNE -->
+        <div class="card">
+             <button class="accordion-header" onclick="toggleAccordion(this)">Sterowanie Autonomiczne</button>
+            <div class="accordion-content">
+               <fieldset>
+                   <legend>Sterowanie Precyzyjne (D-Pad)</legend>
+                   <div class="dpad-input-group">
+                       <label for="dpadDistInput">Dystans (cm):</label>
+                       <input type="number" id="dpadDistInput" value="20">
+                   </div>
+                   <div class="dpad-input-group">
+                       <label for="dpadAngleInput">Kat (st.):</label>
+                       <input type="number" id="dpadAngleInput" value="90">
+                   </div>
+                   <div class="dpad-container">
+                       <button id="dpad-up" class="dpad-btn" data-dpad="up">&#8593;</button>
+                       <button id="dpad-left" class="dpad-btn" data-dpad="left">&#8592;</button>
+                       <button id="dpad-stop" class="dpad-btn" data-dpad="stop">&#215;</button>
+                       <button id="dpad-right" class="dpad-btn" data-dpad="right">&#8594;</button>
+                       <button id="dpad-down" class="dpad-btn" data-dpad="down">&#8595;</button>
+                   </div>
+               </fieldset>
+               <fieldset style="margin-top: 15px;">
+                   <legend>Kreator Sekwencji Ruchow</legend>
+                   <div id="sequence-list"></div>
+                   <button id="add-sequence-step-btn" style="width:100%; margin: 10px 0;">Dodaj Krok</button>
+                   <div style="display:flex; gap:10px; justify-content:center;">
+                       <button id="run-sequence-btn" style="background-color: #a2f279;">Uruchom</button>
+                       <button id="stop-sequence-btn" style="background-color: #ff6347;" disabled>Zatrzymaj</button>
+                       <button id="clear-sequence-btn" style="background-color: #f7b731;">Wyczysc</button>
+                   </div>
+               </fieldset>
+           </div>
+        </div>
 
-struct ControlFlags {
-  bool balancingEnabled = false;
-  bool emergencyStop = false;
-  bool directMotorControlActive = false;
-  bool holdPositionEnabled = false;
-  bool speedModeEnabled = false;
-};
+        <!-- 5. KONFIGURACJA -->
+        <div class="card">
+            <h2>Konfiguracja</h2>
+            <fieldset>
+                <legend>Profile Ustawien PID</legend>
+                <div class="profile-controls"> <select id="pidPresetSelect" style="width: 100%; padding: 5px;"></select> </div>
+                <div class="preset-actions">
+                    <button id="applySelectedPresetBtn">Zastosuj</button>
+                    <button id="saveCurrentAsPresetBtn">Zapisz jako Nowy</button>
+                </div>
+                <button id="deleteSelectedPresetBtn" style="width:100%; margin-top: 10px; background-color: #ff6347;">Usun Wybrany Preset</button>
+            </fieldset>
+            <div id="allSettings">
+                <button class="accordion-header" onclick="toggleAccordion(this)">1. Strojenie Joysticka</button>
+                <div class="accordion-content">
+                    <div class="setting-container"><label for="joystickSensitivityInput">Czulosc Globalna (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickSensitivityInput" min="10" max="100" step="5" value="100"><button>+</button></div><div class="help-text">Mnoznik dla wszystkich wartosci z joysticka. Zmniejsz, aby robot byl mniej czuly.</div></div>
+                    <div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button>+</button></div><div class="help-text">Dodaje krzywa wykladnicza. Wieksza wartosc = wieksza precyzja przy malych wychyleniach.</div></div> 
+                    <div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button>+</button></div><div class="help-text">Maksymalna predkosc zadana w trybie predkosci przy pelnym wychyleniu joysticka.</div></div> 
+                    <div class="setting-container"><label for="joystickAngleSensitivityInput">Czulosc Kata (st.)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickAngleSensitivityInput" min="1" max="30" step="0.5" value="10"><button>+</button></div><div class="help-text">Maksymalny kat pochylenia zadany w trybie kata przy pelnym wychyleniu joysticka.</div></div> 
+                    <div class="setting-container"><label for="turnFactorInput">Czulosc Skretu (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="turnFactorInput" min="0" max="100" step="5" value="25"><button>+</button></div><div class="help-text">Jak szybko robot ma sie obracac w miejscu przy maksymalnym wychyleniu joysticka w poziomie.</div></div> 
+                    <div class="setting-container"><label for="joystickDeadzoneInput">Strefa Martwa (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickDeadzoneInput" min="0" max="50" step="1" value="0"><button>+</button></div><div class="help-text">Obszar wokol srodka joysticka, w ktorym ruch jest ignorowany.</div></div>
+                </div>
 
-struct TuningParams {
-  float Kp_b, Ki_b, Kd_b;
-  float balancePidDerivativeFilterAlpha;
-  float joystickAngleSensitivity;
-  float Kp_s, Ki_s, Kd_s;
-  float Kp_p, Ki_p, Kd_p;
-  float Kp_r, Kd_r;
-  float Kp_h, Ki_h, Kd_h;
-  float speedPidDeadband;
-  float positionPidDeadband;
-  float balanceDeadbandAngle;
-  float expoJoystick, maxSpeedJoystick, turnFactor, joystickDeadzone;
-  float joystickSensitivity;
-  float wheelDiameterCm, trackWidthCm;
-  float encoderPPR;
-  float maxTargetAngleFromSpeedPID;
-  float maxTargetSpeedFromPosPID;
-  float speedFilterAlpha;
-  float pitchFilterAlpha;
-  int minPwmLeftFwd, minPwmLeftBwd, minPwmRightFwd, minPwmRightBwd;
-};
+                <button class="accordion-header" onclick="toggleAccordion(this)">2. PID Balansu (Podstawowy)</button>
+                <div class="accordion-content"> 
+                    <div class="setting-container"> <label for="balanceKpInput">Kp - Sila<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKpInput" step="0.0001" value="97.1850"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Sztywnosc utrzymania pionu. Zwieksz dla szybszej reakcji na wychylenie. Zbyt duza wartosc powoduje oscylacje.</div> </div> 
+                    <div class="setting-container"> <label for="balanceKiInput">Ki - Korekta<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKiInput" step="0.01" value="0.0"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Usuwa dlugotrwaly blad (np. gdy robot dryfuje). Zwiekszaj bardzo ostroznie, czesto nie jest potrzebny.</div> </div> 
+                    <div class="setting-container"> <label for="balanceKdInput">Kd - Tlumienie<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKdInput" step="0.0001" value="3.0039"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Hamuje oscylacje i uspokaja robota. Przewiduje przyszly blad. Zbyt duza wartosc spowalnia reakcje.</div> </div> 
+                    <div class="setting-container"> <label for="balanceFilterAlphaInput">Filtr Pochodnej (%)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceFilterAlphaInput" min="1" max="100" step="1" value="40"><button>+</button></div> <div class="help-text">Wygladza odczyt pochodnej, redukujac wplyw szumow. 100% = brak filtrowania. Zmniejsz, jesli robot jest nerwowy.</div> </div>
+                </div>
 
-struct EncoderState {
-  std::atomic<long> position;
-  const uint8_t pin_a, pin_b;
-  const bool inverted;
-  volatile uint8_t prev_state;
-  volatile unsigned long last_micros;
-};
+                <button class="accordion-header" onclick="toggleAccordion(this)">3. PID Kaskadowy (Predkosc/Pozycja)</button>
+                <div class="accordion-content">
+                    <div class="parameter-group"><h5>PID Predkosci</h5>
+                        <div class="setting-container"> <label for="speedKpInput">Kp - Reakcja</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKpInput" step="0.01" value="0.0"><button>+</button></div> </div>
+                        <div class="setting-container"> <label for="speedKiInput">Ki - Eliminacja bledu</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKiInput" step="0.001" value="0.0"><button>+</button></div> </div>
+                        <div class="setting-container"> <label for="speedKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKdInput" step="0.001" value="0.0"><button>+</button></div> </div>
+                        <div class="setting-container"> <label for="maxTargetAngleInput">Max. kat z PID Predk. (st.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxTargetAngleInput" step="0.5" value="5.0"><button>+</button></div> </div>
+                        <div class="setting-container"> <label for="speedDeadbandInput">Strefa martwa (imp/s)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedDeadbandInput" step="1" value="5"><button>+</button></div> </div>
+                    </div>
+                     <div class="parameter-group"><h5>PID Pozycji</h5>
+                        <div class="setting-container"> <label for="positionKpInput">Kp - Sila powrotu</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionKpInput" step="0.1" value="0.0"><button>+</button></div> </div>
+                        <div class="setting-container"> <label for="positionKiInput">Ki - Korekta</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionKiInput" step="0.001" value="0.0"><button>+</button></div> </div>
+                        <div class="setting-container"> <label for="positionKdInput">Kd - Hamowanie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionKdInput" step="0.05" value="0.0"><button>+</button></div> </div>
+                        <div class="setting-container"> <label for="maxTargetSpeedInput">Max. predkosc z PID Poz. (imp/s)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxTargetSpeedInput" step="50" value="500"><button>+</button></div> </div>
+                        <div class="setting-container"> <label for="positionDeadbandInput">Margines bledu (imp.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionDeadbandInput" step="1" value="5"><button>+</button></div> </div>
+                    </div>
+                </div>
 
-struct BLEMessage { char data[512]; size_t length; };
+                <button class="accordion-header" onclick="toggleAccordion(this)">4. PID Obrotu i Kursu</button>
+                <div class="accordion-content">
+                    <div class="parameter-group"><h5>PID Obrotu (Autonomiczny)</h5>
+                        <div class="setting-container"> <label for="rotationKpInput">Kp - Sila obrotu</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationKpInput" step="0.1" value="0.0"><button>+</button></div> </div>
+                        <div class="setting-container"> <label for="rotationKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationKdInput" step="0.1" value="0.0"><button>+</button></div> </div>
+                    </div>
+                    <div class="parameter-group"><h5>PID Utrzymania Kursu (podczas jazdy prosto)</h5>
+                        <div class="setting-container"> <label for="headingKpInput">Kp - Sila korekty</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKpInput" step="0.05" value="0.0"><button>+</button></div> </div>
+                        <div class="setting-container"> <label for="headingKiInput">Ki - Precyzja</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKiInput" step="0.005" value="0.0"><button>+</button></div> </div>
+                        <div class="setting-container"> <label for="headingKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKdInput" step="0.01" value="0.0"><button>+</button></div> </div>
+                    </div>
+                </div>
 
-#define EEPROM_START_ADDRESS 0
-#define CONFIG_VERSION "pid-evo-v1.3" 
-#define CONFIG_MAGIC_NUMBER 0xCAFED044
-struct EEPROMSettings {
-  uint32_t magic_number;
-  char version[32];
-  TuningParams params;
-  uint32_t crc;
-};
+                <button class="accordion-header" onclick="toggleAccordion(this)">5. Parametry Sprzetowe i Mechaniczne</button>
+                <div class="accordion-content"> 
+                    <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" step="0.1" value="8.2"><button>+</button></div> </div> 
+                    <div class="setting-container"> <label for="trackWidthInput">Rozstaw kol (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="trackWidthInput" step="0.1" value="12.5"><button>+</button></div> </div> 
+                    <div class="setting-container"> <label for="encoderPprInput">Impulsy na obrot (PPR)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="encoderPprInput" step="10" value="820"><button>+</button></div> </div> 
+                    <hr style="border-color: #4a4f58; margin: 10px 0;">
+                    <div class="setting-container"> <label for="turnToRollTargetInput">Kat przechylu przy skrecie (st.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="turnToRollTargetInput" step="0.1" value="5.0"><button>+</button></div> </div> 
+                    <div class="setting-container"> <label for="balanceDeadbandAngleInput">Strefa martwa balansu (st.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceDeadbandAngleInput" step="0.1" value="0.5"><button>+</button></div> </div>
+                </div>
 
-enum RobotState { IDLE, BALANCING, HOLDING_POSITION, AUTONOMOUS_MOVE, AUTONOMOUS_ROTATE, AUTO_TUNING };
-const char* robotStateNames[] = { "IDLE", "BALANSUJE", "TRZYMA_POZYCJE", "RUCH_AUTONOMICZNY", "OBROT_AUTONOMICZNY", "AUTOSTROJENIE" };
+                <button class="accordion-header" onclick="toggleAccordion(this)">6. Kalibracja PWM Silnikow</button>
+                <div class="accordion-content"> 
+                    <div class="pwm-info"> <strong>Info:</strong> Uzyj przycisku <strong>"Auto"</strong>, aby automatycznie znalezc prog startowy silnika, lub <strong>"Testuj"</strong>, aby sprawdzic recznie wpisana wartosc. <strong>Wazne:</strong> Przed testem podnies robota, aby kola mogly sie swobodnie krecic! </div> 
+                     <div class="setting-container"> <label for="pwmTuneStartInput">Rozpocznij auto-szukanie od PWM</label> <div class="numeric-input-wrapper"> <button id="pwmTuneStartMinus">-</button> <input type="number" id="pwmTuneStartInput" min="1" max="800" step="1" value="600"> <button id="pwmTuneStartPlus">+</button> </div> </div> <hr style="border-color: #4a4f58; margin: 15px 0;">
+                    <div class="manual-tune-row" data-motor="left" data-direction="fwd"> <div class="pwm-input-row"> <label>Lewy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftFwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div> 
+                    <div class="manual-tune-row" data-motor="left" data-direction="bwd"> <div class="pwm-input-row"> <label>Lewy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftBwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div> 
+                    <div class="manual-tune-row" data-motor="right" data-direction="fwd"> <div class="pwm-input-row"> <label>Prawy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightFwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div> 
+                    <div class="manual-tune-row" data-motor="right" data-direction="bwd"> <div class="pwm-input-row"> <label>Prawy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div> 
+                    <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKIE SILNIKI</button> 
+                </div>
+            </div>
+            <div class="button-group" style="display:flex; gap:10px; justify-content:center; margin-top:20px;"> 
+                <button id="loadBtn">Wczytaj z Robota</button> 
+                <button id="saveBtn">Zapisz na Robocie</button> 
+            </div>
+        </div>
+        
+        <!-- 6. AUTO STROJENIE -->
+        <div class="card">
+            <h2>Auto Strojenie</h2>
 
-enum ZnTuningSubState { ZN_IDLE, ZN_RAMP_UP, ZN_MEASURE };
-
-// --- Zmienne Globalne ---
-ControlFlags controlFlags;
-TuningParams tuningParams;
-MPU6050 mpu;
-PIDController balancePID, speedPID, positionPID, rotationPID, headingPID;
-
-bool dmpReady = false;
-uint8_t fifoBuffer[64];
-Quaternion q;
-VectorFloat gravity;
-float ypr[3];
-VectorInt16 accel;
-volatile bool mpuInterrupt = false;
-unsigned long liftDetectStartTime = 0;
-unsigned long timeOfFall = 0;
-
-RobotState currentState = IDLE;
-long positionSetpoint = 0;
-float targetSpeed = 0.0f;
-long targetPosition = 0;
-long targetRotationDiff = 0;
-
-float pitch = 0.0, yaw = 0.0;
-float angleOffset = 0.0;
-float yawOffset = 0.0;
-float baseTargetAngleTrim = 0.0;
-float actualSpeed = 0.0f, finalTargetAngle = 0.0f;
-volatile float joystickX = 0.0, joystickY = 0.0;
-volatile bool joystickActive = false;
-unsigned long lastJoystickTime = 0, lastDirectControlTime = 0;
-float internal_impulsesPerCm = 0.0f, internal_impulsesPerDegree = 0.0f;
-
-BLEServer* pServer = NULL;
-BLECharacteristic* pTxCharacteristic = NULL;
-volatile bool bleDeviceConnected = false;
-
-EncoderState encoder_L = { { 0 }, ENCODER_L_A, ENCODER_L_B, ENCODER_L_INVERTED, 0, 0 };
-EncoderState encoder_R = { { 0 }, ENCODER_R_A, ENCODER_R_B, ENCODER_R_INVERTED, 0, 0 };
-QueueHandle_t bleRxQueue = NULL;
-QueueHandle_t bleTxQueue = NULL;
-
-volatile float telemetry_pitch = 0.0f, telemetry_yaw = 0.0f, telemetry_actual_speed = 0.0f, telemetry_balance_output = 0.0f;
-volatile long telemetry_encoder_left = 0, telemetry_encoder_right = 0;
-volatile bool telemetry_camera_ok = false;
-volatile unsigned long lastCameraDataTime = 0;
-
-ZnTuningSubState znSubState = ZN_IDLE;
-TuningParams safeTuningParams;
-float zn_test_kp = 0.0;
-unsigned long zn_last_crossing_time = 0;
-float zn_last_pitch = 0.0;
-float zn_peak_angle = 0.0;
-float zn_trough_angle = 0.0;
-int zn_stable_osc_counter = 0;
-float zn_period_samples[ZN_MEASUREMENT_SAMPLES];
-int zn_period_sample_count = 0;
-
-// --- Prototypy ---
-void ControlLoopTask(void* pvParameters);
-void TelemetryTask(void* pvParameters);
-void CommunicationManagerTask(void* pvParameters);
-void BLETransmitTask(void* pvParameters);
-void sendFullConfiguration();
-void updateSystemConfiguration();
-void recalculateMotionParameters();
-bool loadTuningsFromEEPROM();
-void saveTuningsToEEPROM();
-void loadDefaultSettings();
-void stopAllMotors();
-void setMotorPower(float pwm_l, float pwm_r);
-void emergencyShutdown(const char* reason);
-void calibrateMPU();
-void printAndLog(const char* level, const char* format, ...);
-bool sendBleNotificationSafe(const String& value);
-bool sendLargeBleNotificationFragmented(const String& value);
-void _setSingleMotorPower(uint8_t motor_idx, int power);
-void setMotorPowerRaw(uint8_t motor_idx, int power);
-int tuneSingleMotor(uint8_t motor_idx, int direction, int start_pwm);
-float fmap(float x, float in_min, float in_max, float out_min, float out_max);
-float mapMotorOutput(float power, int minPwmFwd, int minPwmBwd);
-static void IRAM_ATTR encoder_isr_handler(void* arg);
-void setupEncoders();
-void IRAM_ATTR dmpDataReady();
-void setupSensors();
-float normalizeAngle(float angle);
-void resetAllPids();
-void checkLiftDetection(const int16_t& ax, const int16_t& ay, const int16_t& az);
-void checkSafetySystems(float gyroRate);
-void autoRecovery();
-void handleZieglerNicholsTuning(float current_pitch, float dt);
-void startZnTuning();
-void cancelZnTuning();
-void finishZnTuning(float Ku, float Tu);
-
-// =========================================================================
-// === IMPLEMENTACJE FUNKCJI ===
-// =========================================================================
-
-float normalizeAngle(float angle) {
-    float a = fmod(angle + 180.0, 360.0);
-    if (a < 0) a += 360.0;
-    return a - 180.0;
-}
-
-void resetAllPids() {
-    balancePID.reset();
-    speedPID.reset();
-    positionPID.reset();
-    rotationPID.reset();
-    headingPID.reset();
-}
-
-void startZnTuning() {
-    if (currentState != BALANCING && currentState != HOLDING_POSITION) {
-        printAndLog("warn", "Nie mozna rozpoczac strojenia. Robot musi byc w stanie balansu.");
-        return;
-    }
-    printAndLog("info", "Rozpoczeto procedure 'Pierwsze Strojenie' (Z-N)...");
-    safeTuningParams = tuningParams;
-    currentState = AUTO_TUNING;
-    znSubState = ZN_RAMP_UP;
-
-    zn_test_kp = tuningParams.Kp_b;
-    zn_stable_osc_counter = 0;
-    zn_peak_angle = 0;
-    zn_trough_angle = 0;
-    zn_last_pitch = 0;
-}
-
-void cancelZnTuning() {
-    if (currentState != AUTO_TUNING) return;
-    printAndLog("warn", "Strojenie Z-N anulowane przez uzytkownika.");
-    tuningParams = safeTuningParams;
-    updateSystemConfiguration();
-    currentState = BALANCING;
-    znSubState = ZN_IDLE;
-}
-
-void finishZnTuning(float Ku, float Tu) {
-    printAndLog("success", "Strojenie Z-N zakonczone! Zmierzone Ku=%.4f, Tu=%.4f s", Ku, Tu);
-    
-    StaticJsonDocument<SMALL_JSON_SIZE> doc;
-    doc["type"] = "zn_tuning_result";
-    doc["ku"] = Ku;
-    doc["tu"] = Tu;
-    String jsonBuffer;
-    serializeJson(doc, jsonBuffer);
-    sendBleNotificationSafe(jsonBuffer);
-
-    tuningParams = safeTuningParams;
-    updateSystemConfiguration();
-    currentState = BALANCING;
-    znSubState = ZN_IDLE;
-}
-
-void handleZieglerNicholsTuning(float current_pitch, float dt) {
-    float balance_point = angleOffset;
-    
-    switch (znSubState) {
-        case ZN_RAMP_UP: {
-            float output = zn_test_kp * (balance_point - current_pitch);
-            setMotorPower(-output, -output);
-            telemetry_balance_output = zn_test_kp;
-
-            if (current_pitch > zn_last_pitch) {
-                zn_peak_angle = max(zn_peak_angle, current_pitch);
-            } else {
-                zn_trough_angle = min(zn_trough_angle, current_pitch);
-            }
-
-            if ((zn_last_pitch > balance_point && current_pitch <= balance_point) || (zn_last_pitch < balance_point && current_pitch >= balance_point)) {
-                float amplitude = zn_peak_angle - zn_trough_angle;
-                if (amplitude > ZN_OSC_AMPLITUDE_THRESHOLD) {
-                    zn_stable_osc_counter++;
-                } else {
-                    zn_stable_osc_counter = 0;
-                }
+            <button class="accordion-header" onclick="toggleAccordion(this)">Krok 1: Pierwsze Strojenie (Odkrywanie Z-N)</button>
+            <div class="accordion-content">
+                <div class="info-panel">
+                    <strong>Cel:</strong> Automatyczne znalezienie podstawowych, dzialajacych parametrow PID dla balansu (Kp, Kd). Robot sam wprowadzi sie w oscylacje, aby zbadac swoja fizyke. Wynik tego testu to idealny punkt startowy dla dalszej, precyzyjnej optymalizacji.
+                </div>
+                <div id="znTuningStatusPanel">
+                    <h5>Status Procedury Odkrywania</h5>
+                    <div class="info-grid">
+                        <strong>Status:</strong> <span id="znStatusText" style="font-weight: bold;">Bezczynny</span>
+                        <strong>Testowane Kp:</strong> <span id="znKpTestVal">---</span>
+                    </div>
+                </div>
                 
-                zn_peak_angle = balance_point;
-                zn_trough_angle = balance_point;
+                <div id="znResultPanel">
+                    <h5>Wynik Odkrywania</h5>
+                    <div class="zn-result-grid">
+                        <strong>Wzmocnienie Krytyczne (Ku):</strong> <span id="znKuResult"></span>
+                        <strong>Okres Krytyczny (Tu):</strong> <span id="znTuResult"></span>
+                        <hr style="grid-column: 1 / -1; border-color: #4a4f58;">
+                        <strong>Sugerowane Kp:</strong> <span id="znKpSuggest"></span>
+                        <strong>Sugerowane Kd:</strong> <span id="znKdSuggest"></span>
+                    </div>
+                    <button id="applyZnResultsBtn" class="apply-zn-btn">Zastosuj Sugerowane Wartosci</button>
+                </div>
 
-                if (zn_stable_osc_counter >= ZN_OSC_DETECTION_CYCLES) {
-                    printAndLog("info", "Wykryto stabilne oscylacje przy Kp=%.2f. Rozpoczynam pomiar.", zn_test_kp);
-                    znSubState = ZN_MEASURE;
-                    zn_period_sample_count = 0;
-                    zn_last_crossing_time = millis();
+                <button id="znTuningActionBtn" style="width:100%; margin-top:15px; background-color: #f7b731;">Rozpocznij Odkrywanie</button>
+                <button id="znTuningCancelBtn" style="width:100%; margin-top:10px; background-color:#ff6347; display:none;">Anuluj</button>
+            </div>
+
+            <button class="accordion-header" onclick="toggleAccordion(this)">Krok 2: Optymalizacja (Auto Testy PID)</button>
+            <div class="accordion-content">
+                <div class="info-panel" style="border-left-color: #a2f279;">
+                    <strong>Cel:</strong> Inteligentne, autonomiczne dostrojenie parametrow balansu do maksimum stabilnosci. Uzyj tej opcji, gdy robot juz potrafi samodzielnie stac (np. po "Pierwszym Strojeniu").
+                </div>
+                
+                <div id="autotestOptions" style="margin-top: 15px;">
+                    <div class="setting-container"><label for="at_cycles">Liczba cykli optymalizacji:</label><input id="at_cycles" type="number" value="30" min="5" max="100" style="width:90px;"></div>
+                    <div class="setting-container"><label for="at_duration">Czas trwania cyklu (s):</label><input id="at_duration" type="number" value="4" min="2" max="10" style="width:90px;"></div>
+                </div>
+                <hr style="border-color: #4a4f58; margin: 15px 0;">
+        
+                <div id="autotestStatusPanel">
+                    <h5>Status Sesji Optymalizacji</h5>
+                    <div class="info-grid">
+                        <strong>Temperatura:</strong> <span id="statusTemperature">---</span>
+                        <strong>Prawdopodob. Skoku:</strong> <span id="statusJumpChance">---</span>
+                        <strong>Najlepszy Wynik:</strong> <span id="statusBestScore" style="font-weight: bold; color: #a2f279;">---</span>
+                        <strong>Postep:</strong> 
+                        <div>
+                            <progress id="statusProgressBar" value="0" max="100"></progress>
+                            <span id="statusProgressText" style="font-size:0.9em;">Gotowy do rozpoczecia...</span>
+                        </div>
+                        <strong>Status:</strong> <span id="statusStateText" style="font-weight: bold;">Bezczynny</span>
+                    </div>
+                </div>
+                        
+                <button id="autotestActionBtn" style="width:100%; margin-top:15px;">Rozpocznij Optymalizacje Balansu</button>
+                <button id="autotestCancelBtn" style="width:100%; margin-top:10px; background-color:#ff6347; display:none;">Anuluj Sesje Optymalizacji</button>
+            </div>
+        </div>
+
+        <!-- 7. LOGI -->
+        <div class="card" id="log-card" style="grid-column: 1 / -1;">
+            <h2>Logi Systemowe</h2>
+            <div id="log-history"></div>
+            <div style="margin-top: 10px; display: flex; gap: 10px; justify-content: center; align-items: center;">
+                <button onclick="clearLogs()" style="background-color: #f7b731;">Wyczysc Logi</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // =======================================================================================
+    // WERSJA 5.3 (UI dla PID) - Finalna z inteligentna optymalizacja i poprawkami
+    // =======================================================================================
+    let isApplyingConfig = false;
+    let lastKnownRobotState = 'IDLE';
+
+    let isSequenceRunning = false;
+    let currentSequenceStep = 0;
+    const MAX_SEQUENCE_STEPS = 10;
+
+    const parameterMapping = {
+        'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b',
+        'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 
+        'joystickAngleSensitivityInput': 'joystick_angle_sensitivity',
+        'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s',
+        'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedDeadbandInput': 'speed_pid_deadband',
+        'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p',
+        'maxTargetSpeedInput': 'max_target_speed_from_pos_pid', 'positionDeadbandInput': 'position_pid_deadband',
+        'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r',
+        'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h',
+        'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick',
+        'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone',
+        'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr',
+        'turnToRollTargetInput': 'turn_to_roll_target', 'balanceDeadbandAngleInput': 'balance_deadband_angle',
+        'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd',
+        'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd'
+    };
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        initJoystick();
+        setupChartControls();
+        populatePresetSelect();
+        setupNumericInputs();
+        setupEventListeners();
+        setupManualTuneButtons();
+        setupGamepadMappingModal();
+        setupAutoTestEventListeners();
+        setupDpadControls(); 
+        setupSequenceControls(); 
+        setupZnTuningControls();
+        loadGamepadMappings();
+        renderMappingModal();
+        pollGamepad();
+        window.addEventListener('resize', initJoystick);
+    });
+
+    let bleDevice, rxCharacteristic, txCharacteristic;
+    const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+    const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
+    const TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+    let bleBuffer = '';
+    let joystickCenter, joystickRadius, knobRadius, isDragging = false;
+    let lastJoystickSendTime = 0;
+    const JOYSTICK_SEND_INTERVAL = 20;
+    let gamepadIndex = null;
+    let lastGamepadState = [];
+    let gamepadMappings = {};
+    const GAMEPAD_MAPPING_KEY = 'pid_gamepad_mappings_v3';
+    let isMappingButton = false;
+    let actionToMap = null;
+    const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v3_';
+
+    let bleMessageQueue = [];
+    let isSendingBleMessage = false;
+    const BLE_SEND_INTERVAL = 20;
+
+    const availableActions = { 
+        'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' }, 
+        'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' }, 
+        'toggle_speed_mode': { label: 'Wlacz/Wylacz Tryb Predkosci', elementId: 'speedModeSwitch' }, 
+        'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyStopBtn' }, 
+        'reset_zero': { label: 'Resetuj Osie', elementId: 'resetZeroBtn' }, 
+        'trim_plus': { label: 'Korekta Pionu (+)', elementId: 'trimPlusBtn' }, 
+        'trim_minus': { label: 'Korekta Pionu (-)', elementId: 'trimMinusBtn' },
+        'start_autotest_cycle': { label: 'Uruchom Cykl Auto Testu', elementId: 'autotestActionBtn' }
+    };
+    const availableTelemetry = { 
+        'pitch': { label: 'Pitch (Kat)', color: '#61dafb' }, 
+        'yaw': { label: 'Yaw (Kurs)', color: '#f368e0' }, 
+        'speed': { label: 'Predkosc', color: '#f7b731' },
+        'output': { label: 'Wyjscie PID', color: '#ff6347'}
+    };
+    const builtInPresetsData = { 
+        '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 97.1850, balanceKiInput: 0.0, balanceKdInput: 3.0039, speedKpInput: 0.0, positionKpInput: 0.0, positionKiInput: 0.0, positionKdInput: 0.0 }}, 
+        '2': { name: "2. PID Mieciutki (Plynny)", params: { balanceKpInput: 80.0, balanceKiInput: 0.0, balanceKdInput: 2.8, speedKpInput: 0.0, positionKpInput: 0.0, positionKiInput: 0.0, positionKdInput: 0.0 }}, 
+        '3': { name: "3. PID Agresywny (Sztywny)", params: { balanceKpInput: 110.0, balanceKiInput: 0.0, balanceKdInput: 4.0, speedKpInput: 0.0, positionKpInput: 0.0, positionKiInput: 0.0, positionKdInput: 0.0 }}
+    };
+
+    function initJoystick() { const wrapper = document.getElementById('joystickWrapper'); const size = wrapper.clientWidth; const joystickCanvas = document.getElementById('joystickCanvas'); const joystickCtx = joystickCanvas.getContext('2d'); joystickCanvas.width = size; joystickCanvas.height = size; joystickCenter = { x: size / 2, y: size / 2 }; joystickRadius = size / 2 * 0.75; knobRadius = size / 2 * 0.25; drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y); }
+    function drawJoystick(ctx, x, y) { ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); ctx.beginPath(); ctx.arc(joystickCenter.x, joystickCenter.y, joystickRadius, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.fill(); ctx.beginPath(); ctx.arc(x, y, knobRadius, 0, 2 * Math.PI); ctx.fillStyle = '#61dafb'; ctx.fill(); }
+    function getJoystickPosition(event) { const rect = document.getElementById('joystickCanvas').getBoundingClientRect(); const touch = event.touches ? event.touches[0] : event; return { x: touch.clientX - rect.left, y: touch.clientY - rect.top }; }
+    function handleJoystickStart(event) { event.preventDefault(); isDragging = true; }
+    function handleJoystickMove(event) { if (!isDragging) return; event.preventDefault(); const joystickCanvas = document.getElementById('joystickCanvas'); const joystickCtx = joystickCanvas.getContext('2d'); let { x, y } = getJoystickPosition(event); const dx = x - joystickCenter.x; const dy = y - joystickCenter.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; } drawJoystick(joystickCtx, x, y); const now = Date.now(); if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) { const joyX = (x - joystickCenter.x) / joystickRadius; const joyY = -(y - joystickCenter.y) / joystickRadius; sendBleMessage({ type: 'joystick', x: joyX, y: joyY }); lastJoystickSendTime = now; } }
+    function handleJoystickEnd(event) { if (!isDragging) return; event.preventDefault(); isDragging = false; const joystickCanvas = document.getElementById('joystickCanvas'); const joystickCtx = joystickCanvas.getContext('2d'); drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
+    
+    function pollGamepad() { if (gamepadIndex !== null) { const gp = navigator.getGamepads()[gamepadIndex]; if (!gp) return; if (isMappingButton && actionToMap) { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { Object.keys(gamepadMappings).forEach(key => { if (gamepadMappings[key] === actionToMap) delete gamepadMappings[key]; }); gamepadMappings[i] = actionToMap; saveGamepadMappings(); addLogMessage(`[UI] Akcja '${availableActions[actionToMap].label}' przypisana do przycisku ${i}.`, 'success'); isMappingButton = false; actionToMap = null; renderMappingModal(); } }); } else { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { const action = gamepadMappings[i]; if (action && availableActions[action]) { const element = document.getElementById(availableActions[action].elementId); if (element && !element.disabled) { element.click(); flashElement(element); } } } }); } lastGamepadState = gp.buttons.map(b => b.pressed); let x = gp.axes[0] || 0; let y = gp.axes[1] || 0; if (Math.abs(x) < 0.15) x = 0; if (Math.abs(y) < 0.15) y = 0; sendBleMessage({ type: 'joystick', x: x, y: -y }); } requestAnimationFrame(pollGamepad); }
+    window.addEventListener('gamepadconnected', (e) => { gamepadIndex = e.gamepad.index; document.getElementById('gamepadStatus').textContent = 'Polaczony'; document.getElementById('gamepadStatus').style.color = '#a2f279'; addLogMessage(`[UI] Gamepad polaczony: ${e.gamepad.id}`, 'success'); });
+    window.addEventListener('gamepaddisconnected', (e) => { gamepadIndex = null; document.getElementById('gamepadStatus').textContent = 'Brak'; document.getElementById('gamepadStatus').style.color = '#f7b731'; addLogMessage('[UI] Gamepad rozlaczony.', 'warn'); });
+    
+    function startMapping(action, buttonElement) { if (gamepadIndex === null) { addLogMessage("Podlacz gamepada, aby rozpoczac mapowanie!", "warn"); return; } isMappingButton = true; actionToMap = action; document.querySelectorAll('.mapping-button').forEach(btn => btn.textContent = "Przypisz"); buttonElement.textContent = "Czekam..."; addLogMessage(`[UI] Nasluchiwanie na przycisk dla akcji: ${availableActions[action].label}...`, "info"); }
+    function renderMappingModal() { const list = document.getElementById('gamepad-mapping-list'); list.innerHTML = ''; for (const [action, config] of Object.entries(availableActions)) { const row = document.createElement('div'); row.className = 'mapping-row'; const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action); row.innerHTML = `<span class="mapping-label">${config.label}</span><span class="mapping-display">${buttonIndex !== undefined ? `Przycisk ${buttonIndex}` : 'Brak'}</span><button class="mapping-button" data-action="${action}">Przypisz</button>`; list.appendChild(row); } list.querySelectorAll('.mapping-button').forEach(button => { button.addEventListener('click', (e) => { const action = e.target.dataset.action; startMapping(action, e.target); }); }); }
+    
+    const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
+    function addLogMessage(message, level = 'info') { const logHistory = document.getElementById('log-history'); if (!logHistory) return; const timestamp = new Date().toLocaleTimeString(); let color = '#fff'; if (level === 'error') color = '#ff6347'; else if (level === 'warn') color = '#f7b731'; else if (level === 'success') color = '#a2f279'; const logEntry = document.createElement('div'); logEntry.style.color = color; logEntry.textContent = `[${timestamp}] ${message}`; logHistory.prepend(logEntry); while (logHistory.children.length > 200) { logHistory.removeChild(logHistory.lastChild); } }
+    function clearLogs() { document.getElementById('log-history').innerHTML = ''; }
+    function toggleAccordion(header) { const content = header.nextElementSibling; header.classList.toggle('active'); if (content.style.maxHeight && content.style.maxHeight !== '0px') { content.style.maxHeight = '0px'; content.style.padding = '0px 15px'; } else { content.style.maxHeight = content.scrollHeight + "px"; content.style.padding = '15px'; } }
+    function updateAccordionHeight(content) { if (content && content.style.maxHeight !== '0px') { content.style.maxHeight = content.scrollHeight + 'px'; } }
+    
+    async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono!', 'success'); setTimeout(() => { addLogMessage('[UI] Automatycznie synchronizuje konfiguracje...', 'info'); sendBleMessage({ type: 'request_full_config' }); }, 500); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
+    function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; bleMessageQueue = []; isSendingBleMessage = false; }
+    
+    function handleBleNotification(event) {
+        const value = event.target.value;
+        const decoder = new TextDecoder('utf-8');
+        bleBuffer += decoder.decode(value);
+        let newlineIndex;
+        while ((newlineIndex = bleBuffer.indexOf('\n')) !== -1) {
+            const line = bleBuffer.substring(0, newlineIndex).trim();
+            bleBuffer = bleBuffer.substring(newlineIndex + 1);
+            if (line) {
+                try {
+                    const data = JSON.parse(line);
+                    processCompleteMessage(data);
+                } catch (e) { addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error'); }
+            }
+        }
+    }
+    
+    async function _sendRawBleMessage(message) {
+        if (!rxCharacteristic) return;
+        try {
+            const encoder = new TextEncoder();
+            await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n'));
+        } catch (error) {
+            addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error');
+        }
+    }
+
+    async function processBleQueue() {
+        if (isSendingBleMessage || bleMessageQueue.length === 0 || !rxCharacteristic) {
+            return;
+        }
+        isSendingBleMessage = true;
+        const message = bleMessageQueue.shift();
+        await _sendRawBleMessage(message);
+        setTimeout(() => {
+            isSendingBleMessage = false;
+            processBleQueue();
+        }, BLE_SEND_INTERVAL);
+    }
+
+    function sendBleMessage(message) {
+        bleMessageQueue.push(message);
+        processBleQueue();
+    }
+
+    function processCompleteMessage(data) {
+        const previousState = lastKnownRobotState;
+        if (data.type === 'telemetry') {
+            if (data.robot_state) {
+                lastKnownRobotState = data.robot_state;
+                if(lastKnownRobotState === 'AUTOSTROJENIE' && !isZnTuningRunning) {
+                    isZnTuningRunning = true;
+                    document.getElementById('znStatusText').textContent = 'Strojenie w toku...';
+                    document.getElementById('znTuningActionBtn').disabled = true;
+                    document.getElementById('znTuningCancelBtn').style.display = 'block';
+                }
+            }
+            if (tuningSession && tuningSession.isCollecting) tuningSession.recordTelemetry(data);
+            if(isZnTuningRunning && data.output !== undefined) {
+                 document.getElementById('znKpTestVal').textContent = data.output.toFixed(2);
+            }
+        }
+
+        switch (data.type) {
+            case 'telemetry':
+                updateTelemetryUI(data);
+                updateChart(data);
+                checkAndExecuteNextSequenceStep(previousState);
+                break;
+            case 'full_config':
+                isApplyingConfig = true;
+                applyFullConfig(data.params);
+                isApplyingConfig = false;
+                break;
+            case 'log':
+                addLogMessage(`[ROBOT] ${data.message}`, data.level);
+                break;
+            case 'single_pwm_result':
+                const p = data.params;
+                const inputId = `minPwm${p.motor.charAt(0).toUpperCase() + p.motor.slice(1)}${p.direction.charAt(0).toUpperCase() + p.direction.slice(1)}Input`;
+                document.getElementById(inputId).value = p.value;
+                addLogMessage(`[UI] Auto-strojenie dla ${p.motor} ${p.direction} zakonczone. Wynik: ${p.value}`, 'success');
+                const row = document.querySelector(`.manual-tune-row[data-motor="${p.motor}"][data-direction="${p.direction}"]`);
+                if (row) {
+                    const autoBtn = row.querySelector('.auto-btn');
+                    if (autoBtn) {
+                        autoBtn.disabled = false;
+                        autoBtn.textContent = 'Auto';
+                    }
+                }
+                break;
+            case 'zn_tuning_result':
+                handleZnTuningResult(data.ku, data.tu);
+                break;
+        }
+    }
+
+    function applyFullConfig(params) {
+        for (const [inputId, snakeKey] of Object.entries(parameterMapping)) {
+            const input = document.getElementById(inputId);
+            if (input && params[snakeKey] !== undefined) {
+                let value = params[snakeKey];
+                if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) {
+                     value = (value * 100);
+                }
+                input.value = value;
+            }
+        }
+    }
+    
+    function updateTelemetryUI(data) {
+        if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
+        if (data.pitch !== undefined) {
+            document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0';
+            document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`;
+        }
+        if (data.yaw !== undefined) document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' \u00B0';
+        if (data.speed !== undefined) document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0);
+        if (data.encoder_left !== undefined) document.getElementById('encoderLeftVal').textContent = data.encoder_left;
+        if (data.encoder_right !== undefined) document.getElementById('encoderRightVal').textContent = data.encoder_right;
+        if (data.camera_ok !== undefined) {
+            const cameraStatus = document.getElementById('cameraStatus');
+            const cameraText = document.getElementById('cameraText');
+            if (cameraStatus && cameraText) {
+                if (data.camera_ok) {
+                    cameraStatus.className = 'status-indicator status-ok';
+                    cameraText.textContent = 'Aktywna';
+                } else {
+                    cameraStatus.className = 'status-indicator status-error';
+                    cameraText.textContent = 'Brak Danych';
+                }
+            }
+        }
+        const emergencyBanner = document.getElementById('emergency-banner');
+        if (emergencyBanner) emergencyBanner.style.display = data.emergency_stop ? 'block' : 'none';
+    }
+
+    const telemetryChart = new Chart(document.getElementById('telemetryChart'), { type: 'line', data: { labels: Array(100).fill(''), datasets: [] }, options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { type: 'linear', display: true, position: 'left', ticks: { color: '#61dafb' }, title: { display: true, text: 'Wartosc', color: '#61dafb' } } }, plugins: { legend: { labels: { color: '#fff' } } } } });
+    
+    function updateChart(data) {
+        const chartData = telemetryChart.data;
+        if (chartData.labels.length >= 100) chartData.labels.shift();
+        chartData.labels.push('');
+        for (const [key, value] of Object.entries(data)) {
+            if (availableTelemetry[key] && value !== undefined) {
+                let dataset = chartData.datasets.find(ds => ds.label === availableTelemetry[key].label);
+                if (!dataset) continue;
+                if (dataset.data.length >= 100) dataset.data.shift();
+                dataset.data.push(value);
+            }
+        }
+        chartData.datasets.forEach(ds => {
+            if (ds.data.length < chartData.labels.length) {
+                if (ds.data.length >= 100) ds.data.shift();
+                ds.data.push(null);
+            }
+        });
+        telemetryChart.update('none');
+    }
+    
+    function setupChartControls() {
+        const container = document.getElementById('chartControls');
+        container.innerHTML = '';
+        Object.keys(availableTelemetry).forEach((key) => {
+            const label = document.createElement('label'), checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = key;
+            checkbox.checked = (key === 'pitch');
+            checkbox.addEventListener('change', (e) => {
+                const varName = e.target.value;
+                if (e.target.checked) {
+                    if (!telemetryChart.data.datasets.find(ds => ds.label === availableTelemetry[varName].label)) {
+                        telemetryChart.data.datasets.push({ label: availableTelemetry[varName].label, data: Array(telemetryChart.data.labels.length).fill(null), borderColor: availableTelemetry[varName].color, fill: false, tension: 0.1, pointRadius: 0 });
+                    }
+                } else {
+                    const datasetIndex = telemetryChart.data.datasets.findIndex(ds => ds.label === availableTelemetry[varName].label);
+                    if (datasetIndex > -1) telemetryChart.data.datasets.splice(datasetIndex, 1);
+                }
+                telemetryChart.update();
+            });
+            label.appendChild(checkbox);
+            label.append(` ${availableTelemetry[key].label}`);
+            container.appendChild(label);
+            if (checkbox.checked) checkbox.dispatchEvent(new Event('change'));
+        });
+    }
+
+    function populatePresetSelect() { const select = document.getElementById('pidPresetSelect'); select.innerHTML = ''; for (const [index, preset] of Object.entries(builtInPresetsData)) { const option = document.createElement('option'); option.value = index; option.textContent = preset.name; select.appendChild(option); } for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key.startsWith(CUSTOM_PRESET_PREFIX)) { const presetName = key.substring(CUSTOM_PRESET_PREFIX.length); const option = document.createElement('option'); option.value = key; option.textContent = `Wlasny: ${presetName}`; select.appendChild(option); } } }
+    async function applySelectedPreset() { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; let presetData; if (selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { presetData = JSON.parse(localStorage.getItem(selectedValue)); } else { presetData = builtInPresetsData[selectedValue]?.params; } if (presetData) { isApplyingConfig = true; for (const [key, value] of Object.entries(presetData)) { const input = document.getElementById(key); if (input) { input.value = value; } } isApplyingConfig = false; addLogMessage('[UI] Zastosowano wartosci presetu. Zapisz na robocie, aby wyslac.', 'info'); } }
+    function saveCurrentAsPreset() { const presetName = prompt("Podaj nazwe dla nowego presetu:", ""); if (presetName && presetName.trim() !== "") { const presetData = {}; Object.keys(parameterMapping).forEach(inputId => { const input = document.getElementById(inputId); if (input) { presetData[inputId] = parseFloat(input.value); } }); localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData)); addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success'); populatePresetSelect(); } }
+    function deleteSelectedPreset() { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; if (!selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { addLogMessage('[UI] Nie mozna usunac wbudowanego presetu.', 'warn'); return; } if (confirm(`Czy na pewno chcesz usunac preset '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'?`)) { localStorage.removeItem(selectedValue); addLogMessage(`[UI] Usunieto preset.`, 'info'); populatePresetSelect(); } }
+
+    function setupNumericInputs() { document.querySelectorAll('.numeric-input-wrapper').forEach(wrapper => { const container = wrapper.closest('.setting-container') || wrapper.closest('.pwm-input-row'); if (!container) return; const input = container.querySelector('input[type=number]'); const minusBtn = wrapper.querySelector('button:first-child'); const plusBtn = wrapper.querySelector('button:last-child'); if (!input || !minusBtn || !plusBtn || input.disabled) return; const step = parseFloat(input.step) || 1; const isFloat = input.step.includes('.'); const updateValue = (amount) => { let current = parseFloat(input.value); if (isNaN(current)) current = 0; let newValue = current + amount; if (isFloat) { const dp = (step.toString().split('.')[1] || '').length; newValue = parseFloat(newValue.toFixed(dp)); } const min = parseFloat(input.min); const max = parseFloat(input.max); if (!isNaN(min)) newValue = Math.max(min, newValue); if (!isNaN(max)) newValue = Math.min(max, newValue); input.value = newValue; input.dispatchEvent(new Event('change', { bubbles: true })); }; minusBtn.addEventListener('click', () => updateValue(-step)); plusBtn.addEventListener('click', () => updateValue(step)); }); }
+
+    function sendFullConfigToRobot() { const params = {}; for (const [inputId, snakeKey] of Object.entries(parameterMapping)) { const input = document.getElementById(inputId); if (input) { let value = parseFloat(input.value); if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) { value /= 100.0; } params[snakeKey] = value; } } addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info'); sendBleMessage({ type: 'full_config', params }); }
+
+    function setupEventListeners() {
+        const sendSingleParam = (inputId, value) => { if (isApplyingConfig) return; const snakeKey = parameterMapping[inputId]; if (snakeKey) { if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) { value /= 100.0; } sendBleMessage({ type: 'set_param', key: snakeKey, value: value }); } };
+        const debouncedSendSingleParam = debounce(sendSingleParam, 400);
+        document.querySelectorAll('.config-value').forEach(input => { input.addEventListener('change', (e) => { debouncedSendSingleParam(e.target.id, parseFloat(e.target.value)); }); });
+        document.getElementById('joystickCanvas').addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); document.getElementById('joystickCanvas').addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd);
+        document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
+        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
+        const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
+        for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); }
+        
+        document.getElementById('saveBtn').addEventListener('click', () => {
+            if (confirm("Czy na pewno chcesz trwale zapisac biezaca konfiguracje znajdujaca sie na robocie do jego pamieci EEPROM?")) {
+                sendBleMessage({ type: 'save_tunings' });
+            }
+        });
+
+        document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { sendBleMessage({ type: 'request_full_config' }); } });
+        document.getElementById('calibrateMpuBtn')?.addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
+        document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset);
+        document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); });
+    }
+
+    function setupManualTuneButtons() { document.querySelectorAll('.manual-tune-row').forEach(row => { const motor = row.dataset.motor; const direction = row.dataset.direction; const input = row.querySelector('.tune-input'); const testBtn = row.querySelector('.test-btn'); const stopBtn = row.querySelector('.stop-btn'); const autoBtn = row.querySelector('.auto-btn'); testBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: parseInt(input.value) }); }); stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); }); autoBtn.addEventListener('click', (e) => { if (confirm("UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?")) { const startValue = parseInt(document.getElementById('pwmTuneStartInput').value); sendBleMessage({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue }); e.target.disabled = true; e.target.textContent = 'Szukanie...'; addLogMessage(`[UI] Rozpoczynam auto-strojenie dla ${motor} ${direction}...`, 'info'); } }); }); document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); }); }
+    function setupGamepadMappingModal() { document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; }); document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; }); }
+    function flashElement(element) { if (!element) return; const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element; target.classList.add('gamepad-flash'); setTimeout(() => target.classList.remove('gamepad-flash'), 300); }
+    function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
+    function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
+
+    function setupDpadControls() { document.querySelectorAll('.dpad-btn').forEach(btn => { btn.addEventListener('click', (e) => { const action = e.currentTarget.dataset.dpad; if (action === 'up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'stop') sendBleMessage({ type: 'command_stop' }); }); }); }
+    function setupSequenceControls() { document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep); document.getElementById('run-sequence-btn').addEventListener('click', runSequence); document.getElementById('stop-sequence-btn').addEventListener('click', stopSequenceExecution); document.getElementById('clear-sequence-btn').addEventListener('click', clearSequence); }
+    function addSequenceStep() { const list = document.getElementById('sequence-list'); if (list.children.length >= MAX_SEQUENCE_STEPS) return; const stepDiv = document.createElement('div'); stepDiv.className = 'sequence-step'; stepDiv.innerHTML = ` <select class="sequence-type"> <option value="move_fwd">Przod (cm)</option><option value="move_bwd">Tyl (cm)</option> <option value="rotate_r">Obrot Prawo (st.)</option><option value="rotate_l">Obrot Lewo (st.)</option> </select> <input type="number" class="sequence-value" value="20"> <button class="remove-step-btn">&times;</button> `; list.appendChild(stepDiv); updateAccordionHeight(list.closest('.accordion-content')); stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => { stepDiv.remove(); updateAccordionHeight(list.closest('.accordion-content')); }); }
+    function runSequence() { if (isSequenceRunning) return; if (lastKnownRobotState !== 'TRZYMA_POZYCJE' && lastKnownRobotState !== 'BALANSUJE') { addLogMessage(`[UI] Nie mozna rozpoczac sekwencji. Robot w stanie '${lastKnownRobotState}'.`, 'error'); return; } const steps = document.querySelectorAll('.sequence-step'); if (steps.length === 0) return; isSequenceRunning = true; currentSequenceStep = 0; updateSequenceUI(); addLogMessage(`[UI] Rozpoczeto sekwencje z ${steps.length} krokow.`, 'info'); executeNextSequenceStep(); }
+    function stopSequenceExecution() { if (!isSequenceRunning) return; isSequenceRunning = false; sendBleMessage({ type: 'command_stop' }); updateSequenceUI(); addLogMessage('[UI] Sekwencja zatrzymana.', 'warn'); }
+    function clearSequence() { if (isSequenceRunning) stopSequenceExecution(); const list = document.getElementById('sequence-list'); list.innerHTML = ''; updateAccordionHeight(list.closest('.accordion-content')); }
+    function updateSequenceUI() { document.querySelectorAll('.sequence-step').forEach((step, index) => { step.classList.toggle('executing', isSequenceRunning && index === currentSequenceStep); }); document.getElementById('run-sequence-btn').disabled = isSequenceRunning; document.getElementById('add-sequence-step-btn').disabled = isSequenceRunning; document.getElementById('clear-sequence-btn').disabled = isSequenceRunning; document.getElementById('stop-sequence-btn').disabled = !isSequenceRunning; }
+    function checkAndExecuteNextSequenceStep(previousState) { if (!isSequenceRunning) return; const isRobotReadyForNextStep = lastKnownRobotState === 'TRZYMA_POZYCJE' || lastKnownRobotState === 'BALANSUJE'; const wasRobotWorking = previousState === 'RUCH_AUTONOMICZNY' || previousState === 'OBROT_AUTONOMICZNY'; if (isRobotReadyForNextStep && wasRobotWorking) { addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info'); currentSequenceStep++; executeNextSequenceStep(); } }
+    function executeNextSequenceStep() { const steps = document.querySelectorAll('.sequence-step'); if (!isSequenceRunning || currentSequenceStep >= steps.length) { if (isSequenceRunning) { isSequenceRunning = false; addLogMessage('[UI] Sekwencja ukonczona.', 'success'); } updateSequenceUI(); return; } updateSequenceUI(); const stepNode = steps[currentSequenceStep]; const type = stepNode.querySelector('.sequence-type').value; const value = parseFloat(stepNode.querySelector('.sequence-value').value); let command = {}; switch (type) { case 'move_fwd': command = { type: 'execute_move', distance_cm: value }; break; case 'move_bwd': command = { type: 'execute_move', distance_cm: -value }; break; case 'rotate_r': command = { type: 'execute_rotate', angle_deg: value }; break; case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -value }; break; } addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info'); sendBleMessage(command); }
+    
+    let tuningSession = null;
+    
+    // =======================================================================================
+    // SKRYPT DLA SEKCJI AUTO-STROJENIA (ZN + OPTYMALIZACJA)
+    // =======================================================================================
+    
+    let isZnTuningRunning = false;
+    let znResults = { ku: 0, tu: 0 };
+
+    function setupZnTuningControls() {
+        const actionBtn = document.getElementById('znTuningActionBtn');
+        const cancelBtn = document.getElementById('znTuningCancelBtn');
+        const applyBtn = document.getElementById('applyZnResultsBtn');
+
+        actionBtn.addEventListener('click', () => {
+            if (!isZnTuningRunning) {
+                if (lastKnownRobotState !== 'BALANSUJE' && lastKnownRobotState !== 'TRZYMA_POZYCJE') {
+                    addLogMessage('[UI] BLAD: Aby rozpoczac strojenie, robot musi byc w stanie balansu.', 'error');
                     return;
                 }
-            }
-            
-            zn_last_pitch = current_pitch;
-            zn_test_kp += ZN_KP_INCREASE_STEP * dt * 100;
-            break;
-        }
-
-        case ZN_MEASURE: {
-            float output = zn_test_kp * (balance_point - current_pitch);
-            setMotorPower(-output, -output);
-            telemetry_balance_output = zn_test_kp;
-
-            if ((zn_last_pitch > balance_point && current_pitch <= balance_point) || (zn_last_pitch < balance_point && current_pitch >= balance_point)) {
-                unsigned long now = millis();
-                if (zn_last_crossing_time > 0) {
-                    float half_period = (now - zn_last_crossing_time) / 1000.0f;
-                    if (zn_period_sample_count < ZN_MEASUREMENT_SAMPLES) {
-                        zn_period_samples[zn_period_sample_count++] = half_period * 2.0f;
-                    }
-                }
-                zn_last_crossing_time = now;
-
-                if (zn_period_sample_count >= ZN_MEASUREMENT_SAMPLES) {
-                    float sum_tu = 0;
-                    for (int i = 0; i < ZN_MEASUREMENT_SAMPLES; i++) {
-                        sum_tu += zn_period_samples[i];
-                    }
-                    float avg_tu = sum_tu / ZN_MEASUREMENT_SAMPLES;
-                    finishZnTuning(zn_test_kp, avg_tu);
+                if (confirm("UWAGA! Ta procedura wprowadzi robota w kontrolowane oscylacje. Upewnij sie, ze ma wystarczajaco duzo miejsca. Kontynuowac?")) {
+                    startZnTuning();
                 }
             }
-            zn_last_pitch = current_pitch;
-            break;
-        }
-        case ZN_IDLE:
-        default:
-          break;
+        });
+
+        cancelBtn.addEventListener('click', () => {
+            if (isZnTuningRunning) {
+                cancelZnTuning();
+            }
+        });
+
+        applyBtn.addEventListener('click', () => {
+            if (znResults.ku > 0 && znResults.tu > 0) {
+                applyZnResults();
+            }
+        });
     }
-}
+    
+    function startZnTuning() {
+        isZnTuningRunning = true;
+        document.getElementById('znStatusText').textContent = "Rozpoczynanie...";
+        document.getElementById('znTuningActionBtn').disabled = true;
+        document.getElementById('znTuningCancelBtn').style.display = 'block';
+        document.getElementById('znResultPanel').style.display = 'none';
+        addLogMessage('[UI] Wysylam polecenie rozpoczecia strojenia Z-N do robota...', 'info');
+        sendBleMessage({ type: 'start_zn_tuning' });
+    }
 
-void ControlLoopTask(void* pvParameters) {
-  printAndLog("info", "Zadanie petli sterowania uruchomione.");
-  long lastPosition = 0;
-  RobotState previousState = IDLE;
-  TickType_t xLastWakeTime = xTaskGetTickCount();
-  
-  static float filtered_actualSpeed = 0.0f;
+    function cancelZnTuning() {
+        isZnTuningRunning = false;
+        document.getElementById('znStatusText').textContent = "Anulowanie...";
+        addLogMessage('[UI] Wysylam polecenie anulowania strojenia do robota...', 'warn');
+        sendBleMessage({ type: 'cancel_tuning' });
+        resetZnTuningUI();
+    }
 
-  for (;;) {
-    if (dmpReady && !controlFlags.directMotorControlActive) {
-        float dt = (float)LOOP_INTERVAL_MICROS / 1000000.0f;
+    function resetZnTuningUI() {
+        isZnTuningRunning = false;
+        document.getElementById('znStatusText').textContent = "Bezczynny";
+        document.getElementById('znKpTestVal').textContent = "---";
+        document.getElementById('znTuningActionBtn').disabled = false;
+        document.getElementById('znTuningActionBtn').textContent = "Rozpocznij Odkrywanie";
+        document.getElementById('znTuningCancelBtn').style.display = 'none';
+    }
+
+    function handleZnTuningResult(ku, tu) {
+        addLogMessage(`[UI] Otrzymano wynik strojenia Z-N: Ku=${ku.toFixed(4)}, Tu=${tu.toFixed(4)}`, 'success');
+        resetZnTuningUI();
         
-        if (mpuInterrupt) {
-            mpuInterrupt = false;
-            if (mpu.dmpPacketAvailable() && mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
-                mpu.dmpGetQuaternion(&q, fifoBuffer);
-                mpu.dmpGetGravity(&gravity, &q);
-                mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-                mpu.dmpGetAccel(&accel, fifoBuffer);
-                
-                float raw_pitch = ypr[1] * 180 / M_PI;
-                pitch = (1.0f - tuningParams.pitchFilterAlpha) * pitch + tuningParams.pitchFilterAlpha * raw_pitch;
-                yaw = ypr[0] * 180 / M_PI;
-            } else { 
-                mpu.resetFIFO(); 
+        znResults = { ku, tu };
+        const resultPanel = document.getElementById('znResultPanel');
+        resultPanel.style.display = 'block';
+
+        const kp = 0.6 * ku;
+        const kd = kp * tu / 8;
+
+        document.getElementById('znKuResult').textContent = ku.toFixed(4);
+        document.getElementById('znTuResult').textContent = tu.toFixed(4) + " s";
+        document.getElementById('znKpSuggest').textContent = kp.toFixed(4);
+        document.getElementById('znKdSuggest').textContent = kd.toFixed(4);
+
+        updateAccordionHeight(resultPanel.closest('.accordion-content'));
+    }
+
+    function applyZnResults() {
+        const { ku, tu } = znResults;
+        if (ku <= 0 || tu <= 0) return;
+
+        const kp = 0.6 * ku;
+        const kd = kp * tu / 8;
+
+        isApplyingConfig = true;
+        document.getElementById('balanceKpInput').value = kp.toFixed(4);
+        document.getElementById('balanceKiInput').value = 0.0;
+        document.getElementById('balanceKdInput').value = kd.toFixed(4);
+        isApplyingConfig = false;
+
+        document.getElementById('balanceKpInput').dispatchEvent(new Event('change', { bubbles: true }));
+        document.getElementById('balanceKiInput').dispatchEvent(new Event('change', { bubbles: true }));
+        document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true }));
+        
+        addLogMessage('[UI] Zastosowano sugerowane wartosci Kp i Kd. Ki ustawiono na 0.', 'info');
+    }
+    
+    const testConfigurations = {
+        'balance': {
+            label: 'Optymalizuj Balans',
+            paramsToTune: { 
+                kp_b: { id: 'balanceKpInput', range: 0.3 },
+                kd_b: { id: 'balanceKdInput', range: 0.3 } 
             }
         }
-
-        checkLiftDetection(accel.x, accel.y, accel.z);
-        checkSafetySystems(mpu.getRotationY() / 131.0);
-        autoRecovery();
-        
-        if (currentState == AUTO_TUNING) {
-            handleZieglerNicholsTuning(pitch, dt);
-            telemetry_pitch = pitch - angleOffset;
-            telemetry_yaw = normalizeAngle(yaw - yawOffset);
-            telemetry_actual_speed = 0;
-            telemetry_encoder_left = encoder_L.position.load(std::memory_order_relaxed);
-            telemetry_encoder_right = encoder_R.position.load(std::memory_order_relaxed);
-            vTaskDelayUntil(&xLastWakeTime, LOOP_INTERVAL_TICKS);
-            continue;
-        }
-        
-        long currentPosL = encoder_L.position.load(std::memory_order_relaxed);
-        long currentPosR = encoder_R.position.load(std::memory_order_relaxed);
-        long currentPosition = (currentPosL + currentPosR) / 2;
-        
-        float raw_actualSpeed = (float)(currentPosition - lastPosition) / dt;
-        const float MAX_REALISTIC_SPEED = 4000.0f;
-        if (abs(raw_actualSpeed) > MAX_REALISTIC_SPEED) {
-            raw_actualSpeed = filtered_actualSpeed;
-        }
-        filtered_actualSpeed = (1.0f - tuningParams.speedFilterAlpha) * filtered_actualSpeed + tuningParams.speedFilterAlpha * raw_actualSpeed;
-        actualSpeed = filtered_actualSpeed;
-        
-        lastPosition = currentPosition;
-        
-        bool isJoystickTimedOut = (millis() - lastJoystickTime > JOYSTICK_TIMEOUT);
-        bool isJoystickMoving = joystickActive && !isJoystickTimedOut;
-        
-        float joystickTargetSpeed = 0.0f;
-        float joystickTargetAngle = 0.0f;
-        float joystickTurnComponent = 0.0f;
-
-        if (isJoystickMoving) {
-            float joyY_d = (abs(joystickY) > tuningParams.joystickDeadzone) ? joystickY : 0.0f;
-            float targetJoyY_expo = (1.0f - tuningParams.expoJoystick) * joyY_d + tuningParams.expoJoystick * pow(joyY_d, 3);
-            float finalJoyY = targetJoyY_expo * tuningParams.joystickSensitivity;
-            float joyX_d = (abs(joystickX) > tuningParams.joystickDeadzone) ? joystickX : 0.0f;
-            float targetJoyX_expo = (1.0f - tuningParams.expoJoystick) * joyX_d + tuningParams.expoJoystick * pow(joyX_d, 3);
-            float finalJoyX = targetJoyX_expo * tuningParams.joystickSensitivity;
+    };
+    
+    class TuningSession {
+        constructor(testType, options) {
+            this.testType = testType;
+            this.config = testConfigurations[testType];
+            this.options = options;
+            this.paramsToTune = this.config.paramsToTune;
+            this.paramKeys = Object.keys(this.paramsToTune);
+            this.state = 'idle';
+            this.isCollecting = false;
+            this.telemetryBuffer = [];
+            this.currentCycle = 0;
+            this.totalCycles = options.totalCycles;
+            this.bestScore = -1.0;
+            this.bestParams = {};
+            this.currentParams = {};
+            this.safeParams = {};
+            this.cycleTimeout = null;
             
-            if (controlFlags.speedModeEnabled) {
-                joystickTargetSpeed = finalJoyY * tuningParams.maxSpeedJoystick;
+            this.temperature = 1.0;
+            this.coolingRate = Math.pow(0.01, 1.0 / this.totalCycles); // Schlodz do 1% na koniec
+        }
+
+        recordTelemetry(data) { if (this.isCollecting && data.type === 'telemetry') this.telemetryBuffer.push(data); }
+
+        start() {
+            addLogMessage(`[AutoTest] Rozpoczynam sesje: ${this.config.label}`, 'info');
+            this.safeParams = {};
+            for(const key in this.paramsToTune) {
+                const inputId = this.paramsToTune[key].id;
+                this.safeParams[key] = parseFloat(document.getElementById(inputId).value);
+            }
+            this.bestParams = { ...this.safeParams };
+            this.currentParams = { ...this.safeParams };
+            this.currentCycle = 1;
+            this.temperature = 1.0;
+            this.bestScore = -1.0;
+
+            this.runCycle();
+        }
+
+        runCycle() {
+            if (this.currentCycle > this.totalCycles) {
+                this.state = 'finished';
+                updateAutoTestUI(this);
+                return;
+            }
+
+            this.state = 'testing';
+            this.isCollecting = true;
+            this.telemetryBuffer = [];
+            
+            this.currentParams = this.generateNextParams();
+            updateAutoTestUI(this);
+
+            this.cycleTimeout = setTimeout(() => {
+                if (this.isCollecting) {
+                    addLogMessage('[AutoTest] Timeout cyklu! Anuluje probe.', 'warn');
+                    this.finishCycle(true);
+                }
+            }, (this.options.cycleDuration + 2) * 1000);
+
+            Object.entries(this.currentParams).forEach(([key, value]) => {
+                sendBleMessage({ type: 'set_param', key: key, value: value });
+            });
+            sendBleMessage({ type: 'reset_pids' }); 
+            
+            setTimeout(() => {
+                 setTimeout(() => this.finishCycle(false), this.options.cycleDuration * 1000);
+            }, 300);
+        }
+
+        finishCycle(failed = false) {
+            if (!this.isCollecting) return;
+            clearTimeout(this.cycleTimeout);
+            this.isCollecting = false;
+            this.state = 'analyzing';
+            updateAutoTestUI(this);
+
+            if (failed) {
+                 this.temperature *= this.coolingRate;
+                 this.currentCycle++;
+                 setTimeout(() => this.runCycle(), 200);
+                 return;
+            }
+            
+            const { score, components } = this.calculateBalanceFitness();
+            let logMsg = `[AutoTest] Wynik: ${score.toFixed(4)} (S:${components.stability.toFixed(2)}, C:${components.stillness.toFixed(2)}, P:${components.overshoot.toFixed(2)}, W:${components.effort.toFixed(2)})`;
+
+            if (score > this.bestScore) {
+                this.bestScore = score;
+                this.bestParams = { ...this.currentParams };
+                logMsg += " - NOWY NAJLEPSZY!";
+            }
+            
+            const delta = score - this.bestScore;
+            const acceptanceProb = Math.exp(delta / this.temperature);
+            if (Math.random() < acceptanceProb) {
+                // Akceptuj nowe rozwiazanie (lepsze lub gorsze) jako punkt startowy do nastepnej proby
+                // ale NIE nadpisuj najlepszego wyniku, jesli jest gorsze
             } else {
-                joystickTargetAngle = finalJoyY * tuningParams.joystickAngleSensitivity;
+                // Odrzuc nowe rozwiazanie, wroc do najlepszego
+                this.currentParams = { ...this.bestParams };
             }
-            joystickTurnComponent = finalJoyX * (PWM_MAX_VALUE * tuningParams.turnFactor);
-        }
-
-        float speedSetpoint = 0.0f;
-        float angleContribution = 0.0f;
-        float turnComponent = joystickTurnComponent;
-
-        if (isJoystickMoving) {
-            currentState = BALANCING;
-            speedSetpoint = joystickTargetSpeed;
-            angleContribution = joystickTargetAngle;
-        } else {
-            switch (currentState) {
-                case IDLE:
-                    if (controlFlags.balancingEnabled) {
-                        currentState = controlFlags.holdPositionEnabled ? HOLDING_POSITION : BALANCING;
-                    }
-                    break;
-                case BALANCING:
-                    if (controlFlags.holdPositionEnabled) {
-                        currentState = HOLDING_POSITION;
-                    } else if (!controlFlags.balancingEnabled) {
-                        currentState = IDLE;
-                    }
-                    break;
-                case HOLDING_POSITION:
-                    if (!controlFlags.holdPositionEnabled || !controlFlags.balancingEnabled) {
-                        currentState = BALANCING;
-                    } else {
-                        speedSetpoint = positionPID.compute(positionSetpoint, currentPosition, dt);
-                    }
-                    break;
-                case AUTONOMOUS_MOVE:
-                    speedSetpoint = positionPID.compute(targetPosition, currentPosition, dt);
-                    if (abs(targetPosition - currentPosition) < positionPID.deadband && abs(actualSpeed) < speedPID.deadband * 2) {
-                        positionSetpoint = currentPosition;
-                        currentState = HOLDING_POSITION;
-                    }
-                    break;
-                case AUTONOMOUS_ROTATE:
-                    turnComponent = rotationPID.compute(targetRotationDiff, (currentPosR - currentPosL), dt);
-                    if (abs(targetRotationDiff - (currentPosR - currentPosL)) < 50 && abs(actualSpeed) < speedPID.deadband) {
-                        positionSetpoint = currentPosition;
-                        currentState = HOLDING_POSITION;
-                    }
-                    break;
-                case AUTO_TUNING: 
-                    break;
-            }
-        }
-        
-        if(previousState != currentState) {
-            if(currentState == HOLDING_POSITION && previousState != AUTONOMOUS_MOVE && previousState != AUTONOMOUS_ROTATE) {
-                positionSetpoint = currentPosition;
-                positionPID.reset();
-                speedPID.reset();
-            } 
-            else if (currentState == AUTONOMOUS_MOVE) {
-                positionPID.reset();
-                speedPID.reset();
-            }
-            else if (currentState == AUTONOMOUS_ROTATE) {
-                rotationPID.reset();
-            }
-            else if (currentState == IDLE) {
-                resetAllPids();
-            }
-        }
-        previousState = currentState;
-
-        if (currentState == HOLDING_POSITION || currentState == AUTONOMOUS_MOVE || (isJoystickMoving && controlFlags.speedModeEnabled)) {
-            float speedPID_output = speedPID.compute(speedSetpoint, actualSpeed, dt);
-            angleContribution += fmap(speedPID_output, -100.0f, 100.0f, tuningParams.maxTargetAngleFromSpeedPID, -tuningParams.maxTargetAngleFromSpeedPID);
-        }
-        
-        finalTargetAngle = baseTargetAngleTrim + angleContribution;
-        
-        bool shouldBeIdle = (abs(finalTargetAngle) < tuningParams.balanceDeadbandAngle) && (abs(actualSpeed) < speedPID.deadband) && (currentState != AUTONOMOUS_MOVE);
-        balancePID.setIdle(shouldBeIdle);
-        
-        if (controlFlags.balancingEnabled && !controlFlags.emergencyStop) {
-            float balance_output = balancePID.compute(finalTargetAngle, (pitch - angleOffset), dt);
-            telemetry_balance_output = balance_output; 
+            addLogMessage(logMsg, 'success');
             
-            float powerL = -balance_output + turnComponent;
-            float powerR = -balance_output - turnComponent;
-            setMotorPower(powerL, powerR);
-        } else {
-            stopAllMotors();
+            this.temperature *= this.coolingRate;
+            this.currentCycle++;
+            setTimeout(() => this.runCycle(), 200);
         }
-
-        telemetry_pitch = pitch - angleOffset;
-        telemetry_yaw = normalizeAngle(yaw - yawOffset);
-        telemetry_actual_speed = actualSpeed;
-        telemetry_encoder_left = currentPosL;
-        telemetry_encoder_right = currentPosR;
-    }
-    vTaskDelayUntil(&xLastWakeTime, LOOP_INTERVAL_TICKS);
-  }
-}
-
-void CommunicationManagerTask(void* pvParameters) {
-  printAndLog("info", "Manager Komunikacji uruchomiony.");
-  static String messageBuffer = ""; 
-  char rxFragment[256];
-
-  for (;;) {
-    if (xQueueReceive(bleRxQueue, &rxFragment, pdMS_TO_TICKS(10))) {
-      messageBuffer += rxFragment;
-      int newlineIndex;
-      while ((newlineIndex = messageBuffer.indexOf('\n')) != -1) {
-        String completeMessage = messageBuffer.substring(0, newlineIndex);
-        messageBuffer.remove(0, newlineIndex + 1);
-        if (completeMessage.length() == 0) continue;
         
-        StaticJsonDocument<MAX_JSON_SIZE> doc;
-        if (deserializeJson(doc, completeMessage) == DeserializationError::Ok) {
-          JsonObject doc_obj = doc.as<JsonObject>();
-          const char* type = doc_obj["type"];
-          if (!type) continue;
-          
-          if (strcmp(type, "start_zn_tuning") == 0) {
-            startZnTuning();
-          } else if (strcmp(type, "cancel_tuning") == 0) {
-            cancelZnTuning();
-          } else if (strcmp(type, "joystick") == 0) {
-            joystickX = doc_obj["x"];
-            joystickY = doc_obj["y"];
-            joystickActive = (abs(joystickX) > 0.01 || abs(joystickY) > 0.01);
-            lastJoystickTime = millis();
-          } else if (strcmp(type, "speed_mode_toggle") == 0) {
-            controlFlags.speedModeEnabled = doc_obj["enabled"];
-          } else if (strcmp(type, "hold_position_toggle") == 0) {
-            controlFlags.holdPositionEnabled = doc_obj["enabled"];
-          } else if (strcmp(type, "request_full_config") == 0) {
-              sendFullConfiguration();
-          } else if (strcmp(type, "balance_toggle") == 0) { 
-              controlFlags.balancingEnabled = doc_obj["enabled"]; 
-              if (controlFlags.balancingEnabled) { 
-                  controlFlags.emergencyStop = false; 
-                  resetAllPids(); 
-              } else { 
-                  currentState = IDLE;
-                  stopAllMotors();
-              } 
-          } else if (strcmp(type, "execute_move") == 0) {
-              if (controlFlags.balancingEnabled) {
-                  resetAllPids();
-                  float distance_cm = doc_obj["distance_cm"];
-                  targetPosition = ((encoder_L.position.load() + encoder_R.position.load()) / 2) + (long)(distance_cm * internal_impulsesPerCm);
-                  currentState = AUTONOMOUS_MOVE;
-              }
-          } else if (strcmp(type, "execute_rotate") == 0) {
-              if (controlFlags.balancingEnabled) {
-                  resetAllPids();
-                  float angle_deg = doc_obj["angle_deg"];
-                  targetRotationDiff = (encoder_R.position.load() - encoder_L.position.load()) + (long)(angle_deg * internal_impulsesPerDegree);
-                  currentState = AUTONOMOUS_ROTATE;
-              }
-          } else if (strcmp(type, "command_stop") == 0) {
-              if (currentState == AUTONOMOUS_MOVE || currentState == AUTONOMOUS_ROTATE) {
-                  positionSetpoint = (encoder_L.position.load() + encoder_R.position.load()) / 2;
-                  currentState = HOLDING_POSITION;
-              }
-          } else if (strcmp(type, "set_param") == 0) {
-              const char* key = doc_obj["key"];
-              if (key && doc_obj.containsKey("value")) {
-                  float value = doc_obj["value"];
-                  bool config_updated = false;
-                  
-                  if (strcmp(key, "kp_b") == 0) { tuningParams.Kp_b = value; config_updated = true; }
-                  else if (strcmp(key, "ki_b") == 0) { tuningParams.Ki_b = value; config_updated = true; }
-                  else if (strcmp(key, "kd_b") == 0) { tuningParams.Kd_b = value; config_updated = true; }
-                  else if (strcmp(key, "balance_pid_derivative_filter_alpha") == 0) { tuningParams.balancePidDerivativeFilterAlpha = value; config_updated = true; }
-                  else if (strcmp(key, "joystick_angle_sensitivity") == 0) { tuningParams.joystickAngleSensitivity = value; config_updated = true; }
-                  else if (strcmp(key, "kp_s") == 0) { tuningParams.Kp_s = value; config_updated = true; }
-                  else if (strcmp(key, "ki_s") == 0) { tuningParams.Ki_s = value; config_updated = true; }
-                  else if (strcmp(key, "kd_s") == 0) { tuningParams.Kd_s = value; config_updated = true; }
-                  else if (strcmp(key, "kp_p") == 0) { tuningParams.Kp_p = value; config_updated = true; }
-                  else if (strcmp(key, "ki_p") == 0) { tuningParams.Ki_p = value; config_updated = true; }
-                  else if (strcmp(key, "kd_p") == 0) { tuningParams.Kd_p = value; config_updated = true; }
-                  else if (strcmp(key, "kp_r") == 0) { tuningParams.Kp_r = value; config_updated = true; }
-                  else if (strcmp(key, "kd_r") == 0) { tuningParams.Kd_r = value; config_updated = true; }
-                  else if (strcmp(key, "kp_h") == 0) { tuningParams.Kp_h = value; config_updated = true; }
-                  else if (strcmp(key, "ki_h") == 0) { tuningParams.Ki_h = value; config_updated = true; }
-                  else if (strcmp(key, "kd_h") == 0) { tuningParams.Kd_h = value; config_updated = true; }
-                  else if (strcmp(key, "speed_pid_deadband") == 0) { tuningParams.speedPidDeadband = value; config_updated = true; }
-                  else if (strcmp(key, "position_pid_deadband") == 0) { tuningParams.positionPidDeadband = value; config_updated = true; }
-                  else if (strcmp(key, "balance_deadband_angle") == 0) { tuningParams.balanceDeadbandAngle = value; config_updated = true; }
-                  else if (strcmp(key, "expo_joystick") == 0) { tuningParams.expoJoystick = value; config_updated = true; }
-                  else if (strcmp(key, "max_speed_joystick") == 0) { tuningParams.maxSpeedJoystick = value; config_updated = true; }
-                  else if (strcmp(key, "turn_factor") == 0) { tuningParams.turnFactor = value; config_updated = true; }
-                  else if (strcmp(key, "joystick_deadzone") == 0) { tuningParams.joystickDeadzone = value; config_updated = true; }
-                  else if (strcmp(key, "joystick_sensitivity") == 0) { tuningParams.joystickSensitivity = value; config_updated = true; }
-                  else if (strcmp(key, "wheel_diameter_cm") == 0) { tuningParams.wheelDiameterCm = value; config_updated = true; }
-                  else if (strcmp(key, "track_width_cm") == 0) { tuningParams.trackWidthCm = value; config_updated = true; }
-                  else if (strcmp(key, "encoder_ppr") == 0) { tuningParams.encoderPPR = value; config_updated = true; }
-                  else if (strcmp(key, "max_target_angle_from_speed_pid") == 0) { tuningParams.maxTargetAngleFromSpeedPID = value; config_updated = true; }
-                  else if (strcmp(key, "max_target_speed_from_pos_pid") == 0) { tuningParams.maxTargetSpeedFromPosPID = value; config_updated = true; }
-                  else if (strcmp(key, "min_pwm_left_fwd") == 0) { tuningParams.minPwmLeftFwd = (int)value; config_updated = true; }
-                  else if (strcmp(key, "min_pwm_left_bwd") == 0) { tuningParams.minPwmLeftBwd = (int)value; config_updated = true; }
-                  else if (strcmp(key, "min_pwm_right_fwd") == 0) { tuningParams.minPwmRightFwd = (int)value; config_updated = true; }
-                  else if (strcmp(key, "min_pwm_right_bwd") == 0) { tuningParams.minPwmRightBwd = (int)value; config_updated = true; }
-                  else if (strcmp(key, "speed_filter_alpha") == 0) { tuningParams.speedFilterAlpha = value; config_updated = true; }
-                  else if (strcmp(key, "pitch_filter_alpha") == 0) { tuningParams.pitchFilterAlpha = value; config_updated = true; }
-
-                  if (config_updated) { 
-                      updateSystemConfiguration(); 
-                  }
-              }
-          } else if (strcmp(type, "emergency_stop") == 0) { emergencyShutdown("Przycisk E-STOP z UI"); 
-          } else if (strcmp(type, "save_tunings") == 0) { saveTuningsToEEPROM(); 
-          } else if (strcmp(type, "calibrate_mpu") == 0) { calibrateMPU(); 
-          } else if (strcmp(type, "reset_zero") == 0) {
-              angleOffset = pitch;
-              yawOffset = yaw;
-              baseTargetAngleTrim = 0.0;
-          } else if (strcmp(type, "reset_pids") == 0) { 
-              resetAllPids(); 
-          } else if (strcmp(type, "adjust_zero") == 0) { 
-              baseTargetAngleTrim += doc_obj["value"].as<int>() * ZERO_ADJUST_STEP; 
-          } else if (strcmp(type, "reset_encoders") == 0) { 
-              encoder_L.position.store(0); encoder_R.position.store(0); 
-          } else if (strcmp(type, "manual_tune_motor") == 0) {
-              controlFlags.directMotorControlActive = true;
-              lastDirectControlTime = millis();
-              uint8_t motorIdx = (strcmp(doc_obj["motor"], "left") == 0) ? 0 : 1;
-              int direction = (strcmp(doc_obj["direction"], "fwd") == 0) ? 1 : -1;
-              setMotorPowerRaw(motorIdx, doc_obj["pwm"].as<int>() * direction);
-          } else if (strcmp(type, "manual_tune_stop_all") == 0) {
-              stopAllMotors(); 
-              controlFlags.directMotorControlActive = false;
-          } else if (strcmp(type, "autotune_single_pwm") == 0) {
-              controlFlags.directMotorControlActive = true;
-              stopAllMotors();
-              vTaskDelay(pdMS_TO_TICKS(100));
-
-              const char* motor_str = doc_obj["motor"];
-              const char* direction_str = doc_obj["direction"];
-              int start_pwm = doc_obj["start_pwm"];
-              
-              uint8_t motorIdx = (strcmp(motor_str, "left") == 0) ? 0 : 1;
-              int direction = (strcmp(direction_str, "fwd") == 0) ? 1 : -1;
-              
-              int found_pwm = tuneSingleMotor(motorIdx, direction, start_pwm);
-              
-              StaticJsonDocument<SMALL_JSON_SIZE> resultDoc;
-              resultDoc["type"] = "single_pwm_result";
-              JsonObject params = resultDoc.createNestedObject("params");
-              params["motor"] = motor_str;
-              params["direction"] = direction_str;
-              params["value"] = found_pwm;
-              
-              String jsonBuffer;
-              serializeJson(resultDoc, jsonBuffer);
-              sendBleNotificationSafe(jsonBuffer);
-              
-              controlFlags.directMotorControlActive = false;
-          }
-        } else {
-            printAndLog("error", "Blad deserializacji JSON w Managerze: %s", completeMessage.c_str());
-        }
-      }
-    }
-    
-    if (controlFlags.directMotorControlActive && (millis() - lastDirectControlTime > 2000)) {
-        stopAllMotors();
-        controlFlags.directMotorControlActive = false;
-        printAndLog("warn", "Timeout strojenia recznego. Silniki wylaczone.");
-    }
-
-    if (CameraSerial.available()) {
-        lastCameraDataTime = millis();
-        telemetry_camera_ok = true;
-        while(CameraSerial.available()) {
-            CameraSerial.read();
-        }
-    }
-
-    if (millis() - lastCameraDataTime > 500) {
-        telemetry_camera_ok = false;
-    }
-  }
-}
-
-void TelemetryTask(void* pvParameters) {
-  printAndLog("info", "Zadanie Telemetrii uruchomione.");
-  unsigned long lastTelemetrySendTime = 0;
-  for (;;) {
-    if (millis() - lastTelemetrySendTime >= TELEMETRY_INTERVAL_MS) {
-        lastTelemetrySendTime = millis();
-        if (bleDeviceConnected) {
-            StaticJsonDocument<SMALL_JSON_SIZE> doc;
-            doc["type"] = "telemetry";
-            doc["pitch"] = telemetry_pitch;
-            doc["yaw"] = telemetry_yaw;
-            doc["speed"] = telemetry_actual_speed;
-            doc["robot_state"] = robotStateNames[currentState];
-            doc["camera_ok"] = telemetry_camera_ok;
-            doc["encoder_left"] = telemetry_encoder_left;
-            doc["encoder_right"] = telemetry_encoder_right;
-            doc["output"] = telemetry_balance_output;
-            doc["emergency_stop"] = controlFlags.emergencyStop;
-            String jsonBuffer;
-            serializeJson(doc, jsonBuffer);
-            sendBleNotificationSafe(jsonBuffer);
-        }
-    }
-    vTaskDelay(pdMS_TO_TICKS(20));
-  }
-}
-
-void BLETransmitTask(void* pvParameters) {
-  printAndLog("info", "Zadanie transmisji BLE uruchomione.");
-  BLEMessage msg;
-  for (;;) {
-    if (xQueueReceive(bleTxQueue, &msg, portMAX_DELAY)) {
-      if (bleDeviceConnected && pTxCharacteristic) {
-        pTxCharacteristic->setValue((uint8_t*)msg.data, msg.length);
-        pTxCharacteristic->notify();
-        vTaskDelay(pdMS_TO_TICKS(BLE_TX_DELAY_MS));
-      }
-    }
-  }
-}
-
-class MyRxCallbacks : public BLECharacteristicCallbacks {
-  void onWrite(BLECharacteristic* pCharacteristic) {
-    std::string rxValue = pCharacteristic->getValue();
-    size_t len = rxValue.length();
-    if (len > 0 && len < 256) {
-      char buffer[256];
-      strncpy(buffer, rxValue.c_str(), sizeof(buffer) - 1);
-      buffer[sizeof(buffer) - 1] = '\0';
-      xQueueSend(bleRxQueue, &buffer, 0);
-    }
-  }
-};
-
-class MyServerCallbacks : public BLEServerCallbacks {
-  void onConnect(BLEServer* pServer) {
-    bleDeviceConnected = true;
-    printAndLog("info", "Klient BLE polaczony.");
-  }
-  void onDisconnect(BLEServer* pServer) {
-    bleDeviceConnected = false;
-    vTaskDelay(pdMS_TO_TICKS(100));
-    pServer->getAdvertising()->start();
-    printAndLog("warn", "Klient BLE rozlaczony.");
-  }
-};
-
-void setupBLE() {
-  BLEDevice::init(ROBOT_BLE_NAME);
-  pServer = BLEDevice::createServer();
-  pServer->setCallbacks(new MyServerCallbacks());
-  BLEService* pService = pServer->createService(SERVICE_UUID);
-  pTxCharacteristic = pService->createCharacteristic(CHARACTERISTIC_UUID_TX, BLECharacteristic::PROPERTY_NOTIFY);
-  pTxCharacteristic->addDescriptor(new BLE2902());
-  BLECharacteristic* pRxCharacteristic = pService->createCharacteristic(CHARACTERISTIC_UUID_RX, BLECharacteristic::PROPERTY_WRITE_NR);
-  pRxCharacteristic->setCallbacks(new MyRxCallbacks());
-  pService->start();
-  BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
-  pAdvertising->addServiceUUID(SERVICE_UUID);
-  pServer->getAdvertising()->start();
-  printAndLog("info", "Serwer BLE uruchomiony, robot widoczny jako '%s'", ROBOT_BLE_NAME);
-}
-
-void printAndLog(const char* level, const char* format, ...) {
-  char buffer[256];
-  va_list args;
-  va_start(args, format);
-  vsnprintf(buffer, sizeof(buffer), format, args);
-  va_end(args);
-  Serial.printf("[%s] %s\n", level, buffer);
-
-  if (!bleDeviceConnected) return;
-  StaticJsonDocument<SMALL_JSON_SIZE> logDoc;
-  logDoc["type"] = "log";
-  logDoc["level"] = level;
-  logDoc["message"] = buffer;
-  String out;
-  serializeJson(logDoc, out);
-  sendBleNotificationSafe(out);
-}
-
-bool sendBleNotificationSafe(const String& value) {
-  if (!bleDeviceConnected) return false;
-  String valueWithNewline = value + "\n";
-  if (valueWithNewline.length() > BLE_PACKET_MAX_SIZE) {
-    return sendLargeBleNotificationFragmented(value);
-  }
-  BLEMessage msg;
-  msg.length = valueWithNewline.length();
-  strncpy(msg.data, valueWithNewline.c_str(), sizeof(msg.data) - 1);
-  msg.data[sizeof(msg.data) - 1] = '\0';
-  return xQueueSend(bleTxQueue, &msg, 0) == pdTRUE;
-}
-
-bool sendLargeBleNotificationFragmented(const String& value) {
-  if (!bleDeviceConnected) return false;
-  const size_t CHUNK_PAYLOAD_SIZE = 180;
-  unsigned long msgId = millis();
-  int totalChunks = ceil((float)value.length() / CHUNK_PAYLOAD_SIZE);
-  for (int i = 0; i < totalChunks; ++i) {
-    int offset = i * CHUNK_PAYLOAD_SIZE;
-    String chunkData = value.substring(offset, offset + CHUNK_PAYLOAD_SIZE);
-    StaticJsonDocument<300> chunkDoc;
-    chunkDoc["type"] = "chunk";
-    chunkDoc["id"] = msgId;
-    chunkDoc["i"] = i;
-    chunkDoc["total"] = totalChunks;
-    chunkDoc["data"] = chunkData;
-    String chunkBuffer;
-    serializeJson(chunkDoc, chunkBuffer);
-    String chunkWithNewline = chunkBuffer + "\n";
-    BLEMessage msg;
-    msg.length = chunkWithNewline.length();
-    strncpy(msg.data, chunkWithNewline.c_str(), sizeof(msg.data) - 1);
-    msg.data[sizeof(msg.data) - 1] = '\0';
-    if (xQueueSend(bleTxQueue, &msg, pdMS_TO_TICKS(10)) != pdTRUE) {
-        printAndLog("error", "Nie udalo sie zakolejkowac fragmentu %d/%d", i, totalChunks);
-        return false;
-    }
-  }
-  return true;
-}
-
-void sendFullConfiguration() {
-    if (!bleDeviceConnected) return;
-    StaticJsonDocument<MAX_JSON_SIZE> doc;
-    doc["type"] = "full_config";
-    JsonObject params = doc.createNestedObject("params");
-    params["wheel_diameter_cm"] = tuningParams.wheelDiameterCm;
-    params["track_width_cm"] = tuningParams.trackWidthCm;
-    params["encoder_ppr"] = tuningParams.encoderPPR;
-    params["balance_deadband_angle"] = tuningParams.balanceDeadbandAngle;
-    params["joystick_deadzone"] = tuningParams.joystickDeadzone;
-    params["turn_factor"] = tuningParams.turnFactor;
-    params["expo_joystick"] = tuningParams.expoJoystick;
-    params["max_speed_joystick"] = tuningParams.maxSpeedJoystick;
-    params["joystick_sensitivity"] = tuningParams.joystickSensitivity;
-    params["joystick_angle_sensitivity"] = tuningParams.joystickAngleSensitivity;
-    params["min_pwm_left_fwd"] = tuningParams.minPwmLeftFwd;
-    params["min_pwm_left_bwd"] = tuningParams.minPwmLeftBwd;
-    params["min_pwm_right_fwd"] = tuningParams.minPwmRightFwd;
-    params["min_pwm_right_bwd"] = tuningParams.minPwmRightBwd;
-    params["kp_b"] = tuningParams.Kp_b;
-    params["ki_b"] = tuningParams.Ki_b;
-    params["kd_b"] = tuningParams.Kd_b;
-    params["balance_pid_derivative_filter_alpha"] = tuningParams.balancePidDerivativeFilterAlpha;
-    params["kp_s"] = tuningParams.Kp_s;
-    params["ki_s"] = tuningParams.Ki_s;
-    params["kd_s"] = tuningParams.Kd_s;
-    params["max_target_angle_from_speed_pid"] = tuningParams.maxTargetAngleFromSpeedPID;
-    params["speed_pid_deadband"] = tuningParams.speedPidDeadband;
-    params["kp_p"] = tuningParams.Kp_p;
-    params["ki_p"] = tuningParams.Ki_p;
-    params["kd_p"] = tuningParams.Kd_p;
-    params["max_target_speed_from_pos_pid"] = tuningParams.maxTargetSpeedFromPosPID;
-    params["position_pid_deadband"] = tuningParams.positionPidDeadband;
-    params["kp_r"] = tuningParams.Kp_r;
-    params["kd_r"] = tuningParams.Kd_r;
-    params["kp_h"] = tuningParams.Kp_h;
-    params["ki_h"] = tuningParams.Ki_h;
-    params["kd_h"] = tuningParams.Kd_h;
-    params["speed_filter_alpha"] = tuningParams.speedFilterAlpha;
-    params["pitch_filter_alpha"] = tuningParams.pitchFilterAlpha;
-    String buffer;
-    serializeJson(doc, buffer);
-    sendLargeBleNotificationFragmented(buffer);
-}
-
-void loadDefaultSettings() {
-  printAndLog("warn", "Ladowanie domyslnych ustawien (zgodnych z nowymi testami).");
-  tuningParams = TuningParams();
-  // PID Balansu (Startowy, solidny punkt wyjscia)
-  tuningParams.Kp_b = 97.1850f; 
-  tuningParams.Ki_b = 0.0f; 
-  tuningParams.Kd_b = 3.0039f;
-  tuningParams.balancePidDerivativeFilterAlpha = 0.4f;
-  // PID Kaskadowe (wyzerowane, zgodnie z prosba)
-  tuningParams.Kp_s = 0.0f; tuningParams.Ki_s = 0.0f; tuningParams.Kd_s = 0.0f;
-  tuningParams.Kp_p = 0.0f; tuningParams.Ki_p = 0.0f; tuningParams.Kd_p = 0.0f;
-  tuningParams.Kp_r = 0.0f; tuningParams.Kd_r = 0.0f;
-  tuningParams.Kp_h = 0.0f; tuningParams.Ki_h = 0.0f; tuningParams.Kd_h = 0.0f;
-  // Parametry limitujace i strefy martwe (zgodnie ze screenami)
-  tuningParams.maxTargetAngleFromSpeedPID = 5.0f;
-  tuningParams.speedPidDeadband = 5.0f;
-  tuningParams.maxTargetSpeedFromPosPID = 500.0f;
-  tuningParams.positionPidDeadband = 5.0f;
-  // Mechanika i reszta
-  tuningParams.encoderPPR = 820.0f;
-  tuningParams.wheelDiameterCm = 8.2f;
-  tuningParams.trackWidthCm = 12.5f;
-  tuningParams.minPwmLeftFwd = 640; tuningParams.minPwmLeftBwd = 640;
-  tuningParams.minPwmRightFwd = 640; tuningParams.minPwmRightBwd = 640;
-  tuningParams.joystickAngleSensitivity = 10.0f;
-  tuningParams.joystickDeadzone = 0.0f;
-  tuningParams.turnFactor = 0.25f;
-  tuningParams.expoJoystick = 0.0f;
-  tuningParams.maxSpeedJoystick = 800.0f;
-  tuningParams.joystickSensitivity = 1.0f;
-  tuningParams.balanceDeadbandAngle = 0.5f;
-  tuningParams.speedFilterAlpha = 0.2f;
-  tuningParams.pitchFilterAlpha = 0.8f;
-}
-
-void saveTuningsToEEPROM() {
-  EEPROMSettings t;
-  t.magic_number = CONFIG_MAGIC_NUMBER;
-  strncpy(t.version, CONFIG_VERSION, sizeof(t.version) - 1);
-  t.version[sizeof(t.version) - 1] = '\0';
-  t.params = tuningParams;
-  t.crc = crc32_le(0, (const uint8_t*)&t, sizeof(EEPROMSettings) - sizeof(uint32_t));
-  EEPROM.put(0, t);
-  if (EEPROM.commit()) { printAndLog("info", "Zapisano pomyslnie ustawienia w EEPROM."); }
-  else { printAndLog("error", "KRYTYCZNY BLAD zapisu do EEPROM!"); }
-}
-
-bool loadTuningsFromEEPROM() {
-  EEPROMSettings t;
-  EEPROM.get(0, t);
-  uint32_t calculated_crc = crc32_le(0, (const uint8_t*)&t, sizeof(EEPROMSettings) - sizeof(uint32_t));
-  if (t.magic_number == CONFIG_MAGIC_NUMBER && strcmp(t.version, CONFIG_VERSION) == 0 && t.crc == calculated_crc) {
-    tuningParams = t.params;
-    printAndLog("info", "Poprawnie wczytano ustawienia z EEPROM (v%s).", t.version);
-    return true;
-  } else {
-    printAndLog("error", "BLAD ODCZYTU EEPROM lub niezgodna wersja. Ladowanie domyslnych.");
-    return false;
-  }
-}
-
-void updateSystemConfiguration() {
-  balancePID.configure(tuningParams.Kp_b, tuningParams.Ki_b, tuningParams.Kd_b, -PWM_MAX_VALUE, PWM_MAX_VALUE, 500.0f, tuningParams.balancePidDerivativeFilterAlpha);
-  speedPID.configure(tuningParams.Kp_s, tuningParams.Ki_s, tuningParams.Kd_s, -100.0f, 100.0f, 10.0f);
-  speedPID.deadband = tuningParams.speedPidDeadband;
-  positionPID.configure(tuningParams.Kp_p, tuningParams.Ki_p, tuningParams.Kd_p, -tuningParams.maxTargetSpeedFromPosPID, tuningParams.maxTargetSpeedFromPosPID, 500.0f);
-  positionPID.deadband = tuningParams.positionPidDeadband;
-  rotationPID.configure(tuningParams.Kp_r, 0.0f, tuningParams.Kd_r, -800.0f, 800.0f, 0);
-  headingPID.configure(tuningParams.Kp_h, tuningParams.Ki_h, tuningParams.Kd_h, -800.0f, 800.0f, 500.0f);
-  recalculateMotionParameters();
-}
-
-void recalculateMotionParameters() {
-  if (tuningParams.wheelDiameterCm > 0.0f && tuningParams.encoderPPR > 0.0f) { 
-    internal_impulsesPerCm = tuningParams.encoderPPR / (PI * tuningParams.wheelDiameterCm); 
-  } else { internal_impulsesPerCm = 0.0f; }
-  
-  if (tuningParams.trackWidthCm > 0.0f && internal_impulsesPerCm > 0.0f) { 
-    internal_impulsesPerDegree = (PI * tuningParams.trackWidthCm * internal_impulsesPerCm) / 360.0f; 
-  } else { internal_impulsesPerDegree = 0.0f; }
-}
-
-void emergencyShutdown(const char* reason) {
-  if (controlFlags.emergencyStop) return;
-  controlFlags.emergencyStop = true;
-  controlFlags.balancingEnabled = false;
-  controlFlags.holdPositionEnabled = false;
-  currentState = IDLE;
-  stopAllMotors();
-  resetAllPids();
-  timeOfFall = millis();
-  printAndLog("error", "E-STOP: %s", reason);
-}
-
-void checkLiftDetection(const int16_t& ax, const int16_t& ay, const int16_t& az) {
-  if (controlFlags.emergencyStop || !controlFlags.balancingEnabled) {
-    liftDetectStartTime = 0;
-    return;
-  }
-  float ax_g = (float)ax / 16384.0f;
-  float ay_g = (float)ay / 16384.0f;
-  float az_g = (float)az / 16384.0f;
-  float magnitude = sqrt(ax_g * ax_g + ay_g * ay_g + az_g * az_g);
-
-  if (magnitude < LIFT_DETECTION_THRESHOLD_G) {
-    if (liftDetectStartTime == 0) {
-      liftDetectStartTime = millis();
-    } else if (millis() - liftDetectStartTime > LIFT_DETECTION_DURATION_MS) {
-      emergencyShutdown("Wykryto podniesienie");
-      liftDetectStartTime = 0;
-    }
-  } else {
-    liftDetectStartTime = 0;
-  }
-}
-
-void checkSafetySystems(float gyroRate) {
-  if (!controlFlags.emergencyStop) {
-    char reasonBuffer[64];
-    if (abs(pitch - angleOffset) > CRITICAL_ANGLE_LIMIT) {
-      snprintf(reasonBuffer, sizeof(reasonBuffer), "KRYTYCZNY przechyl: %.1f deg", pitch - angleOffset);
-      emergencyShutdown(reasonBuffer);
-      return;
-    }
-    if (abs(gyroRate) > CRITICAL_GYRO_LIMIT) {
-      snprintf(reasonBuffer, sizeof(reasonBuffer), "KRYTYCZNA pred. katowa: %.1f deg/s", gyroRate);
-      emergencyShutdown(reasonBuffer);
-    }
-  }
-}
-
-void autoRecovery() {
-  if (!controlFlags.emergencyStop) return;
-  if (abs(pitch - angleOffset) < 5.0 && millis() - timeOfFall > 3000) {
-    printAndLog("info", "Proba odzyskania...");
-    controlFlags.emergencyStop = false;
-  } else if (abs(pitch - angleOffset) >= 5.0) {
-    timeOfFall = millis();
-  }
-}
-
-void IRAM_ATTR dmpDataReady() { mpuInterrupt = true; }
-
-void _setSingleMotorPower(uint8_t motor_idx, int power) {
-    power = constrain(power, -PWM_MAX_VALUE, PWM_MAX_VALUE);
-    bool is_forward = power > 0;
-    int abs_power = abs(power);
-    uint8_t ch_fwd, ch_bwd;
-    if (motor_idx == 0) { ch_fwd = LEDC_CHANNEL_L_IN2; ch_bwd = LEDC_CHANNEL_L_IN1; }
-    else {
-        if (MOTOR_R_INVERT_LOGIC) { ch_fwd = LEDC_CHANNEL_R_IN1; ch_bwd = LEDC_CHANNEL_R_IN2; }
-        else { ch_fwd = LEDC_CHANNEL_R_IN2; ch_bwd = LEDC_CHANNEL_R_IN1; }
-    }
-    if (is_forward) { ledcWrite(ch_fwd, abs_power); ledcWrite(ch_bwd, 0); }
-    else { ledcWrite(ch_bwd, abs_power); ledcWrite(ch_fwd, 0); }
-}
-
-float fmap(float x, float in_min, float in_max, float out_min, float out_max) { 
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min; 
-}
-
-float mapMotorOutput(float power, int minPwmFwd, int minPwmBwd) {
-  if (abs(power) < 1.0f) { return 0.0f; }
-  float absPower = abs(power);
-  float sign = (power > 0) ? 1.0f : -1.0f;
-  float minPwm = (power > 0) ? (float)minPwmFwd : (float)minPwmBwd;
-  return sign * fmap(absPower, 1.0f, PWM_MAX_VALUE, minPwm, (float)PWM_MAX_VALUE);
-}
-
-void stopAllMotors() { 
-  _setSingleMotorPower(0, 0); 
-  _setSingleMotorPower(1, 0); 
-}
-
-void setMotorPower(float pwm_l, float pwm_r) { 
-  _setSingleMotorPower(0, (int)round(mapMotorOutput(pwm_l, tuningParams.minPwmLeftFwd, tuningParams.minPwmLeftBwd))); 
-  _setSingleMotorPower(1, (int)round(mapMotorOutput(pwm_r, tuningParams.minPwmRightFwd, tuningParams.minPwmRightBwd))); 
-}
-
-void setMotorPowerRaw(uint8_t motor_idx, int power) { 
-  _setSingleMotorPower(motor_idx, power); 
-}
-
-int tuneSingleMotor(uint8_t motor_idx, int direction, int start_pwm) {
-    long start_pos = (motor_idx == 0) ? encoder_L.position.load(std::memory_order_relaxed) : encoder_R.position.load(std::memory_order_relaxed);
-    const int MAX_TEST_PWM = 800;
-    const int PWM_TUNE_MOVEMENT_THRESHOLD = 30;
-    for (int test_pwm = start_pwm; test_pwm < MAX_TEST_PWM; test_pwm += 1) {
-        setMotorPowerRaw(motor_idx, test_pwm * direction);
-        vTaskDelay(pdMS_TO_TICKS(250));
-        long current_pos = (motor_idx == 0) ? encoder_L.position.load(std::memory_order_relaxed) : encoder_R.position.load(std::memory_order_relaxed);
-        if (abs(current_pos - start_pos) > PWM_TUNE_MOVEMENT_THRESHOLD) {
-            setMotorPowerRaw(motor_idx, 0);
-            vTaskDelay(pdMS_TO_TICKS(100));
-            stopAllMotors();
-            return test_pwm;
-        }
-    }
-    stopAllMotors();
-    return MAX_TEST_PWM;
-}
-
-static void IRAM_ATTR encoder_isr_handler(void* arg) {
-    EncoderState* encoder = (EncoderState*)arg;
-    unsigned long now = micros();
-    if (now - encoder->last_micros < ENCODER_DEBOUNCE_MICROS) { return; }
-    encoder->last_micros = now;
-    
-    uint8_t stateA = digitalRead(encoder->pin_a);
-    uint8_t stateB = digitalRead(encoder->pin_b);
-    uint8_t currentState = (stateA << 1) | stateB;
-    uint8_t lastState = encoder->prev_state;
-    
-    if (currentState != lastState) {
-        if ((lastState == 0b00 && currentState == 0b01) || 
-            (lastState == 0b01 && currentState == 0b11) || 
-            (lastState == 0b11 && currentState == 0b10) || 
-            (lastState == 0b10 && currentState == 0b00)) {
-            if (encoder->inverted) { 
-                encoder->position.fetch_sub(1, std::memory_order_relaxed); 
-            } else { 
-                encoder->position.fetch_add(1, std::memory_order_relaxed); 
+        cancel() {
+            clearTimeout(this.cycleTimeout);
+            this.state = 'idle'; this.isCollecting = false;
+            if(Object.keys(this.safeParams).length > 0) {
+                Object.entries(this.safeParams).forEach(([key, value]) => sendBleMessage({ type: 'set_param', key, value }));
             }
-        } else if ((lastState == 0b00 && currentState == 0b10) || 
-                   (lastState == 0b10 && currentState == 0b11) || 
-                   (lastState == 0b11 && currentState == 0b01) || 
-                   (lastState == 0b01 && currentState == 0b00)) {
-            if (encoder->inverted) { 
-                encoder->position.fetch_add(1, std::memory_order_relaxed); 
-            } else { 
-                encoder->position.fetch_sub(1, std::memory_order_relaxed); 
-            }
+            addLogMessage('[AutoTest] Sesja optymalizacji anulowana przez uzytkownika.', 'warn');
+            updateAutoTestUI(null);
         }
-        encoder->prev_state = currentState;
+
+        generateNextParams() {
+            let nextParams = { ...this.currentParams };
+            const paramToChange = this.paramKeys[Math.floor(Math.random() * this.paramKeys.length)];
+            const baseValue = nextParams[paramToChange];
+            const range = this.config.paramsToTune[paramToChange].range * baseValue * this.temperature;
+            const change = (Math.random() * 2 - 1) * range;
+
+            nextParams[paramToChange] += change;
+            if (nextParams[paramToChange] < 0) nextParams[paramToChange] = 0;
+            return nextParams;
+        }
+
+        calculateBalanceFitness() {
+            if (this.telemetryBuffer.length < 10) return { score: 0.0, components: { stability:0, stillness:0, overshoot:0, effort:0 } };
+            const { telemetryBuffer: buffer } = this;
+            let sumAbsPitch = 0, maxAbsPitch = 0, sumAbsOutputChange = 0, stillSamples = 0;
+            const stillnessThreshold = 1023 * 0.05;
+
+            buffer.forEach((d, i) => {
+                const pitch = d.pitch || 0;
+                const output = d.output || 0;
+                sumAbsPitch += Math.abs(pitch);
+                if (Math.abs(pitch) > maxAbsPitch) maxAbsPitch = Math.abs(pitch);
+                if (i > 0) sumAbsOutputChange += Math.abs(output - (buffer[i-1].output || 0));
+                if (Math.abs(output) < stillnessThreshold) stillSamples++;
+            });
+
+            const count = buffer.length;
+            const avgAbsPitch = sumAbsPitch / count;
+            const avgAbsOutputChange = sumAbsOutputChange / (count > 1 ? count - 1 : 1);
+
+            const scoreStability = Math.max(0, 1 - (avgAbsPitch / 1.5));
+            const scoreOvershoot = Math.max(0, 1 - (maxAbsPitch / 5.0)); 
+            const scoreStillness = stillSamples / count;
+            const scoreEffort = Math.max(0, 1 - (avgAbsOutputChange / 50));
+            const finalScore = (scoreStability * 0.35) + (scoreStillness * 0.35) + (scoreOvershoot * 0.2) + (scoreEffort * 0.1);
+            
+            return {
+                score: finalScore,
+                components: { stability: scoreStability, stillness: scoreStillness, overshoot: scoreOvershoot, effort: scoreEffort }
+            };
+        }
+        
+        applyBestResults() {
+            for(const key in this.bestParams) {
+                const inputId = this.paramsToTune[key].id;
+                document.getElementById(inputId).value = this.bestParams[key].toFixed(4);
+                document.getElementById(inputId).dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            addLogMessage('[AutoTest] Zastosowano najlepsze znalezione parametry.', 'success');
+            this.cancel();
+        }
     }
-}
 
-void setupEncoders() {
-    gpio_config_t io_conf;
-    io_conf.intr_type = GPIO_INTR_ANYEDGE;
-    io_conf.pin_bit_mask = (1ULL << ENCODER_L_A) | (1ULL << ENCODER_L_B) | (1ULL << ENCODER_R_A) | (1ULL << ENCODER_R_B);
-    io_conf.mode = GPIO_MODE_INPUT; io_conf.pull_up_en = GPIO_PULLUP_ENABLE; io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    gpio_config(&io_conf);
-    gpio_install_isr_service(0);
-    gpio_isr_handler_add((gpio_num_t)ENCODER_L_A, encoder_isr_handler, (void*)&encoder_L);
-    gpio_isr_handler_add((gpio_num_t)ENCODER_L_B, encoder_isr_handler, (void*)&encoder_L);
-    gpio_isr_handler_add((gpio_num_t)ENCODER_R_A, encoder_isr_handler, (void*)&encoder_R);
-    gpio_isr_handler_add((gpio_num_t)ENCODER_R_B, encoder_isr_handler, (void*)&encoder_R);
-    encoder_L.prev_state = (digitalRead(ENCODER_L_A) << 1) | digitalRead(ENCODER_L_B);
-    encoder_R.prev_state = (digitalRead(ENCODER_R_A) << 1) | digitalRead(ENCODER_R_B);
-}
+    function setupAutoTestEventListeners() {
+        const actionBtn = document.getElementById('autotestActionBtn');
+        const cancelBtn = document.getElementById('autotestCancelBtn');
 
-void calibrateMPU() {
-  controlFlags.balancingEnabled = false;
-  stopAllMotors();
-  vTaskDelay(pdMS_TO_TICKS(100));
-  printAndLog("warn", "ROZPOCZETO KALIBRACJE MPU - TRZYMAJ ROBOTA NIERUCHOMO!");
-  detachInterrupt(digitalPinToInterrupt(MPU_INT_PIN));
-  mpu.setDMPEnabled(false);
-  vTaskDelay(pdMS_TO_TICKS(50));
-  mpu.reset();
-  vTaskDelay(pdMS_TO_TICKS(100));
-  mpu.initialize();
-  if (!mpu.testConnection()) {
-    printAndLog("error", "KRYTYCZNY BLAD: Utracono polaczenie z MPU po resecie!");
-    dmpReady = false;
-    return;
-  }
-  printAndLog("info", "Kalibracja Accel & Gyro...");
-  mpu.CalibrateAccel(10);
-  mpu.CalibrateGyro(10);
-  vTaskDelay(pdMS_TO_TICKS(100));
-  printAndLog("info", "Restart i ponowna inicjalizacja DMP...");
-  if (mpu.dmpInitialize() == 0) {
-    mpu.setDMPEnabled(true);
-    vTaskDelay(pdMS_TO_TICKS(100));
-    mpu.resetFIFO();
-    mpuInterrupt = false;
-    attachInterrupt(digitalPinToInterrupt(MPU_INT_PIN), dmpDataReady, RISING);
-    dmpReady = true;
-    angleOffset = 0; baseTargetAngleTrim = 0.0;
-    yawOffset = 0;
-    resetAllPids();
-    printAndLog("info", "KALIBRACJA ZAKONCZONA POMYSLNIE. Robot jest gotowy.");
-  } else {
-    printAndLog("error", "KRYTYCZNY BLAD podczas ponownej inicjalizacji DMP.");
-    dmpReady = false;
-  }
-}
+        actionBtn.addEventListener('click', () => {
+            if (!tuningSession || tuningSession.state === 'idle') {
+                let options = {};
+                options.totalCycles = parseInt(document.getElementById('at_cycles').value);
+                options.cycleDuration = parseInt(document.getElementById('at_duration').value);
 
-void setupSensors() {
-  Wire.begin(MPU_SDA, MPU_SCL);
-  Wire.setClock(400000); 
-  Wire.setTimeOut(100); 
-  
-  mpu.initialize();
-  if (!mpu.testConnection()) { 
-    printAndLog("error", "BLAD KRYTYCZNY: Nie znaleziono MPU6050! Sprawdz polaczenia."); 
-    delay(5000); 
-    ESP.restart(); 
-  }
-  printAndLog("info", "Inicjalizacja DMP...");
-  uint8_t devStatus = mpu.dmpInitialize();
-  if (devStatus == 0) {
-    pinMode(MPU_INT_PIN, INPUT);
-    attachInterrupt(digitalPinToInterrupt(MPU_INT_PIN), dmpDataReady, RISING);
-    mpu.setDMPEnabled(true);
-    dmpReady = true;
-    printAndLog("info", "DMP gotowy do pracy.");
-  } else { 
-    printAndLog("error", "Blad inicjalizacji DMP (kod: %d). Sprawdz polaczenia.", devStatus); 
-    delay(5000); 
-    ESP.restart(); 
-  }
-}
+                tuningSession = new TuningSession('balance', options);
+                tuningSession.start();
+            } else if (tuningSession.state === 'finished') {
+                tuningSession.applyBestResults();
+            }
+        });
 
-void setup() {
-  Serial.begin(115200);
-  CameraSerial.begin(CAMERA_BAUD_RATE, SERIAL_8N1, CAMERA_RX_PIN, CAMERA_TX_PIN);
-  
-  Serial.println("\n--- ROBOT PID - WERSJA 5.2 EVO ---");
-  
-  bleRxQueue = xQueueCreate(10, sizeof(char[256]));
-  bleTxQueue = xQueueCreate(BLE_TX_QUEUE_SIZE, sizeof(BLEMessage));
-  if (bleRxQueue == NULL || bleTxQueue == NULL) { 
-    Serial.println("[ERROR] Krytyczny blad: Nie udalo sie utworzyc kolejek BLE!"); 
-    ESP.restart(); 
-  }
+        cancelBtn.addEventListener('click', () => {
+            if (tuningSession) tuningSession.cancel();
+        });
+    }
 
-  EEPROM.begin(sizeof(EEPROMSettings));
-  
-  if(!loadTuningsFromEEPROM()) {
-    loadDefaultSettings();
-  }
-  updateSystemConfiguration();
-  
-  setupBLE();
-  setupSensors();
-  ledcSetup(LEDC_CHANNEL_L_IN1, PWM_FREQ, PWM_RESOLUTION);
-  ledcSetup(LEDC_CHANNEL_L_IN2, PWM_FREQ, PWM_RESOLUTION);
-  ledcSetup(LEDC_CHANNEL_R_IN1, PWM_FREQ, PWM_RESOLUTION);
-  ledcSetup(LEDC_CHANNEL_R_IN2, PWM_FREQ, PWM_RESOLUTION); 
-  ledcAttachPin(MOTOR_L_IN1, LEDC_CHANNEL_L_IN1);
-  ledcAttachPin(MOTOR_L_IN2, LEDC_CHANNEL_L_IN2);
-  ledcAttachPin(MOTOR_R_IN1, LEDC_CHANNEL_R_IN1);
-  ledcAttachPin(MOTOR_R_IN2, LEDC_CHANNEL_R_IN2);
-  setupEncoders();
-  
-  printAndLog("info", "Inicjalizacja sprzetu zakonczona. Tworzenie zadan...");
+    function updateAutoTestUI(session) {
+        const actionBtn = document.getElementById('autotestActionBtn');
+        const cancelBtn = document.getElementById('autotestCancelBtn');
+        const statusTemp = document.getElementById('statusTemperature');
+        const statusJump = document.getElementById('statusJumpChance');
+        const statusBestScore = document.getElementById('statusBestScore');
+        const statusBar = document.getElementById('statusProgressBar');
+        const statusProgressText = document.getElementById('statusProgressText');
+        const statusStateText = document.getElementById('statusStateText');
 
-  xTaskCreate(CommunicationManagerTask, "CommManagerTask", 8192, NULL, 4, NULL);
-  xTaskCreate(TelemetryTask, "TelemetryTask", 4096, NULL, 3, NULL);
-  xTaskCreate(ControlLoopTask, "ControlTask", 8192, NULL, configMAX_PRIORITIES - 1, NULL);
-  xTaskCreate(BLETransmitTask, "BLETxTask", 5120, NULL, 5, NULL);
-  
-  printAndLog("info", "System gotowy do pracy.");
-}
+        if (!session || session.state === 'idle') {
+            statusTemp.textContent = '---';
+            statusJump.textContent = '---';
+            statusBestScore.textContent = '---';
+            statusBar.value = 0;
+            statusProgressText.textContent = 'Gotowy do rozpoczecia...';
+            statusStateText.textContent = 'Bezczynny';
+            actionBtn.textContent = 'Rozpocznij Optymalizacje Balansu';
+            actionBtn.disabled = false;
+            cancelBtn.style.display = 'none';
+            return;
+        }
 
-void loop() {
-  vTaskDelay(portMAX_DELAY);
-}
+        cancelBtn.style.display = 'block';
+        statusBar.max = session.totalCycles;
+        statusBar.value = session.currentCycle -1;
+        
+        statusBestScore.textContent = session.bestScore < 0 ? '---' : session.bestScore.toFixed(4);
+        statusTemp.textContent = session.temperature.toFixed(3);
+        
+        const jumpChance = session.temperature > 0.001 ? Math.exp(-0.1 / session.temperature) * 100 : 0;
+        statusJump.textContent = `${jumpChance.toFixed(1)} %`;
+        
+        statusProgressText.textContent = `Cykl ${session.currentCycle}/${session.totalCycles}`;
+
+        switch (session.state) {
+            case 'testing':
+                statusStateText.textContent = 'Testowanie...';
+                actionBtn.disabled = true;
+                break;
+            case 'analyzing':
+                statusStateText.textContent = 'Analiza danych...';
+                actionBtn.disabled = true;
+                break;
+            case 'finished':
+                statusBar.value = session.totalCycles;
+                statusStateText.textContent = 'Sesja zakonczona!';
+                actionBtn.textContent = 'Zastosuj najlepsze parametry';
+                actionBtn.disabled = false;
+                break;
+        }
+    }
+</script>
+
+</body>
+</html>
