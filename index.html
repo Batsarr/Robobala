@@ -125,7 +125,6 @@
         .zn-result-grid strong { color: #a2f279; }
         .zn-result-grid span { font-weight: bold; color: #fff; }
         .apply-zn-btn { background-color: #a2f279; margin-top: 10px; width: 100%; }
-        .info-panel { background-color: #20232a; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #f7b731; text-align: left; font-size: 0.9em; line-height: 1.4;}
         #weights-budget { font-weight: bold; }
         #weights-budget.invalid { color: #ff6347; }
         #weights-budget.valid { color: #a2f279; }
@@ -802,7 +801,7 @@
 
     let genetic;
     let isGeneticOptimizationRunning = false;
-    let isGeneticPaused = false; // NOWA ZMIENNA STANU PAUZY
+    let isGeneticPaused = false;
     let telemetryForGenetic = [];
     let bestOverallScore = -Infinity;
     let bestPhenotype = null;
@@ -812,24 +811,18 @@
         const radios = document.querySelectorAll('input[name="autotest-type"]');
         radios.forEach(radio => radio.addEventListener('change', renderAutotestOptions));
 
-        // Listener dla glownego przycisku akcji (tylko dla testow, ktore nie sa GA)
         const actionBtn = document.getElementById('autotestActionBtn');
         actionBtn.addEventListener('click', () => {
             const selectedTest = document.querySelector('input[name="autotest-type"]:checked').value;
-            if (selectedTest === 'position') {
+            if (selectedTest === 'balance') {
+                startGeneticOptimization();
+            } else if (selectedTest === 'position') {
                 runPositionTest();
             } else if (selectedTest === 'speed') {
                 runSpeedTest();
             }
         });
 
-        // Listenery dla przyciskow kontrolnych GA
-        const startBtn = document.getElementById('autotestActionBtn'); // Ten sam przycisk uzywany do startu GA
-        startBtn.addEventListener('click', () => {
-             const selectedTest = document.querySelector('input[name="autotest-type"]:checked').value;
-             if (selectedTest === 'balance') startGeneticOptimization();
-        });
-        
         const pauseResumeBtn = document.getElementById('ga_pause_resume_btn');
         pauseResumeBtn.addEventListener('click', () => {
             isGeneticPaused = !isGeneticPaused;
@@ -869,7 +862,6 @@
         const runningControls = document.getElementById('ga-controls-running');
         const actionBtn = document.getElementById('autotestActionBtn');
         
-        // Ukryj wszystko na start
         [geneticPanel, positionPanel, speedPanel, statusPanel, standardControls, runningControls].forEach(el => el.style.display = 'none');
         actionBtn.disabled = false;
         
@@ -921,8 +913,6 @@
             speed_cmps: speed
         });
     }
-
-    // --- Logika algorytmu genetycznego ---
 
     function updateWeightsBudget() {
         const budgetEl = document.getElementById('weights-budget');
@@ -1062,10 +1052,9 @@
             for (let j = 0; j < population.length; j++) {
                 if (!isGeneticOptimizationRunning) break;
                 
-                // Pętla pauzy - czeka tutaj, jesli isGeneticPaused jest true
                 while (isGeneticPaused) {
-                    await new Promise(resolve => setTimeout(resolve, 200)); // Czekaj 200ms i sprawdz ponownie
-                    if (!isGeneticOptimizationRunning) break; // Pozwala na anulowanie w trakcie pauzy
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    if (!isGeneticOptimizationRunning) break;
                 }
                 if (!isGeneticOptimizationRunning) break;
                 
@@ -1136,7 +1125,7 @@
         actionBtn.onclick = () => {
             applyPhenotype(fittest);
             renderAutotestOptions();
-            actionBtn.onclick = null; // Usun ten specjalny handler
+            actionBtn.onclick = null;
         };
     }
 
