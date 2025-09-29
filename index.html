@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v5.3 (Final)</title>
+    <title>Robot PID - Panel Sterowania v6.0 (Online Optimizer)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
@@ -342,8 +342,7 @@
                 </div>
                 
                 <div id="autotestOptions" style="margin-top: 15px;">
-                    <div class="setting-container"><label for="at_cycles">Liczba cykli optymalizacji:</label><input id="at_cycles" type="number" value="30" min="5" max="100" style="width:90px;"></div>
-                    <div class="setting-container"><label for="at_duration">Czas trwania cyklu (s):</label><input id="at_duration" type="number" value="4" min="2" max="10" style="width:90px;"></div>
+                    <div class="setting-container"><label for="at_duration_total">Czas trwania optymalizacji (s):</label><input id="at_duration_total" type="number" value="60" min="10" max="300" style="width:90px;"></div>
                 </div>
                 <hr style="border-color: #4a4f58; margin: 15px 0;">
         
@@ -379,7 +378,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 5.3 (UI dla PID) - Finalna z inteligentna optymalizacja i poprawkami
+    // WERSJA 6.0 (UI dla PID) - Ciagla optymalizacja online i finalne poprawki
     // =======================================================================================
     let isApplyingConfig = false;
     let lastKnownRobotState = 'IDLE';
@@ -486,7 +485,7 @@
     function toggleAccordion(header) { const content = header.nextElementSibling; header.classList.toggle('active'); if (content.style.maxHeight && content.style.maxHeight !== '0px') { content.style.maxHeight = '0px'; content.style.padding = '0px 15px'; } else { content.style.maxHeight = content.scrollHeight + "px"; content.style.padding = '15px'; } }
     function updateAccordionHeight(content) { if (content && content.style.maxHeight !== '0px') { content.style.maxHeight = content.scrollHeight + 'px'; } }
     
-    async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE_UUID] }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono!', 'success'); setTimeout(() => { addLogMessage('[UI] Automatycznie synchronizuje konfiguracje...', 'info'); sendBleMessage({ type: 'request_full_config' }); }, 500); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
+    async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ name: 'RoboBala' }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono!', 'success'); setTimeout(() => { addLogMessage('[UI] Automatycznie synchronizuje konfiguracje...', 'info'); sendBleMessage({ type: 'request_full_config' }); }, 500); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
     function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; bleMessageQueue = []; isSendingBleMessage = false; }
     
     function handleBleNotification(event) {
@@ -535,7 +534,6 @@
     }
 
     function processCompleteMessage(data) {
-        const previousState = lastKnownRobotState;
         if (data.type === 'telemetry') {
             if (data.robot_state) {
                 lastKnownRobotState = data.robot_state;
@@ -546,7 +544,7 @@
                     document.getElementById('znTuningCancelBtn').style.display = 'block';
                 }
             }
-            if (tuningSession && tuningSession.isCollecting) tuningSession.recordTelemetry(data);
+            if (tuningSession && tuningSession.isCollecting()) tuningSession.recordTelemetry(data);
             if(isZnTuningRunning && data.output !== undefined) {
                  document.getElementById('znKpTestVal').textContent = data.output.toFixed(2);
             }
@@ -556,7 +554,7 @@
             case 'telemetry':
                 updateTelemetryUI(data);
                 updateChart(data);
-                checkAndExecuteNextSequenceStep(previousState);
+                checkAndExecuteNextSequenceStep(lastKnownRobotState);
                 break;
             case 'full_config':
                 isApplyingConfig = true;
@@ -839,90 +837,57 @@
     };
     
     class TuningSession {
-        constructor(testType, options) {
-            this.testType = testType;
-            this.config = testConfigurations[testType];
-            this.options = options;
-            this.paramsToTune = this.config.paramsToTune;
-            this.paramKeys = Object.keys(this.paramsToTune);
+        constructor(totalDuration) {
             this.state = 'idle';
-            this.isCollecting = false;
-            this.telemetryBuffer = [];
-            this.currentCycle = 0;
-            this.totalCycles = options.totalCycles;
-            this.bestScore = -1.0;
-            this.bestParams = {};
-            this.currentParams = {};
-            this.safeParams = {};
-            this.cycleTimeout = null;
+            this.totalDuration = totalDuration * 1000; // in ms
+            this.updateInterval = 500; // ms
             
-            this.temperature = 1.0;
-            this.coolingRate = Math.pow(0.01, 1.0 / this.totalCycles); // Schlodz do 1% na koniec
+            this.paramsToTune = testConfigurations.balance.paramsToTune;
+            this.paramKeys = Object.keys(this.paramsToTune);
+
+            this.telemetryBuffer = [];
+            this.telemetryWindowMs = 2000;
+
+            this.mainTimeout = null;
+            this.tickInterval = null;
         }
 
-        recordTelemetry(data) { if (this.isCollecting && data.type === 'telemetry') this.telemetryBuffer.push(data); }
+        isCollecting() { return this.state === 'testing'; }
+
+        recordTelemetry(data) { 
+            if (this.isCollecting() && data.type === 'telemetry') {
+                const now = Date.now();
+                this.telemetryBuffer.push({ ...data, timestamp: now });
+                // Utrzymaj bufor w oknie czasowym
+                this.telemetryBuffer = this.telemetryBuffer.filter(d => now - d.timestamp < this.telemetryWindowMs);
+            }
+        }
 
         start() {
-            addLogMessage(`[AutoTest] Rozpoczynam sesje: ${this.config.label}`, 'info');
+            addLogMessage(`[AutoTest] Rozpoczynam ciagla optymalizacje na ${this.totalDuration / 1000}s...`, 'info');
+            
             this.safeParams = {};
             for(const key in this.paramsToTune) {
                 const inputId = this.paramsToTune[key].id;
                 this.safeParams[key] = parseFloat(document.getElementById(inputId).value);
             }
+            
             this.bestParams = { ...this.safeParams };
             this.currentParams = { ...this.safeParams };
-            this.currentCycle = 1;
+            this.bestScore = -Infinity;
             this.temperature = 1.0;
-            this.bestScore = -1.0;
-
-            this.runCycle();
-        }
-
-        runCycle() {
-            if (this.currentCycle > this.totalCycles) {
-                this.state = 'finished';
-                updateAutoTestUI(this);
-                return;
-            }
-
+            this.startTime = Date.now();
             this.state = 'testing';
-            this.isCollecting = true;
-            this.telemetryBuffer = [];
-            
-            this.currentParams = this.generateNextParams();
+
+            this.tickInterval = setInterval(() => this.tick(), this.updateInterval);
+            this.mainTimeout = setTimeout(() => this.finish(), this.totalDuration);
+
             updateAutoTestUI(this);
-
-            this.cycleTimeout = setTimeout(() => {
-                if (this.isCollecting) {
-                    addLogMessage('[AutoTest] Timeout cyklu! Anuluje probe.', 'warn');
-                    this.finishCycle(true);
-                }
-            }, (this.options.cycleDuration + 2) * 1000);
-
-            Object.entries(this.currentParams).forEach(([key, value]) => {
-                sendBleMessage({ type: 'set_param', key: key, value: value });
-            });
-            sendBleMessage({ type: 'reset_pids' }); 
-            
-            setTimeout(() => {
-                 setTimeout(() => this.finishCycle(false), this.options.cycleDuration * 1000);
-            }, 300);
         }
 
-        finishCycle(failed = false) {
-            if (!this.isCollecting) return;
-            clearTimeout(this.cycleTimeout);
-            this.isCollecting = false;
-            this.state = 'analyzing';
-            updateAutoTestUI(this);
+        tick() {
+            if (this.state !== 'testing') return;
 
-            if (failed) {
-                 this.temperature *= this.coolingRate;
-                 this.currentCycle++;
-                 setTimeout(() => this.runCycle(), 200);
-                 return;
-            }
-            
             const { score, components } = this.calculateBalanceFitness();
             let logMsg = `[AutoTest] Wynik: ${score.toFixed(4)} (S:${components.stability.toFixed(2)}, C:${components.stillness.toFixed(2)}, P:${components.overshoot.toFixed(2)}, W:${components.effort.toFixed(2)})`;
 
@@ -932,29 +897,67 @@
                 logMsg += " - NOWY NAJLEPSZY!";
             }
             
-            const delta = score - this.bestScore;
-            const acceptanceProb = Math.exp(delta / this.temperature);
-            if (Math.random() < acceptanceProb) {
-                // Akceptuj nowe rozwiazanie (lepsze lub gorsze) jako punkt startowy do nastepnej proby
-                // ale NIE nadpisuj najlepszego wyniku, jesli jest gorsze
-            } else {
-                // Odrzuc nowe rozwiazanie, wroc do najlepszego
+            const lastScore = this.lastScore || this.bestScore;
+            const delta = score - lastScore;
+            const acceptanceProb = this.temperature > 0.001 ? Math.exp(delta / this.temperature) : 0;
+            
+            if (delta > 0) { // Zawsze akceptuj poprawe
+                 this.currentParams = { ...this.currentParams }; // Zostan przy tym co dobre
+            } else if (Math.random() < acceptanceProb) { // Akceptuj gorsze z pewnym prawdopodobienstwem
+                 this.currentParams = { ...this.currentParams };
+                 logMsg += ` - AKCEPTUJE GORSZY (P=${acceptanceProb.toFixed(2)})`;
+            } else { // Odrzuc, wroc do najlepszego
                 this.currentParams = { ...this.bestParams };
             }
-            addLogMessage(logMsg, 'success');
+            this.lastScore = score;
+            addLogMessage(logMsg, 'info');
+
+            // Generuj nastepny krok i wyslij do robota
+            const nextParams = this.generateNextParams();
+            Object.entries(nextParams).forEach(([key, value]) => {
+                const inputId = this.paramsToTune[key].id;
+                isApplyingConfig = true;
+                document.getElementById(inputId).value = value.toFixed(4);
+                isApplyingConfig = false;
+                sendBleMessage({ type: 'set_param', key: key, value: value });
+            });
+            this.currentParams = nextParams;
+
+            // Chlodzenie
+            const elapsed = (Date.now() - this.startTime) / this.totalDuration;
+            this.temperature = Math.pow(1 - elapsed, 2); // Nieliniowe chlodzenie
             
-            this.temperature *= this.coolingRate;
-            this.currentCycle++;
-            setTimeout(() => this.runCycle(), 200);
+            updateAutoTestUI(this);
+        }
+
+        finish() {
+            this.state = 'finished';
+            clearInterval(this.tickInterval);
+            clearTimeout(this.mainTimeout);
+            this.tickInterval = null;
+            this.mainTimeout = null;
+            addLogMessage(`[AutoTest] Sesja zakonczona. Najlepszy wynik: ${this.bestScore.toFixed(4)}`, 'success');
+            updateAutoTestUI(this);
         }
         
         cancel() {
-            clearTimeout(this.cycleTimeout);
-            this.state = 'idle'; this.isCollecting = false;
+            this.state = 'idle';
+            clearInterval(this.tickInterval);
+            clearTimeout(this.mainTimeout);
+            this.tickInterval = null;
+            this.mainTimeout = null;
+            
             if(Object.keys(this.safeParams).length > 0) {
-                Object.entries(this.safeParams).forEach(([key, value]) => sendBleMessage({ type: 'set_param', key, value }));
+                addLogMessage('[AutoTest] Przywracam bezpieczne parametry...', 'warn');
+                Object.entries(this.safeParams).forEach(([key, value]) => {
+                    const inputId = this.paramsToTune[key].id;
+                     isApplyingConfig = true;
+                    document.getElementById(inputId).value = value;
+                     isApplyingConfig = false;
+                    sendBleMessage({ type: 'set_param', key, value });
+                });
             }
-            addLogMessage('[AutoTest] Sesja optymalizacji anulowana przez uzytkownika.', 'warn');
+            addLogMessage('[AutoTest] Sesja optymalizacji anulowana.', 'warn');
             updateAutoTestUI(null);
         }
 
@@ -1002,12 +1005,14 @@
         }
         
         applyBestResults() {
-            for(const key in this.bestParams) {
-                const inputId = this.paramsToTune[key].id;
-                document.getElementById(inputId).value = this.bestParams[key].toFixed(4);
-                document.getElementById(inputId).dispatchEvent(new Event('change', { bubbles: true }));
-            }
             addLogMessage('[AutoTest] Zastosowano najlepsze znalezione parametry.', 'success');
+            Object.entries(this.bestParams).forEach(([key, value]) => {
+                const inputId = this.paramsToTune[key].id;
+                isApplyingConfig = true;
+                document.getElementById(inputId).value = value.toFixed(4);
+                isApplyingConfig = false;
+                sendBleMessage({ type: 'set_param', key: key, value: value });
+            });
             this.cancel();
         }
     }
@@ -1018,11 +1023,8 @@
 
         actionBtn.addEventListener('click', () => {
             if (!tuningSession || tuningSession.state === 'idle') {
-                let options = {};
-                options.totalCycles = parseInt(document.getElementById('at_cycles').value);
-                options.cycleDuration = parseInt(document.getElementById('at_duration').value);
-
-                tuningSession = new TuningSession('balance', options);
+                const totalDuration = parseInt(document.getElementById('at_duration_total').value);
+                tuningSession = new TuningSession(totalDuration);
                 tuningSession.start();
             } else if (tuningSession.state === 'finished') {
                 tuningSession.applyBestResults();
@@ -1058,28 +1060,26 @@
         }
 
         cancelBtn.style.display = 'block';
-        statusBar.max = session.totalCycles;
-        statusBar.value = session.currentCycle -1;
         
-        statusBestScore.textContent = session.bestScore < 0 ? '---' : session.bestScore.toFixed(4);
+        const elapsed = Date.now() - session.startTime;
+        const progress = Math.min(100, (elapsed / session.totalDuration) * 100);
+        statusBar.value = progress;
+        
+        statusBestScore.textContent = session.bestScore < -100 ? '---' : session.bestScore.toFixed(4);
         statusTemp.textContent = session.temperature.toFixed(3);
         
         const jumpChance = session.temperature > 0.001 ? Math.exp(-0.1 / session.temperature) * 100 : 0;
         statusJump.textContent = `${jumpChance.toFixed(1)} %`;
         
-        statusProgressText.textContent = `Cykl ${session.currentCycle}/${session.totalCycles}`;
+        statusProgressText.textContent = `${(elapsed / 1000).toFixed(1)}s / ${(session.totalDuration / 1000).toFixed(1)}s`;
 
         switch (session.state) {
             case 'testing':
-                statusStateText.textContent = 'Testowanie...';
-                actionBtn.disabled = true;
-                break;
-            case 'analyzing':
-                statusStateText.textContent = 'Analiza danych...';
+                statusStateText.textContent = 'Optymalizacja w toku...';
                 actionBtn.disabled = true;
                 break;
             case 'finished':
-                statusBar.value = session.totalCycles;
+                statusBar.value = 100;
                 statusStateText.textContent = 'Sesja zakonczona!';
                 actionBtn.textContent = 'Zastosuj najlepsze parametry';
                 actionBtn.disabled = false;
