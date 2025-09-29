@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v8.6 (Hardened GA)</title>
+    <title>Robot PID - Panel Sterowania v8.8 (Final GA Rework)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/genetic-js/lib/genetic.js"></script>
     
@@ -481,7 +481,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 8.6 (Hardened GA)
+    // WERSJA 8.7 (Rework GA Loop)
     // =======================================================================================
     
     let isApplyingConfig = false;
@@ -661,7 +661,6 @@
                 }
                 break;
             case 'ack':
-                // Tutaj w przyszlosci bedzie obsluga potwierdzen
                 break;
         }
     }
@@ -792,7 +791,6 @@
     // === SEKCJA STROJENIA KROK 2: OPTYMALIZACJA I TESTY ===
     // =======================================================================================
 
-    let genetic;
     let isGeneticOptimizationRunning = false;
     let isGeneticPaused = false;
     let telemetryForGenetic = [];
@@ -800,23 +798,26 @@
     let bestPhenotype = null;
     let safeStartParams = {};
 
+    const handleAutotestAction = () => {
+        const selectedTest = document.querySelector('input[name="autotest-type"]:checked').value;
+        if (selectedTest === 'balance') {
+            if (confirm("UWAGA! Optymalizacja bedzie testowac parametry, ktore moga byc niestabilne. Upewnij sie, ze robot ma duzo wolnego miejsca i jestes gotow go asekurowac. Kontynuowac?")) {
+                startGeneticOptimization();
+            }
+        } else if (selectedTest === 'position') {
+            runPositionTest();
+        } else if (selectedTest === 'speed') {
+            runSpeedTest();
+        }
+    };
+
     function setupAutoTestEventListeners() {
         const radios = document.querySelectorAll('input[name="autotest-type"]');
         radios.forEach(radio => radio.addEventListener('change', renderAutotestOptions));
 
         const actionBtn = document.getElementById('autotestActionBtn');
-        actionBtn.onclick = () => {
-            const selectedTest = document.querySelector('input[name="autotest-type"]:checked').value;
-            if (selectedTest === 'balance') {
-                if (confirm("UWAGA! Optymalizacja bedzie testowac parametry, ktore moga byc niestabilne. Upewnij sie, ze robot ma duzo wolnego miejsca i jestes gotow go asekurowac. Kontynuowac?")) {
-                    startGeneticOptimization();
-                }
-            } else if (selectedTest === 'position') {
-                runPositionTest();
-            } else if (selectedTest === 'speed') {
-                runSpeedTest();
-            }
-        };
+        actionBtn.removeEventListener('click', handleAutotestAction); 
+        actionBtn.addEventListener('click', handleAutotestAction);
 
         const pauseResumeBtn = document.getElementById('ga_pause_resume_btn');
         pauseResumeBtn.addEventListener('click', () => {
@@ -927,7 +928,7 @@
         const filter_alpha = parseFloat(document.getElementById('balanceFilterAlphaInput').value) / 100;
 
         if (isNaN(kp_b) || isNaN(kd_b) || isNaN(filter_alpha)) {
-            addLogMessage('[Genetic] BLAD KRYTYCZNY: Wartosci Kp, Kd lub filtra w formularzu sa nieprawidlowe (nie sa liczba). Popraw je i sprobuj ponownie.', 'error');
+            addLogMessage('[Genetic] BLAD KRYTYCZNY: Wartosci Kp, Kd lub filtra w formularzu sa nieprawidlowe. Popraw je i sprobuj ponownie.', 'error');
             return;
         }
 
@@ -939,54 +940,17 @@
         bestOverallScore = -Infinity;
         bestPhenotype = null;
 
-        const generations = parseInt(document.getElementById('gaGenerationsInput').value);
-        const populationSize = parseInt(document.getElementById('gaPopulationInput').value);
-        
-        genetic = Genetic.create();
-        genetic.configure({ size: populationSize, crossover: 0.4, mutation: 0.3, iterations: generations, fittestAlwaysSurvives: true });
-
-        genetic.Genotype = (function() {
-            function Genotype(kp, kd, filter) {
-                this.kp_b = kp;
-                this.kd_b = kd;
-                this.balance_pid_derivative_filter_alpha = filter;
-                return this;
-            }
-            
-            Genotype.prototype.clone = function() {
-                return new Genotype(this.kp_b, this.kd_b, this.balance_pid_derivative_filter_alpha);
-            };
-
-            Genotype.prototype.mutate = function(prob) {
-                if (Math.random() < prob) this.kp_b += (Math.random()-0.5) * 0.1 * this.kp_b;
-                if (Math.random() < prob) this.kd_b += (Math.random()-0.5) * 0.1 * this.kd_b;
-                if (Math.random() < prob) this.balance_pid_derivative_filter_alpha += (Math.random()-0.5) * 0.1;
-                this.kp_b = Math.max(0, this.kp_b);
-                this.kd_b = Math.max(0, this.kd_b);
-                this.balance_pid_derivative_filter_alpha = Math.max(0.01, Math.min(1.0, this.balance_pid_derivative_filter_alpha));
-                return this;
-            };
-
-            Genotype.prototype.mate = function(other) {
-                const kp_b = Math.random() < 0.5 ? this.kp_b : other.kp_b;
-                const kd_b = Math.random() < 0.5 ? this.kd_b : other.kd_b;
-                const filter = Math.random() < 0.5 ? this.balance_pid_derivative_filter_alpha : other.balance_pid_derivative_filter_alpha;
-                return [new Genotype(kp_b, kd_b, filter), new Genotype(kp_b, kd_b, filter)];
-            };
-            return Genotype;
-        })();
-        
         document.getElementById('ga-controls-standard').style.display = 'none';
         document.getElementById('ga-controls-running').style.display = 'grid';
         document.getElementById('statusStateText').textContent = 'Optymalizacja...';
-        addLogMessage(`[Genetic] Rozpoczynam optymalizacje: ${generations} pokolen, ${populationSize} osobnikow.`, 'success');
+        addLogMessage(`[Genetic] Rozpoczynam procedure ewolucji...`, 'success');
         
-        runEvolutionLoop(generations, populationSize);
+        runEvolutionLoop();
     }
 
     async function evaluatePhenotype(phenotype) {
         telemetryForGenetic = [];
-        addLogMessage(`[Genetic] Testuje Kp=${phenotype.kp_b.toFixed(4)}, Kd=${phenotype.kd_b.toFixed(4)}, Filtr=${(phenotype.balance_pid_derivative_filter_alpha*100).toFixed(1)}%`, 'info');
+        addLogMessage(`[Genetic] Testuje: Kp=${phenotype.kp_b.toFixed(4)}, Kd=${phenotype.kd_b.toFixed(4)}, Filtr=${(phenotype.balance_pid_derivative_filter_alpha*100).toFixed(1)}%`, 'info');
         sendBleMessage({ type: 'set_param', key: 'kp_b', value: phenotype.kp_b });
         sendBleMessage({ type: 'set_param', key: 'kd_b', value: phenotype.kd_b });
         sendBleMessage({ type: 'set_param', key: 'balance_pid_derivative_filter_alpha', value: phenotype.balance_pid_derivative_filter_alpha });
@@ -1032,10 +996,44 @@
         return finalScore;
     }
 
-    async function runEvolutionLoop(generations, populationSize) {
-        addLogMessage('[Genetic] Tworze populacje startowa w oparciu o biezace ustawienia...', 'info');
+    function tournamentSelect(population, size = 3) {
+        let tournament = [];
+        for (let i = 0; i < size; i++) {
+            const randomIndex = Math.floor(Math.random() * population.length);
+            tournament.push(population[randomIndex]);
+        }
+        return tournament.reduce((best, current) => (current.score > best.score ? current : best), tournament[0]);
+    }
+
+    async function runEvolutionLoop() {
+        const generations = parseInt(document.getElementById('gaGenerationsInput').value);
+        const populationSize = parseInt(document.getElementById('gaPopulationInput').value);
+
+        const Genotype = function(kp, kd, filter) {
+            this.kp_b = kp;
+            this.kd_b = kd;
+            this.balance_pid_derivative_filter_alpha = filter;
+            this.clone = function() { return new Genotype(this.kp_b, this.kd_b, this.balance_pid_derivative_filter_alpha); };
+            this.mutate = function(prob) {
+                if (Math.random() < prob) this.kp_b += (Math.random()-0.5) * 0.1 * this.kp_b;
+                if (Math.random() < prob) this.kd_b += (Math.random()-0.5) * 0.1 * this.kd_b;
+                if (Math.random() < prob) this.balance_pid_derivative_filter_alpha += (Math.random()-0.5) * 0.1;
+                this.kp_b = Math.max(0, this.kp_b);
+                this.kd_b = Math.max(0, this.kd_b);
+                this.balance_pid_derivative_filter_alpha = Math.max(0.01, Math.min(1.0, this.balance_pid_derivative_filter_alpha));
+                return this;
+            };
+            this.mate = function(other) {
+                const kp_b = Math.random() < 0.5 ? this.kp_b : other.kp_b;
+                const kd_b = Math.random() < 0.5 ? this.kd_b : other.kd_b;
+                const filter = Math.random() < 0.5 ? this.balance_pid_derivative_filter_alpha : other.balance_pid_derivative_filter_alpha;
+                return new Genotype(kp_b, kd_b, filter);
+            };
+        };
+        
+        addLogMessage('[Genetic] Tworze populacje startowa...', 'info');
         let population = [];
-        const basePhenotype = new genetic.Genotype(safeStartParams.kp_b, safeStartParams.kd_b, safeStartParams.balance_pid_derivative_filter_alpha);
+        const basePhenotype = new Genotype(safeStartParams.kp_b, safeStartParams.kd_b, safeStartParams.balance_pid_derivative_filter_alpha);
         population.push(basePhenotype);
         while (population.length < populationSize) {
             population.push(basePhenotype.clone().mutate(0.85));
@@ -1060,7 +1058,7 @@
                 document.getElementById('statusProgressText').textContent = `Testowanie osobnika ${j + 1}/${populationSize} (Pokolenie ${i + 1})...`;
                 
                 const score = await evaluatePhenotype(population[j]);
-                let evaluatedPhenotype = population[j];
+                let evaluatedPhenotype = population[j].clone();
                 evaluatedPhenotype.score = score;
                 evaluatedPopulation.push(evaluatedPhenotype);
             }
@@ -1072,24 +1070,18 @@
 
             if (bestOfGeneration.score > bestOverallScore) {
                 bestOverallScore = bestOfGeneration.score;
-                bestPhenotype = bestOfGeneration;
+                bestPhenotype = bestOfGeneration.clone();
                 document.getElementById('statusBestScore').textContent = bestOverallScore.toFixed(4);
                 const bestParamsEl = document.getElementById('statusBestParams');
                 bestParamsEl.innerHTML = `Kp:${bestPhenotype.kp_b.toFixed(4)}<br>Kd:${bestPhenotype.kd_b.toFixed(4)}<br>Filtr:${(bestPhenotype.balance_pid_derivative_filter_alpha * 100).toFixed(1)}%`;
             }
             
-            let newPopulation = [];
-            if (genetic.configuration.fittestAlwaysSurvives) {
-                newPopulation.push(bestOfGeneration);
-            }
+            let newPopulation = [bestOfGeneration];
             while (newPopulation.length < populationSize) {
-                const parent1 = genetic.select1(evaluatedPopulation)[0];
-                const parent2 = genetic.select2(evaluatedPopulation, [parent1])[0];
-                const children = parent1.mate(parent2);
-                newPopulation.push(children[0].mutate(genetic.configuration.mutation));
-                if (newPopulation.length < populationSize) {
-                    newPopulation.push(children[1].mutate(genetic.configuration.mutation));
-                }
+                const parent1 = tournamentSelect(evaluatedPopulation);
+                const parent2 = tournamentSelect(evaluatedPopulation);
+                const child = parent1.mate(parent2).mutate(0.3);
+                newPopulation.push(child);
             }
             population = newPopulation;
         }
@@ -1102,7 +1094,7 @@
     function finishGeneticOptimization(fittest) {
         if (!fittest) {
             addLogMessage('[Genetic] Zakonczono, ale nie znaleziono najlepszego rozwiazania.', 'warn');
-            if (isGeneticOptimizationRunning) cancelGeneticOptimization();
+            cancelGeneticOptimization();
             return;
         }
         
@@ -1119,13 +1111,13 @@
         document.getElementById('ga-controls-standard').style.display = 'block';
         const actionBtn = document.getElementById('autotestActionBtn');
         actionBtn.textContent = 'Zastosuj Najlepsze Parametry';
-        
-        actionBtn.onclick = () => {
+        actionBtn.removeEventListener('click', handleAutotestAction);
+        actionBtn.addEventListener('click', function applyBestAndReset() {
             applyPhenotype(fittest);
             renderAutotestOptions();
-            actionBtn.onclick = null;
             setupAutoTestEventListeners();
-        };
+            this.removeEventListener('click', applyBestAndReset);
+        });
     }
 
     function cancelGeneticOptimization() {
@@ -1133,15 +1125,12 @@
         isGeneticOptimizationRunning = false;
         isGeneticPaused = false;
         
-        addLogMessage('[Genetic] Optymalizacja anulowana przez uzytkownika. Przywracam parametry poczatkowe.', 'warn');
+        addLogMessage('[Genetic] Optymalizacja anulowana. Przywracam parametry poczatkowe.', 'warn');
         applyPhenotype(safeStartParams);
 
         document.getElementById('statusStateText').textContent = 'Anulowano';
         document.getElementById('ga-controls-running').style.display = 'none';
         document.getElementById('ga-controls-standard').style.display = 'block';
-        const actionBtn = document.getElementById('autotestActionBtn');
-        actionBtn.textContent = 'Rozpocznij Optymalizacje';
-        actionBtn.onclick = null;
         setupAutoTestEventListeners();
     }
 
