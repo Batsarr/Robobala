@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v6.0 (Online Optimizer)</title>
+    <title>Robot PID - Panel Sterowania v7.0 (Genetic Algorithm)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/genetic-js/lib/genetic.js"></script>
     
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
@@ -117,6 +118,9 @@
         .zn-result-grid span { font-weight: bold; color: #fff; }
         .apply-zn-btn { background-color: #a2f279; margin-top: 10px; width: 100%; }
         .info-panel { background-color: #20232a; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #f7b731; text-align: left; font-size: 0.9em; line-height: 1.4;}
+        #weights-budget { font-weight: bold; }
+        #weights-budget.invalid { color: #ff6347; }
+        #weights-budget.valid { color: #a2f279; }
 
     </style>
 </head>
@@ -280,9 +284,6 @@
                     <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" step="0.1" value="8.2"><button>+</button></div> </div> 
                     <div class="setting-container"> <label for="trackWidthInput">Rozstaw kol (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="trackWidthInput" step="0.1" value="12.5"><button>+</button></div> </div> 
                     <div class="setting-container"> <label for="encoderPprInput">Impulsy na obrot (PPR)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="encoderPprInput" step="10" value="820"><button>+</button></div> </div> 
-                    <hr style="border-color: #4a4f58; margin: 10px 0;">
-                    <div class="setting-container"> <label for="turnToRollTargetInput">Kat przechylu przy skrecie (st.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="turnToRollTargetInput" step="0.1" value="5.0"><button>+</button></div> </div> 
-                    <div class="setting-container"> <label for="balanceDeadbandAngleInput">Strefa martwa balansu (st.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceDeadbandAngleInput" step="0.1" value="0.5"><button>+</button></div> </div>
                 </div>
 
                 <button class="accordion-header" onclick="toggleAccordion(this)">6. Kalibracja PWM Silnikow</button>
@@ -335,23 +336,46 @@
                 <button id="znTuningCancelBtn" style="width:100%; margin-top:10px; background-color:#ff6347; display:none;">Anuluj</button>
             </div>
 
-            <button class="accordion-header" onclick="toggleAccordion(this)">Krok 2: Optymalizacja (Auto Testy PID)</button>
+            <button class="accordion-header" onclick="toggleAccordion(this)">Krok 2: Optymalizacja On-line</button>
             <div class="accordion-content">
                 <div class="info-panel" style="border-left-color: #a2f279;">
-                    <strong>Cel:</strong> Inteligentne, autonomiczne dostrojenie parametrow balansu do maksimum stabilnosci. Uzyj tej opcji, gdy robot juz potrafi samodzielnie stac (np. po "Pierwszym Strojeniu").
+                    <strong>Cel:</strong> Inteligentne, autonomiczne dostrojenie parametrow balansu do maksimum stabilnosci w czasie rzeczywistym. Uzyj tej opcji, gdy robot juz potrafi samodzielnie stac.
                 </div>
                 
-                <div id="autotestOptions" style="margin-top: 15px;">
+                <div id="autotestOptions">
                     <div class="setting-container"><label for="at_duration_total">Czas trwania optymalizacji (s):</label><input id="at_duration_total" type="number" value="60" min="10" max="300" style="width:90px;"></div>
                 </div>
-                <hr style="border-color: #4a4f58; margin: 15px 0;">
-        
-                <div id="autotestStatusPanel">
+
+                <fieldset style="margin-top: 15px;">
+                    <legend>Priorytety Optymalizacji (Budzet: <span id="weights-budget">10.0</span> pkt)</legend>
+                    <div class="setting-container">
+                        <label>Waga Stabilnosci (S)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="weight-input" id="weightStability" step="0.5" value="3.5" min="0" max="10"><button>+</button></div>
+                        <div class="help-text">Zwieksz, jesli chcesz, aby robot minimalizowal srednie odchylenie od pionu.</div>
+                    </div>
+                    <div class="setting-container">
+                        <label>Waga Spokoju (C)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="weight-input" id="weightStillness" step="0.5" value="3.5" min="0" max="10"><button>+</button></div>
+                        <div class="help-text">Zwieksz, jesli priorytetem jest, aby robot stal idealnie nieruchomo, bez zbednych mikro-korekt.</div>
+                    </div>
+                     <div class="setting-container">
+                        <label>Waga Przekroczenia (P)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="weight-input" id="weightOvershoot" step="0.5" value="2.0" min="0" max="10"><button>+</button></div>
+                        <div class="help-text">Zwieksz, aby surowo karac nawet chwilowe, duze wychylenia od pionu.</div>
+                    </div>
+                     <div class="setting-container">
+                        <label>Waga Wysilku (W)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="weight-input" id="weightEffort" step="0.5" value="1.0" min="0" max="10"><button>+</button></div>
+                        <div class="help-text">Zwieksz, aby zminimalizowac agresywnosc i zuzycie energii przez silniki.</div>
+                    </div>
+                </fieldset>
+
+                <div id="autotestStatusPanel" style="margin-top:15px;">
                     <h5>Status Sesji Optymalizacji</h5>
                     <div class="info-grid">
-                        <strong>Temperatura:</strong> <span id="statusTemperature">---</span>
-                        <strong>Prawdopodob. Skoku:</strong> <span id="statusJumpChance">---</span>
-                        <strong>Najlepszy Wynik:</strong> <span id="statusBestScore" style="font-weight: bold; color: #a2f279;">---</span>
+                        <strong>Pokolenie:</strong> <span id="statusGeneration">---</span>
+                        <strong>Najlepszy wynik w pokoleniu:</strong> <span id="statusBestGenScore">---</span>
+                        <strong>Najlepszy wynik ogolnie:</strong> <span id="statusBestScore" style="font-weight: bold; color: #a2f279;">---</span>
                         <strong>Postep:</strong> 
                         <div>
                             <progress id="statusProgressBar" value="0" max="100"></progress>
@@ -378,7 +402,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 6.0 (UI dla PID) - Ciagla optymalizacja online i finalne poprawki
+    // WERSJA 7.0 (UI dla PID) - Finalna z algorytmem genetycznym i budzetem wag
     // =======================================================================================
     let isApplyingConfig = false;
     let lastKnownRobotState = 'IDLE';
@@ -400,7 +424,6 @@
         'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick',
         'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone',
         'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr',
-        'turnToRollTargetInput': 'turn_to_roll_target', 'balanceDeadbandAngleInput': 'balance_deadband_angle',
         'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd',
         'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd'
     };
@@ -417,6 +440,7 @@
         setupDpadControls(); 
         setupSequenceControls(); 
         setupZnTuningControls();
+        setupWeightsControls();
         loadGamepadMappings();
         renderMappingModal();
         pollGamepad();
@@ -544,7 +568,7 @@
                     document.getElementById('znTuningCancelBtn').style.display = 'block';
                 }
             }
-            if (tuningSession && tuningSession.isCollecting()) tuningSession.recordTelemetry(data);
+            if (tuningSession && tuningSession.isEvaluating) tuningSession.recordTelemetry(data);
             if(isZnTuningRunning && data.output !== undefined) {
                  document.getElementById('znKpTestVal').textContent = data.output.toFixed(2);
             }
@@ -837,10 +861,11 @@
     };
     
     class TuningSession {
-        constructor(totalDuration) {
+        constructor(totalDuration, weights) {
             this.state = 'idle';
-            this.totalDuration = totalDuration * 1000; // in ms
-            this.updateInterval = 500; // ms
+            this.totalDuration = totalDuration * 1000;
+            this.updateInterval = 500;
+            this.weights = weights;
             
             this.paramsToTune = testConfigurations.balance.paramsToTune;
             this.paramKeys = Object.keys(this.paramsToTune);
@@ -858,7 +883,6 @@
             if (this.isCollecting() && data.type === 'telemetry') {
                 const now = Date.now();
                 this.telemetryBuffer.push({ ...data, timestamp: now });
-                // Utrzymaj bufor w oknie czasowym
                 this.telemetryBuffer = this.telemetryBuffer.filter(d => now - d.timestamp < this.telemetryWindowMs);
             }
         }
@@ -875,6 +899,7 @@
             this.bestParams = { ...this.safeParams };
             this.currentParams = { ...this.safeParams };
             this.bestScore = -Infinity;
+            this.lastScore = -Infinity;
             this.temperature = 1.0;
             this.startTime = Date.now();
             this.state = 'testing';
@@ -897,35 +922,33 @@
                 logMsg += " - NOWY NAJLEPSZY!";
             }
             
-            const lastScore = this.lastScore || this.bestScore;
-            const delta = score - lastScore;
+            const delta = score - this.lastScore;
             const acceptanceProb = this.temperature > 0.001 ? Math.exp(delta / this.temperature) : 0;
             
-            if (delta > 0) { // Zawsze akceptuj poprawe
-                 this.currentParams = { ...this.currentParams }; // Zostan przy tym co dobre
-            } else if (Math.random() < acceptanceProb) { // Akceptuj gorsze z pewnym prawdopodobienstwem
-                 this.currentParams = { ...this.currentParams };
+            let nextBaseParams = this.currentParams;
+            if (delta > 0) {
+                 // Zostajemy przy lepszym wyniku
+            } else if (Math.random() < acceptanceProb) {
                  logMsg += ` - AKCEPTUJE GORSZY (P=${acceptanceProb.toFixed(2)})`;
-            } else { // Odrzuc, wroc do najlepszego
-                this.currentParams = { ...this.bestParams };
+            } else {
+                 logMsg += " - ODRZUCONO";
+                 nextBaseParams = { ...this.bestParams }; // Wracamy do najlepszego
             }
             this.lastScore = score;
             addLogMessage(logMsg, 'info');
 
-            // Generuj nastepny krok i wyslij do robota
-            const nextParams = this.generateNextParams();
-            Object.entries(nextParams).forEach(([key, value]) => {
+            const nextParams = this.generateNextParams(nextBaseParams);
+            this.currentParams = nextParams;
+            Object.entries(this.currentParams).forEach(([key, value]) => {
                 const inputId = this.paramsToTune[key].id;
                 isApplyingConfig = true;
                 document.getElementById(inputId).value = value.toFixed(4);
                 isApplyingConfig = false;
                 sendBleMessage({ type: 'set_param', key: key, value: value });
             });
-            this.currentParams = nextParams;
 
-            // Chlodzenie
             const elapsed = (Date.now() - this.startTime) / this.totalDuration;
-            this.temperature = Math.pow(1 - elapsed, 2); // Nieliniowe chlodzenie
+            this.temperature = Math.pow(1 - elapsed, 2);
             
             updateAutoTestUI(this);
         }
@@ -961,11 +984,11 @@
             updateAutoTestUI(null);
         }
 
-        generateNextParams() {
-            let nextParams = { ...this.currentParams };
+        generateNextParams(baseParams) {
+            let nextParams = { ...baseParams };
             const paramToChange = this.paramKeys[Math.floor(Math.random() * this.paramKeys.length)];
             const baseValue = nextParams[paramToChange];
-            const range = this.config.paramsToTune[paramToChange].range * baseValue * this.temperature;
+            const range = this.paramsToTune[paramToChange].range * baseValue * (0.1 + 0.9 * this.temperature);
             const change = (Math.random() * 2 - 1) * range;
 
             nextParams[paramToChange] += change;
@@ -974,7 +997,7 @@
         }
 
         calculateBalanceFitness() {
-            if (this.telemetryBuffer.length < 10) return { score: 0.0, components: { stability:0, stillness:0, overshoot:0, effort:0 } };
+            if (this.telemetryBuffer.length < 10) return { score: -Infinity, components: { stability:0, stillness:0, overshoot:0, effort:0 } };
             const { telemetryBuffer: buffer } = this;
             let sumAbsPitch = 0, maxAbsPitch = 0, sumAbsOutputChange = 0, stillSamples = 0;
             const stillnessThreshold = 1023 * 0.05;
@@ -996,7 +1019,7 @@
             const scoreOvershoot = Math.max(0, 1 - (maxAbsPitch / 5.0)); 
             const scoreStillness = stillSamples / count;
             const scoreEffort = Math.max(0, 1 - (avgAbsOutputChange / 50));
-            const finalScore = (scoreStability * 0.35) + (scoreStillness * 0.35) + (scoreOvershoot * 0.2) + (scoreEffort * 0.1);
+            const finalScore = (scoreStability * this.weights.stability) + (scoreStillness * this.weights.stillness) + (scoreOvershoot * this.weights.overshoot) + (scoreEffort * this.weights.effort);
             
             return {
                 score: finalScore,
@@ -1022,9 +1045,16 @@
         const cancelBtn = document.getElementById('autotestCancelBtn');
 
         actionBtn.addEventListener('click', () => {
+            if(actionBtn.disabled) return;
             if (!tuningSession || tuningSession.state === 'idle') {
                 const totalDuration = parseInt(document.getElementById('at_duration_total').value);
-                tuningSession = new TuningSession(totalDuration);
+                const weights = {
+                    stability: parseFloat(document.getElementById('weightStability').value) / 10.0,
+                    stillness: parseFloat(document.getElementById('weightStillness').value) / 10.0,
+                    overshoot: parseFloat(document.getElementById('weightOvershoot').value) / 10.0,
+                    effort: parseFloat(document.getElementById('weightEffort').value) / 10.0,
+                };
+                tuningSession = new TuningSession(totalDuration, weights);
                 tuningSession.start();
             } else if (tuningSession.state === 'finished') {
                 tuningSession.applyBestResults();
@@ -1034,6 +1064,44 @@
         cancelBtn.addEventListener('click', () => {
             if (tuningSession) tuningSession.cancel();
         });
+    }
+
+    function setupWeightsControls() {
+        const weightsInputs = document.querySelectorAll('.weight-input');
+        const budgetSpan = document.getElementById('weights-budget');
+        const actionBtn = document.getElementById('autotestActionBtn');
+        const totalPoints = 10.0;
+
+        const updateBudget = () => {
+            let currentSum = 0;
+            weightsInputs.forEach(input => {
+                currentSum += parseFloat(input.value);
+            });
+            const remaining = totalPoints - currentSum;
+            budgetSpan.textContent = remaining.toFixed(1);
+            if (Math.abs(remaining) < 0.01) {
+                budgetSpan.className = 'valid';
+                if (!tuningSession || tuningSession.state === 'idle' || tuningSession.state === 'finished') {
+                    actionBtn.disabled = false;
+                }
+                actionBtn.title = '';
+            } else {
+                budgetSpan.className = 'invalid';
+                actionBtn.disabled = true;
+                actionBtn.title = `Suma wag musi wynosic dokladnie ${totalPoints}. Aktualna suma: ${currentSum.toFixed(1)}`;
+            }
+        };
+
+        weightsInputs.forEach(input => {
+            input.addEventListener('change', updateBudget);
+            const wrapper = input.closest('.numeric-input-wrapper');
+            const minusBtn = wrapper.querySelector('button:first-child');
+            const plusBtn = wrapper.querySelector('button:last-child');
+            minusBtn.addEventListener('click', updateBudget);
+            plusBtn.addEventListener('click', updateBudget);
+        });
+
+        updateBudget();
     }
 
     function updateAutoTestUI(session) {
@@ -1054,12 +1122,13 @@
             statusProgressText.textContent = 'Gotowy do rozpoczecia...';
             statusStateText.textContent = 'Bezczynny';
             actionBtn.textContent = 'Rozpocznij Optymalizacje Balansu';
-            actionBtn.disabled = false;
             cancelBtn.style.display = 'none';
+            setupWeightsControls();
             return;
         }
 
         cancelBtn.style.display = 'block';
+        actionBtn.disabled = true;
         
         const elapsed = Date.now() - session.startTime;
         const progress = Math.min(100, (elapsed / session.totalDuration) * 100);
@@ -1068,7 +1137,7 @@
         statusBestScore.textContent = session.bestScore < -100 ? '---' : session.bestScore.toFixed(4);
         statusTemp.textContent = session.temperature.toFixed(3);
         
-        const jumpChance = session.temperature > 0.001 ? Math.exp(-0.1 / session.temperature) * 100 : 0;
+        const jumpChance = session.temperature > 0.001 ? Math.exp(-0.05 / session.temperature) * 100 : 0;
         statusJump.textContent = `${jumpChance.toFixed(1)} %`;
         
         statusProgressText.textContent = `${(elapsed / 1000).toFixed(1)}s / ${(session.totalDuration / 1000).toFixed(1)}s`;
@@ -1076,7 +1145,6 @@
         switch (session.state) {
             case 'testing':
                 statusStateText.textContent = 'Optymalizacja w toku...';
-                actionBtn.disabled = true;
                 break;
             case 'finished':
                 statusBar.value = 100;
