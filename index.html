@@ -6,7 +6,7 @@
     <title>Robot PID - Panel Sterowania v8.8 (Final GA Rework)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/genetic-js/lib/genetic.js"></script>
-    
+
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
         h1 { color: #61dafb; font-size: 1.8em; }
@@ -188,7 +188,7 @@
                 <div class="chart-controls" id="chartControls"></div>
             </div>
         </div>
-        
+
         <!-- 4. STEROWANIE AUTONOMICZNE -->
         <div class="card">
              <button class="accordion-header" onclick="toggleAccordion(this)">Sterowanie Autonomiczne</button>
@@ -309,7 +309,7 @@
                 <button id="saveBtn">Zapisz na Robocie</button> 
             </div>
         </div>
-        
+
         <!-- 6. AUTO STROJENIE -->
         <div class="card">
             <h2>Auto Strojenie</h2>
@@ -327,7 +327,7 @@
                         <strong>Testowane Kp:</strong> <span id="znKpTestVal">---</span>
                     </div>
                 </div>
-                
+
                 <div id="znResultPanel">
                     <h5>Wynik Odkrywania</h5>
                     <div class="zn-result-grid">
@@ -350,7 +350,7 @@
                     <label>Cel Optymalizacji/Testow<span class="help-icon">?</span></label>
                      <div class="help-text">Uruchomienie inteligentnej optymalizacji petli balansu (algorytm genetyczny) lub wykonanie precyzyjnych testow wydajnosciowych dla petli predkosci i pozycji.</div>
                 </div>
-                
+
                 <div id="autotestSelector" class="radio-selector-group">
                     <div class="radio-selector-item">
                         <input type="radio" id="test-balance" name="autotest-type" value="balance" checked>
@@ -439,7 +439,7 @@
                         </fieldset>
                     </div>
                 </div>
-                
+
                 <div id="autotestStatusPanel" style="margin-top:15px;">
                     <h5>Status Sesji Optymalizacji</h5>
                     <div class="info-grid">
@@ -457,7 +457,7 @@
                         <strong>Status:</strong> <span id="statusStateText" style="font-weight: bold;">Bezczynny</span>
                     </div>
                 </div>
-                
+
                 <div id="ga-controls-standard">
                     <button id="autotestActionBtn" style="width:100%; margin-top:15px;">Rozpocznij Optymalizacje</button>
                 </div>
@@ -483,7 +483,7 @@
     // =======================================================================================
     // WERSJA 8.7 (Rework GA Loop)
     // =======================================================================================
-    
+
     let isApplyingConfig = false;
     let lastKnownRobotState = 'IDLE';
     let isSequenceRunning = false;
@@ -505,7 +505,7 @@
         'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd',
         'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd'
     };
-    
+
     document.addEventListener('DOMContentLoaded', () => {
         initJoystick();
         setupChartControls();
@@ -574,23 +574,23 @@
     function handleJoystickMove(event) { if (!isDragging) return; event.preventDefault(); const joystickCanvas = document.getElementById('joystickCanvas'); const joystickCtx = joystickCanvas.getContext('2d'); let { x, y } = getJoystickPosition(event); const dx = x - joystickCenter.x; const dy = y - joystickCenter.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; } drawJoystick(joystickCtx, x, y); const now = Date.now(); if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) { const joyX = (x - joystickCenter.x) / joystickRadius; const joyY = -(y - joystickCenter.y) / joystickRadius; sendBleMessage({ type: 'joystick', x: joyX, y: joyY }); lastJoystickSendTime = now; } }
     function getJoystickPosition(event) { const rect = document.getElementById('joystickCanvas').getBoundingClientRect(); const touch = event.touches ? event.touches[0] : event; return { x: touch.clientX - rect.left, y: touch.clientY - rect.top }; }
     function handleJoystickEnd(event) { if (!isDragging) return; event.preventDefault(); isDragging = false; const joystickCanvas = document.getElementById('joystickCanvas'); const joystickCtx = joystickCanvas.getContext('2d'); drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
-    
+
     function pollGamepad() { if (gamepadIndex !== null) { const gp = navigator.getGamepads()[gamepadIndex]; if (!gp) return; if (isMappingButton && actionToMap) { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { Object.keys(gamepadMappings).forEach(key => { if (gamepadMappings[key] === actionToMap) delete gamepadMappings[key]; }); gamepadMappings[i] = actionToMap; saveGamepadMappings(); addLogMessage(`[UI] Akcja '${availableActions[actionToMap].label}' przypisana do przycisku ${i}.`, 'success'); isMappingButton = false; actionToMap = null; renderMappingModal(); } }); } else { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { const action = gamepadMappings[i]; if (action && availableActions[action]) { const element = document.getElementById(availableActions[action].elementId); if (element && !element.disabled) { element.click(); flashElement(element); } } } }); } lastGamepadState = gp.buttons.map(b => b.pressed); let x = gp.axes[0] || 0; let y = gp.axes[1] || 0; if (Math.abs(x) < 0.15) x = 0; if (Math.abs(y) < 0.15) y = 0; sendBleMessage({ type: 'joystick', x: x, y: -y }); } requestAnimationFrame(pollGamepad); }
     window.addEventListener('gamepadconnected', (e) => { gamepadIndex = e.gamepad.index; document.getElementById('gamepadStatus').textContent = 'Polaczony'; document.getElementById('gamepadStatus').style.color = '#a2f279'; addLogMessage(`[UI] Gamepad polaczony: ${e.gamepad.id}`, 'success'); });
     window.addEventListener('gamepaddisconnected', (e) => { gamepadIndex = null; document.getElementById('gamepadStatus').textContent = 'Brak'; document.getElementById('gamepadStatus').style.color = '#f7b731'; addLogMessage('[UI] Gamepad rozlaczony.', 'warn'); });
-    
+
     function startMapping(action, buttonElement) { if (gamepadIndex === null) { addLogMessage("Podlacz gamepada, aby rozpoczac mapowanie!", "warn"); return; } isMappingButton = true; actionToMap = action; document.querySelectorAll('.mapping-button').forEach(btn => btn.textContent = "Przypisz"); buttonElement.textContent = "Czekam..."; addLogMessage(`[UI] Nasluchiwanie na przycisk dla akcji: ${availableActions[action].label}...`, "info"); }
     function renderMappingModal() { const list = document.getElementById('gamepad-mapping-list'); list.innerHTML = ''; for (const [action, config] of Object.entries(availableActions)) { const row = document.createElement('div'); row.className = 'mapping-row'; const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action); row.innerHTML = `<span class="mapping-label">${config.label}</span><span class="mapping-display">${buttonIndex !== undefined ? `Przycisk ${buttonIndex}` : 'Brak'}</span><button class="mapping-button" data-action="${action}">Przypisz</button>`; list.appendChild(row); } list.querySelectorAll('.mapping-button').forEach(button => { button.addEventListener('click', (e) => { const action = e.target.dataset.action; startMapping(action, e.target); }); }); }
-    
+
     const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
     function addLogMessage(message, level = 'info') { const logHistory = document.getElementById('log-history'); if (!logHistory) return; const timestamp = new Date().toLocaleTimeString(); let color = '#fff'; if (level === 'error') color = '#ff6347'; else if (level === 'warn') color = '#f7b731'; else if (level === 'success') color = '#a2f279'; const logEntry = document.createElement('div'); logEntry.style.color = color; logEntry.textContent = `[${timestamp}] ${message}`; logHistory.prepend(logEntry); while (logHistory.children.length > 200) { logHistory.removeChild(logHistory.lastChild); } }
     function clearLogs() { document.getElementById('log-history').innerHTML = ''; }
     function toggleAccordion(header) { const content = header.nextElementSibling; header.classList.toggle('active'); if (content.style.maxHeight && content.style.maxHeight !== '0px') { content.style.maxHeight = '0px'; content.style.padding = '0px 15px'; } else { content.style.maxHeight = content.scrollHeight + 30 + "px"; content.style.padding = '15px'; } }
     function updateAccordionHeight(content) { if (content && content.style.maxHeight !== '0px') { content.style.maxHeight = content.scrollHeight + 30 + 'px'; } }
-    
+
     async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ name: 'RoboBala' }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono!', 'success'); setTimeout(() => { addLogMessage('[UI] Automatycznie synchronizuje konfiguracje...', 'info'); sendBleMessage({ type: 'request_full_config' }); }, 500); } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); document.getElementById('connectionStatus').className = 'status-indicator status-error'; document.getElementById('connectionText').textContent = 'Blad polaczenia'; document.getElementById('connectBleBtn').disabled = false; } }
     function onDisconnected() { addLogMessage('[UI] Rozlaczono z robotem.', 'warn'); document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); document.getElementById('connectBleBtn').disabled = false; rxCharacteristic = null; txCharacteristic = null; bleMessageQueue = []; isSendingBleMessage = false; }
-    
+
     function handleBleNotification(event) {
         const value = event.target.value;
         const decoder = new TextDecoder('utf-8');
@@ -607,7 +607,7 @@
             }
         }
     }
-    
+
     async function _sendRawBleMessage(message) { if (!rxCharacteristic) return; try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
     async function processBleQueue() { if (isSendingBleMessage || bleMessageQueue.length === 0 || !rxCharacteristic) { return; } isSendingBleMessage = true; const message = bleMessageQueue.shift(); await _sendRawBleMessage(message); setTimeout(() => { isSendingBleMessage = false; processBleQueue(); }, BLE_SEND_INTERVAL); }
     function sendBleMessage(message) { bleMessageQueue.push(message); processBleQueue(); }
@@ -660,6 +660,12 @@
                     handleZnTuningResult(data.ku, data.tu);
                 }
                 break;
+            case 'position_test_result':
+                handlePositionTestResult(data);
+                break;
+            case 'speed_test_result':
+                handleSpeedTestResult(data);
+                break;
             case 'ack':
                 break;
         }
@@ -677,7 +683,7 @@
             }
         }
     }
-    
+
     function updateTelemetryUI(data) {
         if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
         if (data.pitch !== undefined) { document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0'; document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`; }
@@ -691,7 +697,7 @@
     }
 
     const telemetryChart = new Chart(document.getElementById('telemetryChart'), { type: 'line', data: { labels: Array(100).fill(''), datasets: [] }, options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { type: 'linear', display: true, position: 'left', ticks: { color: '#61dafb' }, title: { display: true, text: 'Wartosc', color: '#61dafb' } } }, plugins: { legend: { labels: { color: '#fff' } } } } });
-    
+
     function updateChart(data) {
         const chartData = telemetryChart.data;
         if (chartData.labels.length >= 100) chartData.labels.shift();
@@ -707,7 +713,7 @@
         chartData.datasets.forEach(ds => { if (ds.data.length < chartData.labels.length) { if (ds.data.length >= 100) ds.data.shift(); ds.data.push(null); } });
         telemetryChart.update('none');
     }
-    
+
     function setupChartControls() {
         const container = document.getElementById('chartControls');
         container.innerHTML = '';
@@ -742,7 +748,7 @@
         ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
         const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
         for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); }
-        
+
         document.getElementById('saveBtn').addEventListener('click', () => { if (confirm("Czy na pewno chcesz trwale zapisac biezaca konfiguracje znajdujaca sie na robocie do jego pamieci EEPROM?")) { sendBleMessage({ type: 'save_tunings' }); } });
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { sendBleMessage({ type: 'request_full_config' }); } });
         document.getElementById('calibrateMpuBtn')?.addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
@@ -765,7 +771,7 @@
     function updateSequenceUI() { document.querySelectorAll('.sequence-step').forEach((step, index) => { step.classList.toggle('executing', isSequenceRunning && index === currentSequenceStep); }); document.getElementById('run-sequence-btn').disabled = isSequenceRunning; document.getElementById('add-sequence-step-btn').disabled = isSequenceRunning; document.getElementById('clear-sequence-btn').disabled = isSequenceRunning; document.getElementById('stop-sequence-btn').disabled = !isSequenceRunning; }
     function checkAndExecuteNextSequenceStep(previousState) { if (!isSequenceRunning) return; const isRobotReadyForNextStep = lastKnownRobotState === 'TRZYMA_POZYCJE' || lastKnownRobotState === 'BALANSUJE'; const wasRobotWorking = previousState === 'RUCH_AUTONOMICZNY' || previousState === 'OBROT_AUTONOMICZNY'; if (isRobotReadyForNextStep && wasRobotWorking) { addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info'); currentSequenceStep++; executeNextSequenceStep(); } }
     function executeNextSequenceStep() { const steps = document.querySelectorAll('.sequence-step'); if (!isSequenceRunning || currentSequenceStep >= steps.length) { if (isSequenceRunning) { isSequenceRunning = false; addLogMessage('[UI] Sekwencja ukonczona.', 'success'); } updateSequenceUI(); return; } updateSequenceUI(); const stepNode = steps[currentSequenceStep]; const type = stepNode.querySelector('.sequence-type').value; const value = parseFloat(stepNode.querySelector('.sequence-value').value); let command = {}; switch (type) { case 'move_fwd': command = { type: 'execute_move', distance_cm: value }; break; case 'move_bwd': command = { type: 'execute_move', distance_cm: -value }; break; case 'rotate_r': command = { type: 'execute_rotate', angle_deg: value }; break; case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -value }; break; } addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info'); sendBleMessage(command); }
-    
+
     // =======================================================================================
     // === SEKCJA STROJENIA KROK 1: ZIEGLER-NICHOLS ===
     // =======================================================================================
@@ -780,13 +786,41 @@
         cancelBtn.addEventListener('click', () => { if (isZnTuningRunning) { cancelZnTuning(); } });
         applyBtn.addEventListener('click', () => { if (znResults.ku > 0 && znResults.tu > 0) { applyZnResults(); } });
     }
-    
+
     function startZnTuning() { isZnTuningRunning = true; document.getElementById('znStatusText').textContent = "Rozpoczynanie..."; document.getElementById('znTuningActionBtn').disabled = true; document.getElementById('znTuningCancelBtn').style.display = 'block'; document.getElementById('znResultPanel').style.display = 'none'; addLogMessage('[UI] Wysylam polecenie rozpoczecia strojenia Z-N do robota...', 'info'); sendBleMessage({ type: 'start_zn_tuning' }); }
     function cancelZnTuning() { isZnTuningRunning = false; document.getElementById('znStatusText').textContent = "Anulowanie..."; addLogMessage('[UI] Wysylam polecenie anulowania strojenia do robota...', 'warn'); sendBleMessage({ type: 'cancel_tuning' }); resetZnTuningUI(); }
     function resetZnTuningUI() { isZnTuningRunning = false; document.getElementById('znStatusText').textContent = "Bezczynny"; document.getElementById('znKpTestVal').textContent = "---"; document.getElementById('znTuningActionBtn').disabled = false; document.getElementById('znTuningActionBtn').textContent = "Rozpocznij Odkrywanie"; document.getElementById('znTuningCancelBtn').style.display = 'none'; }
     function handleZnTuningResult(ku, tu) { addLogMessage(`[UI] Otrzymano wynik strojenia Z-N: Ku=${ku.toFixed(4)}, Tu=${tu.toFixed(4)}`, 'success'); resetZnTuningUI(); znResults = { ku, tu }; const resultPanel = document.getElementById('znResultPanel'); resultPanel.style.display = 'block'; const kp = 0.6 * ku; const kd = kp * tu / 8; document.getElementById('znKuResult').textContent = ku.toFixed(4); document.getElementById('znTuResult').textContent = tu.toFixed(4) + " s"; document.getElementById('znKpSuggest').textContent = kp.toFixed(4); document.getElementById('znKdSuggest').textContent = kd.toFixed(4); updateAccordionHeight(resultPanel.closest('.accordion-content')); }
     function applyZnResults() { const { ku, tu } = znResults; if (ku <= 0 || tu <= 0) return; const kp = 0.6 * ku; const kd = kp * tu / 8; isApplyingConfig = true; document.getElementById('balanceKpInput').value = kp.toFixed(4); document.getElementById('balanceKiInput').value = 0.0; document.getElementById('balanceKdInput').value = kd.toFixed(4); isApplyingConfig = false; document.getElementById('balanceKpInput').dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('balanceKiInput').dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true })); addLogMessage('[UI] Zastosowano sugerowane wartosci Kp i Kd. Ki ustawiono na 0.', 'info'); }
-    
+
+    function handlePositionTestResult(data) {
+        document.getElementById('autotestActionBtn').disabled = false;
+        document.getElementById('autotestActionBtn').textContent = 'Uruchom Test Pozycji';
+        
+        if (data.success) {
+            addLogMessage(`[UI] Test pozycji zakonczony pomyslnie. Czas powrotu: ${data.recovery_time_ms}ms, Max odchylenie: ${data.max_deviation}°`, 'success');
+            if (data.stability_score !== undefined) {
+                addLogMessage(`[UI] Ocena stabilnosci: ${data.stability_score.toFixed(2)}/10`, 'info');
+            }
+        } else {
+            addLogMessage(`[UI] Test pozycji nieudany: ${data.error || 'Nieznany blad'}`, 'error');
+        }
+    }
+
+    function handleSpeedTestResult(data) {
+        document.getElementById('autotestActionBtn').disabled = false;
+        document.getElementById('autotestActionBtn').textContent = 'Uruchom Test Predkosci';
+        
+        if (data.success) {
+            addLogMessage(`[UI] Test predkosci zakonczony pomyslnie. Czas: ${data.execution_time_ms}ms, Dokladnosc: ${data.accuracy_percent.toFixed(1)}%`, 'success');
+            if (data.avg_error !== undefined) {
+                addLogMessage(`[UI] Sredni blad predkosci: ${data.avg_error.toFixed(2)} imp/s`, 'info');
+            }
+        } else {
+            addLogMessage(`[UI] Test predkosci nieudany: ${data.error || 'Nieznany blad'}`, 'error');
+        }
+    }
+
     // =======================================================================================
     // === SEKCJA STROJENIA KROK 2: OPTYMALIZACJA I TESTY ===
     // =======================================================================================
@@ -845,10 +879,10 @@
         document.querySelectorAll('.weight-input').forEach(input => input.addEventListener('change', updateWeightsBudget));
         updateWeightsBudget();
     }
-    
+
     function renderAutotestOptions() {
         const selectedTest = document.querySelector('input[name="autotest-type"]:checked').value;
-        
+
         const geneticPanel = document.getElementById('geneticOptionsPanel');
         const positionPanel = document.getElementById('positionTestOptionsPanel');
         const speedPanel = document.getElementById('speedTestOptionsPanel');
@@ -857,50 +891,100 @@
         const standardControls = document.getElementById('ga-controls-standard');
         const runningControls = document.getElementById('ga-controls-running');
         const actionBtn = document.getElementById('autotestActionBtn');
-        
+
         [geneticPanel, positionPanel, speedPanel, statusPanel, standardControls, runningControls].forEach(el => el.style.display = 'none');
-        actionBtn.disabled = false;
         
+        // Reset stanu przycisku tylko jeśli nie ma aktywnej optymalizacji
+        if (!isGeneticOptimizationRunning) {
+            actionBtn.disabled = false;
+            // Wyczyść wszystkie poprzednie event listenery
+            const newActionBtn = actionBtn.cloneNode(true);
+            actionBtn.parentNode.replaceChild(newActionBtn, actionBtn);
+            // Dodaj nowy event listener
+            document.getElementById('autotestActionBtn').addEventListener('click', handleAutotestAction);
+        }
+
         switch(selectedTest) {
             case 'balance':
                 geneticPanel.style.display = 'block';
                 statusPanel.style.display = 'block';
-                standardControls.style.display = 'block';
-                actionBtn.textContent = 'Rozpocznij Optymalizacje';
+                if (isGeneticOptimizationRunning) {
+                    runningControls.style.display = 'grid';
+                } else {
+                    standardControls.style.display = 'block';
+                    document.getElementById('autotestActionBtn').textContent = 'Rozpocznij Optymalizacje';
+                }
                 break;
             case 'position':
                 positionPanel.style.display = 'block';
                 standardControls.style.display = 'block';
-                actionBtn.textContent = 'Uruchom Test Pozycji';
+                if (!isGeneticOptimizationRunning) {
+                    document.getElementById('autotestActionBtn').textContent = 'Uruchom Test Pozycji';
+                }
                 break;
             case 'speed':
                 speedPanel.style.display = 'block';
                 standardControls.style.display = 'block';
-                actionBtn.textContent = 'Uruchom Test Predkosci';
+                if (!isGeneticOptimizationRunning) {
+                    document.getElementById('autotestActionBtn').textContent = 'Uruchom Test Predkosci';
+                }
                 break;
         }
-        updateAccordionHeight(actionBtn.closest('.accordion-content'));
+        updateAccordionHeight(document.getElementById('autotestActionBtn').closest('.accordion-content'));
     }
 
     function runPositionTest() {
-        const impulse = parseInt(document.getElementById('positionTestImpulseInput').value);
-        if (isNaN(impulse)) {
-            addLogMessage('[UI] Nieprawidlowa wartosc impulsu!', 'error');
+        if (lastKnownRobotState !== 'BALANSUJE' && lastKnownRobotState !== 'TRZYMA_POZYCJE') {
+            addLogMessage(`[UI] Nie mozna rozpoczac testu pozycji. Robot w stanie '${lastKnownRobotState}'.`, 'error');
             return;
         }
+        
+        const impulse = parseInt(document.getElementById('positionTestImpulseInput').value);
+        if (isNaN(impulse) || impulse < 200 || impulse > 1023) {
+            addLogMessage('[UI] Nieprawidlowa wartosc impulsu! (200-1023)', 'error');
+            return;
+        }
+        
+        document.getElementById('autotestActionBtn').disabled = true;
+        document.getElementById('autotestActionBtn').textContent = 'Test w toku...';
+        
         addLogMessage(`[UI] Uruchamiam test odrzucania zaklocen z impulsem ${impulse}`, 'info');
         sendBleMessage({ type: 'execute_position_test_impulse', impulse_power: impulse });
+        
+        // Reset UI po 10 sekundach (timeout testu)
+        setTimeout(() => {
+            document.getElementById('autotestActionBtn').disabled = false;
+            document.getElementById('autotestActionBtn').textContent = 'Uruchom Test Pozycji';
+            addLogMessage('[UI] Test pozycji zakonczony (timeout).', 'info');
+        }, 10000);
     }
 
     function runSpeedTest() {
+        if (lastKnownRobotState !== 'BALANSUJE' && lastKnownRobotState !== 'TRZYMA_POZYCJE') {
+            addLogMessage(`[UI] Nie mozna rozpoczac testu predkosci. Robot w stanie '${lastKnownRobotState}'.`, 'error');
+            return;
+        }
+        
         const distance = parseFloat(document.getElementById('speedTestDistanceInput').value);
         const speed = parseFloat(document.getElementById('speedTestSpeedInput').value);
-        if (isNaN(distance) || isNaN(speed)) {
+        if (isNaN(distance) || isNaN(speed) || distance < 10 || speed < 10) {
             addLogMessage('[UI] Nieprawidlowe wartosci dla testu predkosci!', 'error');
             return;
         }
+        
+        document.getElementById('autotestActionBtn').disabled = true;
+        document.getElementById('autotestActionBtn').textContent = 'Test w toku...';
+        
         addLogMessage(`[UI] Uruchamiam test predkosci: dystans ${distance}cm, predkosc ${speed}cm/s`, 'info');
         sendBleMessage({ type: 'execute_speed_test_run', distance_cm: distance, speed_cmps: speed });
+        
+        // Oblicz przybliżony czas testu i dodaj margines
+        const estimatedTime = (distance / speed) * 1000 + 5000; // +5s margines
+        setTimeout(() => {
+            document.getElementById('autotestActionBtn').disabled = false;
+            document.getElementById('autotestActionBtn').textContent = 'Uruchom Test Predkosci';
+            addLogMessage('[UI] Test predkosci zakonczony.', 'info');
+        }, estimatedTime);
     }
 
     function updateWeightsBudget() {
@@ -917,7 +1001,7 @@
             addLogMessage('[Genetic] Blad: Optymalizacja jest juz w toku.', 'warn');
             return;
         }
-        
+
         if (lastKnownRobotState !== 'BALANSUJE' && lastKnownRobotState !== 'TRZYMA_POZYCJE') {
             addLogMessage(`[Genetic] Blad: Robot musi byc w stanie 'BALANSUJE', a jest w '${lastKnownRobotState}'.`, 'error');
             return;
@@ -944,7 +1028,7 @@
         document.getElementById('ga-controls-running').style.display = 'grid';
         document.getElementById('statusStateText').textContent = 'Optymalizacja...';
         addLogMessage(`[Genetic] Rozpoczynam procedure ewolucji...`, 'success');
-        
+
         runEvolutionLoop();
     }
 
@@ -969,7 +1053,7 @@
             addLogMessage(`[Genetic] Otrzymano za malo danych telemetrycznych (${telemetryForGenetic.length}/20). Osobnik otrzymuje niska ocene.`, 'warn');
             return 0;
         }
-        
+
         let sumAbsPitch = 0, maxAbsPitch = 0, sumAbsOutputChange = 0, stillSamples = 0;
         const stillnessThreshold = 0.05 * 1023;
         telemetryForGenetic.forEach((d, i) => {
@@ -1030,7 +1114,7 @@
                 return new Genotype(kp_b, kd_b, filter);
             };
         };
-        
+
         addLogMessage('[Genetic] Tworze populacje startowa...', 'info');
         let population = [];
         const basePhenotype = new Genotype(safeStartParams.kp_b, safeStartParams.kd_b, safeStartParams.balance_pid_derivative_filter_alpha);
@@ -1038,32 +1122,32 @@
         while (population.length < populationSize) {
             population.push(basePhenotype.clone().mutate(0.85));
         }
-        
+
         for (let i = 0; i < generations; i++) {
             if (!isGeneticOptimizationRunning) break;
             document.getElementById('statusGeneration').textContent = `${i + 1} / ${generations}`;
-            
+
             let evaluatedPopulation = [];
             for (let j = 0; j < population.length; j++) {
                 if (!isGeneticOptimizationRunning) break;
-                
+
                 while (isGeneticPaused) {
                     await new Promise(resolve => setTimeout(resolve, 200));
                     if (!isGeneticOptimizationRunning) break;
                 }
                 if (!isGeneticOptimizationRunning) break;
-                
+
                 const progress = ((i * populationSize) + j + 1) / (generations * populationSize) * 100;
                 document.getElementById('statusProgressBar').value = progress;
                 document.getElementById('statusProgressText').textContent = `Testowanie osobnika ${j + 1}/${populationSize} (Pokolenie ${i + 1})...`;
-                
+
                 const score = await evaluatePhenotype(population[j]);
                 let evaluatedPhenotype = population[j].clone();
                 evaluatedPhenotype.score = score;
                 evaluatedPopulation.push(evaluatedPhenotype);
             }
              if (!isGeneticOptimizationRunning) break;
-            
+
             evaluatedPopulation.sort((a, b) => b.score - a.score);
             const bestOfGeneration = evaluatedPopulation[0];
             addLogMessage(`[Genetic] Pokolenie ${i + 1} zakonczone. Najlepszy wynik: ${bestOfGeneration.score.toFixed(4)}`, 'info');
@@ -1075,7 +1159,7 @@
                 const bestParamsEl = document.getElementById('statusBestParams');
                 bestParamsEl.innerHTML = `Kp:${bestPhenotype.kp_b.toFixed(4)}<br>Kd:${bestPhenotype.kd_b.toFixed(4)}<br>Filtr:${(bestPhenotype.balance_pid_derivative_filter_alpha * 100).toFixed(1)}%`;
             }
-            
+
             let newPopulation = [bestOfGeneration];
             while (newPopulation.length < populationSize) {
                 const parent1 = tournamentSelect(evaluatedPopulation);
@@ -1097,7 +1181,7 @@
             cancelGeneticOptimization();
             return;
         }
-        
+
         isGeneticOptimizationRunning = false;
         isGeneticPaused = false;
         addLogMessage(`[Genetic] Optymalizacja zakonczona! Najlepszy wynik: ${bestOverallScore.toFixed(4)}`, 'success');
@@ -1106,17 +1190,21 @@
         document.getElementById('statusStateText').textContent = 'Zakonczono';
         document.getElementById('statusProgressBar').value = 100;
         document.getElementById('statusProgressText').textContent = 'Optymalizacja zakonczona.';
-        
+
         document.getElementById('ga-controls-running').style.display = 'none';
         document.getElementById('ga-controls-standard').style.display = 'block';
+        
+        // Zastąp przycisk nowym z dedykowaną funkcją
         const actionBtn = document.getElementById('autotestActionBtn');
-        actionBtn.textContent = 'Zastosuj Najlepsze Parametry';
-        actionBtn.removeEventListener('click', handleAutotestAction);
-        actionBtn.addEventListener('click', function applyBestAndReset() {
+        const newActionBtn = actionBtn.cloneNode(true);
+        actionBtn.parentNode.replaceChild(newActionBtn, actionBtn);
+        
+        const finalActionBtn = document.getElementById('autotestActionBtn');
+        finalActionBtn.textContent = 'Zastosuj Najlepsze Parametry';
+        finalActionBtn.addEventListener('click', function applyBestAndReset() {
             applyPhenotype(fittest);
+            addLogMessage('[UI] Zastosowano najlepsze parametry z optymalizacji.', 'success');
             renderAutotestOptions();
-            setupAutoTestEventListeners();
-            this.removeEventListener('click', applyBestAndReset);
         });
     }
 
@@ -1124,7 +1212,7 @@
         if (!isGeneticOptimizationRunning) return;
         isGeneticOptimizationRunning = false;
         isGeneticPaused = false;
-        
+
         addLogMessage('[Genetic] Optymalizacja anulowana. Przywracam parametry poczatkowe.', 'warn');
         applyPhenotype(safeStartParams);
 
