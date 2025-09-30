@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v8.8 (Final GA Rework)</title>
+    <title>Robot PID - Panel Sterowania v9.0 (Integracja 3D)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -132,7 +132,7 @@
         .ga-button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
         .test-results-panel { display: none; background-color: #20232a; padding: 12px; border-radius: 6px; margin-top: 15px; }
         .test-results-panel h5 { color: #61dafb; margin: 0 0 10px 0; text-align: left; }
-        #robot3d-container { width: 100%; height: 400px; border-radius: 8px; overflow: hidden; background: linear-gradient(to bottom, #87CEEB 0%, #98FB98 100%); position: relative; border: 2px solid #61dafb; }
+        #robot3d-container { width: 100%; height: 400px; border-radius: 8px; overflow: hidden; position: relative; border: 2px solid #61dafb; }
         .robot3d-controls { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
         .robot3d-controls button { padding: 8px 16px; background-color: #61dafb; color: #282c34; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
         .robot3d-controls button:hover { background-color: #a2f279; }
@@ -544,9 +544,10 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 9.0 (3D Rework & Realism)
+    // WERSJA 9.0 (Integracja modelu 3D)
     // =======================================================================================
 
+    // === DEKLARACJE ZMIENNYCH GLOBALNYCH ===
     let isApplyingConfig = false;
     let lastKnownRobotState = 'IDLE';
     let isSequenceRunning = false;
@@ -569,6 +570,7 @@
         'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd'
     };
 
+    // === INICJALIZACJA APLIKACJI ===
     document.addEventListener('DOMContentLoaded', () => {
         initJoystick();
         setupChartControls();
@@ -587,10 +589,11 @@
         pollGamepad();
         window.addEventListener('resize', initJoystick);
         renderAutotestOptions();
-        init3DVisualization();
+        init3DVisualization(); // Inicjalizacja nowego modelu 3D
         animate3D();
     });
 
+    // === KOMUNIKACJA BLUETOOTH LOW ENERGY (BLE) ===
     let bleDevice, rxCharacteristic, txCharacteristic;
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
     const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
@@ -603,6 +606,7 @@
     const MAX_BLE_RETRIES = 3;
     let bleRetryTimeout = null;
 
+    // === KONTROLERY UZYTKOWNIKA (JOYSTICK, GAMEPAD) ===
     let joystickCenter, joystickRadius, knobRadius, isDragging = false;
     let lastJoystickSendTime = 0;
     const JOYSTICK_SEND_INTERVAL = 20;
@@ -614,6 +618,7 @@
     let actionToMap = null;
     const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v3_';
 
+    // === KONFIGURACJE I PRESETY ===
     const availableActions = { 
         'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' }, 
         'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' }, 
@@ -637,26 +642,29 @@
         '3': { name: "3. PID Agresywny (Sztywny)", params: { balanceKpInput: 110.0, balanceKiInput: 0.0, balanceKdInput: 4.0 }}
     };
 
+    // === FUNKCJE OBSLUGI JOYSTICKA ===
     function initJoystick() { const wrapper = document.getElementById('joystickWrapper'); const size = wrapper.clientWidth; const joystickCanvas = document.getElementById('joystickCanvas'); const joystickCtx = joystickCanvas.getContext('2d'); joystickCanvas.width = size; joystickCanvas.height = size; joystickCenter = { x: size / 2, y: size / 2 }; joystickRadius = size / 2 * 0.75; knobRadius = size / 2 * 0.25; drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y); }
     function drawJoystick(ctx, x, y) { ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); ctx.beginPath(); ctx.arc(joystickCenter.x, joystickCenter.y, joystickRadius, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.fill(); ctx.beginPath(); ctx.arc(x, y, knobRadius, 0, 2 * Math.PI); ctx.fillStyle = '#61dafb'; ctx.fill(); }
     function handleJoystickStart(event) { event.preventDefault(); isDragging = true; }
     function handleJoystickMove(event) { if (!isDragging) return; event.preventDefault(); const joystickCanvas = document.getElementById('joystickCanvas'); const joystickCtx = joystickCanvas.getContext('2d'); let { x, y } = getJoystickPosition(event); const dx = x - joystickCenter.x; const dy = y - joystickCenter.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; } drawJoystick(joystickCtx, x, y); const now = Date.now(); if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) { const joyX = (x - joystickCenter.x) / joystickRadius; const joyY = -(y - joystickCenter.y) / joystickRadius; sendBleMessage({ type: 'joystick', x: joyX, y: joyY }); lastJoystickSendTime = now; } }
     function getJoystickPosition(event) { const rect = document.getElementById('joystickCanvas').getBoundingClientRect(); const touch = event.touches ? event.touches[0] : event; return { x: touch.clientX - rect.left, y: touch.clientY - rect.top }; }
     function handleJoystickEnd(event) { if (!isDragging) return; event.preventDefault(); isDragging = false; const joystickCanvas = document.getElementById('joystickCanvas'); const joystickCtx = joystickCanvas.getContext('2d'); drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
-
+    
+    // === FUNKCJE OBSLUGI GAMEPADA ===
     function pollGamepad() { if (gamepadIndex !== null) { const gp = navigator.getGamepads()[gamepadIndex]; if (!gp) return; if (isMappingButton && actionToMap) { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { Object.keys(gamepadMappings).forEach(key => { if (gamepadMappings[key] === actionToMap) delete gamepadMappings[key]; }); gamepadMappings[i] = actionToMap; saveGamepadMappings(); addLogMessage(`[UI] Akcja '${availableActions[actionToMap].label}' przypisana do przycisku ${i}.`, 'success'); isMappingButton = false; actionToMap = null; renderMappingModal(); } }); } else { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { const action = gamepadMappings[i]; if (action && availableActions[action]) { const element = document.getElementById(availableActions[action].elementId); if (element && !element.disabled) { element.click(); flashElement(element); } } } }); } lastGamepadState = gp.buttons.map(b => b.pressed); let x = gp.axes[0] || 0; let y = gp.axes[1] || 0; if (Math.abs(x) < 0.15) x = 0; if (Math.abs(y) < 0.15) y = 0; sendBleMessage({ type: 'joystick', x: x, y: -y }); } requestAnimationFrame(pollGamepad); }
     window.addEventListener('gamepadconnected', (e) => { gamepadIndex = e.gamepad.index; document.getElementById('gamepadStatus').textContent = 'Polaczony'; document.getElementById('gamepadStatus').style.color = '#a2f279'; addLogMessage(`[UI] Gamepad polaczony: ${e.gamepad.id}`, 'success'); });
     window.addEventListener('gampaddisconnected', (e) => { gamepadIndex = null; document.getElementById('gamepadStatus').textContent = 'Brak'; document.getElementById('gamepadStatus').style.color = '#f7b731'; addLogMessage('[UI] Gamepad rozlaczony.', 'warn'); });
-
     function startMapping(action, buttonElement) { if (gamepadIndex === null) { addLogMessage("Podlacz gamepada, aby rozpoczac mapowanie!", "warn"); return; } isMappingButton = true; actionToMap = action; document.querySelectorAll('.mapping-button').forEach(btn => btn.textContent = "Przypisz"); buttonElement.textContent = "Czekam..."; addLogMessage(`[UI] Nasluchiwanie na przycisk dla akcji: ${availableActions[action].label}...`, "info"); }
     function renderMappingModal() { const list = document.getElementById('gamepad-mapping-list'); list.innerHTML = ''; for (const [action, config] of Object.entries(availableActions)) { const row = document.createElement('div'); row.className = 'mapping-row'; const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action); row.innerHTML = `<span class="mapping-label">${config.label}</span><span class="mapping-display">${buttonIndex !== undefined ? `Przycisk ${buttonIndex}` : 'Brak'}</span><button class="mapping-button" data-action="${action}">Przypisz</button>`; list.appendChild(row); } list.querySelectorAll('.mapping-button').forEach(button => { button.addEventListener('click', (e) => { const action = e.target.dataset.action; startMapping(action, e.target); }); }); }
 
+    // === FUNKCJE POMOCNICZE I UI ===
     const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
     function addLogMessage(message, level = 'info') { const logHistory = document.getElementById('log-history'); if (!logHistory) return; const timestamp = new Date().toLocaleTimeString(); let color = '#fff'; if (level === 'error') color = '#ff6347'; else if (level === 'warn') color = '#f7b731'; else if (level === 'success') color = '#a2f279'; const logEntry = document.createElement('div'); logEntry.style.color = color; logEntry.textContent = `[${timestamp}] ${message}`; logHistory.prepend(logEntry); while (logHistory.children.length > 200) { logHistory.removeChild(logHistory.lastChild); } }
     function clearLogs() { document.getElementById('log-history').innerHTML = ''; }
     function toggleAccordion(header) { const content = header.nextElementSibling; header.classList.toggle('active'); if (content.style.maxHeight && content.style.maxHeight !== '0px') { content.style.maxHeight = '0px'; content.style.padding = '0px 15px'; } else { content.style.maxHeight = content.scrollHeight + 30 + "px"; content.style.padding = '15px'; } }
     function updateAccordionHeight(content) { if (content && content.style.maxHeight !== '0px') { content.style.maxHeight = content.scrollHeight + 30 + 'px'; } }
 
+    // === GLOWNA LOGIKA BLE ===
     async function connectBLE() { addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info'); try { bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ name: 'RoboBala' }], optionalServices: [SERVICE_UUID] }); addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info'); document.getElementById('connectBleBtn').disabled = true; document.getElementById('connectionText').textContent = 'Laczenie...'; bleDevice.addEventListener('gattserverdisconnected', onDisconnected); const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID); rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID); await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification); document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony'; addLogMessage('[UI] Polaczono!', 'success');
         bleConnectionRetries = 0;
         if (bleRetryTimeout) {
@@ -690,7 +698,6 @@
             bleConnectionRetries = 0;
         }
     }
-
     function handleBleNotification(event) {
         const value = event.target.value;
         const decoder = new TextDecoder('utf-8');
@@ -707,11 +714,11 @@
             }
         }
     }
-
     async function _sendRawBleMessage(message) { if (!rxCharacteristic) return; try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
     async function processBleQueue() { if (isSendingBleMessage || bleMessageQueue.length === 0 || !rxCharacteristic) { return; } isSendingBleMessage = true; const message = bleMessageQueue.shift(); await _sendRawBleMessage(message); setTimeout(() => { isSendingBleMessage = false; processBleQueue(); }, BLE_SEND_INTERVAL); }
     function sendBleMessage(message) { bleMessageQueue.push(message); processBleQueue(); }
 
+    // === PRZETWARZANIE WIADOMOSCI Z ROBOTA ===
     function processCompleteMessage(data) {
         if (!data || !data.type) return;
 
@@ -767,7 +774,6 @@
                 break;
         }
     }
-
     function applyFullConfig(params) {
         for (const [inputId, snakeKey] of Object.entries(parameterMapping)) {
             const input = document.getElementById(inputId);
@@ -780,7 +786,6 @@
             }
         }
     }
-
     function updateTelemetryUI(data) {
         if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
         if (data.pitch !== undefined) { 
@@ -812,8 +817,8 @@
         if (emergencyBanner) emergencyBanner.style.display = data.emergency_stop ? 'block' : 'none';
     }
 
+    // === OBSLUGA WYKRESU ===
     const telemetryChart = new Chart(document.getElementById('telemetryChart'), { type: 'line', data: { labels: Array(100).fill(''), datasets: [] }, options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { type: 'linear', display: true, position: 'left', ticks: { color: '#61dafb' }, title: { display: true, text: 'Wartosc', color: '#61dafb' } } }, plugins: { legend: { labels: { color: '#fff' } } } } });
-
     function updateChart(data) {
         const chartData = telemetryChart.data;
         if (chartData.labels.length >= 100) chartData.labels.shift();
@@ -829,7 +834,6 @@
         chartData.datasets.forEach(ds => { if (ds.data.length < chartData.labels.length) { if (ds.data.length >= 100) ds.data.shift(); ds.data.push(null); } });
         telemetryChart.update('none');
     }
-
     function setupChartControls() {
         const container = document.getElementById('chartControls');
         container.innerHTML = '';
@@ -846,11 +850,13 @@
         });
     }
 
+    // === ZARZADZANIE PRESETAMI ===
     function populatePresetSelect() { const select = document.getElementById('pidPresetSelect'); select.innerHTML = ''; for (const [index, preset] of Object.entries(builtInPresetsData)) { const option = document.createElement('option'); option.value = index; option.textContent = preset.name; select.appendChild(option); } for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key.startsWith(CUSTOM_PRESET_PREFIX)) { const presetName = key.substring(CUSTOM_PRESET_PREFIX.length); const option = document.createElement('option'); option.value = key; option.textContent = `Wlasny: ${presetName}`; select.appendChild(option); } } }
     async function applySelectedPreset() { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; let presetData; if (selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { presetData = JSON.parse(localStorage.getItem(selectedValue)); } else { presetData = builtInPresetsData[selectedValue]?.params; } if (presetData) { isApplyingConfig = true; for (const [key, value] of Object.entries(presetData)) { const input = document.getElementById(key); if (input) { input.value = value; } } isApplyingConfig = false; addLogMessage('[UI] Zastosowano wartosci presetu. Zapisz na robocie, aby wyslac.', 'info'); } }
     function saveCurrentAsPreset() { const presetName = prompt("Podaj nazwe dla nowego presetu:", ""); if (presetName && presetName.trim() !== "") { const presetData = {}; Object.keys(parameterMapping).forEach(inputId => { const input = document.getElementById(inputId); if (input) { presetData[inputId] = parseFloat(input.value); } }); localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData)); addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success'); populatePresetSelect(); } }
     function deleteSelectedPreset() { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; if (!selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { addLogMessage('[UI] Nie mozna usunac wbudowanego presetu.', 'warn'); return; } if (confirm(`Czy na pewno chcesz usunac preset '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'?`)) { localStorage.removeItem(selectedValue); addLogMessage(`[UI] Usunieto preset.`, 'info'); populatePresetSelect(); } }
-
+    
+    // === OGOLNA OBSLUGA EVENTOW UI ===
     function validatePIDParameter(inputId, value) {
         const bounds = {
             'balanceKpInput': { min: 0.1, max: 200, name: 'Kp Balans' },
@@ -863,7 +869,6 @@
             'positionKiInput': { min: 0, max: 5, name: 'Ki Pozycja' },
             'positionKdInput': { min: 0, max: 10, name: 'Kd Pozycja' }
         };
-        
         const bound = bounds[inputId];
         if (bound && (value < bound.min || value > bound.max)) {
             addLogMessage(`[WALIDACJA] ${bound.name}: wartosc ${value} poza zakresem ${bound.min}-${bound.max}`, 'warn');
@@ -871,7 +876,6 @@
         }
         return value;
     }
-
     function setupNumericInputs() { 
         document.querySelectorAll('.numeric-input-wrapper').forEach(wrapper => { 
             const container = wrapper.closest('.setting-container') || wrapper.closest('.pwm-input-row'); 
@@ -894,9 +898,7 @@
                 const max = parseFloat(input.max); 
                 if (!isNaN(min)) newValue = Math.max(min, newValue); 
                 if (!isNaN(max)) newValue = Math.min(max, newValue); 
-                
                 newValue = validatePIDParameter(input.id, newValue);
-                
                 input.value = newValue; 
                 input.dispatchEvent(new Event('change', { bubbles: true })); 
             }; 
@@ -904,9 +906,7 @@
             plusBtn.addEventListener('click', () => updateValue(step)); 
         }); 
     }
-
     function sendFullConfigToRobot() { const params = {}; for (const [inputId, snakeKey] of Object.entries(parameterMapping)) { const input = document.getElementById(inputId); if (input) { let value = parseFloat(input.value); if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) { value /= 100.0; } params[snakeKey] = value; } } addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info'); sendBleMessage({ type: 'full_config', params }); }
-
     function setupEventListeners() {
         const sendSingleParam = (inputId, value) => { if (isApplyingConfig) return; const snakeKey = parameterMapping[inputId]; if (snakeKey) { if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) { value /= 100.0; } sendBleMessage({ type: 'set_param', key: snakeKey, value: value }); } };
         const debouncedSendSingleParam = debounce(sendSingleParam, 400);
@@ -923,13 +923,13 @@
         document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset);
         document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); });
     }
-
     function setupManualTuneButtons() { document.querySelectorAll('.manual-tune-row').forEach(row => { const motor = row.dataset.motor; const direction = row.dataset.direction; const input = row.querySelector('.tune-input'); const testBtn = row.querySelector('.test-btn'); const stopBtn = row.querySelector('.stop-btn'); const autoBtn = row.querySelector('.auto-btn'); testBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: parseInt(input.value) }); }); stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); }); autoBtn.addEventListener('click', (e) => { if (confirm("UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?")) { const startValue = parseInt(document.getElementById('pwmTuneStartInput').value); sendBleMessage({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue }); e.target.disabled = true; e.target.textContent = 'Szukanie...'; addLogMessage(`[UI] Rozpoczynam auto-strojenie dla ${motor} ${direction}...`, 'info'); } }); }); document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); }); }
     function setupGamepadMappingModal() { document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; }); document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; }); }
     function flashElement(element) { if (!element) return; const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element; target.classList.add('gamepad-flash'); setTimeout(() => target.classList.remove('gamepad-flash'), 300); }
     function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
     function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
 
+    // === STEROWANIE AUTONOMICZNE (D-PAD I SEKWENCJE) ===
     function setupDpadControls() { document.querySelectorAll('.dpad-btn').forEach(btn => { btn.addEventListener('click', (e) => { const action = e.currentTarget.dataset.dpad; if (action === 'up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'stop') sendBleMessage({ type: 'command_stop' }); }); }); }
     function setupSequenceControls() { document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep); document.getElementById('run-sequence-btn').addEventListener('click', runSequence); document.getElementById('stop-sequence-btn').addEventListener('click', stopSequenceExecution); document.getElementById('clear-sequence-btn').addEventListener('click', clearSequence); }
     function addSequenceStep() { const list = document.getElementById('sequence-list'); if (list.children.length >= MAX_SEQUENCE_STEPS) return; const stepDiv = document.createElement('div'); stepDiv.className = 'sequence-step'; stepDiv.innerHTML = ` <select class="sequence-type"> <option value="move_fwd">Przod (cm)</option><option value="move_bwd">Tyl (cm)</option> <option value="rotate_r">Obrot Prawo (st.)</option><option value="rotate_l">Obrot Lewo (st.)</option> </select> <input type="number" class="sequence-value" value="20"> <button class="remove-step-btn">&times;</button> `; list.appendChild(stepDiv); updateAccordionHeight(list.closest('.accordion-content')); stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => { stepDiv.remove(); updateAccordionHeight(list.closest('.accordion-content')); }); }
@@ -943,7 +943,6 @@
     // --- SEKCJA STROJENIA KROK 1: ZIEGLER-NICHOLS ---
     let isZnTuningRunning = false;
     let znResults = { ku: 0, tu: 0 };
-
     function setupZnTuningControls() {
         const actionBtn = document.getElementById('znTuningActionBtn');
         const cancelBtn = document.getElementById('znTuningCancelBtn');
@@ -952,7 +951,6 @@
         cancelBtn.addEventListener('click', () => { if (isZnTuningRunning) { cancelZnTuning(); } });
         applyBtn.addEventListener('click', () => { if (znResults.ku > 0 && znResults.tu > 0) { applyZnResults(); } });
     }
-
     function startZnTuning() { isZnTuningRunning = true; document.getElementById('znStatusText').textContent = "Rozpoczynanie..."; document.getElementById('znTuningActionBtn').disabled = true; document.getElementById('znTuningCancelBtn').style.display = 'block'; document.getElementById('znResultPanel').style.display = 'none'; addLogMessage('[UI] Wysylam polecenie rozpoczecia strojenia Z-N do robota...', 'info'); sendBleMessage({ type: 'start_zn_tuning' }); }
     function cancelZnTuning() { isZnTuningRunning = false; document.getElementById('znStatusText').textContent = "Anulowanie..."; addLogMessage('[UI] Wysylam polecenie anulowania strojenia do robota...', 'warn'); sendBleMessage({ type: 'cancel_tuning' }); resetZnTuningUI(); }
     function resetZnTuningUI() { isZnTuningRunning = false; document.getElementById('znStatusText').textContent = "Bezczynny"; document.getElementById('znKpTestVal').textContent = "---"; document.getElementById('znTuningActionBtn').disabled = false; document.getElementById('znTuningActionBtn').textContent = "Rozpocznij Odkrywanie"; document.getElementById('znTuningCancelBtn').style.display = 'none'; }
@@ -966,21 +964,10 @@
     let bestOverallScore = -Infinity;
     let bestPhenotype = null;
     let safeStartParams = {};
-
-    // Zmienne dla wizualizacji 3D
-    let scene3D, camera3D, renderer3D, controls3D;
-    let robotGroup, leftWheel, rightWheel, groundPlane;
-    let currentPitch3D = 0, currentYaw3D = 0, currentEncoderLeft = 0, currentEncoderRight = 0;
-    let isAnimation3DEnabled = true, isMovement3DEnabled = false;
-    let groundOffset = 0;
-    let robotPositionZ = 0;
-    let lastEncoderAvg = 0;
-
     const handleAutotestAction = () => {
         const selectedTest = document.querySelector('input[name="autotest-type"]:checked').value;
         const actionBtn = document.getElementById('autotestActionBtn');
         actionBtn.disabled = true;
-
         if (selectedTest === 'balance') {
             if (confirm("UWAGA! Optymalizacja bedzie testowac parametry, ktore moga byc niestabilne. Upewnij sie, ze robot ma duzo wolnego miejsca i jestes gotow go asekurowac. Kontynuowac?")) {
                 startGeneticOptimization();
@@ -993,7 +980,6 @@
             runSpeedTest();
         }
     };
-
     function setupAutoTestEventListeners() {
         document.querySelectorAll('input[name="autotest-type"]').forEach(radio => radio.addEventListener('change', renderAutotestOptions));
         document.getElementById('autotestActionBtn').addEventListener('click', handleAutotestAction);
@@ -1018,7 +1004,6 @@
         document.querySelectorAll('.weight-input').forEach(input => input.addEventListener('change', updateWeightsBudget));
         updateWeightsBudget();
     }
-
     function renderAutotestOptions() {
         const selectedTest = document.querySelector('input[name="autotest-type"]:checked').value;
         const geneticPanel = document.getElementById('geneticOptionsPanel');
@@ -1051,7 +1036,6 @@
         }
         updateAccordionHeight(actionBtn.closest('.accordion-content'));
     }
-
     async function runPositionTest() {
         if (lastKnownRobotState !== 'HOLDING_POSITION' && lastKnownRobotState !== 'TRZYMA_POZYCJE') {
              addLogMessage('[UI] Blad: Aby uruchomic test, robot musi byc w stanie trzymania pozycji.', 'error');
@@ -1069,7 +1053,6 @@
             addLogMessage('[UI] Test pozycji zakonczony.', 'info');
         }, duration);
     }
-
     async function runSpeedTest() {
         if (lastKnownRobotState !== 'HOLDING_POSITION' && lastKnownRobotState !== 'TRZYMA_POZYCJE') {
              addLogMessage('[UI] Blad: Aby uruchomic test, robot musi byc w stanie trzymania pozycji.', 'error');
@@ -1088,7 +1071,6 @@
             addLogMessage('[UI] Test predkosci zakonczony.', 'info');
         }, duration);
     }
-
     function updateWeightsBudget() {
         const budgetEl = document.getElementById('weights-budget');
         const sum = Array.from(document.querySelectorAll('.weight-input')).reduce((acc, input) => acc + parseFloat(input.value), 0);
@@ -1096,48 +1078,37 @@
         budgetEl.classList.toggle('invalid', Math.abs(sum - 10.0) > 0.01);
         budgetEl.classList.toggle('valid', Math.abs(sum - 10.0) <= 0.01);
     }
-
     async function startGeneticOptimization() {
         if (lastKnownRobotState !== 'BALANSUJE' && lastKnownRobotState !== 'TRZYMA_POZYCJE') {
             addLogMessage(`[Genetic] Blad: Robot musi byc w stanie 'BALANSUJE', a jest w '${lastKnownRobotState}'.`, 'error');
             document.getElementById('autotestActionBtn').disabled = false;
             return;
         }
-
         const kp_b = parseFloat(document.getElementById('balanceKpInput').value);
         const kd_b = parseFloat(document.getElementById('balanceKdInput').value);
         const filter_alpha = parseFloat(document.getElementById('balanceFilterAlphaInput').value) / 100;
-
         if (isNaN(kp_b) || isNaN(kd_b) || isNaN(filter_alpha)) {
             addLogMessage('[Genetic] BLAD KRYTYCZNY: Wartosci Kp, Kd lub filtra w formularzu sa nieprawidlowe.', 'error');
             document.getElementById('autotestActionBtn').disabled = false;
             return;
         }
-
         safeStartParams = { kp_b, kd_b, balance_pid_derivative_filter_alpha: filter_alpha };
         addLogMessage(`[Genetic] Zapisano bezpieczne parametry startowe: Kp=${safeStartParams.kp_b.toFixed(4)}, Kd=${safeStartParams.kd_b.toFixed(4)}`, 'info');
-
         isGeneticOptimizationRunning = true;
         isGeneticPaused = false;
         bestOverallScore = -Infinity;
         bestPhenotype = null;
-
         document.getElementById('ga-controls-running').style.display = 'grid';
         document.getElementById('statusStateText').textContent = 'Optymalizacja...';
         addLogMessage(`[Genetic] Rozpoczynam procedure ewolucji...`, 'success');
-
         await runEvolutionLoop();
     }
-
     async function evaluatePhenotype(phenotype) {
         telemetryForGenetic = [];
         addLogMessage(`[Genetic] Testuje: Kp=${phenotype.kp_b.toFixed(4)}, Kd=${phenotype.kd_b.toFixed(4)}, Filtr=${(phenotype.balance_pid_derivative_filter_alpha*100).toFixed(1)}%`, 'info');
-
         await applyPhenotype(phenotype);
-
         const testDuration = parseFloat(document.getElementById('testDurationInput').value) * 1000;
         await new Promise(resolve => setTimeout(resolve, testDuration));
-
         if (lastKnownRobotState !== 'BALANSUJE' && lastKnownRobotState !== 'TRZYMA_POZYCJE') {
              addLogMessage('[Genetic] Wykryto utrate stabilnosci! Osobnik ukarany. Trwa odzyskiwanie...', 'warn');
              await applyPhenotype(safeStartParams);
@@ -1145,12 +1116,10 @@
              await new Promise(resolve => setTimeout(resolve, 2000));
              return -1000;
         }
-
         if (telemetryForGenetic.length < 20) {
             addLogMessage(`[Genetic] Otrzymano za malo danych telemetrycznych (${telemetryForGenetic.length}). Osobnik otrzymuje niska ocene.`, 'warn');
             return -500;
         }
-
         let sumAbsPitch = 0, maxAbsPitch = 0, sumAbsOutputChange = 0;
         telemetryForGenetic.forEach((d, i) => {
             const pitch = d.pitch || 0;
@@ -1162,21 +1131,16 @@
         const count = telemetryForGenetic.length;
         const avgAbsPitch = sumAbsPitch / count;
         const avgAbsOutputChange = sumAbsOutputChange / (count > 1 ? count - 1 : 1);
-
         const weightS = parseFloat(document.getElementById('weightStability').value);
         const weightP = parseFloat(document.getElementById('weightOvershoot').value);
         const weightW = parseFloat(document.getElementById('weightEffort').value);
-
         const stabilityScore = Math.max(0, 1 - (avgAbsPitch / 2.0));
         const overshootScore = Math.max(0, 1 - (maxAbsPitch / 5.0));
         const effortScore = Math.max(0, 1 - (avgAbsOutputChange / 100.0));
-
         const finalScore = (stabilityScore * weightS) + (overshootScore * weightP) + (effortScore * weightW);
-
         addLogMessage(`[Genetic] Ocena osobnika: ${finalScore.toFixed(4)}`, 'success');
         return finalScore;
     }
-
     function tournamentSelect(population, size = 3) {
         let tournament = [];
         for (let i = 0; i < size; i++) {
@@ -1185,7 +1149,6 @@
         }
         return tournament.reduce((best, current) => (current.score > best.score ? current : best), tournament[0]);
     }
-
     async function runEvolutionLoop() {
         const generations = parseInt(document.getElementById('gaGenerationsInput').value);
         const populationSize = parseInt(document.getElementById('gaPopulationInput').value);
@@ -1196,7 +1159,6 @@
             this.kp_b = kp; this.kd_b = kd; this.balance_pid_derivative_filter_alpha = filter;
             this.clone = function() { return new Genotype(this.kp_b, this.kd_b, this.balance_pid_derivative_filter_alpha); };
         };
-
         const mutate = (phenotype) => {
             if (Math.random() < mutationRate) phenotype.kp_b *= (1 + (Math.random() - 0.5) * 0.2);
             if (Math.random() < mutationRate) phenotype.kd_b *= (1 + (Math.random() - 0.5) * 0.2);
@@ -1206,7 +1168,6 @@
             phenotype.balance_pid_derivative_filter_alpha = Math.max(0.01, Math.min(1.0, phenotype.balance_pid_derivative_filter_alpha));
             return phenotype;
         };
-
         const crossover = (parent1, parent2) => {
             const kp_b = Math.random() < 0.5 ? parent1.kp_b : parent2.kp_b;
             const kd_b = Math.random() < 0.5 ? parent1.kd_b : parent2.kd_b;
@@ -1229,17 +1190,14 @@
             let evaluatedPopulation = [];
             for (let j = 0; j < population.length; j++) {
                 if (!isGeneticOptimizationRunning) break;
-
                 while (isGeneticPaused) {
                     await new Promise(resolve => setTimeout(resolve, 200));
                     if (!isGeneticOptimizationRunning) break;
                 }
                 if (!isGeneticOptimizationRunning) break;
-
                 const progress = ((i * populationSize) + j + 1) / (generations * populationSize) * 100;
                 document.getElementById('statusProgressBar').value = progress;
                 document.getElementById('statusProgressText').textContent = `Testowanie osobnika ${j + 1}/${populationSize} (Pokolenie ${i + 1})...`;
-
                 const score = await evaluatePhenotype(population[j]);
                 let evaluatedPhenotype = population[j].clone();
                 evaluatedPhenotype.score = score;
@@ -1278,24 +1236,20 @@
             finishGeneticOptimization(bestPhenotype);
         }
     }
-
     function finishGeneticOptimization(fittest) {
         if (!fittest) {
             addLogMessage('[Genetic] Zakonczono, ale nie znaleziono najlepszego rozwiazania.', 'warn');
             cancelGeneticOptimization();
             return;
         }
-
         isGeneticOptimizationRunning = false;
         isGeneticPaused = false;
         addLogMessage(`[Genetic] Optymalizacja zakonczona! Najlepszy wynik: ${bestOverallScore.toFixed(4)}`, 'success');
         addLogMessage(`[Genetic] Najlepsze parametry: Kp=${fittest.kp_b.toFixed(4)}, Kd=${fittest.kd_b.toFixed(4)}, Filtr=${(fittest.balance_pid_derivative_filter_alpha*100).toFixed(1)}%`, 'info');
-
         document.getElementById('statusStateText').textContent = 'Zakonczono';
         document.getElementById('statusProgressBar').value = 100;
         document.getElementById('statusProgressText').textContent = 'Optymalizacja zakonczona.';
         document.getElementById('ga-controls-running').style.display = 'none';
-
         const actionBtn = document.getElementById('autotestActionBtn');
         actionBtn.textContent = 'Zastosuj Najlepsze Parametry';
         actionBtn.disabled = false;
@@ -1305,205 +1259,247 @@
             renderAutotestOptions();
         };
     }
-
     function cancelGeneticOptimization() {
         if (!isGeneticOptimizationRunning) return;
         isGeneticOptimizationRunning = false;
         isGeneticPaused = false;
-
         addLogMessage('[Genetic] Optymalizacja anulowana. Przywracam parametry poczatkowe.', 'warn');
         applyPhenotype(safeStartParams);
-
         document.getElementById('statusStateText').textContent = 'Anulowano';
         document.getElementById('ga-controls-running').style.display = 'none';
         document.getElementById('autotestActionBtn').disabled = false;
         renderAutotestOptions();
     }
-
     async function applyPhenotype(phenotype) {
         isApplyingConfig = true;
         document.getElementById('balanceKpInput').value = phenotype.kp_b.toFixed(4);
         document.getElementById('balanceKdInput').value = phenotype.kd_b.toFixed(4);
         document.getElementById('balanceFilterAlphaInput').value = (phenotype.balance_pid_derivative_filter_alpha * 100).toFixed(1);
         isApplyingConfig = false;
-
         sendBleMessage({ type: 'set_param', key: 'kp_b', value: phenotype.kp_b });
         sendBleMessage({ type: 'set_param', key: 'kd_b', value: phenotype.kd_b });
         sendBleMessage({ type: 'set_param', key: 'balance_pid_derivative_filter_alpha', value: phenotype.balance_pid_derivative_filter_alpha });
-
         addLogMessage('[Genetic] Zastosowano wybrane parametry.', 'success');
         await new Promise(resolve => setTimeout(resolve, 200));
     }
 
-    // === FUNKCJE WIZUALIZACJI 3D ===
+    // === SEKCJA STROJENIA KROK 3: CHARAKTERYZACJA ===
+    let isCharacterizationRunning = false;
+    let telemetryForCharacterization = [];
+    let characterizationStartTime = 0;
+    function setupCharacterizationControls() {
+        document.getElementById('startStepResponseBtn').addEventListener('click', startSystemCharacterization);
+        document.getElementById('applyStepResponseResultsBtn').addEventListener('click', applyStepResponseResults);
+    }
+    async function startSystemCharacterization() {
+        if (lastKnownRobotState !== 'BALANSUJE' && lastKnownRobotState !== 'TRZYMA_POZYCJE') {
+             addLogMessage('[Char] Blad: Robot musi byc w stanie balansu.', 'error');
+             return;
+        }
+        addLogMessage('[Char] Rozpoczynam test odpowiedzi skokowej...', 'info');
+        const angle = parseFloat(document.getElementById('stepResponseAngleInput').value);
+        telemetryForCharacterization = [];
+        isCharacterizationRunning = true;
+        characterizationStartTime = Date.now();
+        sendBleMessage({ type: 'set_param', key: 'kp_s', value: 0 });
+        sendBleMessage({ type: 'set_param', key: 'ki_s', value: 0 });
+        sendBleMessage({ type: 'set_param', key: 'kd_s', value: 0 });
+        sendBleMessage({ type: 'adjust_zero', value: angle / 0.05 });
+        setTimeout(() => {
+            isCharacterizationRunning = false;
+            sendBleMessage({ type: 'adjust_zero', value: -angle / 0.05 }); // Powrot do zera
+            addLogMessage('[Char] Zbieranie danych zakonczone. Analizuje...', 'info');
+            analyzeStepResponse(telemetryForCharacterization);
+        }, 4000); // Test trwa 4 sekundy
+    }
+    function analyzeStepResponse(data) {
+        if (data.length < 20) {
+            addLogMessage('[Char] Blad: za malo danych do analizy.', 'error');
+            return;
+        }
+        const maxSpeed = data.reduce((max, p) => Math.abs(p.speed) > max ? Math.abs(p.speed) : max, 0);
+        if (maxSpeed < 50) {
+             addLogMessage('[Char] Blad: predkosc maksymalna zbyt niska do analizy.', 'error');
+             return;
+        }
+        const targetSpeed63 = maxSpeed * 0.632;
+        let timeConstant = 0;
+        for(let i=1; i<data.length; i++) {
+            if (Math.abs(data[i].speed) >= targetSpeed63 && Math.abs(data[i-1].speed) < targetSpeed63) {
+                timeConstant = data[i].time;
+                break;
+            }
+        }
+        const gain = maxSpeed / parseFloat(document.getElementById('stepResponseAngleInput').value);
+        if (timeConstant > 0) {
+            const Ku = (4/Math.PI) * (1/gain);
+            const Tu = 4 * timeConstant;
+            const Kp_s = 0.45 * Ku;
+            const Ki_s = Kp_s / (Tu / 1.2);
+            document.getElementById('srKpSuggest').textContent = Kp_s.toFixed(4);
+            document.getElementById('srKiSuggest').textContent = Ki_s.toFixed(4);
+            document.getElementById('srKdSuggest').textContent = "0.0000";
+            document.getElementById('stepResponseResultPanel').style.display = 'block';
+            addLogMessage(`[Char] Analiza zakonczona. K=${gain.toFixed(2)}, T=${timeConstant.toFixed(2)}s.`, 'success');
+        } else {
+             addLogMessage('[Char] Blad: nie udalo sie wyznaczyc stalej czasowej.', 'error');
+        }
+    }
+    function applyStepResponseResults() {
+        const kp = parseFloat(document.getElementById('srKpSuggest').textContent);
+        const ki = parseFloat(document.getElementById('srKiSuggest').textContent);
+        if(!isNaN(kp) && !isNaN(ki)) {
+            isApplyingConfig = true;
+            document.getElementById('speedKpInput').value = kp.toFixed(4);
+            document.getElementById('speedKiInput').value = ki.toFixed(4);
+            document.getElementById('speedKdInput').value = "0.0";
+            isApplyingConfig = false;
+            document.getElementById('speedKpInput').dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('speedKiInput').dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('speedKdInput').dispatchEvent(new Event('change', { bubbles: true }));
+            addLogMessage('[UI] Zastosowano sugerowane wartosci Kp_s i Ki_s.', 'info');
+        }
+    }
+    
+    // =======================================================================================
+    // === NOWA SEKSCJA WIZUALIZACJI 3D ===
+    // =======================================================================================
+    
+    // --- Zmienne dla wizualizacji 3D ---
+    let scene3D, camera3D, renderer3D, controls3D;
+    let robotGroup, leftWheel, rightWheel;
+    let currentPitch3D = 0, currentYaw3D = 0, currentEncoderLeft = 0, currentEncoderRight = 0;
+    let isAnimation3DEnabled = true, isMovement3DEnabled = false;
+    let lastEncoderAvg = 0;
+    
+    // --- Stale dla nowego modelu 3D ---
+    const WHEEL_DIAMETER = 8.2, WHEEL_RADIUS = WHEEL_DIAMETER / 2, TIRE_THICKNESS = 1.0, WHEEL_WIDTH = 2.0;
+
+    // --- NOWE FUNKCJE TWORZACE MODEL 3D (PRZENIESIONE Z robobala.html) ---
+
+    // FINALNA WERSJA FUNKCJI TWORZACEJ KOLO
+    function createCustomWheel(totalRadius, tireThickness, width) {
+        const wheelGroup = new THREE.Group();
+        const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 });
+        const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.4 });
+        const rimRadius = totalRadius - tireThickness;
+        const tire = new THREE.Mesh(new THREE.TorusGeometry(rimRadius + tireThickness / 2, tireThickness / 2, 16, 100), tireMaterial);
+        wheelGroup.add(tire);
+        const rimShape = new THREE.Shape();
+        const outerRadius = rimRadius;
+        const innerRadius = rimRadius * 0.85;
+        rimShape.absarc(0, 0, outerRadius, 0, Math.PI * 2, false);
+        const holePath = new THREE.Path();
+        holePath.absarc(0, 0, innerRadius, 0, Math.PI * 2, true);
+        rimShape.holes.push(holePath);
+        const extrudeSettings = { depth: width * 0.4, bevelEnabled: false };
+        const outerRimGeometry = new THREE.ExtrudeGeometry(rimShape, extrudeSettings);
+        outerRimGeometry.center();
+        const outerRim = new THREE.Mesh(outerRimGeometry, rimMaterial);
+        wheelGroup.add(outerRim);
+        const hubRadius = rimRadius * 0.2;
+        const hub = new THREE.Mesh(new THREE.CylinderGeometry(hubRadius, hubRadius, width * 0.5, 24), rimMaterial);
+        hub.rotateX(Math.PI / 2);
+        wheelGroup.add(hub);
+        const spokeLength = innerRadius - hubRadius;
+        const spokeGeometry = new THREE.BoxGeometry(spokeLength, rimRadius * 0.15, width * 0.4);
+        spokeGeometry.translate(hubRadius + spokeLength / 2, 0, 0);
+        for (let i = 0; i < 6; i++) {
+            const spoke = new THREE.Mesh(spokeGeometry, rimMaterial);
+            spoke.rotation.z = i * (Math.PI / 3);
+            wheelGroup.add(spoke);
+        }
+        return wheelGroup;
+    }
+
+    // FINALNA WERSJA FUNKCJI TWORZACEJ CALY MODEL ROBOTA
+    function createRobotModel() {
+        const BODY_WIDTH = 9.0, BODY_HEIGHT = 6.0, BODY_DEPTH = 3.5, WHEEL_GAP = 1.0;
+        const MAST_HEIGHT = 14.5, MAST_THICKNESS = 1.5;
+        const BATTERY_WIDTH = 6.0, BATTERY_HEIGHT = 1.0, BATTERY_DEPTH = 3.0;
+        const robotPivot = new THREE.Object3D(), robotModel = new THREE.Group();
+        const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1C1C1C });
+        const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0x4169E1 });
+        const body = new THREE.Mesh(new THREE.BoxGeometry(BODY_WIDTH, BODY_HEIGHT, BODY_DEPTH), bodyMaterial);
+        body.position.y = WHEEL_RADIUS;
+        robotModel.add(body);
+        const mast = new THREE.Mesh(new THREE.BoxGeometry(MAST_THICKNESS, MAST_HEIGHT, MAST_THICKNESS), bodyMaterial);
+        mast.position.y = WHEEL_RADIUS + BODY_HEIGHT / 2 + MAST_HEIGHT / 2;
+        robotModel.add(mast);
+        const battery = new THREE.Mesh(new THREE.BoxGeometry(BATTERY_WIDTH, BATTERY_HEIGHT, BATTERY_DEPTH), batteryMaterial);
+        battery.position.y = mast.position.y + MAST_HEIGHT / 2 + BATTERY_HEIGHT / 2;
+        robotModel.add(battery);
+        const wheelL = createCustomWheel(WHEEL_RADIUS, TIRE_THICKNESS, WHEEL_WIDTH);
+        wheelL.rotation.y = Math.PI / 2;
+        wheelL.position.set(-(BODY_WIDTH / 2 + WHEEL_GAP), WHEEL_RADIUS, 0);
+        robotModel.add(wheelL);
+        const wheelR = createCustomWheel(WHEEL_RADIUS, TIRE_THICKNESS, WHEEL_WIDTH);
+        wheelR.rotation.y = Math.PI / 2;
+        wheelR.position.set(BODY_WIDTH / 2 + WHEEL_GAP, WHEEL_RADIUS, 0);
+        robotModel.add(wheelR);
+        robotModel.position.y = -WHEEL_RADIUS;
+        robotPivot.add(robotModel);
+        
+        // Zwracamy obiekt zawierajacy glowny pivot oraz referencje do kol
+        return { pivot: robotPivot, wheelL: wheelL, wheelR: wheelR };
+    }
+    
+    // --- ZAKTUALIZOWANE FUNKCJE KONTROLI WIZUALIZACJI 3D ---
+
     function init3DVisualization() {
         const container = document.getElementById('robot3d-container');
         scene3D = new THREE.Scene();
-        scene3D.background = new THREE.Color(0x87CEEB);
-        camera3D = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
-        camera3D.position.set(15, 10, 15);
+        scene3D.background = new THREE.Color(0xcccccc);
+        camera3D = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera3D.position.set(15, 15, 25);
+        camera3D.lookAt(0, 8, 0);
         renderer3D = new THREE.WebGLRenderer({ antialias: true });
         renderer3D.setSize(container.clientWidth, container.clientHeight);
-        renderer3D.shadowMap.enabled = true;
-        renderer3D.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(renderer3D.domElement);
         controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
-        controls3D.enableDamping = true;
-        controls3D.dampingFactor = 0.1;
-        controls3D.maxPolarAngle = Math.PI / 2;
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
+        controls3D.target.set(0, 8, 0);
+        controls3D.update();
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
         scene3D.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
-        directionalLight.position.set(10, 15, 5);
-        directionalLight.castShadow = true;
-        directionalLight.shadow.mapSize.width = 2048;
-        directionalLight.shadow.mapSize.height = 2048;
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 20, 15);
         scene3D.add(directionalLight);
-        const groundGeometry = new THREE.PlaneGeometry(200, 200);
-        const groundTexture = createRoadTexture();
-        const groundMaterial = new THREE.MeshLambertMaterial({ map: groundTexture });
-        groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
-        groundPlane.rotation.x = -Math.PI / 2;
-        groundPlane.receiveShadow = true;
-        scene3D.add(groundPlane);
-        createRobotModel();
+        scene3D.add(new THREE.GridHelper(100, 100));
+
+        // Tworzenie i dodawanie nowego modelu
+        const robot = createRobotModel();
+        robotGroup = robot.pivot; // Glowny obiekt to teraz 'pivot'
+        leftWheel = robot.wheelL;   // Zapisujemy referencje do lewego kola
+        rightWheel = robot.wheelR;  // Zapisujemy referencje do prawego kola
+        
+        robotGroup.position.y = WHEEL_RADIUS; // Ustawiamy robota na siatce
+        scene3D.add(robotGroup);
+
         setupControls3D();
+        
+        // Handler do zmiany rozmiaru okna
         window.addEventListener('resize', () => {
             const width = container.clientWidth;
             const height = container.clientHeight;
-            camera3D.aspect = width / height;
-            camera3D.updateProjectionMatrix();
-            renderer3D.setSize(width, height);
-        });
-    }
-    
-    function createRoadTexture() {
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#404040';
-        ctx.fillRect(0, 0, 512, 512);
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 10;
-        ctx.setLineDash([60, 40]);
-        ctx.beginPath();
-        ctx.moveTo(256, 0);
-        ctx.lineTo(256, 512);
-        ctx.stroke();
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(1, 20); 
-        return texture;
-    }
-    
-    function createRobotModel() {
-        robotGroup = new THREE.Group();
-        
-        const baseWidth = 8;
-        const baseHeight = 2;
-        const baseDepth = 10;
-        const mastHeight = 8;
-        const mastWidth = 2;
-        const mastDepth = 2;
-        const batteryWidth = 2.5;
-        const batteryHeight = 5;
-        const batteryDepth = 1.5;
-
-        // Podstawa
-        const baseGeometry = new THREE.BoxGeometry(baseWidth, baseHeight, baseDepth);
-        const baseMaterial = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
-        const robotBase = new THREE.Mesh(baseGeometry, baseMaterial);
-        robotBase.position.y = 1.0;
-        robotBase.castShadow = true;
-        robotGroup.add(robotBase);
-        
-        // Maszt
-        const mastGeometry = new THREE.BoxGeometry(mastWidth, mastHeight, mastDepth);
-        const mast = new THREE.Mesh(mastGeometry, baseMaterial);
-        mast.position.y = baseHeight + (mastHeight / 2);
-        mast.castShadow = true;
-        robotGroup.add(mast);
-
-        // Bateria
-        const batteryGeometry = new THREE.BoxGeometry(batteryWidth, batteryHeight, batteryDepth);
-        const batteryMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
-        const battery = new THREE.Mesh(batteryGeometry, batteryMaterial);
-        battery.position.set(0, baseHeight + mastHeight - (batteryHeight / 2) + 1, -mastDepth/2 - batteryDepth/2);
-        battery.castShadow = true;
-        robotGroup.add(battery);
-
-        // MPU na gorze
-        const mpuGeometry = new THREE.BoxGeometry(1, 0.3, 1);
-        const mpuMaterial = new THREE.MeshLambertMaterial({ color: 0x0055aa });
-        const mpu = new THREE.Mesh(mpuGeometry, mpuMaterial);
-        mpu.position.y = baseHeight + mastHeight + 0.3;
-        robotGroup.add(mpu);
-
-        // Kola LEGO
-        const wheelRadius = 4.1; 
-        const wheelWidth = 2.0;
-        const tireWidth = 1.8;
-        
-        const createLegoWheel = () => {
-            const wheelGroup = new THREE.Group();
-            
-            const tireMaterial = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
-            const rimMaterial = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
-            const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xff4757 });
-
-            // Opona
-            const tireGeometry = new THREE.TorusGeometry(wheelRadius, tireWidth / 2, 16, 32);
-            const tire = new THREE.Mesh(tireGeometry, tireMaterial);
-            tire.rotation.y = Math.PI / 2;
-            wheelGroup.add(tire);
-
-            // Felga z 6 ramionami
-            for (let i = 0; i < 6; i++) {
-                const spokeGeometry = new THREE.BoxGeometry(wheelRadius * 0.9, 0.3, 0.3);
-                const spoke = new THREE.Mesh(spokeGeometry, rimMaterial);
-                spoke.rotation.z = (i * Math.PI) / 3;
-                wheelGroup.add(spoke);
+            if (width > 0 && height > 0) {
+                camera3D.aspect = width / height;
+                camera3D.updateProjectionMatrix();
+                renderer3D.setSize(width, height);
             }
-
-            // Znacznik na oponie
-            const markerGeometry = new THREE.BoxGeometry(0.3, 0.2, tireWidth + 0.1);
-            const marker = new THREE.Mesh(markerGeometry, markerMaterial);
-            marker.position.x = wheelRadius;
-            wheelGroup.add(marker);
-
-            wheelGroup.rotation.z = Math.PI / 2;
-            return wheelGroup;
-        };
-
-        leftWheel = createLegoWheel();
-        leftWheel.position.set(-baseWidth/2 - wheelWidth/2, wheelRadius, 0);
-        leftWheel.castShadow = true;
-        robotGroup.add(leftWheel);
-        
-        rightWheel = createLegoWheel();
-        rightWheel.position.set(baseWidth/2 + wheelWidth/2, wheelRadius, 0);
-        rightWheel.castShadow = true;
-        robotGroup.add(rightWheel);
-        
-        robotGroup.position.y = -0.5;
-        scene3D.add(robotGroup);
+        });
     }
     
     function setupControls3D() {
         document.getElementById('reset3dViewBtn').addEventListener('click', () => {
-            camera3D.position.set(20, 15, 20);
-            controls3D.target.set(0, 5, 0);
+            camera3D.position.set(15, 15, 25);
+            controls3D.target.set(0, 8, 0);
             controls3D.update();
         });
-        
         document.getElementById('toggle3dAnimationBtn').addEventListener('click', () => {
             isAnimation3DEnabled = !isAnimation3DEnabled;
             const btn = document.getElementById('toggle3dAnimationBtn');
             btn.textContent = isAnimation3DEnabled ? 'Wylacz Animacje' : 'Wlacz Animacje';
         });
-        
         document.getElementById('toggle3dMovementBtn').addEventListener('click', () => {
             isMovement3DEnabled = !isMovement3DEnabled;
             const btn = document.getElementById('toggle3dMovementBtn');
@@ -1516,135 +1512,39 @@
         requestAnimationFrame(animate3D);
         
         if (isAnimation3DEnabled && robotGroup) {
-            // Animacja przechyłu (pitch)
-            robotGroup.rotation.z = THREE.MathUtils.degToRad(currentPitch3D);
+            // ZMIANA 1: Animacja przechyłu (pitch) - teraz na osi X
+            robotGroup.rotation.x = THREE.MathUtils.degToRad(currentPitch3D);
 
-            // Animacja obrotu (yaw)
+            // ZMIANA 2: Animacja obrotu (yaw) - pozostaje na osi Y
             robotGroup.rotation.y = -THREE.MathUtils.degToRad(currentYaw3D);
             
-            // Animacja obrotu kół 1:1 z enkoderów
+            // ZMIANA 3: Animacja obrotu kół - teraz na osi Z (zgodnie z nowym modelem)
             const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
             const leftRotation = (currentEncoderLeft / ppr) * 2 * Math.PI;
             const rightRotation = (currentEncoderRight / ppr) * 2 * Math.PI;
             
-            if (leftWheel) leftWheel.rotation.x = -leftRotation;
-            if (rightWheel) rightWheel.rotation.x = -rightRotation;
+            if (leftWheel) leftWheel.rotation.z = leftRotation;
+            if (rightWheel) rightWheel.rotation.z = rightRotation;
 
-            // Symulacja ruchu - podłoże się przesuwa
-            if (isMovement3DEnabled && groundPlane) {
+            // Logika ruchu pozostaje bez zmian
+            if (isMovement3DEnabled) {
                 const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
                 const deltaEncoder = currentEncoderAvg - lastEncoderAvg;
                 lastEncoderAvg = currentEncoderAvg;
-
                 const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value) || 8.2;
                 const wheelCircumference = Math.PI * wheelDiameter;
                 const distanceMoved = (deltaEncoder / ppr) * wheelCircumference;
                 
-                robotPositionZ += distanceMoved;
+                // Przesuwamy cala grupe robota w jego lokalnej przestrzeni
+                robotGroup.translateZ(distanceMoved);
                 
-                const roadTextureSpeedFactor = 0.002;
-                groundOffset += (distanceMoved * roadTextureSpeedFactor);
-                groundPlane.material.map.offset.y = groundOffset;
-                
-                document.getElementById('robot3d-position-x').textContent = "0.0 cm";
-                document.getElementById('robot3d-position-z').textContent = robotPositionZ.toFixed(1) + ' cm';
+                document.getElementById('robot3d-position-x').textContent = robotGroup.position.x.toFixed(1) + ' cm';
+                document.getElementById('robot3d-position-z').textContent = robotGroup.position.z.toFixed(1) + ' cm';
             }
         }
         
         controls3D.update();
         renderer3D.render(scene3D, camera3D);
-    }
-
-    // --- SEKCJA STROJENIA KROK 3: CHARAKTERYZACJA ---
-    let isCharacterizationRunning = false;
-    let telemetryForCharacterization = [];
-    let characterizationStartTime = 0;
-
-    function setupCharacterizationControls() {
-        document.getElementById('startStepResponseBtn').addEventListener('click', startSystemCharacterization);
-        document.getElementById('applyStepResponseResultsBtn').addEventListener('click', applyStepResponseResults);
-    }
-
-    async function startSystemCharacterization() {
-        if (lastKnownRobotState !== 'BALANSUJE' && lastKnownRobotState !== 'TRZYMA_POZYCJE') {
-             addLogMessage('[Char] Blad: Robot musi byc w stanie balansu.', 'error');
-             return;
-        }
-        addLogMessage('[Char] Rozpoczynam test odpowiedzi skokowej...', 'info');
-        const angle = parseFloat(document.getElementById('stepResponseAngleInput').value);
-        telemetryForCharacterization = [];
-        isCharacterizationRunning = true;
-        characterizationStartTime = Date.now();
-
-        sendBleMessage({ type: 'set_param', key: 'kp_s', value: 0 });
-        sendBleMessage({ type: 'set_param', key: 'ki_s', value: 0 });
-        sendBleMessage({ type: 'set_param', key: 'kd_s', value: 0 });
-
-        sendBleMessage({ type: 'adjust_zero', value: angle / 0.05 });
-
-        setTimeout(() => {
-            isCharacterizationRunning = false;
-            sendBleMessage({ type: 'adjust_zero', value: -angle / 0.05 }); // Powrot do zera
-            addLogMessage('[Char] Zbieranie danych zakonczone. Analizuje...', 'info');
-            analyzeStepResponse(telemetryForCharacterization);
-        }, 4000); // Test trwa 4 sekundy
-    }
-
-    function analyzeStepResponse(data) {
-        if (data.length < 20) {
-            addLogMessage('[Char] Blad: za malo danych do analizy.', 'error');
-            return;
-        }
-        const maxSpeed = data.reduce((max, p) => Math.abs(p.speed) > max ? Math.abs(p.speed) : max, 0);
-        if (maxSpeed < 50) {
-             addLogMessage('[Char] Blad: predkosc maksymalna zbyt niska do analizy.', 'error');
-             return;
-        }
-
-        const targetSpeed63 = maxSpeed * 0.632;
-        let timeConstant = 0;
-        for(let i=1; i<data.length; i++) {
-            if (Math.abs(data[i].speed) >= targetSpeed63 && Math.abs(data[i-1].speed) < targetSpeed63) {
-                timeConstant = data[i].time;
-                break;
-            }
-        }
-
-        const gain = maxSpeed / parseFloat(document.getElementById('stepResponseAngleInput').value);
-
-        if (timeConstant > 0) {
-            const Ku = (4/Math.PI) * (1/gain);
-            const Tu = 4 * timeConstant;
-
-            const Kp_s = 0.45 * Ku;
-            const Ki_s = Kp_s / (Tu / 1.2);
-
-            document.getElementById('srKpSuggest').textContent = Kp_s.toFixed(4);
-            document.getElementById('srKiSuggest').textContent = Ki_s.toFixed(4);
-            document.getElementById('srKdSuggest').textContent = "0.0000";
-            document.getElementById('stepResponseResultPanel').style.display = 'block';
-            addLogMessage(`[Char] Analiza zakonczona. K=${gain.toFixed(2)}, T=${timeConstant.toFixed(2)}s.`, 'success');
-        } else {
-             addLogMessage('[Char] Blad: nie udalo sie wyznaczyc stalej czasowej.', 'error');
-        }
-    }
-
-    function applyStepResponseResults() {
-        const kp = parseFloat(document.getElementById('srKpSuggest').textContent);
-        const ki = parseFloat(document.getElementById('srKiSuggest').textContent);
-        if(!isNaN(kp) && !isNaN(ki)) {
-            isApplyingConfig = true;
-            document.getElementById('speedKpInput').value = kp.toFixed(4);
-            document.getElementById('speedKiInput').value = ki.toFixed(4);
-            document.getElementById('speedKdInput').value = "0.0";
-            isApplyingConfig = false;
-
-            document.getElementById('speedKpInput').dispatchEvent(new Event('change', { bubbles: true }));
-            document.getElementById('speedKiInput').dispatchEvent(new Event('change', { bubbles: true }));
-            document.getElementById('speedKdInput').dispatchEvent(new Event('change', { bubbles: true }));
-
-            addLogMessage('[UI] Zastosowano sugerowane wartosci Kp_s i Ki_s.', 'info');
-        }
     }
 
 </script>
