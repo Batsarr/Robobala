@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v9.0 (Integracja 3D)</title>
+    <title>Robot PID - Panel Sterowania v9.1 (Finalna Sceneria 3D)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -544,7 +544,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 9.0 (Integracja modelu 3D)
+    // WERSJA 9.1 (Finalna Sceneria 3D)
     // =======================================================================================
 
     // === DEKLARACJE ZMIENNYCH GLOBALNYCH ===
@@ -589,7 +589,7 @@
         pollGamepad();
         window.addEventListener('resize', initJoystick);
         renderAutotestOptions();
-        init3DVisualization(); // Inicjalizacja nowego modelu 3D
+        init3DVisualization();
         animate3D();
     });
 
@@ -1362,22 +1362,20 @@
     }
     
     // =======================================================================================
-    // === NOWA SEKSCJA WIZUALIZACJI 3D ===
+    // === NOWA SEKSCJA WIZUALIZACJI 3D (WERSJA Z CIENIAMI I LEPSZA DROGA) ===
     // =======================================================================================
     
     // --- Zmienne dla wizualizacji 3D ---
-    let scene3D, camera3D, renderer3D, controls3D;
+    let scene3D, camera3D, renderer3D, controls3D, groundPlane;
     let robotGroup, leftWheel, rightWheel;
     let currentPitch3D = 0, currentYaw3D = 0, currentEncoderLeft = 0, currentEncoderRight = 0;
     let isAnimation3DEnabled = true, isMovement3DEnabled = false;
     let lastEncoderAvg = 0;
     
-    // --- Stale dla nowego modelu 3D ---
+    // --- Stale dla modelu 3D ---
     const WHEEL_DIAMETER = 8.2, WHEEL_RADIUS = WHEEL_DIAMETER / 2, TIRE_THICKNESS = 1.0, WHEEL_WIDTH = 2.0;
 
-    // --- NOWE FUNKCJE TWORZACE MODEL 3D (PRZENIESIONE Z robobala.html) ---
-
-    // FINALNA WERSJA FUNKCJI TWORZACEJ KOLO
+    // --- FUNKCJE TWORZACE MODEL 3D (z poprzedniej wersji) ---
     function createCustomWheel(totalRadius, tireThickness, width) {
         const wheelGroup = new THREE.Group();
         const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 });
@@ -1411,8 +1409,6 @@
         }
         return wheelGroup;
     }
-
-    // FINALNA WERSJA FUNKCJI TWORZACEJ CALY MODEL ROBOTA
     function createRobotModel() {
         const BODY_WIDTH = 9.0, BODY_HEIGHT = 6.0, BODY_DEPTH = 3.5, WHEEL_GAP = 1.0;
         const MAST_HEIGHT = 14.5, MAST_THICKNESS = 1.5;
@@ -1439,45 +1435,104 @@
         robotModel.add(wheelR);
         robotModel.position.y = -WHEEL_RADIUS;
         robotPivot.add(robotModel);
-        
-        // Zwracamy obiekt zawierajacy glowny pivot oraz referencje do kol
         return { pivot: robotPivot, wheelL: wheelL, wheelR: wheelR };
     }
     
     // --- ZAKTUALIZOWANE FUNKCJE KONTROLI WIZUALIZACJI 3D ---
 
+    // NOWA, ZMODYFIKOWANA funkcja do tworzenia tekstury drogi
+    function createRoadTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        
+        // Tlo asfaltu
+        ctx.fillStyle = '#404040';
+        ctx.fillRect(0, 0, 512, 512);
+        
+        // Linie na drodze - wieksze i grubsze dla lepszej widocznosci
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 12; // Grubsza linia
+        ctx.setLineDash([120, 80]); // Dluzszy pas, dluzsza przerwa
+        
+        ctx.beginPath();
+        ctx.moveTo(256, 0);
+        ctx.lineTo(256, 512);
+        ctx.stroke();
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(1, 20); // Powtarzanie tekstury 20 razy wzdluz drogi
+        return texture;
+    }
+
+    // NOWA, ZMODYFIKOWANA funkcja inicjalizujaca scene
     function init3DVisualization() {
         const container = document.getElementById('robot3d-container');
+        
+        // Inicjalizacja sceny z nowym tlem
         scene3D = new THREE.Scene();
-        scene3D.background = new THREE.Color(0xcccccc);
-        camera3D = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
-        camera3D.position.set(15, 15, 25);
-        camera3D.lookAt(0, 8, 0);
+        scene3D.background = new THREE.Color(0x87CEEB);
+        
+        // Nowa konfiguracja kamery
+        camera3D = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera3D.position.set(15, 10, 15);
+        
+        // Renderer z wlaczona obsluga cieni
         renderer3D = new THREE.WebGLRenderer({ antialias: true });
         renderer3D.setSize(container.clientWidth, container.clientHeight);
+        renderer3D.shadowMap.enabled = true;
+        renderer3D.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(renderer3D.domElement);
+        
+        // Kontrolki orbity z ograniczeniem kamery
         controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
+        controls3D.enableDamping = true;
+        controls3D.dampingFactor = 0.1;
+        controls3D.maxPolarAngle = Math.PI / 2;
         controls3D.target.set(0, 8, 0);
         controls3D.update();
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-        scene3D.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(10, 20, 15);
-        scene3D.add(directionalLight);
-        scene3D.add(new THREE.GridHelper(100, 100));
 
-        // Tworzenie i dodawanie nowego modelu
-        const robot = createRobotModel();
-        robotGroup = robot.pivot; // Glowny obiekt to teraz 'pivot'
-        leftWheel = robot.wheelL;   // Zapisujemy referencje do lewego kola
-        rightWheel = robot.wheelR;  // Zapisujemy referencje do prawego kola
+        // Nowa konfiguracja oswietlenia
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        scene3D.add(ambientLight);
         
-        robotGroup.position.y = WHEEL_RADIUS; // Ustawiamy robota na siatce
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 20, 10);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        scene3D.add(directionalLight);
+        
+        // Podloze (droga) z nowa tekstura i odbieraniem cieni
+        const groundGeometry = new THREE.PlaneGeometry(200, 400); // Dłuższa droga
+        const groundTexture = createRoadTexture();
+        const groundMaterial = new THREE.MeshLambertMaterial({ map: groundTexture });
+        groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
+        groundPlane.rotation.x = -Math.PI / 2;
+        groundPlane.receiveShadow = true;
+        scene3D.add(groundPlane);
+
+        // Tworzenie i dodawanie naszego finalnego modelu robota
+        const robot = createRobotModel();
+        robotGroup = robot.pivot;
+        leftWheel = robot.wheelL;
+        rightWheel = robot.wheelR;
+        
+        // Wlaczenie rzucania cienia dla kazdego elementu modelu
+        robotGroup.traverse(function(node) {
+            if (node.isMesh) {
+                node.castShadow = true;
+            }
+        });
+        
+        robotGroup.position.y = WHEEL_RADIUS;
         scene3D.add(robotGroup);
 
         setupControls3D();
         
-        // Handler do zmiany rozmiaru okna
         window.addEventListener('resize', () => {
             const width = container.clientWidth;
             const height = container.clientHeight;
@@ -1491,7 +1546,7 @@
     
     function setupControls3D() {
         document.getElementById('reset3dViewBtn').addEventListener('click', () => {
-            camera3D.position.set(15, 15, 25);
+            camera3D.position.set(15, 10, 15);
             controls3D.target.set(0, 8, 0);
             controls3D.update();
         });
@@ -1512,13 +1567,13 @@
         requestAnimationFrame(animate3D);
         
         if (isAnimation3DEnabled && robotGroup) {
-            // ZMIANA 1: Animacja przechyłu (pitch) - teraz na osi X
+            // Animacja przechyłu (pitch)
             robotGroup.rotation.x = THREE.MathUtils.degToRad(currentPitch3D);
 
-            // ZMIANA 2: Animacja obrotu (yaw) - pozostaje na osi Y
+            // Animacja obrotu (yaw)
             robotGroup.rotation.y = -THREE.MathUtils.degToRad(currentYaw3D);
             
-            // ZMIANA 3: Animacja obrotu kół - teraz na osi Z (zgodnie z nowym modelem)
+            // Animacja obrotu kół na podstawie danych z enkoderow
             const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
             const leftRotation = (currentEncoderLeft / ppr) * 2 * Math.PI;
             const rightRotation = (currentEncoderRight / ppr) * 2 * Math.PI;
@@ -1526,7 +1581,6 @@
             if (leftWheel) leftWheel.rotation.z = leftRotation;
             if (rightWheel) rightWheel.rotation.z = rightRotation;
 
-            // Logika ruchu pozostaje bez zmian
             if (isMovement3DEnabled) {
                 const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
                 const deltaEncoder = currentEncoderAvg - lastEncoderAvg;
@@ -1538,6 +1592,10 @@
                 // Przesuwamy cala grupe robota w jego lokalnej przestrzeni
                 robotGroup.translateZ(distanceMoved);
                 
+                // Przewijanie tekstury drogi, z uwzglednieniem skali
+                const SCROLL_SCALE_FACTOR = 40; // WIEKSZA WARTOSC = WOLNIEJSZE PRZEWIJANIE
+                groundPlane.material.map.offset.y = -robotGroup.position.z / SCROLL_SCALE_FACTOR;
+                
                 document.getElementById('robot3d-position-x').textContent = robotGroup.position.x.toFixed(1) + ' cm';
                 document.getElementById('robot3d-position-z').textContent = robotGroup.position.z.toFixed(1) + ' cm';
             }
@@ -1546,7 +1604,6 @@
         controls3D.update();
         renderer3D.render(scene3D, camera3D);
     }
-
 </script>
 </body>
 </html>
