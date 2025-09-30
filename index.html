@@ -196,13 +196,13 @@
             <div id="robot3d-container"></div>
             <div class="robot3d-controls">
                 <button id="reset3dViewBtn">Resetuj Widok</button>
-                <button id="toggle3dAnimationBtn">Wł./Wył. Animację</button>
+                <button id="toggle3dAnimationBtn">Wl./Wyl. Animacje</button>
                 <button id="toggle3dMovementBtn">Start/Stop Ruchu</button>
             </div>
             <div class="robot3d-info">
                 <div class="robot3d-metrics">
-                    <strong>Przechył:</strong> <span id="robot3d-pitch">0.0°</span>
-                    <strong>Obrót kół:</strong> <span id="robot3d-wheel-speed">0 obr/min</span>
+                    <strong>Przechyl:</strong> <span id="robot3d-pitch">0.0°</span>
+                    <strong>Obrot kol:</strong> <span id="robot3d-wheel-speed">0 obr/min</span>
                     <strong>Pozycja X:</strong> <span id="robot3d-position-x">0.0 cm</span>
                     <strong>Pozycja Z:</strong> <span id="robot3d-position-z">0.0 cm</span>
                 </div>
@@ -544,7 +544,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 8.8 (Final GA Rework)
+    // WERSJA 9.0 (3D Rework & Realism)
     // =======================================================================================
 
     let isApplyingConfig = false;
@@ -646,7 +646,7 @@
 
     function pollGamepad() { if (gamepadIndex !== null) { const gp = navigator.getGamepads()[gamepadIndex]; if (!gp) return; if (isMappingButton && actionToMap) { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { Object.keys(gamepadMappings).forEach(key => { if (gamepadMappings[key] === actionToMap) delete gamepadMappings[key]; }); gamepadMappings[i] = actionToMap; saveGamepadMappings(); addLogMessage(`[UI] Akcja '${availableActions[actionToMap].label}' przypisana do przycisku ${i}.`, 'success'); isMappingButton = false; actionToMap = null; renderMappingModal(); } }); } else { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { const action = gamepadMappings[i]; if (action && availableActions[action]) { const element = document.getElementById(availableActions[action].elementId); if (element && !element.disabled) { element.click(); flashElement(element); } } } }); } lastGamepadState = gp.buttons.map(b => b.pressed); let x = gp.axes[0] || 0; let y = gp.axes[1] || 0; if (Math.abs(x) < 0.15) x = 0; if (Math.abs(y) < 0.15) y = 0; sendBleMessage({ type: 'joystick', x: x, y: -y }); } requestAnimationFrame(pollGamepad); }
     window.addEventListener('gamepadconnected', (e) => { gamepadIndex = e.gamepad.index; document.getElementById('gamepadStatus').textContent = 'Polaczony'; document.getElementById('gamepadStatus').style.color = '#a2f279'; addLogMessage(`[UI] Gamepad polaczony: ${e.gamepad.id}`, 'success'); });
-    window.addEventListener('gamepaddisconnected', (e) => { gamepadIndex = null; document.getElementById('gamepadStatus').textContent = 'Brak'; document.getElementById('gamepadStatus').style.color = '#f7b731'; addLogMessage('[UI] Gamepad rozlaczony.', 'warn'); });
+    window.addEventListener('gampaddisconnected', (e) => { gamepadIndex = null; document.getElementById('gamepadStatus').textContent = 'Brak'; document.getElementById('gamepadStatus').style.color = '#f7b731'; addLogMessage('[UI] Gamepad rozlaczony.', 'warn'); });
 
     function startMapping(action, buttonElement) { if (gamepadIndex === null) { addLogMessage("Podlacz gamepada, aby rozpoczac mapowanie!", "warn"); return; } isMappingButton = true; actionToMap = action; document.querySelectorAll('.mapping-button').forEach(btn => btn.textContent = "Przypisz"); buttonElement.textContent = "Czekam..."; addLogMessage(`[UI] Nasluchiwanie na przycisk dla akcji: ${availableActions[action].label}...`, "info"); }
     function renderMappingModal() { const list = document.getElementById('gamepad-mapping-list'); list.innerHTML = ''; for (const [action, config] of Object.entries(availableActions)) { const row = document.createElement('div'); row.className = 'mapping-row'; const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action); row.innerHTML = `<span class="mapping-label">${config.label}</span><span class="mapping-display">${buttonIndex !== undefined ? `Przycisk ${buttonIndex}` : 'Brak'}</span><button class="mapping-button" data-action="${action}">Przypisz</button>`; list.appendChild(row); } list.querySelectorAll('.mapping-button').forEach(button => { button.addEventListener('click', (e) => { const action = e.target.dataset.action; startMapping(action, e.target); }); }); }
@@ -677,7 +677,6 @@
         bleMessageQueue = []; 
         isSendingBleMessage = false;
         
-        // Mechanizm retry
         if (bleConnectionRetries < MAX_BLE_RETRIES) {
             bleConnectionRetries++;
             addLogMessage(`[UI] Proba ponownego polaczenia ${bleConnectionRetries}/${MAX_BLE_RETRIES}...`, 'info');
@@ -787,20 +786,27 @@
         if (data.pitch !== undefined) { 
             document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0'; 
             document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`;
-            // Aktualizacja wizualizacji 3D
             currentPitch3D = data.pitch;
             document.getElementById('robot3d-pitch').textContent = data.pitch.toFixed(1) + '°';
         }
-        if (data.yaw !== undefined) document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' \u00B0';
+        if (data.yaw !== undefined) {
+            document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' \u00B0';
+            currentYaw3D = data.yaw;
+        }
         if (data.speed !== undefined) { 
             document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0);
-            // Aktualizacja wizualizacji 3D
-            currentSpeed3D = parseFloat(data.speed);
-            const wheelRpm = (currentSpeed3D / (Math.PI * 8.2)) * 60; // Średnica koła 8.2cm
+            const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
+            const wheelRpm = (parseFloat(data.speed) / ppr) * 60;
             document.getElementById('robot3d-wheel-speed').textContent = wheelRpm.toFixed(0) + ' obr/min';
         }
-        if (data.encoder_left !== undefined) document.getElementById('encoderLeftVal').textContent = data.encoder_left;
-        if (data.encoder_right !== undefined) document.getElementById('encoderRightVal').textContent = data.encoder_right;
+        if (data.encoder_left !== undefined) {
+            document.getElementById('encoderLeftVal').textContent = data.encoder_left;
+            currentEncoderLeft = data.encoder_left;
+        }
+        if (data.encoder_right !== undefined) {
+            document.getElementById('encoderRightVal').textContent = data.encoder_right;
+            currentEncoderRight = data.encoder_right;
+        }
         if (data.camera_ok !== undefined) { const cameraStatus = document.getElementById('cameraStatus'); const cameraText = document.getElementById('cameraText'); if (cameraStatus && cameraText) { if (data.camera_ok) { cameraStatus.className = 'status-indicator status-ok'; cameraText.textContent = 'Aktywna'; } else { cameraStatus.className = 'status-indicator status-error'; cameraText.textContent = 'Brak Danych'; } } }
         const emergencyBanner = document.getElementById('emergency-banner');
         if (emergencyBanner) emergencyBanner.style.display = data.emergency_stop ? 'block' : 'none';
@@ -889,7 +895,6 @@
                 if (!isNaN(min)) newValue = Math.max(min, newValue); 
                 if (!isNaN(max)) newValue = Math.min(max, newValue); 
                 
-                // Walidacja PID
                 newValue = validatePIDParameter(input.id, newValue);
                 
                 input.value = newValue; 
@@ -964,11 +969,12 @@
 
     // Zmienne dla wizualizacji 3D
     let scene3D, camera3D, renderer3D, controls3D;
-    let robotGroup, robotBody, leftWheel, rightWheel, groundPlane;
-    let currentPitch3D = 0, currentWheelRotation = 0, currentSpeed3D = 0;
-    let robotPosition3D = { x: 0, z: 0 };
+    let robotGroup, leftWheel, rightWheel, groundPlane;
+    let currentPitch3D = 0, currentYaw3D = 0, currentEncoderLeft = 0, currentEncoderRight = 0;
     let isAnimation3DEnabled = true, isMovement3DEnabled = false;
     let groundOffset = 0;
+    let robotPositionZ = 0;
+    let lastEncoderAvg = 0;
 
     const handleAutotestAction = () => {
         const selectedTest = document.querySelector('input[name="autotest-type"]:checked').value;
@@ -1056,7 +1062,6 @@
         const duration = parseFloat(document.getElementById('testDurationInput').value) * 1000;
 
         addLogMessage(`[UI] Uruchamiam test odrzucania zaklocen z impulsem ${impulse}. Zbieranie danych przez ${duration/1000}s.`, 'info');
-        // Tutaj moznaby zaimplementowac logike zbierania i analizy danych
         sendBleMessage({ type: 'execute_position_test_impulse', impulse_power: impulse });
 
         setTimeout(() => {
@@ -1076,7 +1081,6 @@
         const duration = parseFloat(document.getElementById('testDurationInput').value) * 1000;
 
         addLogMessage(`[UI] Uruchamiam test predkosci: dystans ${distance}cm, predkosc ${speed}cm/s. Zbieranie danych przez ${duration/1000}s.`, 'info');
-        // Tutaj moznaby zaimplementowac logike zbierania i analizy danych
         sendBleMessage({ type: 'execute_speed_test_run', distance_cm: distance, speed_cmps: speed });
 
         setTimeout(() => {
@@ -1334,40 +1338,27 @@
     // === FUNKCJE WIZUALIZACJI 3D ===
     function init3DVisualization() {
         const container = document.getElementById('robot3d-container');
-        
-        // Inicjalizacja sceny
         scene3D = new THREE.Scene();
         scene3D.background = new THREE.Color(0x87CEEB);
-        
-        // Kamera
         camera3D = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
         camera3D.position.set(15, 10, 15);
-        
-        // Renderer
         renderer3D = new THREE.WebGLRenderer({ antialias: true });
         renderer3D.setSize(container.clientWidth, container.clientHeight);
         renderer3D.shadowMap.enabled = true;
         renderer3D.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(renderer3D.domElement);
-        
-        // Kontrolki orbity
         controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
         controls3D.enableDamping = true;
         controls3D.dampingFactor = 0.1;
         controls3D.maxPolarAngle = Math.PI / 2;
-        
-        // Oświetlenie
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
         scene3D.add(ambientLight);
-        
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(10, 10, 5);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        directionalLight.position.set(10, 15, 5);
         directionalLight.castShadow = true;
         directionalLight.shadow.mapSize.width = 2048;
         directionalLight.shadow.mapSize.height = 2048;
         scene3D.add(directionalLight);
-        
-        // Podłoże (nieskończona droga)
         const groundGeometry = new THREE.PlaneGeometry(200, 200);
         const groundTexture = createRoadTexture();
         const groundMaterial = new THREE.MeshLambertMaterial({ map: groundTexture });
@@ -1375,14 +1366,8 @@
         groundPlane.rotation.x = -Math.PI / 2;
         groundPlane.receiveShadow = true;
         scene3D.add(groundPlane);
-        
-        // Model robota bazowany na zdjęciu
         createRobotModel();
-        
-        // Event listenery dla kontrolek
         setupControls3D();
-        
-        // Resize handler
         window.addEventListener('resize', () => {
             const width = container.clientWidth;
             const height = container.clientHeight;
@@ -1397,102 +1382,126 @@
         canvas.width = 512;
         canvas.height = 512;
         const ctx = canvas.getContext('2d');
-        
-        // Asfalto
         ctx.fillStyle = '#404040';
         ctx.fillRect(0, 0, 512, 512);
-        
-        // Linie na drodze
         ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 8;
-        ctx.setLineDash([40, 20]);
-        
-        for (let i = 0; i < 512; i += 60) {
-            ctx.beginPath();
-            ctx.moveTo(256, i);
-            ctx.lineTo(256, i + 30);
-            ctx.stroke();
-        }
-        
+        ctx.lineWidth = 10;
+        ctx.setLineDash([60, 40]);
+        ctx.beginPath();
+        ctx.moveTo(256, 0);
+        ctx.lineTo(256, 512);
+        ctx.stroke();
         const texture = new THREE.CanvasTexture(canvas);
         texture.wrapS = THREE.RepeatWrapping;
         texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(4, 4);
+        texture.repeat.set(1, 20); 
         return texture;
     }
     
     function createRobotModel() {
         robotGroup = new THREE.Group();
         
-        // Korpus robota (czarna skrzynka jak na zdjęciu)
-        const bodyGeometry = new THREE.BoxGeometry(3, 4, 8);
-        const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0x2c2c2c });
-        robotBody = new THREE.Mesh(bodyGeometry, bodyMaterial);
-        robotBody.position.y = 3;
-        robotBody.castShadow = true;
-        robotGroup.add(robotBody);
+        const baseWidth = 8;
+        const baseHeight = 2;
+        const baseDepth = 10;
+        const mastHeight = 8;
+        const mastWidth = 2;
+        const mastDepth = 2;
+        const batteryWidth = 2.5;
+        const batteryHeight = 5;
+        const batteryDepth = 1.5;
+
+        // Podstawa
+        const baseGeometry = new THREE.BoxGeometry(baseWidth, baseHeight, baseDepth);
+        const baseMaterial = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+        const robotBase = new THREE.Mesh(baseGeometry, baseMaterial);
+        robotBase.position.y = 1.0;
+        robotBase.castShadow = true;
+        robotGroup.add(robotBase);
         
-        // Płytka prototypowa/Arduino (zielona)
-        const boardGeometry = new THREE.BoxGeometry(2.5, 0.2, 6);
-        const boardMaterial = new THREE.MeshLambertMaterial({ color: 0x00aa00 });
-        const board = new THREE.Mesh(boardGeometry, boardMaterial);
-        board.position.set(0, 5.5, 0);
-        robotGroup.add(board);
+        // Maszt
+        const mastGeometry = new THREE.BoxGeometry(mastWidth, mastHeight, mastDepth);
+        const mast = new THREE.Mesh(mastGeometry, baseMaterial);
+        mast.position.y = baseHeight + (mastHeight / 2);
+        mast.castShadow = true;
+        robotGroup.add(mast);
+
+        // Bateria
+        const batteryGeometry = new THREE.BoxGeometry(batteryWidth, batteryHeight, batteryDepth);
+        const batteryMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+        const battery = new THREE.Mesh(batteryGeometry, batteryMaterial);
+        battery.position.set(0, baseHeight + mastHeight - (batteryHeight / 2) + 1, -mastDepth/2 - batteryDepth/2);
+        battery.castShadow = true;
+        robotGroup.add(battery);
+
+        // MPU na gorze
+        const mpuGeometry = new THREE.BoxGeometry(1, 0.3, 1);
+        const mpuMaterial = new THREE.MeshLambertMaterial({ color: 0x0055aa });
+        const mpu = new THREE.Mesh(mpuGeometry, mpuMaterial);
+        mpu.position.y = baseHeight + mastHeight + 0.3;
+        robotGroup.add(mpu);
+
+        // Kola LEGO
+        const wheelRadius = 4.1; 
+        const wheelWidth = 2.0;
+        const tireWidth = 1.8;
         
-        // Przewody (kolorowe - jak na zdjęciu)
-        const wireColors = [0xff0000, 0xffff00, 0x0000ff, 0xffffff];
-        for (let i = 0; i < 4; i++) {
-            const wireGeometry = new THREE.CylinderGeometry(0.05, 0.05, 2);
-            const wireMaterial = new THREE.MeshLambertMaterial({ color: wireColors[i] });
-            const wire = new THREE.Mesh(wireGeometry, wireMaterial);
-            wire.position.set(-1 + i * 0.7, 6, 2);
-            robotGroup.add(wire);
-        }
-        
-        // Lewe koło (białe z czarną oponą jak na zdjęciu)
-        const wheelGroup1 = new THREE.Group();
-        const wheelGeometry = new THREE.CylinderGeometry(2, 2, 0.8, 16);
-        const wheelMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
-        const tireGeometry = new THREE.CylinderGeometry(2.1, 2.1, 0.6, 16);
-        const tireMaterial = new THREE.MeshLambertMaterial({ color: 0x2c2c2c });
-        
-        const leftTire = new THREE.Mesh(tireGeometry, tireMaterial);
-        const leftWheel3D = new THREE.Mesh(wheelGeometry, wheelMaterial);
-        wheelGroup1.add(leftTire);
-        wheelGroup1.add(leftWheel3D);
-        wheelGroup1.rotation.z = Math.PI / 2;
-        wheelGroup1.position.set(-2.5, 2, 0);
-        wheelGroup1.castShadow = true;
-        leftWheel = wheelGroup1;
+        const createLegoWheel = () => {
+            const wheelGroup = new THREE.Group();
+            
+            const tireMaterial = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+            const rimMaterial = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
+            const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xff4757 });
+
+            // Opona
+            const tireGeometry = new THREE.TorusGeometry(wheelRadius, tireWidth / 2, 16, 32);
+            const tire = new THREE.Mesh(tireGeometry, tireMaterial);
+            tire.rotation.y = Math.PI / 2;
+            wheelGroup.add(tire);
+
+            // Felga z 6 ramionami
+            for (let i = 0; i < 6; i++) {
+                const spokeGeometry = new THREE.BoxGeometry(wheelRadius * 0.9, 0.3, 0.3);
+                const spoke = new THREE.Mesh(spokeGeometry, rimMaterial);
+                spoke.rotation.z = (i * Math.PI) / 3;
+                wheelGroup.add(spoke);
+            }
+
+            // Znacznik na oponie
+            const markerGeometry = new THREE.BoxGeometry(0.3, 0.2, tireWidth + 0.1);
+            const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+            marker.position.x = wheelRadius;
+            wheelGroup.add(marker);
+
+            wheelGroup.rotation.z = Math.PI / 2;
+            return wheelGroup;
+        };
+
+        leftWheel = createLegoWheel();
+        leftWheel.position.set(-baseWidth/2 - wheelWidth/2, wheelRadius, 0);
+        leftWheel.castShadow = true;
         robotGroup.add(leftWheel);
         
-        // Prawe koło
-        const wheelGroup2 = new THREE.Group();
-        const rightTire = new THREE.Mesh(tireGeometry, tireMaterial);
-        const rightWheel3D = new THREE.Mesh(wheelGeometry, wheelMaterial);
-        wheelGroup2.add(rightTire);
-        wheelGroup2.add(rightWheel3D);
-        wheelGroup2.rotation.z = Math.PI / 2;
-        wheelGroup2.position.set(2.5, 2, 0);
-        wheelGroup2.castShadow = true;
-        rightWheel = wheelGroup2;
+        rightWheel = createLegoWheel();
+        rightWheel.position.set(baseWidth/2 + wheelWidth/2, wheelRadius, 0);
+        rightWheel.castShadow = true;
         robotGroup.add(rightWheel);
         
-        // Pozycjonowanie robota
-        robotGroup.position.set(0, 0, 0);
+        robotGroup.position.y = -0.5;
         scene3D.add(robotGroup);
     }
     
     function setupControls3D() {
         document.getElementById('reset3dViewBtn').addEventListener('click', () => {
-            camera3D.position.set(15, 10, 15);
-            controls3D.reset();
+            camera3D.position.set(20, 15, 20);
+            controls3D.target.set(0, 5, 0);
+            controls3D.update();
         });
         
         document.getElementById('toggle3dAnimationBtn').addEventListener('click', () => {
             isAnimation3DEnabled = !isAnimation3DEnabled;
             const btn = document.getElementById('toggle3dAnimationBtn');
-            btn.textContent = isAnimation3DEnabled ? 'Wł./Wył. Animację' : 'Włącz Animację';
+            btn.textContent = isAnimation3DEnabled ? 'Wylacz Animacje' : 'Wlacz Animacje';
         });
         
         document.getElementById('toggle3dMovementBtn').addEventListener('click', () => {
@@ -1506,28 +1515,39 @@
     function animate3D() {
         requestAnimationFrame(animate3D);
         
-        if (isAnimation3DEnabled) {
-            // Animacja przechyłu robota
-            if (robotGroup) {
-                robotGroup.rotation.x = THREE.MathUtils.degToRad(currentPitch3D);
-            }
+        if (isAnimation3DEnabled && robotGroup) {
+            // Animacja przechyłu (pitch)
+            robotGroup.rotation.z = THREE.MathUtils.degToRad(currentPitch3D);
+
+            // Animacja obrotu (yaw)
+            robotGroup.rotation.y = -THREE.MathUtils.degToRad(currentYaw3D);
             
-            // Animacja obrotu kół
-            if (leftWheel && rightWheel) {
-                currentWheelRotation += currentSpeed3D * 0.002;
-                leftWheel.rotation.x = currentWheelRotation;
-                rightWheel.rotation.x = currentWheelRotation;
-            }
+            // Animacja obrotu kół 1:1 z enkoderów
+            const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
+            const leftRotation = (currentEncoderLeft / ppr) * 2 * Math.PI;
+            const rightRotation = (currentEncoderRight / ppr) * 2 * Math.PI;
             
+            if (leftWheel) leftWheel.rotation.x = -leftRotation;
+            if (rightWheel) rightWheel.rotation.x = -rightRotation;
+
             // Symulacja ruchu - podłoże się przesuwa
             if (isMovement3DEnabled && groundPlane) {
-                groundOffset += currentSpeed3D * 0.001;
+                const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
+                const deltaEncoder = currentEncoderAvg - lastEncoderAvg;
+                lastEncoderAvg = currentEncoderAvg;
+
+                const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value) || 8.2;
+                const wheelCircumference = Math.PI * wheelDiameter;
+                const distanceMoved = (deltaEncoder / ppr) * wheelCircumference;
+                
+                robotPositionZ += distanceMoved;
+                
+                const roadTextureSpeedFactor = 0.002;
+                groundOffset += (distanceMoved * roadTextureSpeedFactor);
                 groundPlane.material.map.offset.y = groundOffset;
                 
-                // Aktualizacja pozycji dla UI
-                robotPosition3D.z += currentSpeed3D * 0.01;
-                document.getElementById('robot3d-position-x').textContent = robotPosition3D.x.toFixed(1) + ' cm';
-                document.getElementById('robot3d-position-z').textContent = robotPosition3D.z.toFixed(1) + ' cm';
+                document.getElementById('robot3d-position-x').textContent = "0.0 cm";
+                document.getElementById('robot3d-position-z').textContent = robotPositionZ.toFixed(1) + ' cm';
             }
         }
         
@@ -1593,7 +1613,6 @@
         const gain = maxSpeed / parseFloat(document.getElementById('stepResponseAngleInput').value);
 
         if (timeConstant > 0) {
-            // Reguly Z-N dla obiektu FOPDT (uproszczone)
             const Ku = (4/Math.PI) * (1/gain);
             const Tu = 4 * timeConstant;
 
