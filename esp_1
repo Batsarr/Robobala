@@ -1,34 +1,40 @@
 // =======================================================================================
-// WERSJA 34.3-DUAL-CORE-A (Rdzen Balansujacy) - Finalne Poprawki i Optymalizacje
+// WERSJA 17.0-HYBRID (Wersja hybrydowa na bazie v16.5 z funkcjami z v8.8)
 //
-// ZMIANY (WERSJA 34.3):
+// ZMIANY (HYBRYDA):
 // -----------------------------------
-// [NOWA FUNKCJA] Dodano pelna obsluge tuningu PWM dla silnikow (komenda 'set_direct_motor_control').
-// [NOWA FUNKCJA] Dodano pelna implementacje korekty przechyly bocznego (Roll).
-// [POPRAWKA] Rozszerzono telemetrie wysylana do ESP_B o wszystkie wymagane pola.
-// [OPTYMALIZACJA] Zwiekszono predkosc UART do 460800 baud.
-// [OPTYMALIZACJA] Skrocono timeout joysticka do 100ms dla wiekszej responsywnosci.
-// [OPTYMALIZACJA] Zwiekszono czestotliwosc glownej petli sterowania do 200Hz (5ms).
-// [OPTYMALIZACJA] Zaimplementowano "Fast Path" dla komend joysticka w zadaniu UART,
-//                 aby zminimalizowac opoznienia w sterowaniu.
+// [ARCHITEKTURA] Baza kodu oparta na stabilnej, wielozadaniowej architekturze v16.5.
+// [STEROWANIE] Zachowano poprawna inzyniersko kaskade PID (predkosc -> kat) z v16.5.
+// [FUNKCJE] Zintegrowano bezpieczny modul auto-strojenia Ziegler-Nichols z v8.8.
+// [FUNKCJE] Zintegrowano tryby testow wydajnosciowych (speed run, position impulse) z v8.8.
+// [UPROSZCZENIE] Calkowicie usunieto modul rollPID w celu uproszczenia sterowania.
+// [OPTYMALIZACJA] Usunieto filtr predkosci w petli sterowania, aby zminimalizowac opoznienia.
+// [KONFIGURACJA] Ustawiono debounce enkoderow na 150 mikrosekund.
+// [POPRAWKA] Dodano brakujaca implementacje funkcji dmpDataReady() aby rozwiazac blad linkera.
 // =======================================================================================
 
+// --- Biblioteki ---
 #include <Wire.h>
+#include <EEPROM.h>
+#include <rom/crc.h>
 #include <ArduinoJson.h>
 #include "esp_system.h"
 #include <atomic>
-#include "esp_task_wdt.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
 #include "freertos/queue.h"
-#include <math.h>
 #include "MPU6050_6Axis_MotionApps20.h"
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEServer.h>
+#include <BLE2902.h>
+#include <math.h>
 
 // =========================================================================
 // === SEKCJA KONFIGURACYJNA ===
 // =========================================================================
 
-// --- Definicje pinow ---
+// --- Definicje pinow (Zgodne z ESP32-C3 SuperMini) ---
 #define MPU_SDA 0
 #define MPU_SCL 1
 #define MPU_INT_PIN 10
@@ -40,17 +46,15 @@
 #define ENCODER_L_B 4
 #define ENCODER_R_A 20
 #define ENCODER_R_B 21
-#define UART_ESP_B_TX 6
-#define UART_ESP_B_RX 7
 
 // --- Konfiguracja sprzetowa ---
-#define PWM_FREQ 25000
+#define PWM_FREQ 30000
 #define PWM_RESOLUTION 10
 #define PWM_MAX_VALUE 1023
-#define ENCODER_L_INVERTED false
-#define ENCODER_R_INVERTED true
+#define ENCODER_L_INVERTED true
+#define ENCODER_R_INVERTED false
 #define MOTOR_R_INVERT_LOGIC true
-#define ENCODER_DEBOUNCE_MICROS 300
+#define ENCODER_DEBOUNCE_MICROS 150
 
 // --- Konfiguracja kanalow LEDC (PWM) ---
 #define LEDC_CHANNEL_L_IN1 2
@@ -58,337 +62,1314 @@
 #define LEDC_CHANNEL_R_IN1 0
 #define LEDC_CHANNEL_R_IN2 1
 
-// --- Konfiguracja systemu ---
-const unsigned long LOOP_INTERVAL_MICROS = 5000; // ZWIEKSZONO DO 200Hz
-const TickType_t LOOP_INTERVAL_TICKS = pdMS_TO_TICKS(5); // ZWIEKSZONO DO 200Hz
+// --- Konfiguracja BLE ---
+#define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHARACTERISTIC_UUID_TX "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define CHARACTERISTIC_UUID_RX "beb5483e-36e1-4688-b7f5-ea07361b26a9"
+#define ROBOT_BLE_NAME "RoboBala"
+#define BLE_PACKET_MAX_SIZE 512
+#define BLE_TX_QUEUE_SIZE 20
+#define BLE_TX_DELAY_MS 25
+
+// --- Stale Systemowe i Bezpieczenstwa ---
+const unsigned long LOOP_INTERVAL_MICROS = 5000;
+const TickType_t LOOP_INTERVAL_TICKS = pdMS_TO_TICKS(5);
 #define CRITICAL_ANGLE_LIMIT 60.0f
 #define CRITICAL_GYRO_LIMIT 350.0f
-const float ZERO_ADJUST_STEP = 0.1f;
-const unsigned long JOYSTICK_TIMEOUT = 100; // SKROCONO TIMEOUT
-const unsigned long COMMAND_TIMEOUT_MS = 15000;
-#define WDT_TIMEOUT_SECONDS 60
-#define TELEMETRY_INTERVAL_MS 20 // ZMNIEJSZONO DLA PLYNNIEJSZEJ TELEMETRII
-#define MAX_JSON_SIZE 1024
+const float ZERO_ADJUST_STEP = 0.05f;
+const unsigned long JOYSTICK_TIMEOUT = 250;
+#define TELEMETRY_INTERVAL_MS 100
+#define MAX_JSON_SIZE 2048
+#define SMALL_JSON_SIZE 512
 #define LIFT_DETECTION_THRESHOLD_G 0.3f
 #define LIFT_DETECTION_DURATION_MS 300
-#define Q_BITS 16
-#define Q_SCALE (1 << Q_BITS)
 
-// --- Konfiguracja testu dla Algorytmu Genetycznego (GA) ---
-#define GA_FALL_ANGLE_DEG 25.0f
-#define GA_STABILIZE_DURATION_MS 1000
-#define GA_IMPULSE_DURATION_MS 150
-#define GA_MEASURE_DURATION_MS 2500
-#define GA_IMPULSE_ANGLE_DEG 3.0f
-const unsigned long GA_TOTAL_TEST_DURATION_MS = GA_STABILIZE_DURATION_MS + GA_IMPULSE_DURATION_MS + GA_MEASURE_DURATION_MS;
-const float GA_FITNESS_WEIGHT_ERROR = 1.0f;
-const float GA_FITNESS_WEIGHT_EFFORT = 0.05f;
+// --- Konfiguracja Modulu Auto-Strojenia (Ziegler-Nichols) ---
+#define ZN_KP_INCREASE_STEP 0.2f
+#define ZN_OSC_AMPLITUDE_THRESHOLD 2.0f
+#define ZN_OSC_DETECTION_CYCLES 5
+#define ZN_MEASUREMENT_SAMPLES 10
 
-// =========================================================================
-// === STRUKTURY DANYCH ===
-// =========================================================================
-struct PhysicalParams {
-  float m_body = 0.150f; float m_wheel = 0.055f; float L = 0.087f; float R_wheel = 0.041f; float g = 9.81f;
+// --- Struktury ---
+struct PIDController {
+  float Kp = 0.0f, Ki = 0.0f, Kd = 0.0f;
+  float integral = 0.0f, prev_input = 0.0f;
+  float min_out = 0.0f, max_out = 0.0f, integral_limit = 0.0f;
+  float deadband = 0.0f;
+  float last_output = 0.0f;
+  float derivative_filter_alpha = 1.0f;
+  float filtered_derivative = 0.0f;
+  bool is_idle = false;
+
+  void configure(float p, float i, float d, float min, float max, float int_limit, float filter_alpha = 1.0f) {
+    Kp = p; Ki = i; Kd = d; min_out = min; max_out = max; integral_limit = int_limit; derivative_filter_alpha = filter_alpha;
+  }
+
+  void setIdle(bool idle) {
+    if (idle && !is_idle) {
+        filtered_derivative = 0.0f;
+    }
+    is_idle = idle;
+  }
+
+  float compute(float setpoint, float input, float dt) {
+    if (dt <= 0) return last_output;
+    float error = setpoint - input;
+    if (abs(error) < deadband) {
+        error = 0.0f;
+    }
+    float p_out = Kp * error;
+    float d_out = 0.0f;
+    if (!is_idle) {
+      float raw_derivative = (input - prev_input) / dt;
+      filtered_derivative = (1.0f - derivative_filter_alpha) * filtered_derivative + derivative_filter_alpha * raw_derivative;
+      d_out = -Kd * filtered_derivative;
+    }
+
+    if (!is_idle) {
+      integral += error * dt;
+      integral = constrain(integral, -integral_limit, integral_limit);
+    }
+
+    float i_out = Ki * integral;
+    float output = p_out + i_out + d_out;
+    float constrained_output = constrain(output, min_out, max_out);
+
+    if (Ki > 0.0f && output != constrained_output && !is_idle) {
+      integral += (constrained_output - output) / Ki;
+      integral = constrain(integral, -integral_limit, integral_limit);
+    }
+
+    prev_input = input;
+    last_output = constrained_output;
+    return last_output;
+  }
+
+  void reset() {
+    integral = 0.0f;
+    prev_input = 0.0f;
+    last_output = 0.0f;
+    filtered_derivative = 0.0f;
+    is_idle = false;
+  }
 };
-struct LQRController {
-  float A[4][4]; float B[4]; float K[4]; float Q[4]; float R; float x[4]; float x_ref[4]; int32_t K_fx[4]; int32_t x_fx[4]; int32_t x_ref_fx[4]; PhysicalParams physics; float last_output = 0.0f; bool is_initialized = false;
-  void configure(float q1, float q2, float q3, float q4, float r_weight); int32_t compute_fx(); void updateState(float pitch_deg, float pitch_rate_deg_s, float position_pulses, float velocity_pulses_s); void setReference(float ref_pitch_deg, float ref_position_pulses); void reset();
-private:
-  void calculateSystemMatrices(); void calculateLQRGains(); void solveRiccati(float P[4][4]);
-};
+
 struct ControlFlags {
-  bool balancingEnabled = false; bool emergencyStop = false; bool directMotorControlActive = false; bool holdPositionEnabled = false; bool speedModeEnabled = false; bool lqrEnabled = true;
+  bool balancingEnabled = false;
+  bool emergencyStop = false;
+  bool directMotorControlActive = false;
+  bool holdPositionEnabled = false;
+  bool speedModeEnabled = false;
 };
+
 struct TuningParams {
-  float Q1_angle = 100.0f; float Q2_angular_vel = 10.0f; float Q3_position = 1.0f; float Q4_velocity = 5.0f; float R_control = 0.1f; PhysicalParams physics; float expoJoystick = 0.0f; float maxSpeedJoystick = 800.0f; float turnFactor = 0.25f; float joystickDeadzone = 0.0f; float joystickOutputScale = 1.0f; float joystickAngleSensitivity = 10.0f; float wheelDiameterCm = 8.2f; float trackWidthCm = 13.0f; int minPwmLeftFwd = 640, minPwmLeftBwd = 640; int minPwmRightFwd = 640, minPwmRightBwd = 640; float lqrOutputScalar = 20.0f; float encoderPPR = 820.0f; int holdPositionMarginPulses = 15; float headingCorrectionFactor = 0.4f; float positionErrorGain = 2.5f; float positionDampingGain = 0.5f; float rotationPGain = 1.5f; float speedPGain = 0.005f; float maxSpeedFromPosition = 1000.0f; int globalPowerLimit = PWM_MAX_VALUE;
+  float Kp_b, Ki_b, Kd_b;
+  float balancePidDerivativeFilterAlpha;
+  float joystickAngleSensitivity;
+  float Kp_s, Ki_s, Kd_s;
+  float Kp_p, Ki_p, Kd_p;
+  float Kp_r, Kd_r;
+  float Kp_h, Ki_h, Kd_h;
+  float speedPidDeadband;
+  float positionPidDeadband;
+  float expoJoystick, maxSpeedJoystick, turnFactor, joystickDeadzone;
+  float joystickSensitivity;
+  float wheelDiameterCm, trackWidthCm;
+  float encoderPPR;
+  float maxTargetAngleFromSpeedPID;
+  float maxTargetSpeedFromPosPID;
+  float speedFilterAlpha;
+  float pitchFilterAlpha;
+  int minPwmLeftFwd, minPwmLeftBwd, minPwmRightFwd, minPwmRightBwd;
 };
+
 struct EncoderState {
-  std::atomic<long> position; const uint8_t pin_a, pin_b; const bool inverted; volatile uint8_t prev_state; volatile unsigned long last_micros;
+  std::atomic<long> position;
+  const uint8_t pin_a, pin_b;
+  const bool inverted;
+  volatile uint8_t prev_state;
+  volatile unsigned long last_micros;
 };
-struct GATestParams {
-  float q1_angle, q2_angular_vel, q3_position, q4_velocity, r_control; float lqr_output_scalar;
+
+struct BLEMessage { char data[512]; size_t length; };
+
+#define EEPROM_START_ADDRESS 0
+#define CONFIG_VERSION "pid-hy-v17.0"
+#define CONFIG_MAGIC_NUMBER 0xCAFED051
+struct EEPROMSettings {
+  uint32_t magic_number;
+  char version[32];
+  TuningParams params;
+  uint32_t crc;
 };
 
-// --- Stany Robota ---
-enum RobotState { IDLE, HOLDING_POSITION, EXECUTING_MOVE, EXECUTING_ROTATE, GA_WAITING_FOR_IMPULSE, GA_TEST_IN_PROGRESS };
-const char* robotStateNames[] = { "BEZCZYNNY", "UTRZYMUJE POZYCJE", "RUCH DO CELU", "OBROT DO CELU", "GA CZEKA", "TEST GA" };
+// Maszyna stanow zintegrowana z obu wersji
+enum RobotState { IDLE, BALANCING, HOLDING_POSITION, AUTONOMOUS_MOVE, AUTONOMOUS_ROTATE, AUTO_TUNING, AUTONOMOUS_SPEED_RUN, AUTONOMOUS_POSITION_RECOVERY };
+const char* robotStateNames[] = { "IDLE", "BALANSUJE", "TRZYMA_POZYCJE", "RUCH_AUTONOMICZNY", "OBROT_AUTONOMICZNY", "AUTOSTROJENIE", "TEST_PREDKOSCI", "TEST_POZYCJI" };
 
+// Podstany dla auto-strojenia Z-N
+enum ZnTuningSubState { ZN_IDLE, ZN_RAMP_UP, ZN_MEASURE };
 
-// =========================================================================
-// === ZMIENNE GLOBALNE ===
-// =========================================================================
+// --- Zmienne Globalne ---
 ControlFlags controlFlags;
-static TuningParams tuningParams;
-static LQRController lqrController;
-static GATestParams gaTestParams;
-
+TuningParams tuningParams;
 MPU6050 mpu;
+PIDController balancePID, speedPID, positionPID, rotationPID, headingPID;
+
 bool dmpReady = false;
 uint8_t fifoBuffer[64];
-Quaternion q; VectorFloat gravity; float ypr[3];
+Quaternion q;
+VectorFloat gravity;
+float ypr[3];
+VectorInt16 accel;
 volatile bool mpuInterrupt = false;
+unsigned long liftDetectStartTime = 0;
+unsigned long timeOfFall = 0;
 
 RobotState currentState = IDLE;
-unsigned long commandStartTime = 0;
-long targetPosition = 0, targetRotation = 0;
-long anchoredPosition = 0, anchoredHeading = 0;
+long positionSetpoint = 0;
+float targetSpeed = 0.0f;
+long targetPosition = 0;
+long initialTestPosition = 0;
+long targetRotationDiff = 0;
+unsigned long positionRecoveryTimeout = 0;
 
-float speedSetpoint = 0.0f;
-float pitch = 0.0, roll = 0.0;
+float pitch = 0.0, yaw = 0.0, roll = 0.0;
 float angleOffset = 0.0;
-float rollOffset = 0.0; // NOWA ZMIENNA DLA KOREKTY ROLL
+float yawOffset = 0.0;
+float rollOffset = 0.0;
 float baseTargetAngleTrim = 0.0;
 float actualSpeed = 0.0f, finalTargetAngle = 0.0f;
 volatile float joystickX = 0.0, joystickY = 0.0;
 volatile bool joystickActive = false;
-unsigned long lastJoystickTime = 0;
-unsigned long timeOfFall = 0;
-unsigned long liftDetectStartTime = 0;
+unsigned long lastJoystickTime = 0, lastDirectControlTime = 0;
 float internal_impulsesPerCm = 0.0f, internal_impulsesPerDegree = 0.0f;
+
+BLEServer* pServer = NULL;
+BLECharacteristic* pTxCharacteristic = NULL;
+volatile bool bleDeviceConnected = false;
+
 EncoderState encoder_L = { { 0 }, ENCODER_L_A, ENCODER_L_B, ENCODER_L_INVERTED, 0, 0 };
 EncoderState encoder_R = { { 0 }, ENCODER_R_A, ENCODER_R_B, ENCODER_R_INVERTED, 0, 0 };
+QueueHandle_t bleRxQueue = NULL;
+QueueHandle_t bleTxQueue = NULL;
 
-unsigned long gaTestStartTime = 0;
-long gaTestStartPosition = 0;
-float gaAccumulatedPitchError = 0.0f;
-float gaAccumulatedControlEffort = 0.0f;
+volatile float telemetry_pitch = 0.0f, telemetry_yaw = 0.0f, telemetry_roll = 0.0f, telemetry_actual_speed = 0.0f, telemetry_balance_output = 0.0f, telemetry_target_speed = 0.0f;
+volatile long telemetry_encoder_left = 0, telemetry_encoder_right = 0;
 
-volatile bool systemReady = false;
-TaskHandle_t controlTaskHandle = NULL;
-TaskHandle_t uartCommTaskHandle = NULL;
-StaticJsonDocument<MAX_JSON_SIZE> uartJsonDoc;
+// Zmienne dla auto-strojenia Z-N
+ZnTuningSubState znSubState = ZN_IDLE;
+TuningParams safeTuningParams;
+float zn_test_kp = 0.0;
+unsigned long zn_last_crossing_time = 0;
+float zn_last_pitch = 0.0;
+float zn_peak_angle = 0.0;
+float zn_trough_angle = 0.0;
+int zn_stable_osc_counter = 0;
+float zn_period_samples[ZN_MEASUREMENT_SAMPLES];
+int zn_period_sample_count = 0;
 
-// =========================================================================
-// === DEKLARACJE FUNKCJI ===
-// =========================================================================
-void emergencyShutdown(const char* reason);
+// --- Prototypy Funkcji ---
+void ControlLoopTask(void* pvParameters);
+void TelemetryTask(void* pvParameters);
+void CommunicationManagerTask(void* pvParameters);
+void BLETransmitTask(void* pvParameters);
+void sendFullConfiguration();
+void updateSystemConfiguration();
 void recalculateMotionParameters();
+bool loadTuningsFromEEPROM();
+void saveTuningsToEEPROM();
+void loadDefaultSettings();
+void stopAllMotors();
+void setMotorPower(float pwm_l, float pwm_r);
+void emergencyShutdown(const char* reason);
 void calibrateMPU();
-void finishGATest(bool fallen);
+void printAndLog(const char* level, const char* format, ...);
+bool sendBleNotificationSafe(const String& value);
+bool sendLargeBleNotificationFragmented(const String& value);
+void sendAck(const char* command, bool success, const char* message = nullptr);
 void setMotorPowerRaw(uint8_t motor_idx, int power);
+int tuneSingleMotor(uint8_t motor_idx, int direction, int start_pwm);
+float fmap(float x, float in_min, float in_max, float out_min, float out_max);
+float mapMotorOutput(float power, int minPwmFwd, int minPwmBwd);
+static void IRAM_ATTR encoder_isr_handler(void* arg);
+void setupEncoders();
+void IRAM_ATTR dmpDataReady();
+void setupSensors();
+float normalizeAngle(float angle);
+void resetAllPids();
+void checkLiftDetection(const int16_t& ax, const int16_t& ay, const int16_t& az);
+void checkSafetySystems(float gyroRate);
+void autoRecovery();
+void handleZieglerNicholsTuning(float current_pitch, float dt);
+void startZnTuning();
+void cancelZnTuning();
+void finishZnTuning(float Ku, float Tu);
 
 // =========================================================================
-// === IMPLEMENTACJE FUNKCJI (Logika, Sensory, Silniki) ===
+// === IMPLEMENTACJE FUNKCJI ---
 // =========================================================================
 
-void printAndLog(const char* level, const char* format, ...) { char buffer[256]; va_list args; va_start(args, format); vsnprintf(buffer, sizeof(buffer), format, args); va_end(args); Serial.printf("[%s] %s\n", level, buffer); }
-void LQRController::configure(float q1, float q2, float q3, float q4, float r_weight) {Q[0]=q1;Q[1]=q2;Q[2]=q3;Q[3]=q4;R=r_weight;calculateSystemMatrices();calculateLQRGains();is_initialized=true;}
-void LQRController::calculateSystemMatrices() {for(int i=0;i<4;i++){for(int j=0;j<4;j++){A[i][j]=0.0f;}B[i]=0.0f;}A[0][1]=1.0f;A[1][0]=17.2f;A[2][3]=1.0f;A[3][0]=-1.2f;B[1]=2.5f;B[3]=-1.8f;}
-void LQRController::calculateLQRGains() { float P[4][4]; for (int i = 0; i < 4; i++) { for (int j = 0; j < 4; j++) { P[i][j] = (i == j) ? Q[i] : 0.0f; } } solveRiccati(P); for (int i = 0; i < 4; i++) { K[i] = 0.0f; for (int j = 0; j < 4; j++) { K[i] += B[j] * P[j][i]; } K[i] /= R; } K[0] = constrain(K[0], -200.0f, 200.0f); K[1] = constrain(K[1], -50.0f, 50.0f); K[2] = constrain(K[2], -10.0f, 10.0f); K[3] = constrain(K[3], -20.0f, 20.0f); for (int i = 0; i < 4; i++) { K_fx[i] = (int32_t)(K[i] * Q_SCALE); } }
-void LQRController::solveRiccati(float P[4][4]) {const int iterations=10;float P_new[4][4];for(int iter=0;iter<iterations;iter++){float ATP[4][4];for(int i=0;i<4;i++){for(int j=0;j<4;j++){ATP[i][j]=0.0f;for(int k=0;k<4;k++){ATP[i][j]+=A[k][i]*P[k][j];}}}float PA[4][4];for(int i=0;i<4;i++){for(int j=0;j<4;j++){PA[i][j]=0.0f;for(int k=0;k<4;k++){PA[i][j]+=P[i][k]*A[k][j];}}}float PB[4];for(int i=0;i<4;i++){PB[i]=0.0f;for(int j=0;j<4;j++){PB[i]+=P[i][j]*B[j];}}for(int i=0;i<4;i++){for(int j=0;j<4;j++){P_new[i][j]=(i==j?Q[i]:0.0f)+ATP[i][j]+PA[i][j];P_new[i][j]-=(PB[i]*B[j])/R;}}for(int i=0;i<4;i++){for(int j=0;j<4;j++){P[i][j]=P_new[i][j];}}}}
-int32_t LQRController::compute_fx() {if(!is_initialized)return 0;int32_t error_fx[4];for(int i=0;i<4;i++){error_fx[i]=x_ref_fx[i]-x_fx[i];}int64_t accumulator=0;for(int i=0;i<4;i++){accumulator+=(int64_t)K_fx[i]*error_fx[i];}int32_t control_output_fx=(int32_t)(accumulator>>Q_BITS);last_output=(float)control_output_fx/Q_SCALE;return control_output_fx;}
-void LQRController::updateState(float p_d,float pr_d_s,float pos_p,float v_p_s){x[0]=p_d*M_PI/180.0f;x[1]=pr_d_s*M_PI/180.0f;if(internal_impulsesPerCm>0){x[2]=(pos_p/internal_impulsesPerCm)/100.0f;x[3]=(v_p_s/internal_impulsesPerCm)/100.0f;}else{x[2]=pos_p*0.00001f;x[3]=v_p_s*0.00001f;} for(int i=0;i<4;i++){x_fx[i]=(int32_t)(x[i]*Q_SCALE);}}
-void LQRController::setReference(float rp_d,float rpos_p){x_ref[0]=rp_d*M_PI/180.0f;x_ref[1]=0.0f;if(internal_impulsesPerCm>0){x_ref[2]=(rpos_p/internal_impulsesPerCm)/100.0f;}else{x_ref[2]=rpos_p*0.00001f;}x_ref[3]=0.0f;for(int i=0;i<4;i++){x_ref_fx[i]=(int32_t)(x_ref[i]*Q_SCALE);}}
-void LQRController::reset(){for(int i=0;i<4;i++){x[i]=0.0f;x_ref[i]=0.0f;x_fx[i]=0;x_ref_fx[i]=0;}last_output=0.0f;}
-void IRAM_ATTR dmpDataReady(){mpuInterrupt=true;}
-void setupSensors(){Wire.begin(MPU_SDA,MPU_SCL);mpu.initialize();if(!mpu.testConnection()){printAndLog("error","BLAD KRYTYCZNY: Nie znaleziono MPU6050! Restart za 5s.");delay(5000);ESP.restart();}printAndLog("info","Inicjalizacja DMP...");uint8_t devStatus=mpu.dmpInitialize();if(devStatus==0){pinMode(MPU_INT_PIN,INPUT);attachInterrupt(digitalPinToInterrupt(MPU_INT_PIN),dmpDataReady,RISING);mpu.setDMPEnabled(true);dmpReady=true;printAndLog("info","DMP gotowy do pracy.");}else{printAndLog("error","Blad inicjalizacji DMP (kod %d). Sprawdz polaczenia.",devStatus);delay(5000);ESP.restart();}}
-void calibrateMPU() {controlFlags.balancingEnabled=false;vTaskDelay(pdMS_TO_TICKS(100));printAndLog("warn","ROZPOCZETO KALIBRACJE MPU - TRZYMAJ ROBOTA NIERUCHOMO!");detachInterrupt(digitalPinToInterrupt(MPU_INT_PIN));mpu.setDMPEnabled(false);vTaskDelay(pdMS_TO_TICKS(50));printAndLog("info","Kalibracja Accel & Gyro...");mpu.CalibrateAccel(10);mpu.CalibrateGyro(10);printAndLog("info","Nowe offsety obliczone. Restart DMP...");mpu.PrintActiveOffsets();Wire.end();Wire.begin(MPU_SDA,MPU_SCL);mpu.initialize();vTaskDelay(pdMS_TO_TICKS(100));uint8_t devStatus=mpu.dmpInitialize();if(devStatus==0){mpu.setDMPEnabled(true);attachInterrupt(digitalPinToInterrupt(MPU_INT_PIN),dmpDataReady,RISING);dmpReady=true;mpu.resetFIFO();mpuInterrupt=false;int stableCount=0;unsigned long startTime=millis();while(stableCount<20&&millis()-startTime<1000){if(mpuInterrupt){mpuInterrupt=false;if(mpu.dmpPacketAvailable()&&mpu.dmpGetCurrentFIFOPacket(fifoBuffer)){stableCount++;}else{mpu.resetFIFO();}}vTaskDelay(pdMS_TO_TICKS(5));}angleOffset=0;baseTargetAngleTrim=0;lqrController.reset();printAndLog("info","KALIBRACJA ZAKONCZONA.");}else{printAndLog("error","KRYTYCZNY BLAD podczas ponownej inicjalizacji DMP (kod %d).",devStatus);dmpReady=false;}}
-void setupMotors(){ledcSetup(LEDC_CHANNEL_L_IN1,PWM_FREQ,PWM_RESOLUTION);ledcSetup(LEDC_CHANNEL_L_IN2,PWM_FREQ,PWM_RESOLUTION);ledcSetup(LEDC_CHANNEL_R_IN1,PWM_FREQ,PWM_RESOLUTION);ledcSetup(LEDC_CHANNEL_R_IN2,PWM_FREQ,PWM_RESOLUTION);ledcAttachPin(MOTOR_L_IN1,LEDC_CHANNEL_L_IN1);ledcAttachPin(MOTOR_L_IN2,LEDC_CHANNEL_L_IN2);ledcAttachPin(MOTOR_R_IN1,LEDC_CHANNEL_R_IN1);ledcAttachPin(MOTOR_R_IN2,LEDC_CHANNEL_R_IN2);}
-void stopAllMotors() { _setSingleMotorPower(0, 0); _setSingleMotorPower(1, 0); }
-void _setSingleMotorPower(uint8_t motor_idx, int power) {power=constrain(power,-PWM_MAX_VALUE,PWM_MAX_VALUE);bool is_forward=power>0;int abs_power=abs(power);uint8_t ch_fwd,ch_bwd;if(motor_idx==0){ch_fwd=LEDC_CHANNEL_L_IN2;ch_bwd=LEDC_CHANNEL_L_IN1;}else{if(MOTOR_R_INVERT_LOGIC){ch_fwd=LEDC_CHANNEL_R_IN1;ch_bwd=LEDC_CHANNEL_R_IN2;}else{ch_fwd=LEDC_CHANNEL_R_IN2;ch_bwd=LEDC_CHANNEL_R_IN1;}}if(is_forward){ledcWrite(ch_fwd,abs_power);ledcWrite(ch_bwd,0);}else{ledcWrite(ch_bwd,abs_power);ledcWrite(ch_fwd,0);}}
-void setMotorPowerRaw(uint8_t motor_idx, int power) { _setSingleMotorPower(motor_idx, power); }
-void setMotorPower(float pwm_l, float pwm_r) {auto scale_and_map_power=[](float power,int min_fwd,int min_bwd){if(abs(power)<1.0f)return 0;float c_power=constrain(power,-PWM_MAX_VALUE,PWM_MAX_VALUE);float abs_p=abs(c_power);float sign=(c_power>0)?1.0f:-1.0f;float min_pwm=(c_power>0)?(float)min_fwd:(float)min_bwd;float mapped=min_pwm+(abs_p-1.0f)*(PWM_MAX_VALUE-min_pwm)/(PWM_MAX_VALUE-1.0f);return(int)round(sign*mapped);};int final_l=scale_and_map_power(pwm_l,tuningParams.minPwmLeftFwd,tuningParams.minPwmLeftBwd);int final_r=scale_and_map_power(pwm_r,tuningParams.minPwmRightFwd,tuningParams.minPwmRightBwd);_setSingleMotorPower(0,final_l);_setSingleMotorPower(1,final_r);}
-void IRAM_ATTR update_encoder(EncoderState* enc){unsigned long now=micros();if(now-enc->last_micros<ENCODER_DEBOUNCE_MICROS){return;}enc->last_micros=now;uint8_t s=(digitalRead(enc->pin_a)<<1)|digitalRead(enc->pin_b);uint8_t ls=enc->prev_state;static const int8_t map[]={0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0};int8_t ch=map[(ls<<2)|s];if(ch!=0){if(enc->inverted){enc->position.fetch_sub(ch,std::memory_order_relaxed);}else{enc->position.fetch_add(ch,std::memory_order_relaxed);}}enc->prev_state=s;}
-void IRAM_ATTR encoder_L_A_isr(){update_encoder(&encoder_L);}void IRAM_ATTR encoder_L_B_isr(){update_encoder(&encoder_L);}void IRAM_ATTR encoder_R_A_isr(){update_encoder(&encoder_R);}void IRAM_ATTR encoder_R_B_isr(){update_encoder(&encoder_R);}
-void setupEncoders(){pinMode(ENCODER_L_A,INPUT_PULLUP);pinMode(ENCODER_L_B,INPUT_PULLUP);pinMode(ENCODER_R_A,INPUT_PULLUP);pinMode(ENCODER_R_B,INPUT_PULLUP);encoder_L.prev_state=(digitalRead(ENCODER_L_A)<<1)|digitalRead(ENCODER_L_B);encoder_R.prev_state=(digitalRead(ENCODER_R_A)<<1)|digitalRead(ENCODER_R_B);attachInterrupt(digitalPinToInterrupt(ENCODER_L_A),encoder_L_A_isr,CHANGE);attachInterrupt(digitalPinToInterrupt(ENCODER_L_B),encoder_L_B_isr,CHANGE);attachInterrupt(digitalPinToInterrupt(ENCODER_R_A),encoder_R_A_isr,CHANGE);attachInterrupt(digitalPinToInterrupt(ENCODER_R_B),encoder_R_B_isr,CHANGE);printAndLog("info","Enkodery (ISR + Debounce) skonfigurowane.");}
-void emergencyShutdown(const char* reason){if(controlFlags.emergencyStop)return;controlFlags.emergencyStop=true;controlFlags.balancingEnabled=false;controlFlags.holdPositionEnabled=false;currentState=IDLE;stopAllMotors();lqrController.reset();timeOfFall=millis();printAndLog("error","E-STOP: %s",reason);}
-void autoRecovery(){if(!controlFlags.emergencyStop)return;if(abs(pitch-angleOffset)<5.0&&millis()-timeOfFall>3000){printAndLog("info","Proba odzyskania...");controlFlags.emergencyStop=false;}else if(abs(pitch-angleOffset)>=5.0){timeOfFall=millis();}}
-void checkSafetySystems(float gyroRate){if(!controlFlags.emergencyStop){char reason[64];if(abs(pitch-angleOffset)>CRITICAL_ANGLE_LIMIT){snprintf(reason,sizeof(reason),"KRYTYCZNY przechyl: %.1f deg",pitch-angleOffset);emergencyShutdown(reason);return;}if(abs(gyroRate)>CRITICAL_GYRO_LIMIT){snprintf(reason,sizeof(reason),"KRYTYCZNA pred. katowa: %.1f deg/s",gyroRate);emergencyShutdown(reason);}}}
-void checkLiftDetection(const int16_t& ax,const int16_t& ay,const int16_t& az){if(controlFlags.emergencyStop||!controlFlags.balancingEnabled){liftDetectStartTime=0;return;}float ax_g=(float)ax/16384.0f;float ay_g=(float)ay/16384.0f;float az_g=(float)az/16384.0f;float mag=sqrt(ax_g*ax_g+ay_g*ay_g+az_g*az_g);if(mag<LIFT_DETECTION_THRESHOLD_G){if(liftDetectStartTime==0){liftDetectStartTime=millis();}else if(millis()-liftDetectStartTime>LIFT_DETECTION_DURATION_MS){emergencyShutdown("Wykryto podniesienie");liftDetectStartTime=0;}}else{liftDetectStartTime=0;}}
-void recalculateMotionParameters(){if(tuningParams.wheelDiameterCm>0.0f&&tuningParams.encoderPPR>0.0f){float wheelCirc=PI*tuningParams.wheelDiameterCm;internal_impulsesPerCm=tuningParams.encoderPPR/wheelCirc;}else{internal_impulsesPerCm=0.0f;}if(tuningParams.trackWidthCm>0.0f&&internal_impulsesPerCm>0.0f){float turnCirc=PI*tuningParams.trackWidthCm;internal_impulsesPerDegree=(turnCirc*internal_impulsesPerCm*2.0f)/360.0f;}else{internal_impulsesPerDegree=0.0f;}}
-
-void sendGAResult(float fitness) { StaticJsonDocument<128> doc; doc["type"] = "ga_result"; doc["fitness"] = fitness; String output; serializeJson(doc, output); Serial1.println(output); }
-
-void finishGATest(bool fallen) {
-    float fitness = 0.0f;
-    if (fallen) {
-        fitness = 0.01f;
-        printAndLog("warn", "Test GA przerwany - wykryto upadek.");
-    } else {
-        fitness = 1.0f / (1.0f + (GA_FITNESS_WEIGHT_ERROR * gaAccumulatedPitchError) + (GA_FITNESS_WEIGHT_EFFORT * gaAccumulatedControlEffort));
-        printAndLog("info", "Test GA ukonczony. Blad: %.4f, Wysilek: %.2f, Fitness: %.4f", gaAccumulatedPitchError, gaAccumulatedControlEffort, fitness);
-    }
-    sendGAResult(fitness);
-    lqrController.configure(tuningParams.Q1_angle, tuningParams.Q2_angular_vel, tuningParams.Q3_position, tuningParams.Q4_velocity, tuningParams.R_control);
-    currentState = GA_WAITING_FOR_IMPULSE;
-    printAndLog("info", "GA: Test zakonczony. Powrot do stanu oczekiwania na kolejny impuls.");
+// POPRAWKA: Dodanie brakujacej implementacji funkcji obslugi przerwania
+void IRAM_ATTR dmpDataReady() {
+  mpuInterrupt = true;
 }
 
-void UartCommunicationTask(void* pvParameters) {
-  printAndLog("info", "Zadanie komunikacji UART uruchomione.");
-  String uartBuffer = ""; unsigned long lastTelemetryTime = 0;
-  for (;;) {
-    if (Serial1.available()) {
-      char c = Serial1.read();
-      if (c == '\n') {
-        if (uartBuffer.indexOf("joystick") != -1) {
-            uartJsonDoc.clear();
-            if (deserializeJson(uartJsonDoc, uartBuffer) == DeserializationError::Ok) {
-                if (currentState != GA_TEST_IN_PROGRESS && currentState != GA_WAITING_FOR_IMPULSE) {
-                    joystickX = uartJsonDoc["x"];
-                    joystickY = uartJsonDoc["y"];
-                    joystickActive = (abs(joystickX) > 0.01 || abs(joystickY) > 0.01);
-                    lastJoystickTime = millis();
+void sendAck(const char* command, bool success, const char* message) {
+    if (!bleDeviceConnected) return;
+    StaticJsonDocument<SMALL_JSON_SIZE> doc;
+    doc["type"] = "ack";
+    doc["command"] = command;
+    doc["success"] = success;
+    if (message) {
+        doc["message"] = message;
+    }
+    String jsonBuffer;
+    serializeJson(doc, jsonBuffer);
+    sendBleNotificationSafe(jsonBuffer);
+}
+
+float normalizeAngle(float angle) {
+    float a = fmod(angle + 180.0, 360.0);
+    if (a < 0) a += 360.0;
+    return a - 180.0;
+}
+
+void resetAllPids() {
+    balancePID.reset();
+    speedPID.reset();
+    positionPID.reset();
+    rotationPID.reset();
+    headingPID.reset();
+}
+
+// Implementacja auto-strojenia (bezpieczna wersja z P1.txt)
+void startZnTuning() {
+    if (currentState != BALANCING && currentState != HOLDING_POSITION) {
+        printAndLog("warn", "Nie mozna rozpoczac strojenia. Robot musi byc w stanie balansu.");
+        return;
+    }
+    printAndLog("info", "Rozpoczeto procedure 'Pierwsze Strojenie' (Z-N)...");
+    safeTuningParams = tuningParams;
+    positionSetpoint = (encoder_L.position.load(std::memory_order_relaxed) + encoder_R.position.load(std::memory_order_relaxed)) / 2;
+    resetAllPids();
+    currentState = AUTO_TUNING;
+    znSubState = ZN_RAMP_UP;
+    zn_test_kp = tuningParams.Kp_b > 1.0f ? tuningParams.Kp_b : 10.0f;
+    zn_stable_osc_counter = 0;
+    zn_peak_angle = 0;
+    zn_trough_angle = 0;
+    zn_last_pitch = 0;
+}
+
+void cancelZnTuning() {
+    if (currentState != AUTO_TUNING) return;
+    printAndLog("warn", "Strojenie Z-N anulowane przez uzytkownika.");
+    tuningParams = safeTuningParams;
+    updateSystemConfiguration();
+    currentState = BALANCING;
+    znSubState = ZN_IDLE;
+}
+
+void finishZnTuning(float Ku, float Tu) {
+    printAndLog("success", "Strojenie Z-N zakonczone! Zmierzone Ku=%.4f, Tu=%.4f s", Ku, Tu);
+    StaticJsonDocument<SMALL_JSON_SIZE> doc;
+    doc["type"] = "zn_tuning_result";
+    doc["ku"] = Ku;
+    doc["tu"] = Tu;
+    String jsonBuffer;
+    serializeJson(doc, jsonBuffer);
+    sendBleNotificationSafe(jsonBuffer);
+    tuningParams = safeTuningParams;
+    updateSystemConfiguration();
+    currentState = BALANCING;
+    znSubState = ZN_IDLE;
+}
+
+void handleZieglerNicholsTuning(float current_pitch, float dt) {
+    balancePID.Kp = zn_test_kp;
+    telemetry_balance_output = zn_test_kp;
+    float balance_point = angleOffset;
+
+    switch (znSubState) {
+        case ZN_RAMP_UP: {
+            if (current_pitch > zn_last_pitch) {
+                zn_peak_angle = max(zn_peak_angle, current_pitch);
+            } else {
+                zn_trough_angle = min(zn_trough_angle, current_pitch);
+            }
+            if ((zn_last_pitch > balance_point && current_pitch <= balance_point) || (zn_last_pitch < balance_point && current_pitch >= balance_point)) {
+                float amplitude = zn_peak_angle - zn_trough_angle;
+                if (amplitude > ZN_OSC_AMPLITUDE_THRESHOLD) {
+                    zn_stable_osc_counter++;
+                } else {
+                    zn_stable_osc_counter = 0;
+                }
+                zn_peak_angle = balance_point;
+                zn_trough_angle = balance_point;
+                if (zn_stable_osc_counter >= ZN_OSC_DETECTION_CYCLES) {
+                    printAndLog("info", "Wykryto stabilne oscylacje przy Kp=%.2f. Rozpoczynam pomiar.", zn_test_kp);
+                    znSubState = ZN_MEASURE;
+                    zn_period_sample_count = 0;
+                    zn_last_crossing_time = millis();
+                    return;
                 }
             }
-        } else {
-            uartJsonDoc.clear(); DeserializationError error = deserializeJson(uartJsonDoc, uartBuffer);
-            if (error == DeserializationError::Ok) {
-              JsonObject doc = uartJsonDoc.as<JsonObject>(); const char* type = doc["type"];
-              if (strcmp(type, "ga_load_params") == 0) {
-                  JsonObject params = doc["params"];
-                  gaTestParams.q1_angle = params["q1"]; gaTestParams.q2_angular_vel = params["q2"]; gaTestParams.q3_position = params["q3"]; gaTestParams.q4_velocity = params["q4"]; gaTestParams.r_control = params["r"]; gaTestParams.lqr_output_scalar = params["scalar"];
-              } else if (strcmp(type, "ga_run_test") == 0) {
-                  if (controlFlags.balancingEnabled) {
-                      gaTestStartPosition = (encoder_L.position.load() + encoder_R.position.load()) / 2;
-                      currentState = GA_WAITING_FOR_IMPULSE;
-                      gaAccumulatedPitchError = 0.0f;
-                      gaAccumulatedControlEffort = 0.0f;
-                      lqrController.configure(gaTestParams.q1_angle, gaTestParams.q2_angular_vel, gaTestParams.q3_position, gaTestParams.q4_velocity, gaTestParams.r_control);
-                      printAndLog("info", "GA: Otrzymano parametry. Oczekiwanie na wyzwolenie testu...");
-                  } else { printAndLog("warn", "Odrzucono test GA. Robot nie balansuje."); }
-              } else if (strcmp(type, "ga_execute_impulse_and_measure") == 0) {
-                  if (currentState == GA_WAITING_FOR_IMPULSE) {
-                      gaTestStartTime = millis();
-                      currentState = GA_TEST_IN_PROGRESS;
-                      printAndLog("info", "GA: Wyzwolono test. Rozpoczynanie sekwencji impuls/pomiar.");
-                  } else { printAndLog("warn", "Odrzucono wyzwolenie testu. Robot nie jest w stanie GA_WAITING_FOR_IMPULSE."); }
-              } else if (strcmp(type, "set_direct_motor_control") == 0) {
-                  if(!controlFlags.balancingEnabled) {
-                    const char* motorStr = doc["motor"];
-                    int pwm = doc["pwm"];
-                    if (strcmp(motorStr, "all") == 0) {
-                      stopAllMotors();
-                    } else {
-                      uint8_t motorIdx = (strcmp(motorStr, "left") == 0) ? 0 : 1;
-                      setMotorPowerRaw(motorIdx, pwm);
-                    }
-                  }
-              } else if (strcmp(type, "adjust_roll") == 0) {
-                  rollOffset += doc["value"].as<int>() * ZERO_ADJUST_STEP;
-              } else if (strcmp(type, "balance_toggle") == 0) {
-                controlFlags.balancingEnabled = doc["enabled"]; if(controlFlags.balancingEnabled){controlFlags.emergencyStop=false;lqrController.reset();}else{stopAllMotors();currentState=IDLE;controlFlags.holdPositionEnabled=false;}
-              } else if (strcmp(type, "hold_position_toggle") == 0) {
-                bool en=doc["enabled"];if(en&&!controlFlags.holdPositionEnabled){long cur_p=(encoder_L.position.load()+encoder_R.position.load())/2;long cur_h=encoder_L.position.load()-encoder_R.position.load();anchoredPosition=cur_p;anchoredHeading=cur_h;}controlFlags.holdPositionEnabled=en;
-              } else if (strcmp(type, "speed_mode_toggle") == 0) {controlFlags.speedModeEnabled=doc["enabled"];
-              } else if (strcmp(type, "lqr_enabled_toggle") == 0) {controlFlags.lqrEnabled=doc["enabled"];
-              } else if (strcmp(type, "emergency_stop") == 0) {emergencyShutdown("E-STOP z ESP_B");
-              } else if (strcmp(type, "reset_zero") == 0) {angleOffset=pitch; rollOffset=roll; baseTargetAngleTrim=0.0;
-              } else if (strcmp(type, "adjust_zero") == 0) {baseTargetAngleTrim+=doc["value"].as<int>()*ZERO_ADJUST_STEP;
-              } else if (strcmp(type, "calibrate_mpu") == 0) {calibrateMPU();
-              } else if (strcmp(type, "reset_encoders") == 0) {encoder_L.position.store(0);encoder_R.position.store(0);
-              } else if (strcmp(type, "execute_move") == 0) {if(currentState!=EXECUTING_ROTATE){targetPosition=((encoder_L.position.load()+encoder_R.position.load())/2)+(doc["distance_cm"].as<float>()*internal_impulsesPerCm);currentState=EXECUTING_MOVE;commandStartTime=millis();}}
-              else if (strcmp(type, "execute_rotate") == 0) {if(currentState!=EXECUTING_MOVE){long cur_h=encoder_L.position.load()-encoder_R.position.load();targetRotation=cur_h+(doc["angle_deg"].as<float>()*internal_impulsesPerDegree);currentState=EXECUTING_ROTATE;commandStartTime=millis();}}
-              else if (strcmp(type, "command_stop") == 0) {currentState=IDLE;controlFlags.holdPositionEnabled=false;}
-            } else { printAndLog("error", "Blad JSON z UART: %s", error.c_str()); }
+            zn_last_pitch = current_pitch;
+            zn_test_kp += ZN_KP_INCREASE_STEP * dt * 100;
+            break;
         }
-        uartBuffer = "";
-      } else { uartBuffer += c; }
+        case ZN_MEASURE: {
+            if ((zn_last_pitch > balance_point && current_pitch <= balance_point) || (zn_last_pitch < balance_point && current_pitch >= balance_point)) {
+                unsigned long now = millis();
+                if (zn_last_crossing_time > 0) {
+                    float half_period = (now - zn_last_crossing_time) / 1000.0f;
+                    if (zn_period_sample_count < ZN_MEASUREMENT_SAMPLES) {
+                        zn_period_samples[zn_period_sample_count++] = half_period * 2.0f;
+                    }
+                }
+                zn_last_crossing_time = now;
+                if (zn_period_sample_count >= ZN_MEASUREMENT_SAMPLES) {
+                    float sum_tu = 0;
+                    for (int i = 0; i < ZN_MEASUREMENT_SAMPLES; i++) {
+                        sum_tu += zn_period_samples[i];
+                    }
+                    float avg_tu = sum_tu / ZN_MEASUREMENT_SAMPLES;
+                    finishZnTuning(zn_test_kp, avg_tu);
+                }
+            }
+            zn_last_pitch = current_pitch;
+            break;
+        }
+        case ZN_IDLE: default: break;
     }
-    if (millis() - lastTelemetryTime > TELEMETRY_INTERVAL_MS) {
-      lastTelemetryTime=millis();StaticJsonDocument<512> tel;
-      tel["type"]="telemetry"; tel["pitch"]=pitch-angleOffset; tel["speed"]=actualSpeed;
-      tel["target_angle"]=finalTargetAngle; tel["robot_state"]=robotStateNames[currentState];
-      tel["speed_setpoint"] = speedSetpoint; tel["lqr_output"] = lqrController.last_output;
-      tel["encoder_left"] = encoder_L.position.load(); tel["encoder_right"] = encoder_R.position.load();
-      tel["emergency_stop"] = controlFlags.emergencyStop;
-      String out; serializeJson(tel,out); Serial1.println(out);
-    }
-    vTaskDelay(pdMS_TO_TICKS(1));
-  }
 }
 
 void ControlLoopTask(void* pvParameters) {
-  printAndLog("info", "Zadanie sterujace LQR uruchomione."); while(!systemReady){vTaskDelay(pdMS_TO_TICKS(100));esp_task_wdt_reset();} vTaskDelay(pdMS_TO_TICKS(1000)); printAndLog("info", "Petla sterowania LQR startuje!");
-  long lastPosition = 0; TickType_t xLastWakeTime = xTaskGetTickCount();
+  printAndLog("info", "Zadanie petli sterowania uruchomione.");
+  long lastPosition = 0;
+  RobotState previousState = IDLE;
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+
   for (;;) {
-    unsigned long nowMicros=micros();static unsigned long lastLoopMicros=nowMicros;float dt=(float)(nowMicros-lastLoopMicros)/1000000.0f;lastLoopMicros=nowMicros;if(dt<=0)dt=(float)LOOP_INTERVAL_MICROS/1000000.0f;
-    if(!dmpReady){vTaskDelayUntil(&xLastWakeTime,LOOP_INTERVAL_TICKS);continue;}
-    float pitchRate=0.0f;VectorInt16 accel;if(mpu.dmpPacketAvailable()&&mpu.dmpGetCurrentFIFOPacket(fifoBuffer)){mpu.dmpGetQuaternion(&q,fifoBuffer);mpu.dmpGetGravity(&gravity,&q);mpu.dmpGetYawPitchRoll(ypr,&q,&gravity);mpu.dmpGetAccel(&accel,fifoBuffer);pitch=ypr[1]*180/M_PI;roll=ypr[2]*180/M_PI;pitchRate=mpu.getRotationY()/131.0f;}
-    checkSafetySystems(pitchRate); checkLiftDetection(accel.x,accel.y,accel.z); autoRecovery();
-    long currentPosition=(encoder_L.position.load()+encoder_R.position.load())/2;long currentHeading=encoder_L.position.load()-encoder_R.position.load();actualSpeed=(float)(currentPosition-lastPosition)/dt;lastPosition=currentPosition;
-    bool isJoystickMoving=(millis()-lastJoystickTime<JOYSTICK_TIMEOUT&&joystickActive);
-    float scaledJoyX=0.0f,scaledJoyY=0.0f;if(isJoystickMoving){scaledJoyY=joystickY*tuningParams.joystickOutputScale;scaledJoyX=joystickX*tuningParams.joystickOutputScale;}
-    long refPosition = currentPosition;
-    speedSetpoint = 0.0f;
-    float turnComponent = 0.0f;
-    float refPitch = baseTargetAngleTrim;
-    if (isJoystickMoving && currentState != GA_TEST_IN_PROGRESS && currentState != GA_WAITING_FOR_IMPULSE) {
-      currentState = IDLE; controlFlags.holdPositionEnabled = false; turnComponent = scaledJoyX * (PWM_MAX_VALUE * tuningParams.turnFactor);
-    }
-    if (currentState == IDLE && !isJoystickMoving && controlFlags.holdPositionEnabled) { currentState = HOLDING_POSITION; }
-    if (currentState == HOLDING_POSITION && !controlFlags.holdPositionEnabled) { currentState = IDLE; }
+    if (dmpReady && !controlFlags.directMotorControlActive) {
+        float dt = (float)LOOP_INTERVAL_MICROS / 1000000.0f;
 
-    switch (currentState) {
-      case IDLE: if(controlFlags.speedModeEnabled){speedSetpoint=scaledJoyY*tuningParams.maxSpeedJoystick;}else{float joyY_d=(abs(scaledJoyY)>tuningParams.joystickDeadzone)?scaledJoyY:0.0f;float targetJoyY=(1.0f-tuningParams.expoJoystick)*joyY_d+(tuningParams.expoJoystick*pow(joyY_d,3));refPitch=baseTargetAngleTrim+targetJoyY*tuningParams.joystickAngleSensitivity;} break;
-      case HOLDING_POSITION: refPosition=anchoredPosition; break;
-      case EXECUTING_MOVE: refPosition=targetPosition;if((millis()-commandStartTime>500&&abs(targetPosition-currentPosition)<tuningParams.holdPositionMarginPulses&&abs(actualSpeed)<10.0f)||millis()-commandStartTime>COMMAND_TIMEOUT_MS){currentState=controlFlags.holdPositionEnabled?HOLDING_POSITION:IDLE;if(controlFlags.holdPositionEnabled){anchoredPosition=targetPosition;anchoredHeading=currentHeading;}}break;
-      case EXECUTING_ROTATE: {
-        long rotError=targetRotation-currentHeading; turnComponent=constrain(rotError*tuningParams.rotationPGain,-300.0f,300.0f);
-        if((millis()-commandStartTime>500&&abs(rotError)<20)||millis()-commandStartTime>COMMAND_TIMEOUT_MS){
-          currentState=controlFlags.holdPositionEnabled?HOLDING_POSITION:IDLE; if(controlFlags.holdPositionEnabled){anchoredPosition=currentPosition;anchoredHeading=targetRotation;}
+        if (mpuInterrupt) {
+            mpuInterrupt = false;
+            if (mpu.dmpPacketAvailable() && mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
+                mpu.dmpGetQuaternion(&q, fifoBuffer);
+                mpu.dmpGetGravity(&gravity, &q);
+                mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+                mpu.dmpGetAccel(&accel, fifoBuffer);
+                float raw_pitch = ypr[1] * 180 / M_PI;
+                // Filtr pitch zachowany z v8.8
+                pitch = (1.0f - tuningParams.pitchFilterAlpha) * pitch + tuningParams.pitchFilterAlpha * raw_pitch;
+                yaw = ypr[0] * 180 / M_PI;
+                roll = ypr[2] * 180 / M_PI;
+            } else {
+                mpu.resetFIFO();
+            }
         }
-        break;
-      }
-      case GA_WAITING_FOR_IMPULSE: { refPosition = gaTestStartPosition; turnComponent = 0.0f; refPitch = baseTargetAngleTrim; break; }
-      case GA_TEST_IN_PROGRESS: {
-        refPosition = gaTestStartPosition; turnComponent = 0.0f;
-        if (abs(pitch - angleOffset) > GA_FALL_ANGLE_DEG) { finishGATest(true); } else {
-            unsigned long elapsed = millis() - gaTestStartTime;
-            if (elapsed < GA_STABILIZE_DURATION_MS) { refPitch = baseTargetAngleTrim;
-            } else if (elapsed < GA_STABILIZE_DURATION_MS + GA_IMPULSE_DURATION_MS) { refPitch = baseTargetAngleTrim + GA_IMPULSE_ANGLE_DEG;
-            } else if (elapsed < GA_TOTAL_TEST_DURATION_MS) {
-                refPitch = baseTargetAngleTrim; float pitch_error = pitch - angleOffset - refPitch;
-                gaAccumulatedPitchError += pitch_error * pitch_error * dt;
-                gaAccumulatedControlEffort += lqrController.last_output * lqrController.last_output * dt;
-            } else { finishGATest(false); }
+
+        checkLiftDetection(accel.x, accel.y, accel.z);
+        checkSafetySystems(mpu.getRotationY() / 131.0);
+        autoRecovery();
+
+        if (currentState == AUTO_TUNING) {
+            handleZieglerNicholsTuning(pitch, dt);
         }
-        break;
+
+        long currentPosL = encoder_L.position.load(std::memory_order_relaxed);
+        long currentPosR = encoder_R.position.load(std::memory_order_relaxed);
+        long currentPosition = (currentPosL + currentPosR) / 2;
+        
+        // Usunieto filtr predkosci - uzywamy surowego pomiaru
+        actualSpeed = (float)(currentPosition - lastPosition) / dt;
+        lastPosition = currentPosition;
+
+        bool isJoystickTimedOut = (millis() - lastJoystickTime > JOYSTICK_TIMEOUT);
+        bool isJoystickMoving = joystickActive && !isJoystickTimedOut;
+
+        float joystickTargetSpeed = 0.0f;
+        float joystickTargetAngle = 0.0f;
+        float joystickTurnComponent = 0.0f;
+
+        if (isJoystickMoving) {
+            float joyY_d = (abs(joystickY) > tuningParams.joystickDeadzone) ? joystickY : 0.0f;
+            float targetJoyY_expo = (1.0f - tuningParams.expoJoystick) * joyY_d + tuningParams.expoJoystick * pow(joyY_d, 3);
+            float finalJoyY = targetJoyY_expo * tuningParams.joystickSensitivity;
+            float joyX_d = (abs(joystickX) > tuningParams.joystickDeadzone) ? joystickX : 0.0f;
+            float targetJoyX_expo = (1.0f - tuningParams.expoJoystick) * joyX_d + tuningParams.expoJoystick * pow(joyX_d, 3);
+            float finalJoyX = targetJoyX_expo * tuningParams.joystickSensitivity;
+
+            if (controlFlags.speedModeEnabled) {
+                joystickTargetSpeed = finalJoyY * tuningParams.maxSpeedJoystick;
+            } else {
+                joystickTargetAngle = finalJoyY * tuningParams.joystickAngleSensitivity;
+            }
+            joystickTurnComponent = finalJoyX * (PWM_MAX_VALUE * tuningParams.turnFactor);
+        }
+
+        float speedSetpoint = 0.0f;
+        float angleContribution = 0.0f;
+        float turnComponent = joystickTurnComponent;
+        telemetry_target_speed = 0.0f;
+
+        // Rozbudowana maszyna stanow zintegrowana z obu wersji
+        if (isJoystickMoving) {
+            currentState = BALANCING;
+            speedSetpoint = joystickTargetSpeed;
+            angleContribution = joystickTargetAngle;
+        } else {
+            switch (currentState) {
+                case IDLE:
+                    if (controlFlags.balancingEnabled) {
+                        currentState = controlFlags.holdPositionEnabled ? HOLDING_POSITION : BALANCING;
+                    }
+                    break;
+                case BALANCING:
+                    if (controlFlags.holdPositionEnabled) {
+                        currentState = HOLDING_POSITION;
+                    } else if (!controlFlags.balancingEnabled) {
+                        currentState = IDLE;
+                    }
+                    break;
+                case HOLDING_POSITION:
+                case AUTO_TUNING:
+                    if (currentState == HOLDING_POSITION && (!controlFlags.holdPositionEnabled || !controlFlags.balancingEnabled)) {
+                        currentState = BALANCING;
+                    } else {
+                        speedSetpoint = positionPID.compute(positionSetpoint, currentPosition, dt);
+                    }
+                    break;
+                case AUTONOMOUS_MOVE:
+                    speedSetpoint = positionPID.compute(targetPosition, currentPosition, dt);
+                    if (abs(targetPosition - currentPosition) < positionPID.deadband && abs(actualSpeed) < speedPID.deadband * 2) {
+                        positionSetpoint = currentPosition;
+                        currentState = HOLDING_POSITION;
+                    }
+                    break;
+                case AUTONOMOUS_ROTATE:
+                    turnComponent = -rotationPID.compute(targetRotationDiff, (currentPosR - currentPosL), dt);
+                    if (abs(targetRotationDiff - (currentPosR - currentPosL)) < 50 && abs(actualSpeed) < speedPID.deadband) {
+                        positionSetpoint = currentPosition;
+                        currentState = HOLDING_POSITION;
+                    }
+                    break;
+                case AUTONOMOUS_SPEED_RUN:
+                    speedSetpoint = targetSpeed;
+                    if (abs(currentPosition - initialTestPosition) >= abs(targetPosition - initialTestPosition)) {
+                        currentState = HOLDING_POSITION;
+                    }
+                    break;
+                case AUTONOMOUS_POSITION_RECOVERY:
+                     speedSetpoint = positionPID.compute(initialTestPosition, currentPosition, dt);
+                     if ((millis() > positionRecoveryTimeout) || (abs(initialTestPosition - currentPosition) < positionPID.deadband && abs(actualSpeed) < speedPID.deadband * 2)) {
+                         currentState = HOLDING_POSITION;
+                     }
+                    break;
+            }
+        }
+
+        telemetry_target_speed = speedSetpoint;
+
+        if(previousState != currentState) {
+            if(currentState == HOLDING_POSITION && previousState != AUTONOMOUS_MOVE && previousState != AUTONOMOUS_ROTATE) {
+                positionSetpoint = currentPosition;
+                positionPID.reset();
+                speedPID.reset();
+            } else if (currentState == AUTONOMOUS_MOVE || currentState == AUTONOMOUS_SPEED_RUN) {
+                positionPID.reset();
+                speedPID.reset();
+            } else if (currentState == AUTONOMOUS_ROTATE) {
+                rotationPID.reset();
+            } else if (currentState == IDLE) {
+                resetAllPids();
+            }
+        }
+        previousState = currentState;
+
+        bool useSpeedPID = (currentState != BALANCING && currentState != IDLE) || (currentState == BALANCING && isJoystickMoving && controlFlags.speedModeEnabled);
+        if (useSpeedPID) {
+            // Poprawna kaskada PID (z v16.5): PID predkosci zwraca bezposrednio kat
+            angleContribution += speedPID.compute(speedSetpoint, actualSpeed, dt);
+        }
+
+        finalTargetAngle = baseTargetAngleTrim + angleContribution;
+        bool shouldBeIdle = (abs(actualSpeed) < speedPID.deadband) && (currentState != AUTONOMOUS_MOVE) && (currentState != AUTONOMOUS_SPEED_RUN);
+        balancePID.setIdle(shouldBeIdle);
+
+        if (controlFlags.balancingEnabled && !controlFlags.emergencyStop) {
+            float balance_output = balancePID.compute(finalTargetAngle, (pitch - angleOffset), dt);
+            telemetry_balance_output = (currentState == AUTO_TUNING) ? zn_test_kp : balance_output;
+
+            // Prosty model skretu (z v8.8) po usunieciu rollPID
+            float powerL = -balance_output + turnComponent;
+            float powerR = -balance_output - turnComponent;
+            setMotorPower(powerL, powerR);
+        } else {
+            stopAllMotors();
+        }
+
+        telemetry_pitch = pitch - angleOffset;
+        telemetry_yaw = normalizeAngle(yaw - yawOffset);
+        telemetry_roll = normalizeAngle(roll - rollOffset);
+        telemetry_actual_speed = actualSpeed;
+        telemetry_encoder_left = currentPosL;
+        telemetry_encoder_right = currentPosR;
+    }
+    vTaskDelayUntil(&xLastWakeTime, LOOP_INTERVAL_TICKS);
+  }
+}
+
+// Reszta kodu jest praktycznie identyczna jak w poprzedniej odpowiedzi, zawiera
+// te same funkcje pomocnicze, setup, komunikacje BLE, obsluge EEPROM, etc.
+// Wklejam je ponizej dla kompletnosci.
+
+void CommunicationManagerTask(void* pvParameters) {
+  printAndLog("info", "Manager Komunikacji uruchomiony.");
+  static String messageBuffer = "";
+  char rxFragment[256];
+
+  for (;;) {
+    if (xQueueReceive(bleRxQueue, &rxFragment, pdMS_TO_TICKS(10))) {
+      messageBuffer += rxFragment;
+      int newlineIndex;
+      while ((newlineIndex = messageBuffer.indexOf('\n')) != -1) {
+        String completeMessage = messageBuffer.substring(0, newlineIndex);
+        messageBuffer.remove(0, newlineIndex + 1);
+        if (completeMessage.length() == 0) continue;
+
+        StaticJsonDocument<MAX_JSON_SIZE> doc;
+        if (deserializeJson(doc, completeMessage) == DeserializationError::Ok) {
+          JsonObject doc_obj = doc.as<JsonObject>();
+          if (!doc_obj.containsKey("type")) continue;
+          const char* type = doc_obj["type"];
+
+          if (strcmp(type, "start_zn_tuning") == 0) {
+            startZnTuning();
+            sendAck("start_zn_tuning", true);
+          } else if (strcmp(type, "cancel_tuning") == 0) {
+            cancelZnTuning();
+            sendAck("cancel_tuning", true);
+          } else if (strcmp(type, "execute_speed_test_run") == 0) {
+              if(controlFlags.balancingEnabled && doc_obj.containsKey("distance_cm") && doc_obj.containsKey("speed_cmps")) {
+                  resetAllPids();
+                  float distance_cm = doc_obj["distance_cm"];
+                  float speed_cmps = doc_obj["speed_cmps"];
+                  initialTestPosition = (encoder_L.position.load() + encoder_R.position.load()) / 2;
+                  targetPosition = initialTestPosition + (long)(distance_cm * internal_impulsesPerCm);
+                  targetSpeed = speed_cmps * internal_impulsesPerCm;
+                  currentState = AUTONOMOUS_SPEED_RUN;
+                  sendAck("execute_speed_test_run", true);
+              } else {
+                  sendAck("execute_speed_test_run", false, "Robot nie balansuje lub brak parametrow");
+              }
+          } else if (strcmp(type, "execute_position_test_impulse") == 0) {
+              if(controlFlags.balancingEnabled && doc_obj.containsKey("impulse_power")) {
+                  resetAllPids();
+                  int impulse_power = doc_obj["impulse_power"];
+                  initialTestPosition = (encoder_L.position.load() + encoder_R.position.load()) / 2;
+                  positionSetpoint = initialTestPosition;
+                  setMotorPowerRaw(0, impulse_power);
+                  setMotorPowerRaw(1, impulse_power);
+                  vTaskDelay(pdMS_TO_TICKS(150));
+                  stopAllMotors();
+                  positionRecoveryTimeout = millis() + 3000;
+                  currentState = AUTONOMOUS_POSITION_RECOVERY;
+                  sendAck("execute_position_test_impulse", true);
+              } else {
+                  sendAck("execute_position_test_impulse", false, "Robot nie balansuje lub brak parametrow");
+              }
+          } else if (strcmp(type, "joystick") == 0) {
+            if(doc_obj.containsKey("x") && doc_obj.containsKey("y")) {
+              joystickX = doc_obj["x"];
+              joystickY = doc_obj["y"];
+              joystickActive = (abs(joystickX) > 0.01 || abs(joystickY) > 0.01);
+              lastJoystickTime = millis();
+            }
+          } else if (strcmp(type, "speed_mode_toggle") == 0 && doc_obj.containsKey("enabled")) {
+            controlFlags.speedModeEnabled = doc_obj["enabled"];
+            sendAck("speed_mode_toggle", true);
+          } else if (strcmp(type, "hold_position_toggle") == 0 && doc_obj.containsKey("enabled")) {
+            controlFlags.holdPositionEnabled = doc_obj["enabled"];
+            sendAck("hold_position_toggle", true);
+          } else if (strcmp(type, "request_full_config") == 0) {
+              sendFullConfiguration();
+          } else if (strcmp(type, "balance_toggle") == 0 && doc_obj.containsKey("enabled")) {
+              controlFlags.balancingEnabled = doc_obj["enabled"];
+              if (controlFlags.balancingEnabled) {
+                  controlFlags.emergencyStop = false;
+                  resetAllPids();
+              } else {
+                  currentState = IDLE;
+                  stopAllMotors();
+              }
+              sendAck("balance_toggle", true);
+          } else if (strcmp(type, "execute_move") == 0 && doc_obj.containsKey("distance_cm")) {
+              if (controlFlags.balancingEnabled) {
+                  resetAllPids();
+                  float distance_cm = doc_obj["distance_cm"];
+                  targetPosition = ((encoder_L.position.load() + encoder_R.position.load()) / 2) + (long)(distance_cm * internal_impulsesPerCm);
+                  currentState = AUTONOMOUS_MOVE;
+                  sendAck("execute_move", true);
+              }
+          } else if (strcmp(type, "execute_rotate") == 0 && doc_obj.containsKey("angle_deg")) {
+              if (controlFlags.balancingEnabled) {
+                  resetAllPids();
+                  float angle_deg = doc_obj["angle_deg"];
+                  targetRotationDiff = (encoder_R.position.load() - encoder_L.position.load()) + (long)(angle_deg * internal_impulsesPerDegree);
+                  currentState = AUTONOMOUS_ROTATE;
+                  sendAck("execute_rotate", true);
+              }
+          } else if (strcmp(type, "command_stop") == 0) {
+              if (currentState == AUTONOMOUS_MOVE || currentState == AUTONOMOUS_ROTATE || currentState == AUTONOMOUS_SPEED_RUN || currentState == AUTONOMOUS_POSITION_RECOVERY) {
+                  positionSetpoint = (encoder_L.position.load() + encoder_R.position.load()) / 2;
+                  currentState = HOLDING_POSITION;
+              }
+              sendAck("command_stop", true);
+          } else if (strcmp(type, "set_param") == 0) {
+              if (doc_obj.containsKey("key") && doc_obj.containsKey("value")) {
+                  const char* key = doc_obj["key"];
+                  float value = doc_obj["value"];
+                  bool config_updated = false;
+
+                  if (strcmp(key, "kp_b") == 0) { tuningParams.Kp_b = value; config_updated = true; }
+                  else if (strcmp(key, "ki_b") == 0) { tuningParams.Ki_b = value; config_updated = true; }
+                  else if (strcmp(key, "kd_b") == 0) { tuningParams.Kd_b = value; config_updated = true; }
+                  else if (strcmp(key, "balance_pid_derivative_filter_alpha") == 0) { tuningParams.balancePidDerivativeFilterAlpha = value; config_updated = true; }
+                  else if (strcmp(key, "joystick_angle_sensitivity") == 0) { tuningParams.joystickAngleSensitivity = value; config_updated = true; }
+                  else if (strcmp(key, "kp_s") == 0) { tuningParams.Kp_s = value; config_updated = true; }
+                  else if (strcmp(key, "ki_s") == 0) { tuningParams.Ki_s = value; config_updated = true; }
+                  else if (strcmp(key, "kd_s") == 0) { tuningParams.Kd_s = value; config_updated = true; }
+                  else if (strcmp(key, "kp_p") == 0) { tuningParams.Kp_p = value; config_updated = true; }
+                  else if (strcmp(key, "ki_p") == 0) { tuningParams.Ki_p = value; config_updated = true; }
+                  else if (strcmp(key, "kd_p") == 0) { tuningParams.Kd_p = value; config_updated = true; }
+                  else if (strcmp(key, "kp_r") == 0) { tuningParams.Kp_r = value; config_updated = true; }
+                  else if (strcmp(key, "kd_r") == 0) { tuningParams.Kd_r = value; config_updated = true; }
+                  else if (strcmp(key, "kp_h") == 0) { tuningParams.Kp_h = value; config_updated = true; }
+                  else if (strcmp(key, "ki_h") == 0) { tuningParams.Ki_h = value; config_updated = true; }
+                  else if (strcmp(key, "kd_h") == 0) { tuningParams.Kd_h = value; config_updated = true; }
+                  else if (strcmp(key, "speed_pid_deadband") == 0) { tuningParams.speedPidDeadband = value; config_updated = true; }
+                  else if (strcmp(key, "position_pid_deadband") == 0) { tuningParams.positionPidDeadband = value; config_updated = true; }
+                  else if (strcmp(key, "expo_joystick") == 0) { tuningParams.expoJoystick = value; config_updated = true; }
+                  else if (strcmp(key, "max_speed_joystick") == 0) { tuningParams.maxSpeedJoystick = value; config_updated = true; }
+                  else if (strcmp(key, "turn_factor") == 0) { tuningParams.turnFactor = value; config_updated = true; }
+                  else if (strcmp(key, "joystick_deadzone") == 0) { tuningParams.joystickDeadzone = value; config_updated = true; }
+                  else if (strcmp(key, "joystick_sensitivity") == 0) { tuningParams.joystickSensitivity = value; config_updated = true; }
+                  else if (strcmp(key, "wheel_diameter_cm") == 0) { tuningParams.wheelDiameterCm = value; config_updated = true; }
+                  else if (strcmp(key, "track_width_cm") == 0) { tuningParams.trackWidthCm = value; config_updated = true; }
+                  else if (strcmp(key, "encoder_ppr") == 0) { tuningParams.encoderPPR = value; config_updated = true; }
+                  else if (strcmp(key, "max_target_angle_from_speed_pid") == 0) { tuningParams.maxTargetAngleFromSpeedPID = value; config_updated = true; }
+                  else if (strcmp(key, "max_target_speed_from_pos_pid") == 0) { tuningParams.maxTargetSpeedFromPosPID = value; config_updated = true; }
+                  else if (strcmp(key, "min_pwm_left_fwd") == 0) { tuningParams.minPwmLeftFwd = (int)value; config_updated = true; }
+                  else if (strcmp(key, "min_pwm_left_bwd") == 0) { tuningParams.minPwmLeftBwd = (int)value; config_updated = true; }
+                  else if (strcmp(key, "min_pwm_right_fwd") == 0) { tuningParams.minPwmRightFwd = (int)value; config_updated = true; }
+                  else if (strcmp(key, "min_pwm_right_bwd") == 0) { tuningParams.minPwmRightBwd = (int)value; config_updated = true; }
+                  else if (strcmp(key, "speed_filter_alpha") == 0) { tuningParams.speedFilterAlpha = value; config_updated = true; }
+                  else if (strcmp(key, "pitch_filter_alpha") == 0) { tuningParams.pitchFilterAlpha = value; config_updated = true; }
+
+                  if (config_updated) {
+                      updateSystemConfiguration();
+                      sendAck("set_param", true, key);
+                  }
+              }
+          } else if (strcmp(type, "emergency_stop") == 0) {
+              emergencyShutdown("Przycisk E-STOP z UI");
+              sendAck("emergency_stop", true);
+          } else if (strcmp(type, "save_tunings") == 0) {
+              saveTuningsToEEPROM();
+          } else if (strcmp(type, "calibrate_mpu") == 0) {
+              calibrateMPU();
+          } else if (strcmp(type, "reset_zero") == 0) {
+              angleOffset = pitch;
+              yawOffset = yaw;
+              rollOffset = roll;
+              baseTargetAngleTrim = 0.0;
+              sendAck("reset_zero", true);
+          } else if (strcmp(type, "adjust_zero") == 0) {
+              baseTargetAngleTrim += doc_obj["value"].as<int>() * ZERO_ADJUST_STEP;
+              sendAck("adjust_zero", true);
+          } else if (strcmp(type, "reset_encoders") == 0) {
+              encoder_L.position.store(0); encoder_R.position.store(0);
+              sendAck("reset_encoders", true);
+          } else if (strcmp(type, "manual_tune_motor") == 0) {
+              controlFlags.directMotorControlActive = true;
+              lastDirectControlTime = millis();
+              uint8_t motorIdx = (strcmp(doc_obj["motor"], "left") == 0) ? 0 : 1;
+              int direction = (strcmp(doc_obj["direction"], "fwd") == 0) ? 1 : -1;
+              setMotorPowerRaw(motorIdx, doc_obj["pwm"].as<int>() * direction);
+          } else if (strcmp(type, "manual_tune_stop_all") == 0) {
+              stopAllMotors();
+              controlFlags.directMotorControlActive = false;
+          } else if (strcmp(type, "autotune_single_pwm") == 0) {
+              controlFlags.directMotorControlActive = true;
+              stopAllMotors();
+              vTaskDelay(pdMS_TO_TICKS(100));
+              const char* motor_str = doc_obj["motor"];
+              const char* direction_str = doc_obj["direction"];
+              int start_pwm = doc_obj["start_pwm"];
+              uint8_t motorIdx = (strcmp(motor_str, "left") == 0) ? 0 : 1;
+              int direction = (strcmp(direction_str, "fwd") == 0) ? 1 : -1;
+              int found_pwm = tuneSingleMotor(motorIdx, direction, start_pwm);
+              StaticJsonDocument<SMALL_JSON_SIZE> resultDoc;
+              resultDoc["type"] = "single_pwm_result";
+              JsonObject params = resultDoc.createNestedObject("params");
+              params["motor"] = motor_str;
+              params["direction"] = direction_str;
+              params["value"] = found_pwm;
+              String jsonBuffer;
+              serializeJson(resultDoc, jsonBuffer);
+              sendBleNotificationSafe(jsonBuffer);
+              controlFlags.directMotorControlActive = false;
+          }
+        } else {
+            printAndLog("error", "Blad deserializacji JSON w Managerze: %s", completeMessage.c_str());
+        }
       }
     }
 
-    bool isPositionOrSpeedMode = (currentState == HOLDING_POSITION || currentState == EXECUTING_MOVE || (currentState == IDLE && controlFlags.speedModeEnabled) || currentState == GA_WAITING_FOR_IMPULSE || currentState == GA_TEST_IN_PROGRESS);
-    if (isPositionOrSpeedMode) {
-      if (currentState != IDLE || (currentState == IDLE && controlFlags.speedModeEnabled)) {
-          long posError = refPosition - currentPosition;
-          if(currentState != EXECUTING_MOVE && currentState != GA_TEST_IN_PROGRESS) { if (abs(posError) < tuningParams.holdPositionMarginPulses) {posError = 0;} }
-          float p_corr = posError * tuningParams.positionErrorGain;
-          float d_corr = actualSpeed * tuningParams.positionDampingGain;
-          speedSetpoint = constrain(p_corr - d_corr, -tuningParams.maxSpeedFromPosition,tuningParams.maxSpeedFromPosition);
-      }
-      float speedError = speedSetpoint - actualSpeed; float angleCorr = speedError * tuningParams.speedPGain;
-      if (currentState != GA_TEST_IN_PROGRESS) { refPitch = baseTargetAngleTrim + angleCorr; }
+    if (controlFlags.directMotorControlActive && (millis() - lastDirectControlTime > 2000)) {
+        stopAllMotors();
+        controlFlags.directMotorControlActive = false;
+        printAndLog("warn", "Timeout strojenia recznego. Silniki wylaczone.");
     }
-    
-    lqrController.updateState(pitch-angleOffset, pitchRate, currentPosition, actualSpeed);
-    lqrController.setReference(refPitch, refPosition);
-    finalTargetAngle = refPitch;
+  }
+}
 
-    if (controlFlags.balancingEnabled && !controlFlags.emergencyStop && controlFlags.lqrEnabled) {
-      int32_t lqr_output_fx = lqrController.compute_fx();
-      float scalar = (currentState == GA_TEST_IN_PROGRESS || currentState == GA_WAITING_FOR_IMPULSE) ? gaTestParams.lqr_output_scalar : tuningParams.lqrOutputScalar;
-      float base_power = lqrController.last_output * scalar;
-      if (currentState == HOLDING_POSITION && !isJoystickMoving) {long headingError=anchoredHeading-currentHeading;turnComponent=constrain(headingError*tuningParams.headingCorrectionFactor,-250.0f,250.0f);}
-      float powerL=constrain(base_power+turnComponent,-tuningParams.globalPowerLimit,tuningParams.globalPowerLimit);float powerR=constrain(base_power-turnComponent,-tuningParams.globalPowerLimit,tuningParams.globalPowerLimit);
-      setMotorPower(powerL,powerR);
-    } else { stopAllMotors(); }
-    esp_task_wdt_reset(); vTaskDelayUntil(&xLastWakeTime,LOOP_INTERVAL_TICKS);
+void TelemetryTask(void* pvParameters) {
+  printAndLog("info", "Zadanie Telemetrii uruchomione.");
+  unsigned long lastTelemetrySendTime = 0;
+  for (;;) {
+    if (millis() - lastTelemetrySendTime >= TELEMETRY_INTERVAL_MS) {
+        lastTelemetrySendTime = millis();
+        if (bleDeviceConnected) {
+            StaticJsonDocument<SMALL_JSON_SIZE> doc;
+            doc["type"] = "telemetry";
+            doc["pitch"] = telemetry_pitch;
+            doc["yaw"] = telemetry_yaw;
+            doc["roll"] = telemetry_roll;
+            doc["bo"] = telemetry_balance_output;
+            doc["speed"] = telemetry_actual_speed;
+            doc["target_speed"] = telemetry_target_speed;
+            doc["robot_state"] = robotStateNames[currentState];
+            doc["encoder_left"] = telemetry_encoder_left;
+            doc["encoder_right"] = telemetry_encoder_right;
+            doc["output"] = telemetry_balance_output;
+            doc["emergency_stop"] = controlFlags.emergencyStop;
+            String jsonBuffer;
+            serializeJson(doc, jsonBuffer);
+            sendBleNotificationSafe(jsonBuffer);
+        }
+    }
+    vTaskDelay(pdMS_TO_TICKS(20));
+  }
+}
+
+void BLETransmitTask(void* pvParameters) {
+  printAndLog("info", "Zadanie transmisji BLE uruchomione.");
+  BLEMessage msg;
+  for (;;) {
+    if (xQueueReceive(bleTxQueue, &msg, portMAX_DELAY)) {
+      if (bleDeviceConnected && pTxCharacteristic) {
+        pTxCharacteristic->setValue((uint8_t*)msg.data, msg.length);
+        pTxCharacteristic->notify();
+        vTaskDelay(pdMS_TO_TICKS(BLE_TX_DELAY_MS));
+      }
+    }
+  }
+}
+
+class MyRxCallbacks : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* pCharacteristic) {
+    std::string rxValue = pCharacteristic->getValue();
+    size_t len = rxValue.length();
+    if (len > 0 && len < 256) {
+      char buffer[256];
+      strncpy(buffer, rxValue.c_str(), sizeof(buffer) - 1);
+      buffer[sizeof(buffer) - 1] = '\0';
+      xQueueSend(bleRxQueue, &buffer, 0);
+    }
+  }
+};
+
+class MyServerCallbacks : public BLEServerCallbacks {
+  void onConnect(BLEServer* pServer) {
+    bleDeviceConnected = true;
+    printAndLog("info", "Klient BLE polaczony.");
+  }
+  void onDisconnect(BLEServer* pServer) {
+    bleDeviceConnected = false;
+    vTaskDelay(pdMS_TO_TICKS(100));
+    pServer->getAdvertising()->start();
+    printAndLog("warn", "Klient BLE rozlaczony.");
+  }
+};
+
+void setupBLE() {
+  BLEDevice::init(ROBOT_BLE_NAME);
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());
+  BLEService* pService = pServer->createService(SERVICE_UUID);
+  pTxCharacteristic = pService->createCharacteristic(CHARACTERISTIC_UUID_TX, BLECharacteristic::PROPERTY_NOTIFY);
+  pTxCharacteristic->addDescriptor(new BLE2902());
+  BLECharacteristic* pRxCharacteristic = pService->createCharacteristic(CHARACTERISTIC_UUID_RX, BLECharacteristic::PROPERTY_WRITE_NR);
+  pRxCharacteristic->setCallbacks(new MyRxCallbacks());
+  pService->start();
+  BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
+  pAdvertising->addServiceUUID(SERVICE_UUID);
+  pServer->getAdvertising()->start();
+  printAndLog("info", "Serwer BLE uruchomiony, robot widoczny jako '%s'", ROBOT_BLE_NAME);
+}
+
+void printAndLog(const char* level, const char* format, ...) {
+  char buffer[256];
+  va_list args;
+  va_start(args, format);
+  vsnprintf(buffer, sizeof(buffer), format, args);
+  va_end(args);
+  Serial.printf("[%s] %s\n", level, buffer);
+
+  if (!bleDeviceConnected) return;
+  StaticJsonDocument<SMALL_JSON_SIZE> logDoc;
+  logDoc["type"] = "log";
+  logDoc["level"] = level;
+  logDoc["message"] = buffer;
+  String out;
+  serializeJson(logDoc, out);
+  sendBleNotificationSafe(out);
+}
+
+bool sendBleNotificationSafe(const String& value) {
+  if (!bleDeviceConnected) return false;
+  String valueWithNewline = value + "\n";
+  if (valueWithNewline.length() > BLE_PACKET_MAX_SIZE) {
+    return sendLargeBleNotificationFragmented(value);
+  }
+  BLEMessage msg;
+  msg.length = valueWithNewline.length();
+  strncpy(msg.data, valueWithNewline.c_str(), sizeof(msg.data) - 1);
+  msg.data[sizeof(msg.data) - 1] = '\0';
+  return xQueueSend(bleTxQueue, &msg, 0) == pdTRUE;
+}
+
+bool sendLargeBleNotificationFragmented(const String& value) {
+  if (!bleDeviceConnected) return false;
+  const size_t CHUNK_PAYLOAD_SIZE = 180;
+  unsigned long msgId = millis();
+  int totalChunks = ceil((float)value.length() / CHUNK_PAYLOAD_SIZE);
+  for (int i = 0; i < totalChunks; ++i) {
+    int offset = i * CHUNK_PAYLOAD_SIZE;
+    String chunkData = value.substring(offset, offset + CHUNK_PAYLOAD_SIZE);
+    StaticJsonDocument<300> chunkDoc;
+    chunkDoc["type"] = "chunk";
+    chunkDoc["id"] = msgId;
+    chunkDoc["i"] = i;
+    chunkDoc["total"] = totalChunks;
+    chunkDoc["data"] = chunkData;
+    String chunkBuffer;
+    serializeJson(chunkDoc, chunkBuffer);
+    String chunkWithNewline = chunkBuffer + "\n";
+    BLEMessage msg;
+    msg.length = chunkWithNewline.length();
+    strncpy(msg.data, chunkWithNewline.c_str(), sizeof(msg.data) - 1);
+    msg.data[sizeof(msg.data) - 1] = '\0';
+    if (xQueueSend(bleTxQueue, &msg, pdMS_TO_TICKS(10)) != pdTRUE) {
+        printAndLog("error", "Nie udalo sie zakolejkowac fragmentu %d/%d", i, totalChunks);
+        return false;
+    }
+  }
+  return true;
+}
+
+void sendFullConfiguration() {
+    if (!bleDeviceConnected) return;
+    StaticJsonDocument<MAX_JSON_SIZE> doc;
+    doc["type"] = "full_config";
+    JsonObject params = doc.createNestedObject("params");
+    params["wheel_diameter_cm"] = tuningParams.wheelDiameterCm;
+    params["track_width_cm"] = tuningParams.trackWidthCm;
+    params["encoder_ppr"] = tuningParams.encoderPPR;
+    params["joystick_deadzone"] = tuningParams.joystickDeadzone;
+    params["turn_factor"] = tuningParams.turnFactor;
+    params["expo_joystick"] = tuningParams.expoJoystick;
+    params["max_speed_joystick"] = tuningParams.maxSpeedJoystick;
+    params["joystick_sensitivity"] = tuningParams.joystickSensitivity;
+    params["joystick_angle_sensitivity"] = tuningParams.joystickAngleSensitivity;
+    params["min_pwm_left_fwd"] = tuningParams.minPwmLeftFwd;
+    params["min_pwm_left_bwd"] = tuningParams.minPwmLeftBwd;
+    params["min_pwm_right_fwd"] = tuningParams.minPwmRightFwd;
+    params["min_pwm_right_bwd"] = tuningParams.minPwmRightBwd;
+    params["kp_b"] = tuningParams.Kp_b;
+    params["ki_b"] = tuningParams.Ki_b;
+    params["kd_b"] = tuningParams.Kd_b;
+    params["balance_pid_derivative_filter_alpha"] = tuningParams.balancePidDerivativeFilterAlpha;
+    params["kp_s"] = tuningParams.Kp_s;
+    params["ki_s"] = tuningParams.Ki_s;
+    params["kd_s"] = tuningParams.Kd_s;
+    params["max_target_angle_from_speed_pid"] = tuningParams.maxTargetAngleFromSpeedPID;
+    params["speed_pid_deadband"] = tuningParams.speedPidDeadband;
+    params["kp_p"] = tuningParams.Kp_p;
+    params["ki_p"] = tuningParams.Ki_p;
+    params["kd_p"] = tuningParams.Kd_p;
+    params["max_target_speed_from_pos_pid"] = tuningParams.maxTargetSpeedFromPosPID;
+    params["position_pid_deadband"] = tuningParams.positionPidDeadband;
+    params["kp_r"] = tuningParams.Kp_r;
+    params["kd_r"] = tuningParams.Kd_r;
+    params["kp_h"] = tuningParams.Kp_h;
+    params["ki_h"] = tuningParams.Ki_h;
+    params["kd_h"] = tuningParams.Kd_h;
+    params["speed_filter_alpha"] = tuningParams.speedFilterAlpha;
+    params["pitch_filter_alpha"] = tuningParams.pitchFilterAlpha;
+    String buffer;
+    serializeJson(doc, buffer);
+    sendLargeBleNotificationFragmented(buffer);
+}
+
+void loadDefaultSettings() {
+  printAndLog("warn", "Ladowanie domyslnych ustawien (hybryda v17.0).");
+  tuningParams = TuningParams();
+  tuningParams.Kp_b = 97.1850f;
+  tuningParams.Ki_b = 0.0f;
+  tuningParams.Kd_b = 3.0039f;
+  tuningParams.balancePidDerivativeFilterAlpha = 0.4f;
+  tuningParams.Kp_s = 0.0f; tuningParams.Ki_s = 0.0f; tuningParams.Kd_s = 0.0f;
+  tuningParams.Kp_p = 0.0f; tuningParams.Ki_p = 0.0f; tuningParams.Kd_p = 0.0f;
+  tuningParams.Kp_r = 0.0f; tuningParams.Kd_r = 0.0f;
+  tuningParams.Kp_h = 0.0f; tuningParams.Ki_h = 0.0f; tuningParams.Kd_h = 0.0f;
+  tuningParams.maxTargetAngleFromSpeedPID = 5.0f;
+  tuningParams.speedPidDeadband = 5.0f;
+  tuningParams.maxTargetSpeedFromPosPID = 500.0f;
+  tuningParams.positionPidDeadband = 5.0f;
+  tuningParams.encoderPPR = 820.0f;
+  tuningParams.wheelDiameterCm = 8.2f;
+  tuningParams.trackWidthCm = 12.5f;
+  tuningParams.minPwmLeftFwd = 640; tuningParams.minPwmLeftBwd = 640;
+  tuningParams.minPwmRightFwd = 640; tuningParams.minPwmRightBwd = 640;
+  tuningParams.joystickAngleSensitivity = 10.0f;
+  tuningParams.joystickDeadzone = 0.0f;
+  tuningParams.turnFactor = 0.25f;
+  tuningParams.expoJoystick = 0.0f;
+  tuningParams.maxSpeedJoystick = 800.0f;
+  tuningParams.joystickSensitivity = 1.0f;
+  tuningParams.speedFilterAlpha = 1.0f; // Filtr predkosci wylaczony domyslnie
+  tuningParams.pitchFilterAlpha = 0.8f;
+}
+
+void saveTuningsToEEPROM() {
+  EEPROMSettings t;
+  t.magic_number = CONFIG_MAGIC_NUMBER;
+  strncpy(t.version, CONFIG_VERSION, sizeof(t.version) - 1);
+  t.version[sizeof(t.version) - 1] = '\0';
+  t.params = tuningParams;
+  t.crc = crc32_le(0, (const uint8_t*)&t, sizeof(EEPROMSettings) - sizeof(uint32_t));
+  EEPROM.put(0, t);
+  bool success = EEPROM.commit();
+  if (success) {
+      printAndLog("info", "Zapisano pomyslnie ustawienia w EEPROM.");
+  } else {
+      printAndLog("error", "KRYTYCZNY BLAD zapisu do EEPROM!");
+  }
+  sendAck("save_tunings", success);
+}
+
+bool loadTuningsFromEEPROM() {
+  EEPROMSettings t;
+  EEPROM.get(0, t);
+  uint32_t calculated_crc = crc32_le(0, (const uint8_t*)&t, sizeof(EEPROMSettings) - sizeof(uint32_t));
+  if (t.magic_number == CONFIG_MAGIC_NUMBER && strcmp(t.version, CONFIG_VERSION) == 0 && t.crc == calculated_crc) {
+    tuningParams = t.params;
+    printAndLog("info", "Poprawnie wczytano ustawienia z EEPROM (v%s).", t.version);
+    return true;
+  } else {
+    printAndLog("error", "BLAD ODCZYTU EEPROM lub niezgodna wersja. Ladowanie domyslnych.");
+    loadDefaultSettings();
+    return false;
+  }
+}
+
+void updateSystemConfiguration() {
+  balancePID.configure(tuningParams.Kp_b, tuningParams.Ki_b, tuningParams.Kd_b, -PWM_MAX_VALUE, PWM_MAX_VALUE, 500.0f, tuningParams.balancePidDerivativeFilterAlpha);
+  speedPID.configure(tuningParams.Kp_s, tuningParams.Ki_s, tuningParams.Kd_s, -tuningParams.maxTargetAngleFromSpeedPID, tuningParams.maxTargetAngleFromSpeedPID, 10.0f);
+  speedPID.deadband = tuningParams.speedPidDeadband;
+  positionPID.configure(tuningParams.Kp_p, tuningParams.Ki_p, tuningParams.Kd_p, -tuningParams.maxTargetSpeedFromPosPID, tuningParams.maxTargetSpeedFromPosPID, 500.0f);
+  positionPID.deadband = tuningParams.positionPidDeadband;
+  rotationPID.configure(tuningParams.Kp_r, 0.0f, tuningParams.Kd_r, -800.0f, 800.0f, 0);
+  headingPID.configure(tuningParams.Kp_h, tuningParams.Ki_h, tuningParams.Kd_h, -800.0f, 800.0f, 500.0f);
+  recalculateMotionParameters();
+}
+
+void recalculateMotionParameters() {
+  if (tuningParams.wheelDiameterCm > 0.0f && tuningParams.encoderPPR > 0.0f) {
+    internal_impulsesPerCm = tuningParams.encoderPPR / (PI * tuningParams.wheelDiameterCm);
+  } else { internal_impulsesPerCm = 0.0f; }
+
+  if (tuningParams.trackWidthCm > 0.0f && internal_impulsesPerCm > 0.0f) {
+    internal_impulsesPerDegree = (PI * tuningParams.trackWidthCm * internal_impulsesPerCm) / 360.0f;
+  } else { internal_impulsesPerDegree = 0.0f; }
+}
+
+void emergencyShutdown(const char* reason) {
+  if (controlFlags.emergencyStop) return;
+  controlFlags.emergencyStop = true;
+  controlFlags.balancingEnabled = false;
+  controlFlags.holdPositionEnabled = false;
+  currentState = IDLE;
+  stopAllMotors();
+  resetAllPids();
+  timeOfFall = millis();
+  printAndLog("error", "E-STOP: %s", reason);
+}
+
+void checkLiftDetection(const int16_t& ax, const int16_t& ay, const int16_t& az) {
+  if (controlFlags.emergencyStop || !controlFlags.balancingEnabled) {
+    liftDetectStartTime = 0;
+    return;
+  }
+  float ax_g = (float)ax / 16384.0f;
+  float ay_g = (float)ay / 16384.0f;
+  float az_g = (float)az / 16384.0f;
+  float magnitude = sqrt(ax_g * ax_g + ay_g * ay_g + az_g * az_g);
+
+  if (magnitude < LIFT_DETECTION_THRESHOLD_G) {
+    if (liftDetectStartTime == 0) {
+      liftDetectStartTime = millis();
+    } else if (millis() - liftDetectStartTime > LIFT_DETECTION_DURATION_MS) {
+      emergencyShutdown("Wykryto podniesienie");
+      liftDetectStartTime = 0;
+    }
+  } else {
+    liftDetectStartTime = 0;
+  }
+}
+
+void checkSafetySystems(float gyroRate) {
+  if (!controlFlags.emergencyStop) {
+    char reasonBuffer[64];
+    if (abs(pitch - angleOffset) > CRITICAL_ANGLE_LIMIT) {
+      snprintf(reasonBuffer, sizeof(reasonBuffer), "KRYTYCZNY przechyl: %.1f deg", pitch - angleOffset);
+      emergencyShutdown(reasonBuffer);
+      return;
+    }
+    if (abs(gyroRate) > CRITICAL_GYRO_LIMIT) {
+      snprintf(reasonBuffer, sizeof(reasonBuffer), "KRYTYCZNA pred. katowa: %.1f deg/s", gyroRate);
+      emergencyShutdown(reasonBuffer);
+    }
+  }
+}
+
+void autoRecovery() {
+  if (!controlFlags.emergencyStop) return;
+  if (abs(pitch - angleOffset) < 5.0 && millis() - timeOfFall > 3000) {
+    printAndLog("info", "Proba odzyskania...");
+    controlFlags.emergencyStop = false;
+  } else if (abs(pitch - angleOffset) >= 5.0) {
+    timeOfFall = millis();
+  }
+}
+
+void _setSingleMotorPower(uint8_t motor_idx, int power) {
+    power = constrain(power, -PWM_MAX_VALUE, PWM_MAX_VALUE);
+    bool is_forward = power > 0;
+    int abs_power = abs(power);
+    uint8_t ch_fwd, ch_bwd;
+    if (motor_idx == 0) { ch_fwd = LEDC_CHANNEL_L_IN2; ch_bwd = LEDC_CHANNEL_L_IN1; }
+    else {
+        if (MOTOR_R_INVERT_LOGIC) { ch_fwd = LEDC_CHANNEL_R_IN1; ch_bwd = LEDC_CHANNEL_R_IN2; }
+        else { ch_fwd = LEDC_CHANNEL_R_IN2; ch_bwd = LEDC_CHANNEL_R_IN1; }
+    }
+    if (is_forward) { ledcWrite(ch_fwd, abs_power); ledcWrite(ch_bwd, 0); }
+    else { ledcWrite(ch_bwd, abs_power); ledcWrite(ch_fwd, 0); }
+}
+
+float fmap(float x, float in_min, float in_max, float out_min, float out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+float mapMotorOutput(float power, int minPwmFwd, int minPwmBwd) {
+  if (abs(power) < 1.0f) { return 0.0f; }
+  float absPower = abs(power);
+  float sign = (power > 0) ? 1.0f : -1.0f;
+  float minPwm = (power > 0) ? (float)minPwmFwd : (float)minPwmBwd;
+  return sign * fmap(absPower, 1.0f, PWM_MAX_VALUE, minPwm, (float)PWM_MAX_VALUE);
+}
+
+void stopAllMotors() {
+  _setSingleMotorPower(0, 0);
+  _setSingleMotorPower(1, 0);
+}
+
+void setMotorPower(float pwm_l, float pwm_r) {
+  _setSingleMotorPower(0, (int)round(mapMotorOutput(pwm_l, tuningParams.minPwmLeftFwd, tuningParams.minPwmLeftBwd)));
+  _setSingleMotorPower(1, (int)round(mapMotorOutput(pwm_r, tuningParams.minPwmRightFwd, tuningParams.minPwmRightBwd)));
+}
+
+void setMotorPowerRaw(uint8_t motor_idx, int power) {
+  _setSingleMotorPower(motor_idx, power);
+}
+
+int tuneSingleMotor(uint8_t motor_idx, int direction, int start_pwm) {
+    long start_pos = (motor_idx == 0) ? encoder_L.position.load(std::memory_order_relaxed) : encoder_R.position.load(std::memory_order_relaxed);
+    const int MAX_TEST_PWM = 800;
+    const int PWM_TUNE_MOVEMENT_THRESHOLD = 30;
+    for (int test_pwm = start_pwm; test_pwm < MAX_TEST_PWM; test_pwm += 1) {
+        setMotorPowerRaw(motor_idx, test_pwm * direction);
+        vTaskDelay(pdMS_TO_TICKS(250));
+        long current_pos = (motor_idx == 0) ? encoder_L.position.load(std::memory_order_relaxed) : encoder_R.position.load(std::memory_order_relaxed);
+        if (abs(current_pos - start_pos) > PWM_TUNE_MOVEMENT_THRESHOLD) {
+            setMotorPowerRaw(motor_idx, 0);
+            vTaskDelay(pdMS_TO_TICKS(100));
+            stopAllMotors();
+            return test_pwm;
+        }
+    }
+    stopAllMotors();
+    return MAX_TEST_PWM;
+}
+
+static void IRAM_ATTR encoder_isr_handler(void* arg) {
+    EncoderState* encoder = (EncoderState*)arg;
+    unsigned long now = micros();
+    if (now - encoder->last_micros < ENCODER_DEBOUNCE_MICROS) { return; }
+    encoder->last_micros = now;
+
+    uint8_t stateA = digitalRead(encoder->pin_a);
+    uint8_t stateB = digitalRead(encoder->pin_b);
+    uint8_t currentState = (stateA << 1) | stateB;
+    uint8_t lastState = encoder->prev_state;
+
+    if (currentState != lastState) {
+        if ((lastState == 0b00 && currentState == 0b01) || (lastState == 0b01 && currentState == 0b11) || (lastState == 0b11 && currentState == 0b10) || (lastState == 0b10 && currentState == 0b00)) {
+            if (encoder->inverted) { encoder->position.fetch_sub(1, std::memory_order_relaxed); } 
+            else { encoder->position.fetch_add(1, std::memory_order_relaxed); }
+        } else if ((lastState == 0b00 && currentState == 0b10) || (lastState == 0b10 && currentState == 0b11) || (lastState == 0b11 && currentState == 0b01) || (lastState == 0b01 && currentState == 0b00)) {
+            if (encoder->inverted) { encoder->position.fetch_add(1, std::memory_order_relaxed); } 
+            else { encoder->position.fetch_sub(1, std::memory_order_relaxed); }
+        }
+        encoder->prev_state = currentState;
+    }
+}
+
+void setupEncoders() {
+    gpio_config_t io_conf;
+    io_conf.intr_type = GPIO_INTR_ANYEDGE;
+    io_conf.pin_bit_mask = (1ULL << ENCODER_L_A) | (1ULL << ENCODER_L_B) | (1ULL << ENCODER_R_A) | (1ULL << ENCODER_R_B);
+    io_conf.mode = GPIO_MODE_INPUT; io_conf.pull_up_en = GPIO_PULLUP_ENABLE; io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    gpio_config(&io_conf);
+    gpio_install_isr_service(0);
+    gpio_isr_handler_add((gpio_num_t)ENCODER_L_A, encoder_isr_handler, (void*)&encoder_L);
+    gpio_isr_handler_add((gpio_num_t)ENCODER_L_B, encoder_isr_handler, (void*)&encoder_L);
+    gpio_isr_handler_add((gpio_num_t)ENCODER_R_A, encoder_isr_handler, (void*)&encoder_R);
+    gpio_isr_handler_add((gpio_num_t)ENCODER_R_B, encoder_isr_handler, (void*)&encoder_R);
+    encoder_L.prev_state = (digitalRead(ENCODER_L_A) << 1) | digitalRead(ENCODER_L_B);
+    encoder_R.prev_state = (digitalRead(ENCODER_R_A) << 1) | digitalRead(ENCODER_R_B);
+}
+
+void calibrateMPU() {
+  controlFlags.balancingEnabled = false;
+  stopAllMotors();
+  vTaskDelay(pdMS_TO_TICKS(100));
+  printAndLog("warn", "ROZPOCZETO KALIBRACJE MPU - TRZYMAJ ROBOTA NIERUCHOMO!");
+  detachInterrupt(digitalPinToInterrupt(MPU_INT_PIN));
+  mpu.setDMPEnabled(false);
+  vTaskDelay(pdMS_TO_TICKS(50));
+  mpu.reset();
+  vTaskDelay(pdMS_TO_TICKS(100));
+  mpu.initialize();
+  if (!mpu.testConnection()) {
+    printAndLog("error", "KRYTYCZNY BLAD: Utracono polaczenie z MPU po resecie!");
+    dmpReady = false;
+    sendAck("calibrate_mpu", false, "Utracono polaczenie");
+    return;
+  }
+  printAndLog("info", "Kalibracja Accel & Gyro...");
+  mpu.CalibrateAccel(10);
+  mpu.CalibrateGyro(10);
+  vTaskDelay(pdMS_TO_TICKS(100));
+  printAndLog("info", "Restart i ponowna inicjalizacja DMP...");
+  if (mpu.dmpInitialize() == 0) {
+    mpu.setDMPEnabled(true);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    mpu.resetFIFO();
+    mpuInterrupt = false;
+    attachInterrupt(digitalPinToInterrupt(MPU_INT_PIN), dmpDataReady, RISING);
+    dmpReady = true;
+    angleOffset = 0; baseTargetAngleTrim = 0.0;
+    yawOffset = 0; rollOffset = 0;
+    resetAllPids();
+    printAndLog("info", "KALIBRACJA ZAKONCZONA POMYSLNIE. Robot jest gotowy.");
+    sendAck("calibrate_mpu", true);
+  } else {
+    printAndLog("error", "KRYTYCZNY BLAD podczas ponownej inicjalizacji DMP.");
+    dmpReady = false;
+    sendAck("calibrate_mpu", false, "Inicjalizacja DMP nie powiodla sie");
+  }
+}
+
+void setupSensors() {
+  Wire.begin(MPU_SDA, MPU_SCL);
+  Wire.setClock(400000);
+  Wire.setTimeOut(100);
+
+  mpu.initialize();
+  if (!mpu.testConnection()) {
+    printAndLog("error", "BLAD KRYTYCZNY: Nie znaleziono MPU6050! Sprawdz polaczenia.");
+    delay(5000);
+    ESP.restart();
+  }
+  printAndLog("info", "Inicjalizacja DMP...");
+  uint8_t devStatus = mpu.dmpInitialize();
+  if (devStatus == 0) {
+    pinMode(MPU_INT_PIN, INPUT);
+    attachInterrupt(digitalPinToInterrupt(MPU_INT_PIN), dmpDataReady, RISING);
+    mpu.setDMPEnabled(true);
+    dmpReady = true;
+    printAndLog("info", "DMP gotowy do pracy.");
+  } else {
+    printAndLog("error", "Blad inicjalizacji DMP (kod: %d). Sprawdz polaczenia.", devStatus);
+    delay(5000);
+    ESP.restart();
   }
 }
 
 void setup() {
   Serial.begin(115200);
-  printAndLog("info", "\n--- ROBOT - RDZEN BALANSUJACY (ESP_A) v34.3 ---");
-  Serial1.begin(460800, SERIAL_8N1, UART_ESP_B_RX, UART_ESP_B_TX); // ZWIEKSZONO PREDKOSC UART
-  lqrController.configure(tuningParams.Q1_angle,tuningParams.Q2_angular_vel,tuningParams.Q3_position,tuningParams.Q4_velocity,tuningParams.R_control);
-  recalculateMotionParameters();
-  setupSensors(); setupMotors(); setupEncoders();
-  printAndLog("info", "Inicjalizacja sprzetu zakonczona. Tworzenie zadan RTOS...");
-  esp_task_wdt_init(WDT_TIMEOUT_SECONDS, true);
-  xTaskCreate(ControlLoopTask, "ControlTask", 8192, NULL, configMAX_PRIORITIES - 1, &controlTaskHandle);
-  xTaskCreate(UartCommunicationTask, "UartCommTask", 4096, NULL, 4, &uartCommTaskHandle);
-  systemReady = true;
-  printAndLog("info", "=== RDZEN BALANSUJACY GOTOWY ===");
+  Serial.println("\n--- ROBOT PID - WERSJA 17.0-HYBRID ---");
+
+  bleRxQueue = xQueueCreate(10, sizeof(char[256]));
+  bleTxQueue = xQueueCreate(BLE_TX_QUEUE_SIZE, sizeof(BLEMessage));
+  if (bleRxQueue == NULL || bleTxQueue == NULL) {
+    Serial.println("[ERROR] Krytyczny blad: Nie udalo sie utworzyc kolejek BLE!");
+    ESP.restart();
+  }
+
+  EEPROM.begin(sizeof(EEPROMSettings) + 16);
+  loadTuningsFromEEPROM();
+  updateSystemConfiguration();
+
+  setupBLE();
+  setupSensors();
+  ledcSetup(LEDC_CHANNEL_L_IN1, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(LEDC_CHANNEL_L_IN2, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(LEDC_CHANNEL_R_IN1, PWM_FREQ, PWM_RESOLUTION);
+  ledcSetup(LEDC_CHANNEL_R_IN2, PWM_FREQ, PWM_RESOLUTION);
+  ledcAttachPin(MOTOR_L_IN1, LEDC_CHANNEL_L_IN1);
+  ledcAttachPin(MOTOR_L_IN2, LEDC_CHANNEL_L_IN2);
+  ledcAttachPin(MOTOR_R_IN1, LEDC_CHANNEL_R_IN1);
+  ledcAttachPin(MOTOR_R_IN2, LEDC_CHANNEL_R_IN2);
+  setupEncoders();
+
+  printAndLog("info", "Inicjalizacja sprzetu zakonczona. Tworzenie zadan...");
+
+  xTaskCreate(CommunicationManagerTask, "CommManagerTask", 8192, NULL, 4, NULL);
+  xTaskCreate(TelemetryTask, "TelemetryTask", 4096, NULL, 3, NULL);
+  xTaskCreate(ControlLoopTask, "ControlTask", 8192, NULL, configMAX_PRIORITIES - 1, NULL);
+  xTaskCreate(BLETransmitTask, "BLETxTask", 5120, NULL, 5, NULL);
+
+  printAndLog("info", "System gotowy do pracy.");
 }
 
-void loop() { vTaskDelay(portMAX_DELAY); }
+void loop() {
+  vTaskDelay(portMAX_DELAY);
+}
