@@ -1339,6 +1339,7 @@
     // =======================================================================================
     let scene3D, camera3D, renderer3D, controls3D;
     let robotPivot, leftWheel, rightWheel;
+    let groundMesh, groundTexture;
     let currentPitch3D = 0, currentYaw3D = 0, currentEncoderLeft = 0, currentEncoderRight = 0;
     let isAnimation3DEnabled = true, isMovement3DEnabled = false;
     let lastEncoderAvg = 0;
@@ -1413,6 +1414,22 @@
         return pivot;
     }
 
+    function createCheckerTexture(squareSizeCm = 20, colorA = '#2e3140', colorB = '#3b3f4e') {
+        const size = 256; const squares = 2; // 2x2 checker; one repeat == jeden kwadrat 20cm
+        const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size; const ctx = canvas.getContext('2d');
+        const s = size / squares;
+        for (let y = 0; y < squares; y++) {
+            for (let x = 0; x < squares; x++) {
+                ctx.fillStyle = ((x + y) % 2 === 0) ? colorA : colorB;
+                ctx.fillRect(x * s, y * s, s, s);
+            }
+        }
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+        tex.anisotropy = 8; tex.encoding = THREE.sRGBEncoding;
+        return tex;
+    }
+
     function init3DVisualization() {
         const container = document.getElementById('robot3d-container');
         scene3D = new THREE.Scene();
@@ -1430,7 +1447,17 @@
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
         directionalLight.position.set(10, 20, 15);
         scene3D.add(directionalLight);
-        scene3D.add(new THREE.GridHelper(100, 100));
+        // Ground plane with repeating checker texture (20x20 cm squares), infinite scroll via UV offset
+        const PLANE_SIZE_CM = 2000; // 20 m square
+        groundTexture = createCheckerTexture(20);
+        const repeats = PLANE_SIZE_CM / 20;
+        groundTexture.repeat.set(repeats, repeats);
+        const groundMaterial = new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1.0, metalness: 0.0 });
+        const groundGeo = new THREE.PlaneGeometry(PLANE_SIZE_CM, PLANE_SIZE_CM, 1, 1);
+        groundMesh = new THREE.Mesh(groundGeo, groundMaterial);
+        groundMesh.rotation.x = -Math.PI / 2;
+        groundMesh.position.y = 0;
+        scene3D.add(groundMesh);
         
         robotPivot = createRobotModel3D();
         robotPivot.position.y = WHEEL_RADIUS_3D;
@@ -1475,14 +1502,22 @@
             if (isMovement3DEnabled) {
                 const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
                 const dist_cm = ((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * WHEEL_DIAMETER;
-                
                 const angleRad = robotPivot.rotation.y;
-                robotPivot.position.x += Math.sin(angleRad) * dist_cm;
-                robotPivot.position.z += Math.cos(angleRad) * dist_cm;
-
-                document.getElementById('robot3d-position-x').textContent = robotPivot.position.x.toFixed(1) + ' cm';
-                document.getElementById('robot3d-position-z').textContent = robotPivot.position.z.toFixed(1) + ' cm';
-
+                // Infinite ground scroll: move texture opposite to robot's motion
+                if (groundTexture) {
+                    const dx = Math.sin(angleRad) * dist_cm; // world X forward component
+                    const dz = Math.cos(angleRad) * dist_cm; // world Z forward component
+                    const squaresPerCm = 1 / 20; // 20 cm squares
+                    // UV offset.x maps to plane's U (X axis), offset.y maps to V (Z axis)
+                    groundTexture.offset.x += dx * squaresPerCm;
+                    groundTexture.offset.y += dz * squaresPerCm;
+                    groundTexture.needsUpdate = true;
+                }
+                // Keep robot at origin for infinite effect, but compute logical position for UI display
+                const logicalX = (groundTexture ? -groundTexture.offset.x * 20 : robotPivot.position.x);
+                const logicalZ = (groundTexture ? -groundTexture.offset.y * 20 : robotPivot.position.z);
+                document.getElementById('robot3d-position-x').textContent = logicalX.toFixed(1) + ' cm';
+                document.getElementById('robot3d-position-z').textContent = logicalZ.toFixed(1) + ' cm';
                 lastEncoderAvg = currentEncoderAvg;
             }
         }
