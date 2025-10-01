@@ -732,8 +732,8 @@
                 if (isSequenceRunning) {
                     checkAndExecuteNextSequenceStep(previousState);
                 }
-                if (isZnTuningRunning && data.bo !== undefined) {
-                    document.getElementById('znKpTestVal').textContent = data.bo.toFixed(2);
+                if (isZnTuningRunning && data.output !== undefined) {
+                    document.getElementById('znKpTestVal').textContent = data.output.toFixed(2);
                 }
                 break;
             case 'full_config':
