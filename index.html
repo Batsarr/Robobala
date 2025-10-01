@@ -1355,7 +1355,7 @@
     }
     
     // =======================================================================================
-    // === SEKCJA WIZUALIZACJI 3D - ZMODYFIKOWANA ===
+    // === WIZUALIZACJA 3D (ZINTEGROWANA Z ROBOBALA.HTML) ===
     // =======================================================================================
     let scene3D, camera3D, renderer3D, controls3D;
     let robotPivot, leftWheel, rightWheel;
@@ -1368,7 +1368,6 @@
 
     function createCustomWheel(totalRadius, tireThickness, width) {
         const wheelGroup = new THREE.Group();
-        // ZMIANA: Przywrocenie oryginalnych materialow
         const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 });
         const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.4 });
         const rimRadius = totalRadius - tireThickness;
@@ -1407,10 +1406,8 @@
         
         const pivot = new THREE.Object3D();
         const model = new THREE.Group();
-        // ZMIANA: Przywrocenie oryginalnych materialow robota
         const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1C1C1C });
         const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0x4169E1 });
-
         const body = new THREE.Mesh(new THREE.BoxGeometry(BODY_WIDTH, BODY_HEIGHT, BODY_DEPTH), bodyMaterial);
         body.position.y = WHEEL_RADIUS_3D;
         model.add(body);
@@ -1437,11 +1434,8 @@
         return pivot;
     }
 
-    function createCheckerTexture(squareSizeCm = 20) {
-        const colorA = '#FFFFFF'; // Czysta biel dla lepszego kontrastu
-        const colorB = '#808080'; // Sredni szary
-
-        const size = 256; const squares = 2; 
+    function createCheckerTexture(squareSizeCm = 20, colorA = '#2e3140', colorB = '#3b3f4e') {
+        const size = 256; const squares = 2; // 2x2 checker; one repeat == jeden kwadrat 20cm
         const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size; const ctx = canvas.getContext('2d');
         const s = size / squares;
         for (let y = 0; y < squares; y++) {
@@ -1452,60 +1446,33 @@
         }
         const tex = new THREE.CanvasTexture(canvas);
         tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
-        
-        if (renderer3D) {
-             tex.anisotropy = renderer3D.capabilities.getMaxAnisotropy();
-        }
-        tex.encoding = THREE.sRGBEncoding;
+        tex.anisotropy = 8; tex.encoding = THREE.sRGBEncoding;
         return tex;
     }
 
     function init3DVisualization() {
         const container = document.getElementById('robot3d-container');
         scene3D = new THREE.Scene();
-
-        camera3D = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 2000);
-        camera3D.position.set(25, 20, 40);
+        scene3D.background = new THREE.Color(0xcccccc);
+        camera3D = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera3D.position.set(15, 15, 25);
         camera3D.lookAt(0, 8, 0);
-
         renderer3D = new THREE.WebGLRenderer({ antialias: true });
-        renderer3D.setPixelRatio(window.devicePixelRatio);
         renderer3D.setSize(container.clientWidth, container.clientHeight);
-        renderer3D.outputEncoding = THREE.sRGBEncoding;
-        
         container.appendChild(renderer3D.domElement);
         controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
         controls3D.target.set(0, 8, 0);
-        
-        // ZMIANA: Blokada kamery, aby nie wchodzila pod podloze
-        controls3D.maxPolarAngle = Math.PI / 2;
-        
-        const cubeTextureLoader = new THREE.CubeTextureLoader();
-        const skyboxTexture = cubeTextureLoader.load([
-            'https://threejs.org/examples/textures/cube/SwedishRoyalCastle/px.jpg',
-            'https://threejs.org/examples/textures/cube/SwedishRoyalCastle/nx.jpg',
-            'https://threejs.org/examples/textures/cube/SwedishRoyalCastle/py.jpg',
-            'https://threejs.org/examples/textures/cube/SwedishRoyalCastle/ny.jpg',
-            'https://threejs.org/examples/textures/cube/SwedishRoyalCastle/pz.jpg',
-            'https://threejs.org/examples/textures/cube/SwedishRoyalCastle/nz.jpg'
-        ]);
-        scene3D.background = skyboxTexture;
-
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
         scene3D.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(20, 30, 25);
+        directionalLight.position.set(10, 20, 15);
         scene3D.add(directionalLight);
-
-        const PLANE_SIZE_CM = 2000;
+        // Ground plane with repeating checker texture (20x20 cm squares), infinite scroll via UV offset
+        const PLANE_SIZE_CM = 2000; // 20 m square
         groundTexture = createCheckerTexture(20);
-        
-        // ZMIANA: Poprawiona logika skalowania tekstury podloza dla uzyskania kwadratow 20x20 cm
-        // Tekstura to siatka 2x2, wiec jedno powtorzenie musi pokryc obszar 40x40 cm, aby kazdy kwadrat mial 20x20 cm.
-        const repeats = PLANE_SIZE_CM / 40;
-        
+        const repeats = PLANE_SIZE_CM / 20;
         groundTexture.repeat.set(repeats, repeats);
-        const groundMaterial = new THREE.MeshStandardMaterial({ map: groundTexture });
+        const groundMaterial = new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1.0, metalness: 0.0 });
         const groundGeo = new THREE.PlaneGeometry(PLANE_SIZE_CM, PLANE_SIZE_CM, 1, 1);
         groundMesh = new THREE.Mesh(groundGeo, groundMaterial);
         groundMesh.rotation.x = -Math.PI / 2;
@@ -1522,15 +1489,13 @@
             camera3D.aspect = width / height;
             camera3D.updateProjectionMatrix();
             renderer3D.setSize(width, height);
-            renderer3D.setPixelRatio(window.devicePixelRatio);
         });
         
         setupControls3D();
     }
-    
     function setupControls3D() {
         document.getElementById('reset3dViewBtn').addEventListener('click', () => {
-            camera3D.position.set(25, 20, 40); 
+            camera3D.position.set(15, 15, 25);
             controls3D.target.set(0, 8, 0);
             controls3D.update();
         });
@@ -1558,20 +1523,19 @@
                 const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
                 const dist_cm = ((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * WHEEL_DIAMETER;
                 const angleRad = robotPivot.rotation.y;
-                
+                // Infinite ground scroll: move texture opposite to robot's motion
                 if (groundTexture) {
-                    const dx = Math.sin(angleRad) * dist_cm;
-                    const dz = Math.cos(angleRad) * dist_cm;
-                    
-                    // ZMIANA: Skalowanie przesuniecia tekstury rowniez musi byc poprawione
-                    const squaresPerCm = 1 / 40; 
-                    
+                    const dx = Math.sin(angleRad) * dist_cm; // world X forward component
+                    const dz = Math.cos(angleRad) * dist_cm; // world Z forward component
+                    const squaresPerCm = 1 / 20; // 20 cm squares
+                    // UV offset.x maps to plane's U (X axis), offset.y maps to V (Z axis)
                     groundTexture.offset.x += dx * squaresPerCm;
                     groundTexture.offset.y += dz * squaresPerCm;
+                    groundTexture.needsUpdate = true;
                 }
-                
-                const logicalX = (groundTexture ? -groundTexture.offset.x * 40 : robotPivot.position.x);
-                const logicalZ = (groundTexture ? -groundTexture.offset.y * 40 : robotPivot.position.z);
+                // Keep robot at origin for infinite effect, but compute logical position for UI display
+                const logicalX = (groundTexture ? -groundTexture.offset.x * 20 : robotPivot.position.x);
+                const logicalZ = (groundTexture ? -groundTexture.offset.y * 20 : robotPivot.position.z);
                 document.getElementById('robot3d-position-x').textContent = logicalX.toFixed(1) + ' cm';
                 document.getElementById('robot3d-position-z').textContent = logicalZ.toFixed(1) + ' cm';
                 lastEncoderAvg = currentEncoderAvg;
