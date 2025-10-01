@@ -588,6 +588,7 @@
     const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
     const TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
     let bleBuffer = '';
+    const bleChunks = new Map(); // id -> { total, parts: Map<i,string> }
     let bleMessageQueue = [];
     let isSendingBleMessage = false;
     const BLE_SEND_INTERVAL = 20;
@@ -699,7 +700,26 @@
             if (line) {
                 try {
                     const data = JSON.parse(line);
-                    processCompleteMessage(data);
+                    if (data.type === 'chunk' && data.id !== undefined) {
+                        let entry = bleChunks.get(data.id);
+                        if (!entry) { entry = { total: data.total || 0, parts: new Map() }; bleChunks.set(data.id, entry); }
+                        entry.parts.set(data.i, data.data || '');
+                        entry.total = data.total || entry.total;
+                        // If all parts received, reassemble
+                        if (entry.parts.size === entry.total && entry.total > 0) {
+                            let combined = '';
+                            for (let i = 0; i < entry.total; i++) { combined += entry.parts.get(i) || ''; }
+                            bleChunks.delete(data.id);
+                            try {
+                                const fullMsg = JSON.parse(combined);
+                                processCompleteMessage(fullMsg);
+                            } catch (e) {
+                                addLogMessage(`[UI] Blad skladania chunkow: ${e}`, 'error');
+                            }
+                        }
+                    } else {
+                        processCompleteMessage(data);
+                    }
                 } catch (e) { addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error'); }
             }
         }
