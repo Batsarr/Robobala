@@ -761,8 +761,20 @@
             lastKnownRobotState = data.robot_state;
         }
         
-        if (isOptimizationSessionRunning && data.type === 'telemetry' && data.trial?.id) {
-            telemetryForCurrentTest.push(data);
+        if (isOptimizationSessionRunning && data.type === 'telemetry') {
+            // Jeśli trwa automatyczny test balansu, zbieraj WSZYSTKIE pakiety telemetryczne
+            if (isBalanceTestRunning) {
+                // Dodajemy sztuczny obiekt 'trial', aby funkcja oceny działała poprawnie
+                const enrichedData = {
+                    ...data,
+                    trial: { elapsed_ms: (Date.now() - (individualStartTime || Date.now())) }
+                };
+                telemetryForCurrentTest.push(enrichedData);
+            } 
+            // Dla innych (interaktywnych) testów, wymagaj znacznika 'trial' od robota
+            else if (data.trial?.id) {
+                telemetryForCurrentTest.push(data);
+            }
         }
 
         if (isCharacterizationRunning && data.type === 'telemetry' && data.speed !== undefined) {
@@ -1024,6 +1036,8 @@
     let telemetryForCurrentTest = [];
     let safeStartParams = {};
     let trialTimeout = null;
+    let isBalanceTestRunning = false;
+    let individualStartTime = 0;
     
     function setupAutoTestEventListeners() {
         document.querySelectorAll('input[name="autotest-type"]').forEach(radio => radio.addEventListener('change', renderAutotestOptions));
@@ -1089,6 +1103,7 @@
     
     async function runFullBalanceGA() {
         addLogMessage(`[GA-Auto] Rozpoczeto automatyczna optymalizacje petli balansu.`, 'info');
+        isBalanceTestRunning = true;
         const totalGenerations = parseInt(document.getElementById('gaGenerationsInput').value);
 
         for (let gen = 0; gen < totalGenerations; gen++) {
@@ -1105,7 +1120,8 @@
 
                 const individual = currentPopulation[ind];
                 telemetryForCurrentTest = [];
-                
+                individualStartTime = Date.now();
+
                 updateStatus(`Testowanie osobnika ${ind + 1}/${currentPopulation.length}`, (ind / currentPopulation.length) * 100);
                 
                 updateCurrentPhenotypeStatus(individual);
@@ -1212,6 +1228,7 @@
     function cancelOptimizationSession() {
         if (!isOptimizationSessionRunning) return;
         isOptimizationSessionRunning = false;
+        isBalanceTestRunning = false;
         clearTimeout(trialTimeout);
         applyPhenotype(safeStartParams);
         addLogMessage('[GA] Sesja strojenia anulowana przez uzytkownika.', 'warn');
@@ -1221,6 +1238,7 @@
     function finishOptimizationSession() {
         if (!isOptimizationSessionRunning) return;
         isOptimizationSessionRunning = false;
+        isBalanceTestRunning = false;
         finalBestPhenotypeFromGA = bestOverallPhenotype;
         addLogMessage('[GA] Sesja optymalizacji zakonczona!', 'success');
         
@@ -1348,8 +1366,12 @@
 
     // --- FUNKCJE OCENY (FITNESS) ---
     function evaluateBalanceFitness(telemetryData, weights) {
-        if (!telemetryData[0]?.trial?.elapsed_ms) return 0.0;
-        const testDuration = telemetryData[telemetryData.length-1].trial.elapsed_ms / 1000.0;
+        if (!telemetryData || telemetryData.length < 20) return 0.0;
+
+        const firstSampleTime = telemetryData[0].trial.elapsed_ms;
+        const lastSampleTime = telemetryData[telemetryData.length - 1].trial.elapsed_ms;
+        const testDuration = (lastSampleTime - firstSampleTime) / 1000.0;
+
         if (testDuration < 1.0) return 0.0;
 
         const MAX_ACCEPTABLE_ITAE = 50.0;
@@ -1359,7 +1381,7 @@
         const CRITICAL_PITCH_ERROR = 15.0;
         
         let itae = 0, maxOvershoot = 0, zeroCrossings = 0;
-        let lastTime = 0;
+        let lastTime = telemetryData[0].trial.elapsed_ms / 1000.0;
         const pitches = telemetryData.map(d => d.pitch);
         const outputs = telemetryData.map(d => d.output);
 
@@ -1803,6 +1825,7 @@
             const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
             const wheelRotationR = (currentEncoderRight / ppr) * 2 * Math.PI;
             
+            // POPRAWKA: Dodajemy znak minus, aby odwrócić kierunek obrotu
             if (leftWheel) leftWheel.rotation.z = -wheelRotationL;
             if (rightWheel) rightWheel.rotation.z = -wheelRotationR;
 
