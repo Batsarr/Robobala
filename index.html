@@ -1803,8 +1803,8 @@
             const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
             const wheelRotationR = (currentEncoderRight / ppr) * 2 * Math.PI;
             
-            if (leftWheel) leftWheel.rotation.z = wheelRotationL;
-            if (rightWheel) rightWheel.rotation.z = wheelRotationR;
+            if (leftWheel) leftWheel.rotation.z = -wheelRotationL;
+            if (rightWheel) rightWheel.rotation.z = -wheelRotationR;
 
             if (isMovement3DEnabled) {
                 const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
