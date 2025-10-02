@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v17.1 (GA Refactor)</title>
+    <title>Robot PID - Panel Sterowania v17.2 (GA Refactor)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -372,11 +372,11 @@
                 <button id="znTuningCancelBtn" style="width:100%; margin-top:10px; background-color:#ff6347; display:none;">Anuluj</button>
             </div>
 
-            <button class="accordion-header" onclick="toggleAccordion(this)">2: Optymalizacja i Testy Wydajnosciowe</button>
+            <button class="accordion-header" onclick="toggleAccordion(this)">2: Optymalizacja i Testy Wydajnosciowe (GA)</button>
             <div class="accordion-content">
                 <div class="setting-container" style="margin-bottom: 15px;">
                     <label>Cel Optymalizacji/Testow<span class="help-icon">?</span></label>
-                     <div class="help-text">Uruchomienie inteligentnej optymalizacji petli balansu (algorytm genetyczny) lub wykonanie precyzyjnych testow wydajnosciowych dla petli predkosci i pozycji.</div>
+                     <div class="help-text">Uruchomienie inteligentnej optymalizacji (algorytm genetyczny) dla wybranej petli regulacji (balans, predkosc lub pozycja) w celu znalezienia optymalnych nastaw PID.</div>
                 </div>
 
                 <div id="autotestSelector" class="radio-selector-group">
@@ -385,12 +385,12 @@
                         <label for="test-balance">Optymalizuj Petle Balansu (GA - Auto)</label>
                     </div>
                     <div class="radio-selector-item">
-                        <input type="radio" id="test-position" name="autotest-type" value="position">
-                        <label for="test-position">Optymalizuj Petle Pozycji (GA - Interaktywnie)</label>
-                    </div>
-                    <div class="radio-selector-item">
                         <input type="radio" id="test-speed" name="autotest-type" value="speed">
                         <label for="test-speed">Optymalizuj Petle Predkosci (GA - Interaktywnie)</label>
+                    </div>
+                    <div class="radio-selector-item">
+                        <input type="radio" id="test-position" name="autotest-type" value="position">
+                        <label for="test-position">Optymalizuj Petle Pozycji (GA - Interaktywnie)</label>
                     </div>
                 </div>
 
@@ -402,7 +402,7 @@
                     <hr style="border-color: #4a4f58; margin: 15px 0;">
 
                     <!-- Panel dla Optymalizacji Genetycznej Balansu -->
-                    <div id="geneticOptionsPanel">
+                    <div id="balanceOptionsPanel">
                          <fieldset>
                             <legend>Priorytety Optymalizacji (Budzet: <span id="weights-budget">10.0</span> pkt)</legend>
                             <div class="setting-container">
@@ -424,27 +424,6 @@
                                 <label>Waga Wysilku (W)<span class="help-icon">?</span></label>
                                 <div class="numeric-input-wrapper"><button>-</button><input type="number" class="weight-input" id="weightEffort" step="0.5" value="1.0" min="0" max="10"><button>+</button></div>
                                 <div class="help-text">Zwieksz, aby zminimalizowac agresywnosc i zuzycie energii przez silniki.</div>
-                            </div>
-                        </fieldset>
-                        <fieldset style="margin-top: 15px;">
-                            <legend>Parametry Algorytmu Genetycznego</legend>
-                            <div class="setting-container">
-                                <label for="gaGenerationsInput">Liczba pokolen<span class="help-icon">?</span></label>
-                                <div class="numeric-input-wrapper">
-                                    <button>-</button>
-                                    <input type="number" id="gaGenerationsInput" min="2" max="50" step="1" value="10">
-                                    <button>+</button>
-                                </div>
-                                <div class="help-text">Ile cykli ewolucji ma przejsc algorytm. Wiecej = potencjalnie lepszy wynik, ale dluzszy czas.</div>
-                            </div>
-                            <div class="setting-container">
-                                <label for="gaPopulationInput">Liczba osobnikow<span class="help-icon">?</span></label>
-                                <div class="numeric-input-wrapper">
-                                    <button>-</button>
-                                    <input type="number" id="gaPopulationInput" min="4" max="20" step="1" value="10">
-                                    <button>+</button>
-                                </div>
-                                <div class="help-text">Ile rozwiazan (zestawow PID) bedzie testowanych w kazdym pokoleniu.</div>
                             </div>
                         </fieldset>
                     </div>
@@ -472,6 +451,28 @@
                             </div>
                         </fieldset>
                     </div>
+                     <!-- Panel wspolny dla wszystkich testow GA -->
+                    <fieldset style="margin-top: 15px;">
+                        <legend>Parametry Algorytmu Genetycznego</legend>
+                        <div class="setting-container">
+                            <label for="gaGenerationsInput">Liczba pokolen<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper">
+                                <button>-</button>
+                                <input type="number" id="gaGenerationsInput" min="2" max="50" step="1" value="10">
+                                <button>+</button>
+                            </div>
+                            <div class="help-text">Ile cykli ewolucji ma przejsc algorytm. Wiecej = potencjalnie lepszy wynik, ale dluzszy czas.</div>
+                        </div>
+                        <div class="setting-container">
+                            <label for="gaPopulationInput">Liczba osobnikow<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper">
+                                <button>-</button>
+                                <input type="number" id="gaPopulationInput" min="4" max="20" step="1" value="10">
+                                <button>+</button>
+                            </div>
+                            <div class="help-text">Ile rozwiazan (zestawow PID) bedzie testowanych w kazdym pokoleniu.</div>
+                        </div>
+                    </fieldset>
                 </div>
 
                 <div id="autotestStatusPanel" style="margin-top:15px;">
@@ -479,6 +480,7 @@
                     <div class="info-grid">
                         <strong>Pokolenie / Osobnik:</strong> <span id="statusGeneration">---</span>
                         <strong>Najlepszy wynik ogolnie:</strong> <span id="statusBestScore" style="font-weight: bold; color: #a2f279;">---</span>
+                        <strong>Najlepsze Parametry:</strong> <span id="statusBestPhenotype" style="font-weight: bold; color: #61dafb;">---</span>
                         <strong>Ostatni wynik:</strong> <span id="statusLastScore" style="font-weight: bold; color: #f7b731;">---</span>
                         <strong>Postep Generacji:</strong>
                         <div>
@@ -488,14 +490,25 @@
                         <strong>Status:</strong> <span id="statusStateText" style="font-weight: bold;">Bezczynny</span>
                     </div>
                 </div>
+                
+                <div id="gaResultsPanel" class="test-results-panel" style="margin-top: 15px;">
+                    <h5>Wyniki Sesji Optymalizacji</h5>
+                    <div class="result-grid">
+                        <strong>Najlepsza Ocena:</strong> <span id="gaFinalScore"></span>
+                        <strong>Znalezione Kp:</strong> <span id="gaFinalKp"></span>
+                        <strong>Znalezione Ki:</strong> <span id="gaFinalKi"></span>
+                        <strong>Znalezione Kd:</strong> <span id="gaFinalKd"></span>
+                    </div>
+                    <button id="applyGaResultsBtn" class="apply-btn">Zastosuj do Panelu</button>
+                </div>
 
-                <div id="autotestControls">
+
+                <div id="autotestControls" style="margin-top: 15px;">
                     <div class="ga-button-row">
                         <button id="autotestActionBtn" style="width:100%;">Rozpocznij Sesje Strojenia</button>
                         <button id="ga_stop_btn" style="background-color: #ff6347; display: none;">Zatrzymaj Sesje</button>
                     </div>
                 </div>
-
             </div>
 
             <button class="accordion-header" onclick="toggleAccordion(this)">3: Charakteryzacja Systemu (Petle Kaskadowe)</button>
@@ -533,7 +546,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 17.1 (Refactor 3D i GA)
+    // WERSJA 17.2 (Refactor 3D i GA)
     // =======================================================================================
 
     // === DEKLARACJE ZMIENNYCH GLOBALNYCH ===
@@ -705,7 +718,6 @@
                         if (!entry) { entry = { total: data.total || 0, parts: new Map() }; bleChunks.set(data.id, entry); }
                         entry.parts.set(data.i, data.data || '');
                         entry.total = data.total || entry.total;
-                        // If all parts received, reassemble
                         if (entry.parts.size === entry.total && entry.total > 0) {
                             let combined = '';
                             for (let i = 0; i < entry.total; i++) { combined += entry.parts.get(i) || ''; }
@@ -933,7 +945,7 @@
     function runSequence() { if (isSequenceRunning) return; if (lastKnownRobotState !== 'TRZYMA_POZYCJE' && lastKnownRobotState !== 'BALANSUJE') { addLogMessage(`[UI] Nie mozna rozpoczac sekwencji. Robot w stanie '${lastKnownRobotState}'.`, 'error'); return; } const steps = document.querySelectorAll('.sequence-step'); if (steps.length === 0) return; isSequenceRunning = true; currentSequenceStep = 0; updateSequenceUI(); addLogMessage(`[UI] Rozpoczeto sekwencje z ${steps.length} krokow.`, 'info'); executeNextSequenceStep(); }
     function stopSequenceExecution() { if (!isSequenceRunning) return; isSequenceRunning = false; sendBleMessage({ type: 'command_stop' }); updateSequenceUI(); addLogMessage('[UI] Sekwencja zatrzymana.', 'warn'); }
     function clearSequence() { if (isSequenceRunning) stopSequenceExecution(); const list = document.getElementById('sequence-list'); list.innerHTML = ''; updateAccordionHeight(list.closest('.accordion-content')); }
-    function updateSequenceUI() { document.querySelectorAll('.sequence-step').forEach((step, index) => { step.classList.toggle('executing', isSequenceRunning && index === currentSequenceStep); }); document.getElementById('run-sequence-btn').disabled = isSequenceRunning; document.getElementById('add-sequence-step-btn').disabled = isSequenceRunning; document.getElementById('clear-sequence-btn').disabled = isSequenceRunning; document.getElementById('stop-sequence-btn').disabled = !isSequenceRunning; }
+    function updateSequenceUI() { document.querySelectorAll('.sequence-step').forEach((index, step) => { step.classList.toggle('executing', isSequenceRunning && index === currentSequenceStep); }); document.getElementById('run-sequence-btn').disabled = isSequenceRunning; document.getElementById('add-sequence-step-btn').disabled = isSequenceRunning; document.getElementById('clear-sequence-btn').disabled = isSequenceRunning; document.getElementById('stop-sequence-btn').disabled = !isSequenceRunning; }
     function checkAndExecuteNextSequenceStep(previousState) {
         const wasWorking = ['RUCH_AUTONOMICZNY', 'OBROT_AUTONOMICZNY'].includes(previousState);
         const isReady = ['TRZYMA_POZYCJE', 'BALANSUJE'].includes(lastKnownRobotState);
@@ -962,7 +974,7 @@
     function handleZnTuningResult(ku, tu) { addLogMessage(`[UI] Otrzymano wynik strojenia Z-N: Ku=${ku.toFixed(4)}, Tu=${tu.toFixed(4)}`, 'success'); resetZnTuningUI(); znResults = { ku, tu }; const resultPanel = document.getElementById('znResultPanel'); resultPanel.style.display = 'block'; const kp = 0.6 * ku; const kd = kp * tu / 8; document.getElementById('znKuResult').textContent = ku.toFixed(4); document.getElementById('znTuResult').textContent = tu.toFixed(4) + " s"; document.getElementById('znKpSuggest').textContent = kp.toFixed(4); document.getElementById('znKdSuggest').textContent = kd.toFixed(4); updateAccordionHeight(resultPanel.closest('.accordion-content')); }
     function applyZnResults() { const { ku, tu } = znResults; if (ku <= 0 || tu <= 0) return; const kp = 0.6 * ku; const kd = kp * tu / 8; isApplyingConfig = true; document.getElementById('balanceKpInput').value = kp.toFixed(4); document.getElementById('balanceKiInput').value = 0.0; document.getElementById('balanceKdInput').value = kd.toFixed(4); isApplyingConfig = false; document.getElementById('balanceKpInput').dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('balanceKiInput').dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true })); addLogMessage('[UI] Zastosowano sugerowane wartosci Kp i Kd. Ki ustawiono na 0.', 'info'); }
 
-    // --- SEKCJA STROJENIA KROK 2: OPTYMALIZACJA I TESTY (PRZEBUDOWANA) ---
+    // --- SEKCJA STROJENIA KROK 2: OPTYMALIZACJA I TESTY (GA) ---
     let isOptimizationSessionRunning = false;
     let currentOptimizationMode = 'balance';
     let currentGeneration = 0;
@@ -971,6 +983,7 @@
     let evaluatedPopulation = [];
     let bestOverallScore = -Infinity;
     let bestOverallPhenotype = null;
+    let finalBestPhenotypeFromGA = null;
     let telemetryForCurrentTest = [];
     let safeStartParams = {};
     let trialTimeout = null;
@@ -980,17 +993,16 @@
         document.getElementById('autotestActionBtn').addEventListener('click', handleAutotestAction);
         document.getElementById('ga_stop_btn').addEventListener('click', cancelOptimizationSession);
         document.querySelectorAll('.weight-input').forEach(input => input.addEventListener('change', updateWeightsBudget));
+        document.getElementById('applyGaResultsBtn').addEventListener('click', applyGaResults);
         updateWeightsBudget();
     }
     
     function handleAutotestAction() {
         if (isOptimizationSessionRunning) {
-             // W trybie interaktywnym, ten przycisk uruchamia test nastepnego osobnika
             if(currentOptimizationMode !== 'balance') {
                 testNextIndividualInteractive();
             }
         } else {
-            // Rozpocznij nowa sesje
             startOptimizationSession();
         }
     }
@@ -1007,39 +1019,46 @@
         currentIndividualIndex = -1;
         bestOverallScore = -Infinity;
         bestOverallPhenotype = null;
+        finalBestPhenotypeFromGA = null;
         evaluatedPopulation = [];
-        safeStartParams = { kp_b: parseFloat(document.getElementById('balanceKpInput').value), kd_b: parseFloat(document.getElementById('balanceKdInput').value) };
+        
+        if (currentOptimizationMode === 'balance') {
+            safeStartParams = { kp_b: parseFloat(document.getElementById('balanceKpInput').value), ki_b: 0, kd_b: parseFloat(document.getElementById('balanceKdInput').value) };
+        } else if (currentOptimizationMode === 'speed') {
+            safeStartParams = { kp_s: parseFloat(document.getElementById('speedKpInput').value), ki_s: parseFloat(document.getElementById('speedKiInput').value), kd_s: parseFloat(document.getElementById('speedKdInput').value) };
+        } else if (currentOptimizationMode === 'position') {
+            safeStartParams = { kp_p: parseFloat(document.getElementById('positionKpInput').value), ki_p: parseFloat(document.getElementById('positionKiInput').value), kd_p: parseFloat(document.getElementById('positionKdInput').value) };
+        }
         
         const populationSize = parseInt(document.getElementById('gaPopulationInput').value);
         currentPopulation = createInitialPopulation(populationSize);
 
         addLogMessage(`[GA] Rozpoczeto sesje strojenia dla petli: ${currentOptimizationMode}.`, 'success');
-        document.getElementById('ga_stop_btn').style.display = 'block';
+        document.getElementById('ga_stop_btn').style.display = 'inline-block';
         document.getElementById('autotestActionBtn').disabled = true;
-        document.getElementById('statusStateText').textContent = 'Inicjalizacja...';
-        document.getElementById('statusGeneration').textContent = `1 / ${populationSize}`;
+        document.getElementById('gaResultsPanel').style.display = 'none';
+        updateStatus('Inicjalizacja...', 0);
+        document.getElementById('statusGeneration').textContent = `1 / ${parseInt(document.getElementById('gaGenerationsInput').value)}`;
 
         if (currentOptimizationMode === 'balance') {
-            runFullBalanceGA(); // Uruchom w pelni automatyczna petle
+            document.getElementById('autotestActionBtn').style.display = 'none';
+            runFullBalanceGA();
         } else {
-            // Przygotuj UI do trybu interaktywnego
             document.getElementById('autotestActionBtn').textContent = `Testuj Osobnika 1/${populationSize}`;
             document.getElementById('autotestActionBtn').disabled = false;
-            document.getElementById('statusStateText').textContent = 'Oczekiwanie na probe';
-            document.getElementById('statusProgressText').textContent = `Gotowy do testu osobnika 1.`;
+            updateStatus(`Gotowy do testu osobnika 1`, 0);
         }
     }
     
     async function runFullBalanceGA() {
         addLogMessage(`[GA-Auto] Rozpoczeto automatyczna optymalizacje petli balansu.`, 'info');
-        document.getElementById('autotestActionBtn').style.display = 'none';
-
         const totalGenerations = parseInt(document.getElementById('gaGenerationsInput').value);
 
         for (let gen = 0; gen < totalGenerations; gen++) {
             if (!isOptimizationSessionRunning) break;
             currentGeneration = gen + 1;
             document.getElementById('statusGeneration').textContent = `${currentGeneration} / ${totalGenerations}`;
+            evaluatedPopulation = [];
             
             for (let ind = 0; ind < currentPopulation.length; ind++) {
                 if (!isOptimizationSessionRunning) break;
@@ -1053,12 +1072,12 @@
                 updateStatus(`Testowanie osobnika ${ind + 1}/${currentPopulation.length}`, (ind / currentPopulation.length) * 100);
 
                 await applyPhenotype(individual);
-                await sleep(500); // Czas na stabilizacje
+                await sleep(500);
                 
                 const testDuration = parseFloat(document.getElementById('testDurationInput').value) * 1000;
                 await sleep(testDuration);
 
-                processBalanceTestResult(individual);
+                processTestResult(individual);
             }
              if (!isOptimizationSessionRunning) break;
             
@@ -1084,7 +1103,6 @@
         await applyPhenotype(individual);
         await sleep(300);
 
-        // Wyzwol akcje testowa
         if (currentOptimizationMode === 'speed') {
             const distance = parseFloat(document.getElementById('speedTestDistanceInput').value);
             const speed = parseFloat(document.getElementById('speedTestSpeedInput').value);
@@ -1095,16 +1113,17 @@
         }
 
         const trialTime = parseFloat(document.getElementById('testDurationInput').value) * 1000;
-        trialTimeout = setTimeout(handleInteractiveTrialEnd, trialTime);
+        trialTimeout = setTimeout(handleInteractiveTrialEnd, trialTime + 1000); // +1s bufor
     }
     
     async function handleInteractiveTrialEnd() {
+        if (!isOptimizationSessionRunning) return;
         addLogMessage('[GA-Inter] Czas na zbieranie danych uplynal. Zatrzymuje robota i analizuje...', 'info');
         sendBleMessage({ type: 'command_stop' });
         
         await waitForRobotIdle();
 
-        processInteractiveTestResult();
+        processTestResult(currentPopulation[currentIndividualIndex]);
 
         const populationSize = currentPopulation.length;
         if (currentIndividualIndex < populationSize - 1) {
@@ -1112,44 +1131,41 @@
             document.getElementById('autotestActionBtn').disabled = false;
             updateStatus('Gotowy na nastepna probe');
         } else {
-            document.getElementById('autotestActionBtn').textContent = `Rozpocznij Generacje ${currentGeneration + 1}`;
-            document.getElementById('autotestActionBtn').disabled = false;
-            document.getElementById('autotestActionBtn').onclick = () => {
-                createNewGeneration();
-                currentIndividualIndex = -1; // Reset dla nowej generacji
-                document.getElementById('autotestActionBtn').textContent = `Testuj Osobnika 1/${populationSize}`;
-                document.getElementById('autotestActionBtn').onclick = handleAutotestAction;
-            };
-            updateStatus('Generacja zakonczona');
+            const totalGenerations = parseInt(document.getElementById('gaGenerationsInput').value);
+            if(currentGeneration < totalGenerations){
+                 document.getElementById('autotestActionBtn').textContent = `Rozpocznij Pokolenie ${currentGeneration + 1}`;
+                 document.getElementById('autotestActionBtn').disabled = false;
+                 document.getElementById('autotestActionBtn').onclick = () => {
+                     createNewGeneration();
+                     currentIndividualIndex = -1;
+                     document.getElementById('statusGeneration').textContent = `${currentGeneration} / ${totalGenerations}`;
+                     document.getElementById('autotestActionBtn').textContent = `Testuj Osobnika 1/${populationSize}`;
+                     document.getElementById('autotestActionBtn').onclick = handleAutotestAction;
+                     testNextIndividualInteractive();
+                 };
+                 updateStatus('Pokolenie zakonczone');
+            } else {
+                finishOptimizationSession();
+            }
         }
     }
-
-    function processBalanceTestResult(individual) {
+    
+    function processTestResult(individual) {
         let score = -1000; // Kara za niestabilnosc
-        if (['BALANSUJE', 'TRZYMA_POZYCJE'].includes(lastKnownRobotState) && telemetryForCurrentTest.length > 10) {
-            // Tu logika oceny dla balansu...
-            score = Math.random() * 100; // Placeholder
-        }
-        
-        individual.score = score;
-        evaluatedPopulation.push(individual);
-        updateScores(score);
-    }
-
-    function processInteractiveTestResult() {
-        let score = -1000;
         if (telemetryForCurrentTest.length > 10) {
-             if (currentOptimizationMode === 'speed') {
+            if (currentOptimizationMode === 'balance') {
+                 const weights = { stability: parseFloat(document.getElementById('weightStability').value), stillness: parseFloat(document.getElementById('weightStillness').value), overshoot: parseFloat(document.getElementById('weightOvershoot').value), effort: parseFloat(document.getElementById('weightEffort').value) };
+                score = evaluateBalanceFitness(telemetryForCurrentTest, weights);
+            } else if (currentOptimizationMode === 'speed') {
                 score = evaluateSpeedFitness(telemetryForCurrentTest);
             } else if (currentOptimizationMode === 'position') {
                 score = evaluatePositionFitness(telemetryForCurrentTest);
             }
         }
         
-        let testedIndividual = currentPopulation[currentIndividualIndex];
-        testedIndividual.score = score;
-        evaluatedPopulation.push(testedIndividual);
-        updateScores(score);
+        individual.score = score;
+        evaluatedPopulation.push(individual);
+        updateScores(score, individual);
     }
 
     function cancelOptimizationSession() {
@@ -1162,22 +1178,31 @@
     }
     
     function finishOptimizationSession() {
+        if (!isOptimizationSessionRunning) return;
         isOptimizationSessionRunning = false;
+        finalBestPhenotypeFromGA = bestOverallPhenotype;
         addLogMessage('[GA] Sesja optymalizacji zakonczona!', 'success');
-        if(bestOverallPhenotype){
-            addLogMessage(`[GA] Najlepsze znalezione parametry: Kp=${bestOverallPhenotype.kp_b.toFixed(4)}, Kd=${bestOverallPhenotype.kd_b.toFixed(4)}`, 'info');
-            applyPhenotype(bestOverallPhenotype);
+        
+        if(finalBestPhenotypeFromGA){
+            addLogMessage(`[GA] Najlepsze znalezione parametry zapisane.`, 'info');
+            displayFinalGAResults();
         }
+        
         resetGAUI();
+        applyPhenotype(safeStartParams);
     }
 
     function resetGAUI() {
         document.getElementById('ga_stop_btn').style.display = 'none';
-        document.getElementById('autotestActionBtn').style.display = 'block';
+        document.getElementById('autotestActionBtn').style.display = 'inline-block';
         document.getElementById('autotestActionBtn').disabled = false;
         document.getElementById('autotestActionBtn').onclick = handleAutotestAction;
         renderAutotestOptions();
         updateStatus('Bezczynny', 0);
+        document.getElementById('statusGeneration').textContent = '---';
+        document.getElementById('statusBestScore').textContent = '---';
+        document.getElementById('statusLastScore').textContent = '---';
+        document.getElementById('statusBestPhenotype').textContent = '---';
     }
     
     async function waitForRobotIdle() {
@@ -1190,74 +1215,162 @@
             await sleep(200);
         }
         addLogMessage('[GA] Robot jest stabilny. Kontynuacja...', 'success');
+        await sleep(500); // Dodatkowy czas na uspokojenie
     }
 
     function updateStatus(stateText, progress = -1) {
         document.getElementById('statusStateText').textContent = stateText;
         if(progress !== -1) {
             document.getElementById('statusProgressBar').value = progress;
-            document.getElementById('statusProgressText').textContent = stateText;
+            document.getElementById('statusProgressText').textContent = `${stateText} (${progress.toFixed(0)}%)`;
         }
     }
     
-    function updateScores(lastScore) {
+    function updateScores(lastScore, phenotype) {
         document.getElementById('statusLastScore').textContent = lastScore.toFixed(2);
         if (lastScore > bestOverallScore) {
             bestOverallScore = lastScore;
-            bestOverallPhenotype = evaluatedPopulation[evaluatedPopulation.length - 1];
+            bestOverallPhenotype = phenotype;
             document.getElementById('statusBestScore').textContent = bestOverallScore.toFixed(2);
+            
+            let phenotypeText = '';
+            if (currentOptimizationMode === 'balance') phenotypeText = `Kp: ${phenotype.kp_b.toFixed(3)}, Kd: ${phenotype.kd_b.toFixed(3)}`;
+            else if (currentOptimizationMode === 'speed') phenotypeText = `Kp: ${phenotype.kp_s.toFixed(3)}, Ki: ${phenotype.ki_s.toFixed(3)}, Kd: ${phenotype.kd_s.toFixed(3)}`;
+            else if (currentOptimizationMode === 'position') phenotypeText = `Kp: ${phenotype.kp_p.toFixed(3)}, Ki: ${phenotype.ki_p.toFixed(3)}, Kd: ${phenotype.kd_p.toFixed(3)}`;
+            document.getElementById('statusBestPhenotype').textContent = phenotypeText;
         }
     }
 
     function createInitialPopulation(size) {
-        const baseKp = parseFloat(document.getElementById('balanceKpInput').value);
-        const baseKd = parseFloat(document.getElementById('balanceKdInput').value);
-        let population = [{kp_b: baseKp, kd_b: baseKd}];
-        for(let i=1; i<size; i++) {
-            population.push({
-                kp_b: baseKp * (1 + (Math.random() - 0.5) * 0.4),
-                kd_b: baseKd * (1 + (Math.random() - 0.5) * 0.4)
-            });
+        let population = [];
+        let baseParams = {};
+        
+        switch (currentOptimizationMode) {
+            case 'balance':
+                baseParams = { kp_b: parseFloat(document.getElementById('balanceKpInput').value), ki_b: 0, kd_b: parseFloat(document.getElementById('balanceKdInput').value) };
+                population.push(baseParams);
+                for (let i = 1; i < size; i++) population.push({ kp_b: Math.max(0, baseParams.kp_b * (1 + (Math.random() - 0.5) * 0.4)), ki_b: 0, kd_b: Math.max(0, baseParams.kd_b * (1 + (Math.random() - 0.5) * 0.4)) });
+                break;
+            case 'speed':
+                baseParams = { kp_s: parseFloat(document.getElementById('speedKpInput').value), ki_s: parseFloat(document.getElementById('speedKiInput').value), kd_s: parseFloat(document.getElementById('speedKdInput').value) };
+                population.push(baseParams);
+                for (let i = 1; i < size; i++) population.push({ kp_s: Math.max(0, baseParams.kp_s * (1 + (Math.random() - 0.5) * 0.8)), ki_s: Math.max(0, baseParams.ki_s * (1 + (Math.random() - 0.5) * 0.8)), kd_s: Math.max(0, baseParams.kd_s * (1 + (Math.random() - 0.5) * 0.8)) });
+                break;
+            case 'position':
+                baseParams = { kp_p: parseFloat(document.getElementById('positionKpInput').value), ki_p: parseFloat(document.getElementById('positionKiInput').value), kd_p: parseFloat(document.getElementById('positionKdInput').value) };
+                population.push(baseParams);
+                for (let i = 1; i < size; i++) population.push({ kp_p: Math.max(0, baseParams.kp_p * (1 + (Math.random() - 0.5) * 0.8)), ki_p: Math.max(0, baseParams.ki_p * (1 + (Math.random() - 0.5) * 0.8)), kd_p: Math.max(0, baseParams.kd_p * (1 + (Math.random() - 0.5) * 0.8)) });
+                break;
         }
         return population;
     }
 
     function createNewGeneration() {
         addLogMessage(`[GA] Tworzenie nowej generacji ${currentGeneration + 1}...`);
-        // Prosta logika: elityzm + mutacja najlepszych
         const populationSize = currentPopulation.length;
         evaluatedPopulation.sort((a,b) => b.score - a.score);
         
         let newPopulation = [];
-        newPopulation.push(evaluatedPopulation[0]); // Elityzm
+        const eliteSize = Math.max(1, Math.floor(populationSize * 0.2));
+        for(let i=0; i < eliteSize; i++) newPopulation.push(evaluatedPopulation[i]);
         
         while(newPopulation.length < populationSize) {
-            let parent = evaluatedPopulation[Math.floor(Math.random() * (populationSize / 2))]; // Wybierz z lepszej polowy
-            let child = { 
-                kp_b: parent.kp_b * (1 + (Math.random() - 0.5) * 0.2), 
-                kd_b: parent.kd_b * (1 + (Math.random() - 0.5) * 0.2) 
-            };
+            let parent = evaluatedPopulation[Math.floor(Math.random() * (populationSize / 2))];
+            let child = {};
+            
+            switch (currentOptimizationMode) {
+                case 'balance':
+                    child = { kp_b: Math.max(0, parent.kp_b * (1 + (Math.random() - 0.5) * 0.2)), ki_b: 0, kd_b: Math.max(0, parent.kd_b * (1 + (Math.random() - 0.5) * 0.2)) };
+                    break;
+                case 'speed':
+                    child = { kp_s: Math.max(0, parent.kp_s * (1 + (Math.random() - 0.5) * 0.5)), ki_s: Math.max(0, parent.ki_s * (1 + (Math.random() - 0.5) * 0.5)), kd_s: Math.max(0, parent.kd_s * (1 + (Math.random() - 0.5) * 0.5)) };
+                    break;
+                case 'position':
+                     child = { kp_p: Math.max(0, parent.kp_p * (1 + (Math.random() - 0.5) * 0.5)), ki_p: Math.max(0, parent.ki_p * (1 + (Math.random() - 0.5) * 0.5)), kd_p: Math.max(0, parent.kd_p * (1 + (Math.random() - 0.5) * 0.5)) };
+                    break;
+            }
             newPopulation.push(child);
         }
         
         currentPopulation = newPopulation;
-        evaluatedPopulation = [];
     }
 
-    function evaluateSpeedFitness(telemetryData) { return Math.random() * 100; } // Placeholder
-    function evaluatePositionFitness(telemetryData) { return Math.random() * 100; } // Placeholder
+    // --- FUNKCJE OCENY (FITNESS) ---
+    function evaluateBalanceFitness(telemetryData, weights) {
+        if (telemetryData.length < 20) return -1000;
+        const pitches = telemetryData.map(d => d.pitch);
+        const outputs = telemetryData.map(d => d.output);
+        const stabilityScore = pitches.reduce((acc, p) => acc + Math.abs(p), 0) / pitches.length;
+        const meanPitch = pitches.reduce((a, b) => a + b, 0) / pitches.length;
+        const stillnessScore = Math.sqrt(pitches.map(p => Math.pow(p - meanPitch, 2)).reduce((a, b) => a + b, 0) / pitches.length);
+        const overshootScore = Math.max(...pitches.map(p => Math.abs(p)));
+        const effortScore = outputs.reduce((acc, o) => acc + Math.abs(o), 0) / outputs.length;
+        const finalScore = 1000 - (weights.stability * stabilityScore * 10 + weights.stillness * stillnessScore * 10 + weights.overshoot * overshootScore * 5 + weights.effort * (effortScore / 1023) * 20);
+        return finalScore;
+    }
+    
+    function evaluateSpeedFitness(telemetryData) {
+        if (telemetryData.length < 20) return -1000;
+        const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
+        const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value) || 8.2;
+        const impulsesPerCm = ppr / (Math.PI * wheelDiameter);
+        const targetSpeedCmps = parseFloat(document.getElementById('speedTestSpeedInput').value);
+        const targetSpeedImps = targetSpeedCmps * impulsesPerCm;
+        const targetDistanceCm = parseFloat(document.getElementById('speedTestDistanceInput').value);
+        const targetDistanceImpulses = targetDistanceCm * impulsesPerCm;
+
+        let speedErrorSumSq = 0, maxOvershoot = 0;
+        const startEncoderAvg = (telemetryData[0].encoder_left + telemetryData[0].encoder_right) / 2;
+        const endEncoderAvg = (telemetryData[telemetryData.length-1].encoder_left + telemetryData[telemetryData.length-1].encoder_right) / 2;
+        const actualDistanceImpulses = Math.abs(endEncoderAvg - startEncoderAvg);
+        const positionError = Math.abs(targetDistanceImpulses - actualDistanceImpulses);
+
+        for (const data of telemetryData) {
+            const currentSpeed = Math.abs(data.speed);
+            if (currentSpeed > 0.1 * targetSpeedImps) speedErrorSumSq += Math.pow(targetSpeedImps - currentSpeed, 2);
+            if (currentSpeed > targetSpeedImps) {
+                const overshoot = currentSpeed - targetSpeedImps;
+                if (overshoot > maxOvershoot) maxOvershoot = overshoot;
+            }
+        }
+        
+        const avgSpeedError = Math.sqrt(speedErrorSumSq / telemetryData.length);
+        const score = 1000 - (avgSpeedError / (targetSpeedImps + 1) * 100) - (positionError / (targetDistanceImpulses + 1) * 150) - (maxOvershoot / (targetSpeedImps + 1) * 80);
+        return score;
+    }
+
+    function evaluatePositionFitness(telemetryData) {
+        if (telemetryData.length < 20) return -1000;
+        const startEncoderAvg = (telemetryData[0].encoder_left + telemetryData[0].encoder_right) / 2;
+        let itae = 0, maxOvershoot = 0, lastTime = 0;
+        
+        for (const data of telemetryData) {
+            const currentTime = (data.trial?.elapsed_ms || 0) / 1000.0;
+            const dt = currentTime - lastTime;
+            if(dt <= 0) continue;
+            const currentPos = (data.encoder_left + data.encoder_right) / 2;
+            const posError = Math.abs(currentPos - startEncoderAvg);
+            itae += posError * currentTime * dt;
+            if(posError > maxOvershoot) maxOvershoot = posError;
+            lastTime = currentTime;
+        }
+
+        const finalPosError = Math.abs(((telemetryData[telemetryData.length-1].encoder_left + telemetryData[telemetryData.length-1].encoder_right) / 2) - startEncoderAvg);
+        const score = 1000 - (itae * 0.1) - (maxOvershoot * 0.5) - (finalPosError * 2);
+        return score;
+    }
 
     function renderAutotestOptions() {
         const selectedTest = document.querySelector('input[name="autotest-type"]:checked').value;
-        const geneticPanel = document.getElementById('geneticOptionsPanel');
+        const balancePanel = document.getElementById('balanceOptionsPanel');
         const positionPanel = document.getElementById('positionTestOptionsPanel');
         const speedPanel = document.getElementById('speedTestOptionsPanel');
         const actionBtn = document.getElementById('autotestActionBtn');
 
-        [geneticPanel, positionPanel, speedPanel].forEach(el => el.style.display = 'none');
+        [balancePanel, positionPanel, speedPanel].forEach(el => el.style.display = 'none');
         
         if (selectedTest === 'balance') {
-            geneticPanel.style.display = 'block';
+            balancePanel.style.display = 'block';
             actionBtn.textContent = 'Rozpocznij Sesje (Auto)';
         } else if (selectedTest === 'position') {
             positionPanel.style.display = 'block';
@@ -1278,14 +1391,95 @@
     }
     
     async function applyPhenotype(phenotype) {
-        isApplyingConfig = true;
-        document.getElementById('balanceKpInput').value = phenotype.kp_b.toFixed(4);
-        document.getElementById('balanceKdInput').value = phenotype.kd_b.toFixed(4);
+        isApplyingConfig = true; // Blokuje wysylanie pojedynczych zmian
+        
+        switch(currentOptimizationMode) {
+            case 'balance':
+                document.getElementById('balanceKpInput').value = phenotype.kp_b.toFixed(4);
+                document.getElementById('balanceKdInput').value = phenotype.kd_b.toFixed(4);
+                break;
+            case 'speed':
+                document.getElementById('speedKpInput').value = phenotype.kp_s.toFixed(4);
+                document.getElementById('speedKiInput').value = phenotype.ki_s.toFixed(4);
+                document.getElementById('speedKdInput').value = phenotype.kd_s.toFixed(4);
+                break;
+            case 'position':
+                document.getElementById('positionKpInput').value = phenotype.kp_p.toFixed(4);
+                document.getElementById('positionKiInput').value = phenotype.ki_p.toFixed(4);
+                document.getElementById('positionKdInput').value = phenotype.kd_p.toFixed(4);
+                break;
+        }
+        
         isApplyingConfig = false;
-        sendBleMessage({ type: 'set_param', key: 'kp_b', value: phenotype.kp_b });
-        sendBleMessage({ type: 'set_param', key: 'kd_b', value: phenotype.kd_b });
-        await sleep(50); // Daj czas na wyslanie wiadomosci
+        
+        // Wysylanie wiadomosci do robota
+        for (const [key, value] of Object.entries(phenotype)) {
+             sendBleMessage({ type: 'set_param', key: key, value: value });
+        }
+        await sleep(50);
     }
+
+    function displayFinalGAResults() {
+        const panel = document.getElementById('gaResultsPanel');
+        if (!finalBestPhenotypeFromGA) return;
+        
+        panel.style.display = 'block';
+        document.getElementById('gaFinalScore').textContent = bestOverallScore.toFixed(2);
+        
+        let kp, ki, kd;
+        switch(currentOptimizationMode) {
+             case 'balance':
+                [kp, ki, kd] = [finalBestPhenotypeFromGA.kp_b, 0, finalBestPhenotypeFromGA.kd_b];
+                break;
+            case 'speed':
+                [kp, ki, kd] = [finalBestPhenotypeFromGA.kp_s, finalBestPhenotypeFromGA.ki_s, finalBestPhenotypeFromGA.kd_s];
+                break;
+            case 'position':
+                [kp, ki, kd] = [finalBestPhenotypeFromGA.kp_p, finalBestPhenotypeFromGA.ki_p, finalBestPhenotypeFromGA.kd_p];
+                break;
+        }
+        document.getElementById('gaFinalKp').textContent = kp.toFixed(4);
+        document.getElementById('gaFinalKi').textContent = ki.toFixed(4);
+        document.getElementById('gaFinalKd').textContent = kd.toFixed(4);
+        
+        updateAccordionHeight(panel.closest('.accordion-content'));
+    }
+
+    function applyGaResults() {
+        if (!finalBestPhenotypeFromGA) {
+            addLogMessage('[UI] Brak wynikow do zastosowania.', 'warn');
+            return;
+        }
+
+        isApplyingConfig = true;
+        switch(currentOptimizationMode) {
+             case 'balance':
+                document.getElementById('balanceKpInput').value = finalBestPhenotypeFromGA.kp_b.toFixed(4);
+                document.getElementById('balanceKiInput').value = "0.0000";
+                document.getElementById('balanceKdInput').value = finalBestPhenotypeFromGA.kd_b.toFixed(4);
+                break;
+            case 'speed':
+                document.getElementById('speedKpInput').value = finalBestPhenotypeFromGA.kp_s.toFixed(4);
+                document.getElementById('speedKiInput').value = finalBestPhenotypeFromGA.ki_s.toFixed(4);
+                document.getElementById('speedKdInput').value = finalBestPhenotypeFromGA.kd_s.toFixed(4);
+                break;
+            case 'position':
+                document.getElementById('positionKpInput').value = finalBestPhenotypeFromGA.kp_p.toFixed(4);
+                document.getElementById('positionKiInput').value = finalBestPhenotypeFromGA.ki_p.toFixed(4);
+                document.getElementById('positionKdInput').value = finalBestPhenotypeFromGA.kd_p.toFixed(4);
+                break;
+        }
+        isApplyingConfig = false;
+
+        // Wyzwol zdarzenia change, aby wyslac wartosci do robota
+        for(const key in finalBestPhenotypeFromGA) {
+            const inputId = Object.keys(parameterMapping).find(id => parameterMapping[id] === key);
+            if(inputId) document.getElementById(inputId).dispatchEvent(new Event('change', {bubbles:true}));
+        }
+        
+        addLogMessage('[UI] Zastosowano najlepsze znalezione parametry do panelu.', 'success');
+    }
+
 
     // --- SEKCJA STROJENIA KROK 3: CHARAKTERYZACJA ---
     let isCharacterizationRunning = false;
@@ -1435,7 +1629,7 @@
     }
 
     function createCheckerTexture(squareSizeCm = 20, colorA = '#C8C8C8', colorB = '#787878') {
-        const size = 256; const squares = 2; // 2x2 checker; one repeat == jeden kwadrat 20cm
+        const size = 256; const squares = 2;
         const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size; const ctx = canvas.getContext('2d');
         const s = size / squares;
         for (let y = 0; y < squares; y++) {
@@ -1454,10 +1648,9 @@
         const width = 1024, height = 512;
         const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d');
         const grad = ctx.createLinearGradient(0, 0, 0, height);
-        grad.addColorStop(0, '#87CEEB'); // jasne niebo
-        grad.addColorStop(1, '#E6F2FA'); // horyzont
+        grad.addColorStop(0, '#87CEEB');
+        grad.addColorStop(1, '#E6F2FA');
         ctx.fillStyle = grad; ctx.fillRect(0, 0, width, height);
-        // proste "chmurki"
         ctx.globalAlpha = 0.15; ctx.fillStyle = '#FFFFFF';
         for (let i = 0; i < 12; i++) {
             const cx = Math.random() * width, cy = Math.random() * height * 0.6, rw = 120 + Math.random() * 180, rh = 30 + Math.random() * 40;
@@ -1484,8 +1677,8 @@
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
         directionalLight.position.set(10, 20, 15);
         scene3D.add(directionalLight);
-        // Ground plane with repeating checker texture (20x20 cm squares), infinite scroll via UV offset
-        const PLANE_SIZE_CM = 2000; // 20 m square
+        
+        const PLANE_SIZE_CM = 2000;
         groundTexture = createCheckerTexture(20);
         const repeats = PLANE_SIZE_CM / 20;
         groundTexture.repeat.set(repeats, repeats);
@@ -1540,17 +1733,15 @@
                 const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
                 const dist_cm = ((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * WHEEL_DIAMETER;
                 const angleRad = robotPivot.rotation.y;
-                // Infinite ground scroll: move texture opposite to robot's motion
+                
                 if (groundTexture) {
-                    const dx = Math.sin(angleRad) * dist_cm; // world X forward component
-                    const dz = Math.cos(angleRad) * dist_cm; // world Z forward component
-                    const squaresPerCm = 1 / 20; // 20 cm squares
-                    // UV offset.x maps to plane's U (X axis), offset.y maps to V (Z axis)
+                    const dx = Math.sin(angleRad) * dist_cm;
+                    const dz = Math.cos(angleRad) * dist_cm;
+                    const squaresPerCm = 1 / 20;
                     groundTexture.offset.x += dx * squaresPerCm;
                     groundTexture.offset.y += dz * squaresPerCm;
                     groundTexture.needsUpdate = true;
                 }
-                // Keep robot at origin for infinite effect, but compute logical position for UI display
                 const logicalX = (groundTexture ? -groundTexture.offset.x * 20 : robotPivot.position.x);
                 const logicalZ = (groundTexture ? -groundTexture.offset.y * 20 : robotPivot.position.z);
                 document.getElementById('robot3d-position-x').textContent = logicalX.toFixed(1) + ' cm';
