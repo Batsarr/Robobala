@@ -408,12 +408,12 @@
                             <div class="setting-container">
                                 <label>Waga Stabilnosci (S)<span class="help-icon">?</span></label>
                                 <div class="numeric-input-wrapper"><button>-</button><input type="number" class="weight-input" id="weightStability" step="0.5" value="4.0" min="0" max="10"><button>+</button></div>
-                                <div class="help-text">Zwieksz, jesli chcesz, aby robot minimalizowal srednie odchylenie od zera.</div>
+                                <div class="help-text">Zwieksz, jesli chcesz, aby robot minimalizowal srednie odchylenie od zera w czasie.</div>
                             </div>
                             <div class="setting-container">
                                 <label>Waga Spokoju (C)<span class="help-icon">?</span></label>
                                 <div class="numeric-input-wrapper"><button>-</button><input type="number" class="weight-input" id="weightStillness" step="0.5" value="3.0" min="0" max="10"><button>+</button></div>
-                                <div class="help-text">Zwieksz, jesli priorytetem jest, aby robot stal idealnie nieruchomo, bez zbednych mikro-korekt.</div>
+                                <div class="help-text">Zwieksz, jesli priorytetem jest, aby robot stal idealnie nieruchomo, bez zbednych, czestych oscylacji.</div>
                             </div>
                              <div class="setting-container">
                                 <label>Waga Przekroczenia (P)<span class="help-icon">?</span></label>
@@ -480,8 +480,11 @@
                     <div class="info-grid">
                         <strong>Pokolenie / Osobnik:</strong> <span id="statusGeneration">---</span>
                         <strong>Najlepszy wynik ogolnie:</strong> <span id="statusBestScore" style="font-weight: bold; color: #a2f279;">---</span>
-                        <strong>Najlepsze Parametry:</strong> <span id="statusBestPhenotype" style="font-weight: bold; color: #61dafb;">---</span>
+                        <strong>Najlepsze Znalezione:</strong> <span id="statusBestPhenotype" style="font-weight: bold; color: #61dafb;">---</span>
+                        <hr style="grid-column: 1 / -1; border-color: #4a4f58; margin: 2px 0;">
+                        <strong>Testowane Parametry:</strong> <span id="statusCurrentPhenotype" style="font-weight: bold; color: #f7b731;">---</span>
                         <strong>Ostatni wynik:</strong> <span id="statusLastScore" style="font-weight: bold; color: #f7b731;">---</span>
+                        <hr style="grid-column: 1 / -1; border-color: #4a4f58; margin: 2px 0;">
                         <strong>Postep Generacji:</strong>
                         <div>
                             <progress id="statusProgressBar" value="0" max="100"></progress>
@@ -749,7 +752,7 @@
             lastKnownRobotState = data.robot_state;
         }
         
-        if (isOptimizationSessionRunning && data.type === 'telemetry') {
+        if (isOptimizationSessionRunning && data.type === 'telemetry' && data.trial?.id) {
             telemetryForCurrentTest.push(data);
         }
 
@@ -945,7 +948,7 @@
     function runSequence() { if (isSequenceRunning) return; if (lastKnownRobotState !== 'TRZYMA_POZYCJE' && lastKnownRobotState !== 'BALANSUJE') { addLogMessage(`[UI] Nie mozna rozpoczac sekwencji. Robot w stanie '${lastKnownRobotState}'.`, 'error'); return; } const steps = document.querySelectorAll('.sequence-step'); if (steps.length === 0) return; isSequenceRunning = true; currentSequenceStep = 0; updateSequenceUI(); addLogMessage(`[UI] Rozpoczeto sekwencje z ${steps.length} krokow.`, 'info'); executeNextSequenceStep(); }
     function stopSequenceExecution() { if (!isSequenceRunning) return; isSequenceRunning = false; sendBleMessage({ type: 'command_stop' }); updateSequenceUI(); addLogMessage('[UI] Sekwencja zatrzymana.', 'warn'); }
     function clearSequence() { if (isSequenceRunning) stopSequenceExecution(); const list = document.getElementById('sequence-list'); list.innerHTML = ''; updateAccordionHeight(list.closest('.accordion-content')); }
-    function updateSequenceUI() { document.querySelectorAll('.sequence-step').forEach((index, step) => { step.classList.toggle('executing', isSequenceRunning && index === currentSequenceStep); }); document.getElementById('run-sequence-btn').disabled = isSequenceRunning; document.getElementById('add-sequence-step-btn').disabled = isSequenceRunning; document.getElementById('clear-sequence-btn').disabled = isSequenceRunning; document.getElementById('stop-sequence-btn').disabled = !isSequenceRunning; }
+    function updateSequenceUI() { document.querySelectorAll('.sequence-step').forEach((step, index) => { step.classList.toggle('executing', isSequenceRunning && index === currentSequenceStep); }); document.getElementById('run-sequence-btn').disabled = isSequenceRunning; document.getElementById('add-sequence-step-btn').disabled = isSequenceRunning; document.getElementById('clear-sequence-btn').disabled = isSequenceRunning; document.getElementById('stop-sequence-btn').disabled = !isSequenceRunning; }
     function checkAndExecuteNextSequenceStep(previousState) {
         const wasWorking = ['RUCH_AUTONOMICZNY', 'OBROT_AUTONOMICZNY'].includes(previousState);
         const isReady = ['TRZYMA_POZYCJE', 'BALANSUJE'].includes(lastKnownRobotState);
@@ -1070,6 +1073,8 @@
                 telemetryForCurrentTest = [];
                 
                 updateStatus(`Testowanie osobnika ${ind + 1}/${currentPopulation.length}`, (ind / currentPopulation.length) * 100);
+                
+                updateCurrentPhenotypeStatus(individual);
 
                 await applyPhenotype(individual);
                 await sleep(500);
@@ -1099,6 +1104,8 @@
         addLogMessage(`[GA-Inter] Przygotowanie do testu osobnika ${currentIndividualIndex + 1}...`);
         document.getElementById('autotestActionBtn').disabled = true;
         updateStatus(`Testowanie osobnika ${currentIndividualIndex + 1}...`, (currentIndividualIndex / currentPopulation.length) * 100);
+
+        updateCurrentPhenotypeStatus(individual);
 
         await applyPhenotype(individual);
         await sleep(300);
@@ -1141,7 +1148,7 @@
                      document.getElementById('statusGeneration').textContent = `${currentGeneration} / ${totalGenerations}`;
                      document.getElementById('autotestActionBtn').textContent = `Testuj Osobnika 1/${populationSize}`;
                      document.getElementById('autotestActionBtn').onclick = handleAutotestAction;
-                     testNextIndividualInteractive();
+                     handleAutotestAction();
                  };
                  updateStatus('Pokolenie zakonczone');
             } else {
@@ -1151,7 +1158,7 @@
     }
     
     function processTestResult(individual) {
-        let score = -1000; // Kara za niestabilnosc
+        let score = 0.0;
         if (telemetryForCurrentTest.length > 10) {
             if (currentOptimizationMode === 'balance') {
                  const weights = { stability: parseFloat(document.getElementById('weightStability').value), stillness: parseFloat(document.getElementById('weightStillness').value), overshoot: parseFloat(document.getElementById('weightOvershoot').value), effort: parseFloat(document.getElementById('weightEffort').value) };
@@ -1203,6 +1210,7 @@
         document.getElementById('statusBestScore').textContent = '---';
         document.getElementById('statusLastScore').textContent = '---';
         document.getElementById('statusBestPhenotype').textContent = '---';
+        document.getElementById('statusCurrentPhenotype').textContent = '---';
     }
     
     async function waitForRobotIdle() {
@@ -1215,7 +1223,7 @@
             await sleep(200);
         }
         addLogMessage('[GA] Robot jest stabilny. Kontynuacja...', 'success');
-        await sleep(500); // Dodatkowy czas na uspokojenie
+        await sleep(500);
     }
 
     function updateStatus(stateText, progress = -1) {
@@ -1225,13 +1233,21 @@
             document.getElementById('statusProgressText').textContent = `${stateText} (${progress.toFixed(0)}%)`;
         }
     }
+
+    function updateCurrentPhenotypeStatus(phenotype) {
+        let phenotypeText = '';
+        if (currentOptimizationMode === 'balance') phenotypeText = `Kp: ${phenotype.kp_b.toFixed(3)}, Kd: ${phenotype.kd_b.toFixed(3)}`;
+        else if (currentOptimizationMode === 'speed') phenotypeText = `Kp: ${phenotype.kp_s.toFixed(3)}, Ki: ${phenotype.ki_s.toFixed(3)}, Kd: ${phenotype.kd_s.toFixed(3)}`;
+        else if (currentOptimizationMode === 'position') phenotypeText = `Kp: ${phenotype.kp_p.toFixed(3)}, Ki: ${phenotype.ki_p.toFixed(3)}, Kd: ${phenotype.kd_p.toFixed(3)}`;
+        document.getElementById('statusCurrentPhenotype').textContent = phenotypeText;
+    }
     
     function updateScores(lastScore, phenotype) {
-        document.getElementById('statusLastScore').textContent = lastScore.toFixed(2);
+        document.getElementById('statusLastScore').textContent = lastScore.toFixed(4);
         if (lastScore > bestOverallScore) {
             bestOverallScore = lastScore;
             bestOverallPhenotype = phenotype;
-            document.getElementById('statusBestScore').textContent = bestOverallScore.toFixed(2);
+            document.getElementById('statusBestScore').textContent = bestOverallScore.toFixed(4);
             
             let phenotypeText = '';
             if (currentOptimizationMode === 'balance') phenotypeText = `Kp: ${phenotype.kp_b.toFixed(3)}, Kd: ${phenotype.kd_b.toFixed(3)}`;
@@ -1293,24 +1309,61 @@
         }
         
         currentPopulation = newPopulation;
+        currentGeneration++;
     }
 
     // --- FUNKCJE OCENY (FITNESS) ---
     function evaluateBalanceFitness(telemetryData, weights) {
-        if (telemetryData.length < 20) return -1000;
+        if (!telemetryData[0]?.trial?.elapsed_ms) return 0.0;
+        const testDuration = telemetryData[telemetryData.length-1].trial.elapsed_ms / 1000.0;
+        if (testDuration < 1.0) return 0.0;
+
+        const MAX_ACCEPTABLE_ITAE = 50.0;
+        const MAX_ACCEPTABLE_STD_DEV = 0.75;
+        const MAX_ACCEPTABLE_OVERSHOOT = 5.0;
+        const MAX_ACCEPTABLE_ZERO_CROSSINGS_PER_SEC = 10;
+        const CRITICAL_PITCH_ERROR = 15.0;
+        
+        let itae = 0, maxOvershoot = 0, zeroCrossings = 0;
+        let lastTime = 0;
         const pitches = telemetryData.map(d => d.pitch);
         const outputs = telemetryData.map(d => d.output);
-        const stabilityScore = pitches.reduce((acc, p) => acc + Math.abs(p), 0) / pitches.length;
+
+        for (let i = 1; i < telemetryData.length; i++) {
+            const currentTime = telemetryData[i].trial.elapsed_ms / 1000.0;
+            const dt = currentTime - lastTime;
+            if(dt <= 0) continue;
+            itae += Math.abs(pitches[i]) * currentTime * dt;
+            if (pitches[i-1] * pitches[i] < 0) zeroCrossings++;
+            lastTime = currentTime;
+        }
+
+        maxOvershoot = Math.max(...pitches.map(p => Math.abs(p)));
+        if (maxOvershoot > CRITICAL_PITCH_ERROR) {
+            addLogMessage(`[GA-Ocena] DYSKWALIFIKACJA: Przekroczono krytyczny kat (${maxOvershoot.toFixed(2)} st.)`, "warn");
+            return 0.0;
+        }
+
         const meanPitch = pitches.reduce((a, b) => a + b, 0) / pitches.length;
-        const stillnessScore = Math.sqrt(pitches.map(p => Math.pow(p - meanPitch, 2)).reduce((a, b) => a + b, 0) / pitches.length);
-        const overshootScore = Math.max(...pitches.map(p => Math.abs(p)));
-        const effortScore = outputs.reduce((acc, o) => acc + Math.abs(o), 0) / outputs.length;
-        const finalScore = 1000 - (weights.stability * stabilityScore * 10 + weights.stillness * stillnessScore * 10 + weights.overshoot * overshootScore * 5 + weights.effort * (effortScore / 1023) * 20);
+        const stdDev = Math.sqrt(pitches.map(p => Math.pow(p - meanPitch, 2)).reduce((a, b) => a + b, 0) / pitches.length);
+        const rmsEffort = Math.sqrt(outputs.map(o => o*o).reduce((a, b) => a + b, 0) / outputs.length);
+
+        const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+        
+        const stabilityScore = 1.0 - clamp(itae / MAX_ACCEPTABLE_ITAE, 0, 1);
+        const stillnessScore = (1.0 - clamp(stdDev / MAX_ACCEPTABLE_STD_DEV, 0, 1)) * 0.7 + (1.0 - clamp((zeroCrossings/testDuration) / MAX_ACCEPTABLE_ZERO_CROSSINGS_PER_SEC, 0, 1)) * 0.3;
+        const overshootScore = 1.0 - clamp(maxOvershoot / MAX_ACCEPTABLE_OVERSHOOT, 0, 1);
+        const effortScore = 1.0 - clamp(rmsEffort / 1023, 0, 1);
+
+        const totalWeight = weights.stability + weights.stillness + weights.overshoot + weights.effort;
+        if(totalWeight === 0) return 0.5;
+
+        const finalScore = (weights.stability * stabilityScore + weights.stillness * stillnessScore + weights.overshoot * overshootScore + weights.effort * effortScore) / totalWeight;
         return finalScore;
     }
     
     function evaluateSpeedFitness(telemetryData) {
-        if (telemetryData.length < 20) return -1000;
+        if (telemetryData.length < 20) return 0.0;
         const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
         const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value) || 8.2;
         const impulsesPerCm = ppr / (Math.PI * wheelDiameter);
@@ -1335,17 +1388,22 @@
         }
         
         const avgSpeedError = Math.sqrt(speedErrorSumSq / telemetryData.length);
-        const score = 1000 - (avgSpeedError / (targetSpeedImps + 1) * 100) - (positionError / (targetDistanceImpulses + 1) * 150) - (maxOvershoot / (targetSpeedImps + 1) * 80);
-        return score;
+        
+        const speedPenalty = Math.min(1.0, avgSpeedError / (targetSpeedImps + 1));
+        const positionPenalty = Math.min(1.0, positionError / (targetDistanceImpulses + 1));
+        const overshootPenalty = Math.min(1.0, maxOvershoot / (targetSpeedImps + 1));
+
+        const totalPenalty = (speedPenalty * 0.3) + (positionPenalty * 0.5) + (overshootPenalty * 0.2);
+        return 1.0 - totalPenalty;
     }
 
     function evaluatePositionFitness(telemetryData) {
-        if (telemetryData.length < 20) return -1000;
+        if (telemetryData.length < 20 || !telemetryData[0]?.trial?.elapsed_ms) return 0.0;
         const startEncoderAvg = (telemetryData[0].encoder_left + telemetryData[0].encoder_right) / 2;
         let itae = 0, maxOvershoot = 0, lastTime = 0;
         
         for (const data of telemetryData) {
-            const currentTime = (data.trial?.elapsed_ms || 0) / 1000.0;
+            const currentTime = data.trial.elapsed_ms / 1000.0;
             const dt = currentTime - lastTime;
             if(dt <= 0) continue;
             const currentPos = (data.encoder_left + data.encoder_right) / 2;
@@ -1356,8 +1414,13 @@
         }
 
         const finalPosError = Math.abs(((telemetryData[telemetryData.length-1].encoder_left + telemetryData[telemetryData.length-1].encoder_right) / 2) - startEncoderAvg);
-        const score = 1000 - (itae * 0.1) - (maxOvershoot * 0.5) - (finalPosError * 2);
-        return score;
+        
+        const itaePenalty = Math.min(1.0, itae / 50000.0); // 50000 to stala do skalowania
+        const overshootPenalty = Math.min(1.0, maxOvershoot / 1000.0); // 1000 impulsow to duzy overshoot
+        const finalErrorPenalty = Math.min(1.0, finalPosError / 50.0); // 50 impulsow to duzy blad koncowy
+        
+        const totalPenalty = (itaePenalty * 0.4) + (overshootPenalty * 0.3) + (finalErrorPenalty * 0.3);
+        return 1.0 - totalPenalty;
     }
 
     function renderAutotestOptions() {
@@ -1391,32 +1454,12 @@
     }
     
     async function applyPhenotype(phenotype) {
-        isApplyingConfig = true; // Blokuje wysylanie pojedynczych zmian
-        
-        switch(currentOptimizationMode) {
-            case 'balance':
-                document.getElementById('balanceKpInput').value = phenotype.kp_b.toFixed(4);
-                document.getElementById('balanceKdInput').value = phenotype.kd_b.toFixed(4);
-                break;
-            case 'speed':
-                document.getElementById('speedKpInput').value = phenotype.kp_s.toFixed(4);
-                document.getElementById('speedKiInput').value = phenotype.ki_s.toFixed(4);
-                document.getElementById('speedKdInput').value = phenotype.kd_s.toFixed(4);
-                break;
-            case 'position':
-                document.getElementById('positionKpInput').value = phenotype.kp_p.toFixed(4);
-                document.getElementById('positionKiInput').value = phenotype.ki_p.toFixed(4);
-                document.getElementById('positionKdInput').value = phenotype.kd_p.toFixed(4);
-                break;
-        }
-        
-        isApplyingConfig = false;
-        
-        // Wysylanie wiadomosci do robota
+        isApplyingConfig = true;
         for (const [key, value] of Object.entries(phenotype)) {
              sendBleMessage({ type: 'set_param', key: key, value: value });
         }
         await sleep(50);
+        isApplyingConfig = false;
     }
 
     function displayFinalGAResults() {
@@ -1424,7 +1467,7 @@
         if (!finalBestPhenotypeFromGA) return;
         
         panel.style.display = 'block';
-        document.getElementById('gaFinalScore').textContent = bestOverallScore.toFixed(2);
+        document.getElementById('gaFinalScore').textContent = bestOverallScore.toFixed(4);
         
         let kp, ki, kd;
         switch(currentOptimizationMode) {
@@ -1471,13 +1514,13 @@
         }
         isApplyingConfig = false;
 
-        // Wyzwol zdarzenia change, aby wyslac wartosci do robota
         for(const key in finalBestPhenotypeFromGA) {
             const inputId = Object.keys(parameterMapping).find(id => parameterMapping[id] === key);
             if(inputId) document.getElementById(inputId).dispatchEvent(new Event('change', {bubbles:true}));
         }
         
         addLogMessage('[UI] Zastosowano najlepsze znalezione parametry do panelu.', 'success');
+        document.getElementById('gaResultsPanel').style.display = 'none';
     }
 
 
