@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v17.2 (GA Refactor)</title>
+    <title>Robot PID - Panel Sterowania v17.3 (Kalman)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -186,7 +186,7 @@
              <fieldset style="margin-top: 15px;">
                 <legend>Diagnostyka</legend>
                 <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
-                    <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Kalibruj MPU (DMP)</button>
+                    <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Kalibruj MPU</button>
                     <button id="calibrateZeroPointBtn" style="width:100%; background-color:#f7b731;">Znajdz Pion Automatycznie</button>
                 </div>
             </fieldset>
@@ -317,14 +317,31 @@
                     </div>
                 </div>
 
-                <button class="accordion-header" onclick="toggleAccordion(this)">5. Parametry Sprzetowe i Mechaniczne</button>
+                <!-- ########## NOWA SEKCJA FILTRU KALMANA ########## -->
+                <button class="accordion-header" onclick="toggleAccordion(this)">5. Strojenie Filtru Kalmana</button>
+                <div class="accordion-content">
+                    <div class="setting-container">
+                        <label for="qAngleInput">Q Angle (Szum Zyro)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="qAngleInput" step="0.001" value="0.001"><button>+</button></div>
+                        <div class="help-text"><strong>Wplyw:</strong> Jak bardzo ufamy zyroskopowi. Mniejsza wartosc = wieksze zaufanie do zyroskopu, kat bedzie bardziej 'plynacy', ale moze dryfowac. Wieksza wartosc = szybsza korekta z akcelerometru.<br><strong>Strojenie:</strong> Zaczynaj od malych wartosci. Zwiekszaj, jesli robot zbyt wolno koryguje swoj dryf.</div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="rMeasureInput">R Measure (Szum Acc)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rMeasureInput" step="0.01" value="0.03"><button>+</button></div>
+                        <div class="help-text"><strong>Wplyw:</strong> Jak bardzo ufamy akcelerometrowi. Mniejsza wartosc = kat bedzie szybciej korygowany przez akcelerometr, ale bedzie bardziej 'zaszumiony' od wibracji. Wieksza wartosc = wieksze wygladzenie i odpornosc na wstrzasy.<br><strong>Strojenie:</strong> Zwiekszaj, jesli kat jest zbyt 'nerwowy'. Zmniejszaj, jesli robot zbyt wolno reaguje na faktyczny przechyl.</div>
+                    </div>
+                </div>
+                <!-- ########## KONIEC NOWEJ SEKCJI ########## -->
+
+
+                <button class="accordion-header" onclick="toggleAccordion(this)">6. Parametry Sprzetowe i Mechaniczne</button>
                 <div class="accordion-content">
                     <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" step="0.1" value="8.2"><button>+</button></div> </div>
                     <div class="setting-container"> <label for="trackWidthInput">Rozstaw kol (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="trackWidthInput" step="0.1" value="12.5"><button>+</button></div> </div>
                     <div class="setting-container"> <label for="encoderPprInput">Impulsy na obrot (PPR)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="encoderPprInput" step="10" value="820"><button>+</button></div> </div>
                 </div>
 
-                <button class="accordion-header" onclick="toggleAccordion(this)">6. Kalibracja PWM Silnikow</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">7. Kalibracja PWM Silnikow</button>
                 <div class="accordion-content">
                     <div class="pwm-info"> <strong>Info:</strong> Uzyj przycisku <strong>"Auto"</strong>, aby automatycznie znalezc prog startowy silnika, lub <strong>"Testuj"</strong>, aby sprawdzic recznie wpisana wartosc. <strong>Wazne:</strong> Przed testem podnies robota, aby kola mogly sie swobodnie krecic! </div>
                      <div class="setting-container"> <label for="pwmTuneStartInput">Rozpocznij auto-szukanie od PWM</label> <div class="numeric-input-wrapper"> <button id="pwmTuneStartMinus">-</button> <input type="number" id="pwmTuneStartInput" min="1" max="800" step="1" value="600"> <button id="pwmTuneStartPlus">+</button> </div> </div> <hr style="border-color: #4a4f58; margin: 15px 0;">
@@ -552,7 +569,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 17.2 (Refactor 3D i GA)
+    // WERSJA 17.3 (Refactor 3D i GA, Integracja Kalmana)
     // =======================================================================================
 
     // === DEKLARACJE ZMIENNYCH GLOBALNYCH ===
@@ -575,7 +592,9 @@
         'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone',
         'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr',
         'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd',
-        'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd'
+        'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd',
+        'qAngleInput': 'kalman_q_angle', // NOWY WPIS
+        'rMeasureInput': 'kalman_r_measure' // NOWY WPIS
     };
 
     // === INICJALIZACJA APLIKACJI ===
