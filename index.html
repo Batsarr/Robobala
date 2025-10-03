@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v17.2 (GA Refactor)</title>
+    <title>Robot PID - Panel Sterowania v18.0 (Kalman Filter)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -324,7 +324,15 @@
                     <div class="setting-container"> <label for="encoderPprInput">Impulsy na obrot (PPR)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="encoderPprInput" step="10" value="820"><button>+</button></div> </div>
                 </div>
 
-                <button class="accordion-header" onclick="toggleAccordion(this)">6. Kalibracja PWM Silnikow</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">6. Konfiguracja Filtr Kalmana</button>
+                <div class="accordion-content">
+                    <div class="setting-container"><label for="kalmanQAngleInput">Q Angle (Szum Procesu - Kat)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="kalmanQAngleInput" min="0.0001" max="0.01" step="0.0001" value="0.001"><button>+</button></div><div class="help-text">Wspolczynnik zaufania do modelu predykcji kata. Wieksza wartosc = wiekszy szum procesu, filtr bedzie bardziej reagowal na akcelerometr.</div></div>
+                    <div class="setting-container"><label for="kalmanQBiasInput">Q Bias (Szum Procesu - Bias)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="kalmanQBiasInput" min="0.0001" max="0.01" step="0.0001" value="0.003"><button>+</button></div><div class="help-text">Wspolczynnik zaufania do modelu predykcji dryfu zyroskopu. Wieksza wartosc = szybsza adaptacja do dryfu zyroskopu.</div></div>
+                    <div class="setting-container"><label for="kalmanRMeasureInput">R Measure (Szum Pomiaru)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="kalmanRMeasureInput" min="0.001" max="0.1" step="0.001" value="0.03"><button>+</button></div><div class="help-text">Zaufanie do pomiarow akcelerometru. Wieksza wartosc = mniejsze zaufanie do akcelerometru, filtr bedzie bardziej poleganal na zyroskopie.</div></div>
+                    <div class="pwm-info"><strong>Info:</strong> Filtr Kalmana laczy dane z akcelerometru (precyzyjny kat, ale podatny na wstrzasy) z zyroskopem (precyzyjna predkosc katowa, ale z dryfem). Parametry Q i R kontroluja, jak bardzo filtr ufa kazdemu zrodlu danych. <strong>Tip:</strong> Zwieksz Q_angle, jesli robot jest niestabilny, zwieksz R_measure, jesli akcelerometr jest zbyt szumny.</div>
+                </div>
+
+                <button class="accordion-header" onclick="toggleAccordion(this)">7. Kalibracja PWM Silnikow</button>
                 <div class="accordion-content">
                     <div class="pwm-info"> <strong>Info:</strong> Uzyj przycisku <strong>"Auto"</strong>, aby automatycznie znalezc prog startowy silnika, lub <strong>"Testuj"</strong>, aby sprawdzic recznie wpisana wartosc. <strong>Wazne:</strong> Przed testem podnies robota, aby kola mogly sie swobodnie krecic! </div>
                      <div class="setting-container"> <label for="pwmTuneStartInput">Rozpocznij auto-szukanie od PWM</label> <div class="numeric-input-wrapper"> <button id="pwmTuneStartMinus">-</button> <input type="number" id="pwmTuneStartInput" min="1" max="800" step="1" value="600"> <button id="pwmTuneStartPlus">+</button> </div> </div> <hr style="border-color: #4a4f58; margin: 15px 0;">
@@ -552,7 +560,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 17.2 (Refactor 3D i GA)
+    // WERSJA 18.0 (Kalman Filter Integration)
     // =======================================================================================
 
     // === DEKLARACJE ZMIENNYCH GLOBALNYCH ===
@@ -575,7 +583,8 @@
         'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone',
         'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr',
         'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd',
-        'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd'
+        'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd',
+        'kalmanQAngleInput': 'kalman_q_angle', 'kalmanQBiasInput': 'kalman_q_bias', 'kalmanRMeasureInput': 'kalman_r_measure'
     };
 
     // === INICJALIZACJA APLIKACJI ===
@@ -1855,3 +1864,4 @@
 </script>
 </body>
 </html>
+
