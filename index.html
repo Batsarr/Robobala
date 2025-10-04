@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v18.4 (PWM Tune Fix)</title>
+    <title>Robot PID - Panel Sterowania v18.4</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -166,7 +166,7 @@
             <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
             <button id="emergencyStopBtn">STOP AWARYJNY</button>
             
-            <!-- ZMIANA: Sekcja Joysticka przeniesiona tutaj -->
+            <!-- PRZENIESIONA SEKCJA JOYSTICKA -->
             <button class="accordion-header" onclick="toggleAccordion(this)" style="margin-top: 15px;">Strojenie Joysticka</button>
             <div class="accordion-content">
                 <div class="setting-container"><label for="joystickSensitivityInput">Czulosc Globalna (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickSensitivityInput" min="10" max="100" step="5" value="100"><button>+</button></div><div class="help-text">Mnoznik dla wszystkich wartosci z joysticka. Zmniejsz, aby robot byl mniej czuly.</div></div>
@@ -280,8 +280,7 @@
                 <button id="deleteSelectedPresetBtn" style="width:100%; margin-top: 10px; background-color: #ff6347;">Usun Wybrany Preset</button>
             </fieldset>
             <div id="allSettings">
-                
-                <!-- ZMIANA: Nowa kolejność -->
+                <!-- NOWA KOLEJNOSC -->
                 <button class="accordion-header" onclick="toggleAccordion(this)">1. Parametry Sprzetowe i Mechaniczne</button>
                 <div class="accordion-content">
                     <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" step="0.1" value="8.2"><button>+</button></div> </div>
@@ -299,8 +298,8 @@
                     <div class="manual-tune-row" data-motor="right" data-direction="bwd"> <div class="pwm-input-row"> <label>Prawy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
                     <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKIE SILNIKI</button>
                 </div>
-
-                <button class="accordion-header" onclick="toggleAccordion(this)">3. Konfiguracja Filtra Kalmana</button>
+                
+                <button class="accordion-header" onclick="toggleAccordion(this)">3. Konfiguracja Filtr Kalmana</button>
                 <div class="accordion-content">
                     <div class="setting-container"><label for="kalmanQAngleInput">Q Angle (Szum Procesu - Kat)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="kalmanQAngleInput" min="0.0001" max="0.01" step="0.0001" value="0.001"><button>+</button></div><div class="help-text">Wspolczynnik zaufania do modelu predykcji kata. Wieksza wartosc = wiekszy szum procesu, filtr bedzie bardziej reagowal na akcelerometr.</div></div>
                     <div class="setting-container"><label for="kalmanQBiasInput">Q Bias (Szum Procesu - Bias)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="kalmanQBiasInput" min="0.0001" max="0.01" step="0.0001" value="0.003"><button>+</button></div><div class="help-text">Wspolczynnik zaufania do modelu predykcji dryfu zyroskopu. Wieksza wartosc = szybsza adaptacja do dryfu zyroskopu.</div></div>
@@ -314,15 +313,8 @@
                     <div class="setting-container"> <label for="balanceKiInput">Ki - Korekta<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKiInput" step="0.01" value="0.0"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Usuwa dlugotrwaly blad (np. gdy robot dryfuje). Zwiekszaj bardzo ostroznie, czesto nie jest potrzebny.</div> </div>
                     <div class="setting-container"> <label for="balanceKdInput">Kd - Tlumienie<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKdInput" step="0.0001" value="3.0039"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Hamuje oscylacje i uspokaja robota. W nowej wersji, ten parametr ma podwojne dzialanie: (1) tlumienie oparte na szybkosci zmiany kata (pochodna bledu) oraz (2) dodatkowe, bezposrednie tlumienie oparte na surowej predkosci katowej z zyroskopu. To czyni go bardzo waznym dla stabilnosci.</div> </div>
                     <div class="setting-container"> <label for="balanceFilterAlphaInput">Filtr Pochodnej (%)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceFilterAlphaInput" min="1" max="100" step="1" value="40"><button>+</button></div> <div class="help-text">Wygladza odczyt pochodnej, redukujac wplyw szumow. 100% = brak filtrowania. Zmniejsz, jesli robot jest nerwowy.</div> </div>
-                    <!-- ZMIANA: Nowy przełącznik -->
-                    <div class="setting-container">
-                        <label for="gyroDampingSwitch">Tlumienie z Żyroskopu<span class="help-icon">?</span></label>
-                        <label class="switch">
-                            <input type="checkbox" id="gyroDampingSwitch" checked>
-                            <span class="slider round"></span>
-                        </label>
-                        <div class="help-text">Bezposrednie tlumienie ruchu na podstawie surowej predkosci katowej. Zwieksza stabilnosc, ale musi byc wylaczone do testu Z-N.</div>
-                    </div>
+                    <div class="control-row"><span class="control-label">Tlumienie z Zyroskopu<span class="help-icon">?</span></span><label class="switch"><input type="checkbox" id="gyroDampingSwitch" checked><span class="slider round"></span></label></div>
+                    <div class="help-text" style="grid-column: 1 / -1;">Bezposrednie tlumienie z zyroskopu (punkt 2 w opisie Kd) znacznie zwieksza stabilnosc robota. Wylacz te opcje, aby przeprowadzic test auto-strojenia Z-N lub jesli chcesz, aby robot byl bardziej "mieciutki".</div>
                 </div>
 
                 <button class="accordion-header" onclick="toggleAccordion(this)">5. PID Kaskadowy (Predkosc/Pozycja)</button>
@@ -574,7 +566,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 18.4 (UI Changes for Damping Toggle & Layout)
+    // WERSJA 18.4 (PWM Tune Fix, UI Reorder, Damping Toggle)
     // =======================================================================================
 
     // === DEKLARACJE ZMIENNYCH GLOBALNYCH ===
@@ -817,9 +809,7 @@
                     document.getElementById('balanceSwitch').checked = data.states.balancing;
                     document.getElementById('holdPositionSwitch').checked = data.states.holding_pos;
                     document.getElementById('speedModeSwitch').checked = data.states.speed_mode;
-                    if (data.states.gyro_damping !== undefined) {
-                        document.getElementById('gyroDampingSwitch').checked = data.states.gyro_damping;
-                    }
+                    document.getElementById('gyroDampingSwitch').checked = data.states.gyro_damping;
                     isApplyingConfig = false;
                 }
                 if (data.params) {
@@ -882,6 +872,9 @@
             currentRoll3D = data.roll;
             document.getElementById('robot3d-roll').textContent = data.roll.toFixed(1) + '°';
         }
+        if (data.yaw !== undefined) {
+            currentYaw3D = data.yaw;
+        }
         if (data.speed !== undefined) {
             document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0);
             const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
@@ -901,13 +894,11 @@
             document.getElementById('balanceSwitch').checked = data.states.balancing;
             document.getElementById('holdPositionSwitch').checked = data.states.holding_pos;
             document.getElementById('speedModeSwitch').checked = data.states.speed_mode;
-            if (data.states.gyro_damping !== undefined) {
-                document.getElementById('gyroDampingSwitch').checked = data.states.gyro_damping;
-            }
+            document.getElementById('gyroDampingSwitch').checked = data.states.gyro_damping;
             isApplyingConfig = false;
         }
         const emergencyBanner = document.getElementById('emergency-banner');
-        if (emergencyBanner) emergencyBanner.style.display = data.states.emergency_stop ? 'block' : 'none';
+        if (emergencyBanner) emergencyBanner.style.display = data.states && data.states.emergency_stop ? 'block' : 'none';
     }
 
     // === OBSLUGA WYKRESU ===
@@ -1009,7 +1000,10 @@
              }
         });
         document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset);
-        document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container'); const helpText = container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); });
+        document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); 
+        const container = icon.closest('.setting-container') || icon.closest('.control-row');
+        if(!container) return;
+        const helpText = container.nextElementSibling.classList.contains('help-text') ? container.nextElementSibling : container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); });
     }
     function setupManualTuneButtons() { document.querySelectorAll('.manual-tune-row').forEach(row => { const motor = row.dataset.motor; const direction = row.dataset.direction; const input = row.querySelector('.tune-input'); const testBtn = row.querySelector('.test-btn'); const stopBtn = row.querySelector('.stop-btn'); const autoBtn = row.querySelector('.auto-btn'); testBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: parseInt(input.value) }); }); stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); }); autoBtn.addEventListener('click', (e) => { if (confirm("UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?")) { const startValue = parseInt(document.getElementById('pwmTuneStartInput').value); sendBleMessage({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue }); e.target.disabled = true; e.target.textContent = 'Szukanie...'; addLogMessage(`[UI] Rozpoczynam auto-strojenie dla ${motor} ${direction}...`, 'info'); } }); }); document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); }); }
     function setupGamepadMappingModal() { document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; }); document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; }); }
@@ -1850,7 +1844,7 @@
         if (isAnimation3DEnabled && robotPivot) {
             robotPivot.rotation.x = -THREE.MathUtils.degToRad(currentPitch3D);
             robotPivot.rotation.z = THREE.MathUtils.degToRad(currentRoll3D);
-            robotPivot.rotation.y = 0; // YAW DISABLED
+            robotPivot.rotation.y = 0; // YAW WYLACZONE
 
             const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
             const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
