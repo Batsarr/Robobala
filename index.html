@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v18.4</title>
+    <title>Robot PID - Panel Sterowania v18.5</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -186,6 +186,7 @@
                 <strong>Polaczenie:</strong> <div><span id="connectionStatus" class="status-indicator status-disconnected"></span> <span id="connectionText">Rozlaczony</span></div>
                 <strong>Gamepad:</strong> <span id="gamepadStatus" style="font-weight:bold; color: #f7b731;">Brak</span>
                 <strong>Tryb Pracy:</strong> <span id="robotStateVal" style="font-weight:bold; color: #61dafb;">IDLE</span>
+                <strong>Czas Petli:</strong> <span id="loopTimeVal">0 &micro;s</span>
             </div>
             <div class="info-grid">
                 <strong>Kat (Pitch):</strong> <div class="angle-display"><span id="angleVal">0.0 &deg;</span><div class="angle-indicator-wrapper"><div id="angleIndicator" class="angle-indicator-needle"></div></div></div>
@@ -566,7 +567,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 18.4 (PWM Tune Fix, UI Reorder, Damping Toggle)
+    // WERSJA 18.5 (UI dla Czasu Petli, Blokada Kamery)
     // =======================================================================================
 
     // === DEKLARACJE ZMIENNYCH GLOBALNYCH ===
@@ -861,6 +862,7 @@
     }
     function updateTelemetryUI(data) {
         if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
+        if (data.loop_time !== undefined) document.getElementById('loopTimeVal').textContent = data.loop_time + ' \u00B5s';
         if (data.pitch !== undefined) {
             document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0';
             document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`;
@@ -1795,6 +1797,7 @@
         container.appendChild(renderer3D.domElement);
         controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
         controls3D.target.set(0, 8, 0);
+        controls3D.maxPolarAngle = Math.PI / 2; // ZMIANA: Blokada kamery ponizej podlogi
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
         scene3D.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
