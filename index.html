@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v18.1 (Kalman / No-Yaw)</title>
+    <title>Robot PID - Panel Sterowania v18.4 (PWM Tune Fix)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -165,6 +165,17 @@
             <div class="trim-controls"> <button id="trimMinusBtn">-</button> <span>Korekta Pionu (Pitch)</span> <button id="trimPlusBtn">+</button> </div>
             <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
             <button id="emergencyStopBtn">STOP AWARYJNY</button>
+            
+            <!-- ZMIANA: Sekcja Joysticka przeniesiona tutaj -->
+            <button class="accordion-header" onclick="toggleAccordion(this)" style="margin-top: 15px;">Strojenie Joysticka</button>
+            <div class="accordion-content">
+                <div class="setting-container"><label for="joystickSensitivityInput">Czulosc Globalna (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickSensitivityInput" min="10" max="100" step="5" value="100"><button>+</button></div><div class="help-text">Mnoznik dla wszystkich wartosci z joysticka. Zmniejsz, aby robot byl mniej czuly.</div></div>
+                <div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button>+</button></div><div class="help-text">Dodaje krzywa wykladnicza. Wieksza wartosc = wieksza precyzja przy malych wychyleniach.</div></div>
+                <div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button>+</button></div><div class="help-text">Maksymalna predkosc zadana w trybie predkosci przy pelnym wychyleniu joysticka.</div></div>
+                <div class="setting-container"><label for="joystickAngleSensitivityInput">Czulosc Kata (st.)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickAngleSensitivityInput" min="1" max="30" step="0.5" value="10"><button>+</button></div><div class="help-text">Maksymalny kat pochylenia zadany w trybie kata przy pelnym wychyleniu joysticka.</div></div>
+                <div class="setting-container"><label for="turnFactorInput">Czulosc Skretu (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="turnFactorInput" min="0" max="100" step="5" value="25"><button>+</button></div><div class="help-text">Jak szybko robot ma sie obracac w miejscu przy maksymalnym wychyleniu joysticka w poziomie.</div></div>
+                <div class="setting-container"><label for="joystickDeadzoneInput">Strefa Martwa (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickDeadzoneInput" min="0" max="50" step="1" value="0"><button>+</button></div><div class="help-text">Obszar wokol srodka joysticka, w ktorym ruch jest ignorowany.</div></div>
+            </div>
         </div>
 
         <!-- 2. STATUS ROBOTA -->
@@ -179,8 +190,6 @@
             <div class="info-grid">
                 <strong>Kat (Pitch):</strong> <div class="angle-display"><span id="angleVal">0.0 &deg;</span><div class="angle-indicator-wrapper"><div id="angleIndicator" class="angle-indicator-needle"></div></div></div>
                 <strong>Kat (Roll):</strong> <span id="rollVal">0.0 &deg;</span>
-                <!-- YAW WYLACZONE -->
-                <!-- <strong>Kat (Yaw):</strong> <span id="yawVal">0.0 &deg;</span> -->
                 <strong>Predkosc (imp/s):</strong> <span id="speedVal">0</span>
                 <strong>Enkoder L:</strong> <span id="encoderLeftVal">0</span>
                 <strong>Enkoder P:</strong> <span id="encoderRightVal">0</span>
@@ -271,25 +280,52 @@
                 <button id="deleteSelectedPresetBtn" style="width:100%; margin-top: 10px; background-color: #ff6347;">Usun Wybrany Preset</button>
             </fieldset>
             <div id="allSettings">
-                <button class="accordion-header" onclick="toggleAccordion(this)">1. Strojenie Joysticka</button>
+                
+                <!-- ZMIANA: Nowa kolejność -->
+                <button class="accordion-header" onclick="toggleAccordion(this)">1. Parametry Sprzetowe i Mechaniczne</button>
                 <div class="accordion-content">
-                    <div class="setting-container"><label for="joystickSensitivityInput">Czulosc Globalna (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickSensitivityInput" min="10" max="100" step="5" value="100"><button>+</button></div><div class="help-text">Mnoznik dla wszystkich wartosci z joysticka. Zmniejsz, aby robot byl mniej czuly.</div></div>
-                    <div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button>+</button></div><div class="help-text">Dodaje krzywa wykladnicza. Wieksza wartosc = wieksza precyzja przy malych wychyleniach.</div></div>
-                    <div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button>+</button></div><div class="help-text">Maksymalna predkosc zadana w trybie predkosci przy pelnym wychyleniu joysticka.</div></div>
-                    <div class="setting-container"><label for="joystickAngleSensitivityInput">Czulosc Kata (st.)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickAngleSensitivityInput" min="1" max="30" step="0.5" value="10"><button>+</button></div><div class="help-text">Maksymalny kat pochylenia zadany w trybie kata przy pelnym wychyleniu joysticka.</div></div>
-                    <div class="setting-container"><label for="turnFactorInput">Czulosc Skretu (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="turnFactorInput" min="0" max="100" step="5" value="25"><button>+</button></div><div class="help-text">Jak szybko robot ma sie obracac w miejscu przy maksymalnym wychyleniu joysticka w poziomie.</div></div>
-                    <div class="setting-container"><label for="joystickDeadzoneInput">Strefa Martwa (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickDeadzoneInput" min="0" max="50" step="1" value="0"><button>+</button></div><div class="help-text">Obszar wokol srodka joysticka, w ktorym ruch jest ignorowany.</div></div>
+                    <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" step="0.1" value="8.2"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="trackWidthInput">Rozstaw kol (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="trackWidthInput" step="0.1" value="12.5"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="encoderPprInput">Impulsy na obrot (PPR)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="encoderPprInput" step="10" value="820"><button>+</button></div> </div>
                 </div>
 
-                <button class="accordion-header" onclick="toggleAccordion(this)">2. PID Balansu (Podstawowy)</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">2. Kalibracja PWM Silnikow</button>
+                <div class="accordion-content">
+                    <div class="pwm-info"> <strong>Info:</strong> Uzyj przycisku <strong>"Auto"</strong>, aby automatycznie znalezc prog startowy silnika, lub <strong>"Testuj"</strong>, aby sprawdzic recznie wpisana wartosc. <strong>Wazne:</strong> Przed testem podnies robota, aby kola mogly sie swobodnie krecic! </div>
+                     <div class="setting-container"> <label for="pwmTuneStartInput">Rozpocznij auto-szukanie od PWM</label> <div class="numeric-input-wrapper"> <button id="pwmTuneStartMinus">-</button> <input type="number" id="pwmTuneStartInput" min="1" max="800" step="1" value="600"> <button id="pwmTuneStartPlus">+</button> </div> </div> <hr style="border-color: #4a4f58; margin: 15px 0;">
+                    <div class="manual-tune-row" data-motor="left" data-direction="fwd"> <div class="pwm-input-row"> <label>Lewy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftFwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
+                    <div class="manual-tune-row" data-motor="left" data-direction="bwd"> <div class="pwm-input-row"> <label>Lewy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftBwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
+                    <div class="manual-tune-row" data-motor="right" data-direction="fwd"> <div class="pwm-input-row"> <label>Prawy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightFwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
+                    <div class="manual-tune-row" data-motor="right" data-direction="bwd"> <div class="pwm-input-row"> <label>Prawy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
+                    <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKIE SILNIKI</button>
+                </div>
+
+                <button class="accordion-header" onclick="toggleAccordion(this)">3. Konfiguracja Filtra Kalmana</button>
+                <div class="accordion-content">
+                    <div class="setting-container"><label for="kalmanQAngleInput">Q Angle (Szum Procesu - Kat)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="kalmanQAngleInput" min="0.0001" max="0.01" step="0.0001" value="0.001"><button>+</button></div><div class="help-text">Wspolczynnik zaufania do modelu predykcji kata. Wieksza wartosc = wiekszy szum procesu, filtr bedzie bardziej reagowal na akcelerometr.</div></div>
+                    <div class="setting-container"><label for="kalmanQBiasInput">Q Bias (Szum Procesu - Bias)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="kalmanQBiasInput" min="0.0001" max="0.01" step="0.0001" value="0.003"><button>+</button></div><div class="help-text">Wspolczynnik zaufania do modelu predykcji dryfu zyroskopu. Wieksza wartosc = szybsza adaptacja do dryfu zyroskopu.</div></div>
+                    <div class="setting-container"><label for="kalmanRMeasureInput">R Measure (Szum Pomiaru)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="kalmanRMeasureInput" min="0.001" max="0.1" step="0.001" value="0.03"><button>+</button></div><div class="help-text">Zaufanie do pomiarow akcelerometru. Wieksza wartosc = mniejsze zaufanie do akcelerometru, filtr bedzie bardziej poleganal na zyroskopie.</div></div>
+                    <div class="pwm-info"><strong>Info:</strong> Filtr Kalmana laczy dane z akcelerometru (precyzyjny kat, ale podatny na wstrzasy) z zyroskopem (precyzyjna predkosc katowa, ale z dryfem). Parametry Q i R kontroluja, jak bardzo filtr ufa kazdemu zrodlu danych. <strong>Tip:</strong> Zwieksz Q_angle, jesli robot jest niestabilny, zwieksz R_measure, jesli akcelerometr jest zbyt szumny.</div>
+                </div>
+
+                <button class="accordion-header" onclick="toggleAccordion(this)">4. PID Balansu (Podstawowy)</button>
                 <div class="accordion-content">
                     <div class="setting-container"> <label for="balanceKpInput">Kp - Sila<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKpInput" step="0.0001" value="97.1850"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Sztywnosc utrzymania pionu. Zwieksz dla szybszej reakcji na wychylenie. Zbyt duza wartosc powoduje oscylacje.</div> </div>
                     <div class="setting-container"> <label for="balanceKiInput">Ki - Korekta<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKiInput" step="0.01" value="0.0"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Usuwa dlugotrwaly blad (np. gdy robot dryfuje). Zwiekszaj bardzo ostroznie, czesto nie jest potrzebny.</div> </div>
                     <div class="setting-container"> <label for="balanceKdInput">Kd - Tlumienie<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKdInput" step="0.0001" value="3.0039"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Hamuje oscylacje i uspokaja robota. W nowej wersji, ten parametr ma podwojne dzialanie: (1) tlumienie oparte na szybkosci zmiany kata (pochodna bledu) oraz (2) dodatkowe, bezposrednie tlumienie oparte na surowej predkosci katowej z zyroskopu. To czyni go bardzo waznym dla stabilnosci.</div> </div>
                     <div class="setting-container"> <label for="balanceFilterAlphaInput">Filtr Pochodnej (%)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceFilterAlphaInput" min="1" max="100" step="1" value="40"><button>+</button></div> <div class="help-text">Wygladza odczyt pochodnej, redukujac wplyw szumow. 100% = brak filtrowania. Zmniejsz, jesli robot jest nerwowy.</div> </div>
+                    <!-- ZMIANA: Nowy przełącznik -->
+                    <div class="setting-container">
+                        <label for="gyroDampingSwitch">Tlumienie z Żyroskopu<span class="help-icon">?</span></label>
+                        <label class="switch">
+                            <input type="checkbox" id="gyroDampingSwitch" checked>
+                            <span class="slider round"></span>
+                        </label>
+                        <div class="help-text">Bezposrednie tlumienie ruchu na podstawie surowej predkosci katowej. Zwieksza stabilnosc, ale musi byc wylaczone do testu Z-N.</div>
+                    </div>
                 </div>
 
-                <button class="accordion-header" onclick="toggleAccordion(this)">3. PID Kaskadowy (Predkosc/Pozycja)</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">5. PID Kaskadowy (Predkosc/Pozycja)</button>
                 <div class="accordion-content">
                     <div class="parameter-group"><h5>PID Predkosci</h5>
                         <div class="setting-container"> <label for="speedKpInput">Kp - Reakcja</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKpInput" step="0.01" value="0.0"><button>+</button></div> </div>
@@ -307,7 +343,7 @@
                     </div>
                 </div>
 
-                <button class="accordion-header" onclick="toggleAccordion(this)">4. PID Obrotu i Kursu</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">6. PID Obrotu i Kursu</button>
                 <div class="accordion-content">
                     <div class="parameter-group"><h5>PID Obrotu (Autonomiczny)</h5>
                         <div class="setting-container"> <label for="rotationKpInput">Kp - Sila obrotu</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationKpInput" step="0.1" value="0.0"><button>+</button></div> </div>
@@ -320,31 +356,6 @@
                     </div>
                 </div>
 
-                <button class="accordion-header" onclick="toggleAccordion(this)">5. Parametry Sprzetowe i Mechaniczne</button>
-                <div class="accordion-content">
-                    <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" step="0.1" value="8.2"><button>+</button></div> </div>
-                    <div class="setting-container"> <label for="trackWidthInput">Rozstaw kol (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="trackWidthInput" step="0.1" value="12.5"><button>+</button></div> </div>
-                    <div class="setting-container"> <label for="encoderPprInput">Impulsy na obrot (PPR)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="encoderPprInput" step="10" value="820"><button>+</button></div> </div>
-                </div>
-
-                <button class="accordion-header" onclick="toggleAccordion(this)">6. Konfiguracja Filtr Kalmana</button>
-                <div class="accordion-content">
-                    <div class="setting-container"><label for="kalmanQAngleInput">Q Angle (Szum Procesu - Kat)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="kalmanQAngleInput" min="0.0001" max="0.01" step="0.0001" value="0.001"><button>+</button></div><div class="help-text">Wspolczynnik zaufania do modelu predykcji kata. Wieksza wartosc = wiekszy szum procesu, filtr bedzie bardziej reagowal na akcelerometr.</div></div>
-                    <div class="setting-container"><label for="kalmanQBiasInput">Q Bias (Szum Procesu - Bias)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="kalmanQBiasInput" min="0.0001" max="0.01" step="0.0001" value="0.003"><button>+</button></div><div class="help-text">Wspolczynnik zaufania do modelu predykcji dryfu zyroskopu. Wieksza wartosc = szybsza adaptacja do dryfu zyroskopu.</div></div>
-                    <div class="setting-container"><label for="kalmanRMeasureInput">R Measure (Szum Pomiaru)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="kalmanRMeasureInput" min="0.001" max="0.1" step="0.001" value="0.03"><button>+</button></div><div class="help-text">Zaufanie do pomiarow akcelerometru. Wieksza wartosc = mniejsze zaufanie do akcelerometru, filtr bedzie bardziej poleganal na zyroskopie.</div></div>
-                    <div class="pwm-info"><strong>Info:</strong> Filtr Kalmana laczy dane z akcelerometru (precyzyjny kat, ale podatny na wstrzasy) z zyroskopem (precyzyjna predkosc katowa, ale z dryfem). Parametry Q i R kontroluja, jak bardzo filtr ufa kazdemu zrodlu danych. <strong>Tip:</strong> Zwieksz Q_angle, jesli robot jest niestabilny, zwieksz R_measure, jesli akcelerometr jest zbyt szumny.</div>
-                </div>
-
-                <button class="accordion-header" onclick="toggleAccordion(this)">7. Kalibracja PWM Silnikow</button>
-                <div class="accordion-content">
-                    <div class="pwm-info"> <strong>Info:</strong> Uzyj przycisku <strong>"Auto"</strong>, aby automatycznie znalezc prog startowy silnika, lub <strong>"Testuj"</strong>, aby sprawdzic recznie wpisana wartosc. <strong>Wazne:</strong> Przed testem podnies robota, aby kola mogly sie swobodnie krecic! </div>
-                     <div class="setting-container"> <label for="pwmTuneStartInput">Rozpocznij auto-szukanie od PWM</label> <div class="numeric-input-wrapper"> <button id="pwmTuneStartMinus">-</button> <input type="number" id="pwmTuneStartInput" min="1" max="800" step="1" value="600"> <button id="pwmTuneStartPlus">+</button> </div> </div> <hr style="border-color: #4a4f58; margin: 15px 0;">
-                    <div class="manual-tune-row" data-motor="left" data-direction="fwd"> <div class="pwm-input-row"> <label>Lewy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftFwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
-                    <div class="manual-tune-row" data-motor="left" data-direction="bwd"> <div class="pwm-input-row"> <label>Lewy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftBwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
-                    <div class="manual-tune-row" data-motor="right" data-direction="fwd"> <div class="pwm-input-row"> <label>Prawy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightFwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
-                    <div class="manual-tune-row" data-motor="right" data-direction="bwd"> <div class="pwm-input-row"> <label>Prawy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="1023" step="1" value="640"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
-                    <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKIE SILNIKI</button>
-                </div>
             </div>
             <div class="button-group" style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
                 <button id="loadBtn">Wczytaj z Robota</button>
@@ -563,7 +574,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 18.1 (Kalman Filter - YAW Disabled UI)
+    // WERSJA 18.4 (UI Changes for Damping Toggle & Layout)
     // =======================================================================================
 
     // === DEKLARACJE ZMIENNYCH GLOBALNYCH ===
@@ -619,7 +630,7 @@
     const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
     const TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
     let bleBuffer = '';
-    const bleChunks = new Map(); // id -> { total, parts: Map<i,string> }
+    const bleChunks = new Map();
     let bleMessageQueue = [];
     let isSendingBleMessage = false;
     const BLE_SEND_INTERVAL = 20;
@@ -653,7 +664,6 @@
     const availableTelemetry = {
         'pitch': { label: 'Pitch (Kat)', color: '#61dafb' },
         'roll': { label: 'Roll (Przechyl)', color: '#a2f279' },
-        // 'yaw': { label: 'Yaw (Kurs)', color: '#f368e0' }, // YAW WYLACZONE
         'speed': { label: 'Predkosc', color: '#f7b731'},
         'target_speed': { label: 'Predkosc Zadana', color: '#ff9f43' },
         'output': { label: 'Wyjscie PID', color: '#ff6347'}
@@ -703,7 +713,7 @@
         addLogMessage('[UI] Rozlaczono z robotem.', 'warn');
         document.getElementById('connectionStatus').className = 'status-indicator status-disconnected';
         document.getElementById('connectionText').textContent = 'Rozlaczony';
-        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => {
+        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'gyroDampingSwitch'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.checked = false;
         });
@@ -807,6 +817,9 @@
                     document.getElementById('balanceSwitch').checked = data.states.balancing;
                     document.getElementById('holdPositionSwitch').checked = data.states.holding_pos;
                     document.getElementById('speedModeSwitch').checked = data.states.speed_mode;
+                    if (data.states.gyro_damping !== undefined) {
+                        document.getElementById('gyroDampingSwitch').checked = data.states.gyro_damping;
+                    }
                     isApplyingConfig = false;
                 }
                 if (data.params) {
@@ -869,10 +882,6 @@
             currentRoll3D = data.roll;
             document.getElementById('robot3d-roll').textContent = data.roll.toFixed(1) + '°';
         }
-        if (data.yaw !== undefined) {
-            // document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' \u00B0'; // YAW WYLACZONE
-            currentYaw3D = data.yaw;
-        }
         if (data.speed !== undefined) {
             document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0);
             const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
@@ -892,10 +901,13 @@
             document.getElementById('balanceSwitch').checked = data.states.balancing;
             document.getElementById('holdPositionSwitch').checked = data.states.holding_pos;
             document.getElementById('speedModeSwitch').checked = data.states.speed_mode;
+            if (data.states.gyro_damping !== undefined) {
+                document.getElementById('gyroDampingSwitch').checked = data.states.gyro_damping;
+            }
             isApplyingConfig = false;
         }
         const emergencyBanner = document.getElementById('emergency-banner');
-        if (emergencyBanner) emergencyBanner.style.display = data.emergency_stop ? 'block' : 'none';
+        if (emergencyBanner) emergencyBanner.style.display = data.states.emergency_stop ? 'block' : 'none';
     }
 
     // === OBSLUGA WYKRESU ===
@@ -974,10 +986,10 @@
         document.querySelectorAll('.config-value').forEach(input => { input.addEventListener('change', (e) => { debouncedSendSingleParam(e.target.id, parseFloat(e.target.value)); }); });
         document.getElementById('joystickCanvas').addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); document.getElementById('joystickCanvas').addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd);
         document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
-        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { 
+        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'gyroDampingSwitch'].forEach(id => { 
             document.getElementById(id).addEventListener('change', (e) => { 
                 if (isApplyingConfig) return;
-                const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; 
+                const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle', 'gyroDampingSwitch': 'gyro_damping_toggle' }; 
                 sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); 
             }); 
         });
@@ -1838,7 +1850,7 @@
         if (isAnimation3DEnabled && robotPivot) {
             robotPivot.rotation.x = -THREE.MathUtils.degToRad(currentPitch3D);
             robotPivot.rotation.z = THREE.MathUtils.degToRad(currentRoll3D);
-            // robotPivot.rotation.y = -THREE.MathUtils.degToRad(currentYaw3D); // YAW WYLACZONE
+            robotPivot.rotation.y = 0; // YAW DISABLED
 
             const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
             const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
