@@ -137,7 +137,7 @@
         .robot3d-controls button { padding: 8px 16px; background-color: #61dafb; color: #282c34; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
         .robot3d-controls button:hover { background-color: #a2f279; }
         .robot3d-info { background-color: #20232a; padding: 10px; border-radius: 6px; margin-top: 10px; }
-        .robot3d-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; }
+        .robot3d-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; text-align: left; }
         .robot3d-metrics strong { color: #a2f279; }
     </style>
 </head>
@@ -178,6 +178,7 @@
             </div>
             <div class="info-grid">
                 <strong>Kat (Pitch):</strong> <div class="angle-display"><span id="angleVal">0.0 &deg;</span><div class="angle-indicator-wrapper"><div id="angleIndicator" class="angle-indicator-needle"></div></div></div>
+                <strong>Kat (Roll):</strong> <span id="rollVal">0.0 &deg;</span>
                 <strong>Kat (Yaw):</strong> <span id="yawVal">0.0 &deg;</span>
                 <strong>Predkosc (imp/s):</strong> <span id="speedVal">0</span>
                 <strong>Enkoder L:</strong> <span id="encoderLeftVal">0</span>
@@ -186,7 +187,7 @@
              <fieldset style="margin-top: 15px;">
                 <legend>Diagnostyka</legend>
                 <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
-                    <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Kalibruj MPU (DMP)</button>
+                    <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Pelna Kalibracja Sensorow</button>
                     <button id="calibrateZeroPointBtn" style="width:100%; background-color:#f7b731;">Znajdz Pion Automatycznie</button>
                 </div>
             </fieldset>
@@ -203,7 +204,8 @@
             </div>
             <div class="robot3d-info">
                 <div class="robot3d-metrics">
-                    <strong>Przechyl:</strong> <span id="robot3d-pitch">0.0°</span>
+                    <strong>Przechyl (Pitch):</strong> <span id="robot3d-pitch">0.0°</span>
+                    <strong>Przechyl (Roll):</strong> <span id="robot3d-roll">0.0°</span>
                     <strong>Obrot kol:</strong> <span id="robot3d-wheel-speed">0 obr/min</span>
                     <strong>Pozycja X:</strong> <span id="robot3d-position-x">0.0 cm</span>
                     <strong>Pozycja Z:</strong> <span id="robot3d-position-z">0.0 cm</span>
@@ -282,7 +284,7 @@
                 <div class="accordion-content">
                     <div class="setting-container"> <label for="balanceKpInput">Kp - Sila<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKpInput" step="0.0001" value="97.1850"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Sztywnosc utrzymania pionu. Zwieksz dla szybszej reakcji na wychylenie. Zbyt duza wartosc powoduje oscylacje.</div> </div>
                     <div class="setting-container"> <label for="balanceKiInput">Ki - Korekta<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKiInput" step="0.01" value="0.0"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Usuwa dlugotrwaly blad (np. gdy robot dryfuje). Zwiekszaj bardzo ostroznie, czesto nie jest potrzebny.</div> </div>
-                    <div class="setting-container"> <label for="balanceKdInput">Kd - Tlumienie<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKdInput" step="0.0001" value="3.0039"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Hamuje oscylacje i uspokaja robota. Przewiduje przyszly blad. Zbyt duza wartosc spowalnia reakcje.</div> </div>
+                    <div class="setting-container"> <label for="balanceKdInput">Kd - Tlumienie<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKdInput" step="0.0001" value="3.0039"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Hamuje oscylacje i uspokaja robota. W nowej wersji, ten parametr ma podwojne dzialanie: (1) tlumienie oparte na szybkosci zmiany kata (pochodna bledu) oraz (2) dodatkowe, bezposrednie tlumienie oparte na surowej predkosci katowej z zyroskopu. To czyni go bardzo waznym dla stabilnosci.</div> </div>
                     <div class="setting-container"> <label for="balanceFilterAlphaInput">Filtr Pochodnej (%)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceFilterAlphaInput" min="1" max="100" step="1" value="40"><button>+</button></div> <div class="help-text">Wygladza odczyt pochodnej, redukujac wplyw szumow. 100% = brak filtrowania. Zmniejsz, jesli robot jest nerwowy.</div> </div>
                 </div>
 
@@ -560,7 +562,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 18.0 (Kalman Filter Integration)
+    // WERSJA 18.0 (Kalman Filter Integration) - UI ADAPTED
     // =======================================================================================
 
     // === DEKLARACJE ZMIENNYCH GLOBALNYCH ===
@@ -649,9 +651,10 @@
     };
     const availableTelemetry = {
         'pitch': { label: 'Pitch (Kat)', color: '#61dafb' },
+        'roll': { label: 'Roll (Przechyl)', color: '#a2f279' },
         'yaw': { label: 'Yaw (Kurs)', color: '#f368e0' },
         'speed': { label: 'Predkosc', color: '#f7b731'},
-        'target_speed': { label: 'Predkosc Zadana', color: '#a2f279' },
+        'target_speed': { label: 'Predkosc Zadana', color: '#ff9f43' },
         'output': { label: 'Wyjscie PID', color: '#ff6347'}
     };
     const builtInPresetsData = {
@@ -690,7 +693,6 @@
             clearTimeout(bleRetryTimeout);
             bleRetryTimeout = null;
         }
-            // NOWA ZMIANA: Automatyczne zadanie o stan po polaczeniu
             setTimeout(() => { 
                 addLogMessage('[UI] Synchronizuje stan z robotem...', 'info'); 
                 sendBleMessage({ type: 'request_full_config' }); 
@@ -771,16 +773,13 @@
         }
         
         if (isOptimizationSessionRunning && data.type === 'telemetry') {
-            // Jeśli trwa automatyczny test balansu, zbieraj WSZYSTKIE pakiety telemetryczne
             if (isBalanceTestRunning) {
-                // Dodajemy sztuczny obiekt 'trial', aby funkcja oceny działała poprawnie
                 const enrichedData = {
                     ...data,
                     trial: { elapsed_ms: (Date.now() - (individualStartTime || Date.now())) }
                 };
                 telemetryForCurrentTest.push(enrichedData);
             } 
-            // Dla innych (interaktywnych) testów, wymagaj znacznika 'trial' od robota
             else if (data.trial?.id) {
                 telemetryForCurrentTest.push(data);
             }
@@ -863,6 +862,11 @@
             document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`;
             currentPitch3D = data.pitch;
             document.getElementById('robot3d-pitch').textContent = data.pitch.toFixed(1) + '°';
+        }
+        if (data.roll !== undefined) {
+            document.getElementById('rollVal').textContent = data.roll.toFixed(1) + ' \u00B0';
+            currentRoll3D = data.roll;
+            document.getElementById('robot3d-roll').textContent = data.roll.toFixed(1) + '°';
         }
         if (data.yaw !== undefined) {
             document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' \u00B0';
@@ -971,7 +975,7 @@
         document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
         ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { 
             document.getElementById(id).addEventListener('change', (e) => { 
-                if (isApplyingConfig) return; // IGNORUJ zmiane, jesli jest wynikiem synchronizacji
+                if (isApplyingConfig) return;
                 const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; 
                 sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); 
             }); 
@@ -981,7 +985,11 @@
 
         document.getElementById('saveBtn').addEventListener('click', () => { if (confirm("Czy na pewno chcesz trwale zapisac biezaca konfiguracje znajdujaca sie na robocie do jego pamieci EEPROM?")) { sendBleMessage({ type: 'save_tunings' }); } });
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { sendBleMessage({ type: 'request_full_config' }); } });
-        document.getElementById('calibrateMpuBtn')?.addEventListener('click', () => sendBleMessage({ type: 'calibrate_mpu' }));
+        document.getElementById('calibrateMpuBtn')?.addEventListener('click', () => {
+             if (confirm("WAZNE! Ta procedura skalibruje zyroskop i ustawi poczatkowy kat zerowy. Upewnij sie, ze robot stoi idealnie nieruchomo i poziomo na ziemi. Kontynuowac?")) {
+                sendBleMessage({ type: 'calibrate_mpu' });
+             }
+        });
         document.getElementById('calibrateZeroPointBtn')?.addEventListener('click', () => {
              if (confirm("Upewnij sie, ze robot stoi na idealnie plaskiej powierzchni. Robot bedzie balansowal przez 10 sekund w celu znalezienia dokladnego punktu rownowagi. Kontynuowac?")) {
                 sendBleMessage({ type: 'calibrate_zero_point' });
@@ -1657,15 +1665,15 @@
     }
     
     // =======================================================================================
-    // === WIZUALIZACJA 3D (ZINTEGROWANA Z ROBOBALA.HTML) ===
+    // === WIZUALIZACJA 3D ===
     // =======================================================================================
     let scene3D, camera3D, renderer3D, controls3D;
     let robotPivot, leftWheel, rightWheel;
     let groundMesh, groundTexture;
-    let currentPitch3D = 0, currentYaw3D = 0, currentEncoderLeft = 0, currentEncoderRight = 0;
+    let currentPitch3D = 0, currentRoll3D = 0, currentYaw3D = 0, currentEncoderLeft = 0, currentEncoderRight = 0;
     let isAnimation3DEnabled = true, isMovement3DEnabled = false;
     let lastEncoderAvg = 0;
-    const WHEEL_DIAMETER = 8.2; // [cm]
+    const WHEEL_DIAMETER = 8.2;
     const WHEEL_RADIUS_3D = WHEEL_DIAMETER / 2;
 
     function createCustomWheel(totalRadius, tireThickness, width) {
@@ -1828,13 +1836,13 @@
         requestAnimationFrame(animate3D);
         if (isAnimation3DEnabled && robotPivot) {
             robotPivot.rotation.x = -THREE.MathUtils.degToRad(currentPitch3D);
+            robotPivot.rotation.z = THREE.MathUtils.degToRad(currentRoll3D);
             robotPivot.rotation.y = -THREE.MathUtils.degToRad(currentYaw3D);
 
             const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
             const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
             const wheelRotationR = (currentEncoderRight / ppr) * 2 * Math.PI;
             
-            // POPRAWKA: Dodajemy znak minus, aby odwrócić kierunek obrotu
             if (leftWheel) leftWheel.rotation.z = -wheelRotationL;
             if (rightWheel) rightWheel.rotation.z = -wheelRotationR;
 
@@ -1864,4 +1872,3 @@
 </script>
 </body>
 </html>
-
