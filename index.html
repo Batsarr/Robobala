@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v18.0 (Kalman Filter)</title>
+    <title>Robot PID - Panel Sterowania v18.1 (Kalman / No-Yaw)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -179,7 +179,8 @@
             <div class="info-grid">
                 <strong>Kat (Pitch):</strong> <div class="angle-display"><span id="angleVal">0.0 &deg;</span><div class="angle-indicator-wrapper"><div id="angleIndicator" class="angle-indicator-needle"></div></div></div>
                 <strong>Kat (Roll):</strong> <span id="rollVal">0.0 &deg;</span>
-                <strong>Kat (Yaw):</strong> <span id="yawVal">0.0 &deg;</span>
+                <!-- YAW WYLACZONE -->
+                <!-- <strong>Kat (Yaw):</strong> <span id="yawVal">0.0 &deg;</span> -->
                 <strong>Predkosc (imp/s):</strong> <span id="speedVal">0</span>
                 <strong>Enkoder L:</strong> <span id="encoderLeftVal">0</span>
                 <strong>Enkoder P:</strong> <span id="encoderRightVal">0</span>
@@ -562,7 +563,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 18.0 (Kalman Filter Integration) - UI ADAPTED
+    // WERSJA 18.1 (Kalman Filter - YAW Disabled UI)
     // =======================================================================================
 
     // === DEKLARACJE ZMIENNYCH GLOBALNYCH ===
@@ -652,7 +653,7 @@
     const availableTelemetry = {
         'pitch': { label: 'Pitch (Kat)', color: '#61dafb' },
         'roll': { label: 'Roll (Przechyl)', color: '#a2f279' },
-        'yaw': { label: 'Yaw (Kurs)', color: '#f368e0' },
+        // 'yaw': { label: 'Yaw (Kurs)', color: '#f368e0' }, // YAW WYLACZONE
         'speed': { label: 'Predkosc', color: '#f7b731'},
         'target_speed': { label: 'Predkosc Zadana', color: '#ff9f43' },
         'output': { label: 'Wyjscie PID', color: '#ff6347'}
@@ -869,7 +870,7 @@
             document.getElementById('robot3d-roll').textContent = data.roll.toFixed(1) + '°';
         }
         if (data.yaw !== undefined) {
-            document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' \u00B0';
+            // document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' \u00B0'; // YAW WYLACZONE
             currentYaw3D = data.yaw;
         }
         if (data.speed !== undefined) {
@@ -1837,7 +1838,7 @@
         if (isAnimation3DEnabled && robotPivot) {
             robotPivot.rotation.x = -THREE.MathUtils.degToRad(currentPitch3D);
             robotPivot.rotation.z = THREE.MathUtils.degToRad(currentRoll3D);
-            robotPivot.rotation.y = -THREE.MathUtils.degToRad(currentYaw3D);
+            // robotPivot.rotation.y = -THREE.MathUtils.degToRad(currentYaw3D); // YAW WYLACZONE
 
             const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
             const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
