@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v19.1</title>
+    <title>Robot PID - Panel Sterowania v19.2</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -151,7 +151,7 @@
         </div>
     </div>
 
-    <h1>Robot PID - Panel Sterowania v19.1</h1>
+    <h1>Robot PID - Panel Sterowania v19.2</h1>
     <div class="main-grid">
         <!-- 1. STEROWANIE -->
         <div class="card" id="controls-card">
@@ -459,7 +459,7 @@
                     </div>
                      <!-- NOWA SEKCJA PARAMETROW GA -->
                     <fieldset style="margin-top: 15px;">
-                        <legend>Parametry Algorytmu Genetycznego (v2.0)</legend>
+                        <legend>Parametry Algorytmu Genetycznego (v2.1)</legend>
                         <div class="setting-container">
                             <label for="gaGenerationsInput">Liczba pokolen</label>
                             <div class="numeric-input-wrapper"><button>-</button><input type="number" id="gaGenerationsInput" min="2" max="50" step="1" value="10"><button>+</button></div>
@@ -556,7 +556,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 19.1 (UI dla ulepszonego GA)
+    // WERSJA 19.2 (UI dla ulepszonego GA v2.1 - Cmentarz i ochrona NaN)
     // =======================================================================================
 
     // === DEKLARACJE ZMIENNYCH GLOBALNYCH ===
@@ -1043,7 +1043,7 @@
     function applyZnResults() { const { ku, tu } = znResults; if (ku <= 0 || tu <= 0) return; const kp = 0.6 * ku; const kd = kp * tu / 8; isApplyingConfig = true; document.getElementById('balanceKpInput').value = kp.toFixed(4); document.getElementById('balanceKiInput').value = 0.0; document.getElementById('balanceKdInput').value = kd.toFixed(4); isApplyingConfig = false; document.getElementById('balanceKpInput').dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('balanceKiInput').dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true })); addLogMessage('[UI] Zastosowano sugerowane wartosci Kp i Kd. Ki ustawiono na 0.', 'info'); }
 
     // =======================================================================================
-    // === SEKCJA STROJENIA KROK 2: ULEPSZONY ALGORYTM GENETYCZNY (GA v2.0) ===
+    // === SEKCJA STROJENIA KROK 2: ULEPSZONY ALGORYTM GENETYCZNY (GA v2.1) ===
     // =======================================================================================
     let isOptimizationSessionRunning = false;
     let currentOptimizationMode = 'balance';
@@ -1056,13 +1056,16 @@
     let safeStartParams = {};
     let isBalanceTestRunning = false;
     let individualStartTime = 0;
-
-    // Nowe zmienne stanu dla GA v2.0
+    
+    // Nowe zmienne stanu dla GA v2.1
     let stagnationCounter = 0;
     let currentMutationStrength = 0.15; // Inicjalizowane z UI
-    const STAGNATION_TOLERANCE = 2; // Hardcoded, zgodnie z zyczeniem
-    const IMMIGRATION_RATE = 0.10; // Hardcoded, zgodnie z zyczeniem
-    
+    const STAGNATION_TOLERANCE = 2; 
+    const IMMIGRATION_RATE = 0.10; 
+    let gaGraveyard = []; // "Cmentarz" dla zlych parametrow
+    const GRAVEYARD_DISTANCE_THRESHOLD = 0.05; // 5% progu podobienstwa
+    const CRITICAL_PITCH_ERROR_JS = 15.0; // Kat, przy ktorym uznajemy upadek
+
     function setupAutoTestEventListeners() {
         document.querySelectorAll('input[name="autotest-type"]').forEach(radio => radio.addEventListener('change', renderAutotestOptions));
         document.getElementById('autotestActionBtn').addEventListener('click', handleAutotestAction);
@@ -1094,13 +1097,13 @@
         finalBestPhenotypeFromGA = null;
         stagnationCounter = 0;
         currentMutationStrength = parseFloat(document.getElementById('gaMutationRateInput').value) / 100.0;
+        gaGraveyard = []; // Czyscimy "cmentarz" na start nowej sesji
         
         // Zapisz bezpieczne parametry startowe
         if (currentOptimizationMode === 'balance') {
             safeStartParams = { kp_b: parseFloat(document.getElementById('balanceKpInput').value), ki_b: 0, kd_b: parseFloat(document.getElementById('balanceKdInput').value) };
         } else {
-            // ... (logika dla innych trybow, jesli beda wspierane przez GA v2.0)
-            addLogMessage('[GA] Ten tryb optymalizacji nie jest jeszcze w pelni obslugiwany przez GA v2.0', 'warn');
+            addLogMessage('[GA] Ten tryb optymalizacji nie jest jeszcze w pelni obslugiwany przez GA v2.1', 'warn');
             cancelOptimizationSession();
             return;
         }
@@ -1108,7 +1111,7 @@
         const populationSize = parseInt(document.getElementById('gaPopulationInput').value);
         currentPopulation = createInitialPopulation(populationSize, safeStartParams);
 
-        addLogMessage(`[GA v2.0] Rozpoczeto sesje strojenia dla petli: ${currentOptimizationMode}.`, 'success');
+        addLogMessage(`[GA v2.1] Rozpoczeto sesje strojenia dla petli: ${currentOptimizationMode}.`, 'success');
         document.getElementById('ga_stop_btn').style.display = 'inline-block';
         document.getElementById('autotestActionBtn').disabled = true;
         document.getElementById('gaResultsPanel').style.display = 'none';
@@ -1122,7 +1125,7 @@
     }
     
     async function runFullBalanceGA() {
-        addLogMessage(`[GA v2.0] Rozpoczeto automatyczna optymalizacje petli balansu.`, 'info');
+        addLogMessage(`[GA v2.1] Rozpoczeto automatyczna optymalizacje petli balansu.`, 'info');
         isBalanceTestRunning = true;
         const totalGenerations = parseInt(document.getElementById('gaGenerationsInput').value);
 
@@ -1153,7 +1156,7 @@
                 const testDuration = parseFloat(document.getElementById('testDurationInput').value) * 1000;
                 await sleep(testDuration); // Zbieranie danych
 
-                const score = processTestResult();
+                const score = processTestResult(individual);
                 evaluatedPopulation.push({ ...individual, score });
                 updateScores(score, individual);
             }
@@ -1166,60 +1169,75 @@
         finishOptimizationSession();
     }
     
-    function processTestResult() {
-        if (telemetryForCurrentTest.length < 20) return 0.0;
+    function processTestResult(individual) {
         const weights = { stability: parseFloat(document.getElementById('weightStability').value), stillness: parseFloat(document.getElementById('weightStillness').value), overshoot: parseFloat(document.getElementById('weightOvershoot').value), effort: parseFloat(document.getElementById('weightEffort').value) };
-        return evaluateBalanceFitness(telemetryForCurrentTest, weights);
+        return evaluateBalanceFitness(telemetryForCurrentTest, weights, individual);
     }
     
-    // --- Nowe, kluczowe funkcje GA v2.0 ---
+    // --- Nowe, kluczowe funkcje GA v2.1 ---
+    
+    function isTooCloseToGraveyard(phenotype) {
+        if(!phenotype || !safeStartParams.kp_b) return false;
+        for (const dead of gaGraveyard) {
+            const distKp = Math.abs(phenotype.kp_b - dead.kp_b) / safeStartParams.kp_b;
+            const distKd = Math.abs(phenotype.kd_b - dead.kd_b) / safeStartParams.kd_b;
+            if(distKp < GRAVEYARD_DISTANCE_THRESHOLD && distKd < GRAVEYARD_DISTANCE_THRESHOLD) {
+                addLogMessage(`[GA-Cmentarz] Odrzucono potomka - zbyt blisko zlych parametrow (Kp=${dead.kp_b.toFixed(2)}, Kd=${dead.kd_b.toFixed(2)})`, 'warn');
+                return true;
+            }
+        }
+        return false;
+    }
 
     function createNewGeneration(evaluatedPopulation) {
-        addLogMessage(`[GA v2.0] Tworzenie pokolenia ${currentGeneration + 1}...`);
+        addLogMessage(`[GA v2.1] Tworzenie pokolenia ${currentGeneration + 1}...`);
         const populationSize = evaluatedPopulation.length;
         
-        // Sortowanie populacji od najlepszego do najgorszego
         evaluatedPopulation.sort((a, b) => b.score - a.score);
 
-        // Adaptacyjna mutacja
         if (evaluatedPopulation[0].score > bestOverallScore) {
             stagnationCounter = 0;
-            currentMutationStrength = parseFloat(document.getElementById('gaMutationRateInput').value) / 100.0; // Reset do bazowej
-            addLogMessage(`[GA v2.0] Postep! Sila mutacji zresetowana do ${currentMutationStrength.toFixed(2)}.`);
+            currentMutationStrength = parseFloat(document.getElementById('gaMutationRateInput').value) / 100.0;
+            addLogMessage(`[GA v2.1] Postep! Sila mutacji zresetowana do ${currentMutationStrength.toFixed(2)}.`);
         } else {
             stagnationCounter++;
         }
 
         if (stagnationCounter >= STAGNATION_TOLERANCE) {
-            currentMutationStrength = Math.min(0.8, currentMutationStrength * 2.5); // Gwaltowne zwiekszenie
-            stagnationCounter = 0; // Reset licznika po zwiekszeniu
-            addLogMessage(`[GA v2.0] Stagnacja! Sila mutacji zwiekszona do ${currentMutationStrength.toFixed(2)}.`);
+            currentMutationStrength = Math.min(0.8, currentMutationStrength * 2.5);
+            stagnationCounter = 0;
+            addLogMessage(`[GA v2.1] Stagnacja! Sila mutacji zwiekszona do ${currentMutationStrength.toFixed(2)}.`);
         }
         
         let newPopulation = [];
+        newPopulation.push(evaluatedPopulation[0]); // Elityzm
 
-        // 1. Elityzm (przeniesienie 1 najlepszego osobnika bez zmian)
-        newPopulation.push(evaluatedPopulation[0]);
-
-        // 2. Krzyzowanie i mutacja
         const crossoverRate = parseFloat(document.getElementById('gaCrossoverRateInput').value) / 100.0;
         while (newPopulation.length < populationSize) {
             const parent1 = selectParentTournament(evaluatedPopulation);
             const parent2 = selectParentTournament(evaluatedPopulation);
             
-            let child = crossoverArithmetic(parent1, parent2, crossoverRate);
-            child = mutate(child, currentMutationStrength);
+            let attempts = 0;
+            let child;
+            do {
+                child = crossoverArithmetic(parent1, parent2, crossoverRate);
+                child = mutate(child, currentMutationStrength);
+                attempts++;
+                if (attempts > 5) {
+                    child = mutate(child, currentMutationStrength * 2.5); 
+                    addLogMessage('[GA-Cmentarz] Proba ucieczki z cmentarza przez silniejsza mutacje.', 'info');
+                }
+            } while (isTooCloseToGraveyard(child) && attempts < 10);
             
             newPopulation.push(child);
         }
 
-        // 3. Imigracja
         const immigrantCount = Math.floor(populationSize * IMMIGRATION_RATE);
         for (let i = 0; i < immigrantCount; i++) {
             newPopulation[populationSize - 1 - i] = createRandomIndividual(safeStartParams);
         }
-
-        addLogMessage(`[GA v2.0] Stworzono ${immigrantCount} nowych imigrantow.`);
+        if(immigrantCount > 0) addLogMessage(`[GA v2.1] Stworzono ${immigrantCount} nowych imigrantow.`);
+        
         return newPopulation;
     }
 
@@ -1236,12 +1254,10 @@
 
     function crossoverArithmetic(parent1, parent2, crossoverRate) {
         if (Math.random() > crossoverRate) {
-            return { ...parent1 }; // Zwracamy klona jednego z rodzicow, jesli krzyzowanie nie zaszlo
+            return { ...parent1 };
         }
-        
         const child = {};
-        const alpha = Math.random(); // Wspolczynnik mieszania
-        
+        const alpha = Math.random();
         for (const key in parent1) {
             if (key !== 'score') {
                 child[key] = alpha * parent1[key] + (1 - alpha) * parent2[key];
@@ -1254,9 +1270,9 @@
         const mutated = { ...individual };
         for (const key in mutated) {
             if (key !== 'score') {
-                const mutationFactor = 1.0 + (Math.random() - 0.5) * 2 * mutationStrength; // np. od 0.85 do 1.15 dla 15%
+                const mutationFactor = 1.0 + (Math.random() - 0.5) * 2 * mutationStrength;
                 mutated[key] *= mutationFactor;
-                if (key === 'ki_b' || key === 'ki_s' || key === 'ki_p') mutated[key] = Math.max(0, mutated[key]); // Ki nie moze byc ujemne
+                if (key.includes('ki_')) mutated[key] = Math.max(0, mutated[key]);
             }
         }
         return mutated;
@@ -1265,7 +1281,6 @@
     function createRandomIndividual(baseParams) {
         const individual = {};
         for (const key in baseParams) {
-             // Tworzenie losowych osobnikow w zakresie +/- 50% od wartosci bazowych
             individual[key] = baseParams[key] * (0.5 + Math.random());
         }
         return individual;
@@ -1273,14 +1288,14 @@
 
     function createInitialPopulation(size, baseParams) {
         let population = [];
-        population.push({ ...baseParams }); // Pierwszy osobnik to aktualne ustawienia
+        population.push({ ...baseParams });
         for (let i = 1; i < size; i++) {
             population.push(createRandomIndividual(baseParams));
         }
         return population;
     }
     
-    // --- Koniec nowych funkcji GA v2.0 ---
+    // --- Koniec nowych funkcji GA v2.1 ---
 
     function cancelOptimizationSession() {
         if (!isOptimizationSessionRunning) return;
@@ -1365,28 +1380,35 @@
         }
     }
 
-    function evaluateBalanceFitness(telemetryData, weights) {
-        if (!telemetryData || telemetryData.length < 20) return 0.0;
+    function evaluateBalanceFitness(telemetryData, weights, phenotype) {
+        // [POPRAWKA GA] Krok 1: Filtruj dane, aby uniknac bledow NaN
+        const validData = telemetryData.filter(d => d && d.pitch !== undefined && d.output !== undefined && d.trial && d.trial.elapsed_ms !== undefined);
+        if (!validData || validData.length < 20) {
+            addLogMessage('[GA-Ocena] Niewystarczajaca ilosc poprawnych danych do oceny. Wynik: 0.0', 'warn');
+            if (phenotype) {
+                gaGraveyard.push(phenotype);
+                addLogMessage(`[GA-Cmentarz] Dodano do cmentarza z powodu braku danych.`, 'info');
+            }
+            return 0.0;
+        }
 
-        const firstSampleTime = telemetryData[0].trial.elapsed_ms;
-        const lastSampleTime = telemetryData[telemetryData.length - 1].trial.elapsed_ms;
+        const firstSampleTime = validData[0].trial.elapsed_ms;
+        const lastSampleTime = validData[validData.length - 1].trial.elapsed_ms;
         const testDuration = (lastSampleTime - firstSampleTime) / 1000.0;
-
         if (testDuration < 1.0) return 0.0;
 
         const MAX_ACCEPTABLE_ITAE = 50.0;
         const MAX_ACCEPTABLE_STD_DEV = 0.75;
         const MAX_ACCEPTABLE_OVERSHOOT = 5.0;
         const MAX_ACCEPTABLE_ZERO_CROSSINGS_PER_SEC = 10;
-        const CRITICAL_PITCH_ERROR = 15.0;
         
         let itae = 0, maxOvershoot = 0, zeroCrossings = 0;
-        let lastTime = telemetryData[0].trial.elapsed_ms / 1000.0;
-        const pitches = telemetryData.map(d => d.pitch);
-        const outputs = telemetryData.map(d => d.output);
+        let lastTime = validData[0].trial.elapsed_ms / 1000.0;
+        const pitches = validData.map(d => d.pitch);
+        const outputs = validData.map(d => d.output);
 
-        for (let i = 1; i < telemetryData.length; i++) {
-            const currentTime = telemetryData[i].trial.elapsed_ms / 1000.0;
+        for (let i = 1; i < validData.length; i++) {
+            const currentTime = validData[i].trial.elapsed_ms / 1000.0;
             const dt = currentTime - lastTime;
             if(dt <= 0) continue;
             itae += Math.abs(pitches[i]) * currentTime * dt;
@@ -1395,22 +1417,26 @@
         }
 
         maxOvershoot = Math.max(...pitches.map(p => Math.abs(p)));
-        if (maxOvershoot > CRITICAL_PITCH_ERROR) {
+        
+        // [POPRAWKA GA] Krok 2: Dodaj do "cmentarza" jesli byl upadek
+        if (maxOvershoot > CRITICAL_PITCH_ERROR_JS) {
             addLogMessage(`[GA-Ocena] DYSKWALIFIKACJA: Przekroczono krytyczny kat (${maxOvershoot.toFixed(2)} st.)`, "warn");
+            if(phenotype) {
+                gaGraveyard.push(phenotype);
+                addLogMessage(`[GA-Cmentarz] Dodano do cmentarza: Kp=${phenotype.kp_b.toFixed(2)}, Kd=${phenotype.kd_b.toFixed(2)}`, 'info');
+            }
             return 0.0;
         }
 
         const meanPitch = pitches.reduce((a, b) => a + b, 0) / pitches.length;
         const stdDev = Math.sqrt(pitches.map(p => Math.pow(p - meanPitch, 2)).reduce((a, b) => a + b, 0) / pitches.length);
         const rmsEffort = Math.sqrt(outputs.map(o => o*o).reduce((a, b) => a + b, 0) / outputs.length);
-
         const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
         
         const stabilityScore = 1.0 - clamp(itae / MAX_ACCEPTABLE_ITAE, 0, 1);
         const stillnessScore = (1.0 - clamp(stdDev / MAX_ACCEPTABLE_STD_DEV, 0, 1)) * 0.7 + (1.0 - clamp((zeroCrossings/testDuration) / MAX_ACCEPTABLE_ZERO_CROSSINGS_PER_SEC, 0, 1)) * 0.3;
         const overshootScore = 1.0 - clamp(maxOvershoot / MAX_ACCEPTABLE_OVERSHOOT, 0, 1);
         const effortScore = 1.0 - clamp(rmsEffort / 1023, 0, 1);
-
         const totalWeight = weights.stability + weights.stillness + weights.overshoot + weights.effort;
         if(totalWeight === 0) return 0.5;
 
@@ -1430,8 +1456,10 @@
         if (selectedTest === 'balance') {
             balancePanel.style.display = 'block';
             actionBtn.textContent = 'Rozpocznij Sesje (Auto)';
+            actionBtn.disabled = false;
         } else {
             actionBtn.textContent = 'Rozpocznij Sesje (Niedostepne)';
+            actionBtn.disabled = true;
         }
         updateAccordionHeight(document.getElementById('autotestOptions').closest('.accordion-content'));
     }
