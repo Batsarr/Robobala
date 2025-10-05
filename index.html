@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v19.0</title>
+    <title>Robot PID - Panel Sterowania v19.1</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -151,7 +151,7 @@
         </div>
     </div>
 
-    <h1>Robot PID - Panel Sterowania v19.0</h1>
+    <h1>Robot PID - Panel Sterowania v19.1</h1>
     <div class="main-grid">
         <!-- 1. STEROWANIE -->
         <div class="card" id="controls-card">
@@ -457,26 +457,27 @@
                             </div>
                         </fieldset>
                     </div>
-                     <!-- Panel wspolny dla wszystkich testow GA -->
+                     <!-- NOWA SEKCJA PARAMETROW GA -->
                     <fieldset style="margin-top: 15px;">
-                        <legend>Parametry Algorytmu Genetycznego</legend>
+                        <legend>Parametry Algorytmu Genetycznego (v2.0)</legend>
                         <div class="setting-container">
-                            <label for="gaGenerationsInput">Liczba pokolen<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper">
-                                <button>-</button>
-                                <input type="number" id="gaGenerationsInput" min="2" max="50" step="1" value="10">
-                                <button>+</button>
-                            </div>
-                            <div class="help-text">Ile cykli ewolucji ma przejsc algorytm. Wiecej = potencjalnie lepszy wynik, ale dluzszy czas.</div>
+                            <label for="gaGenerationsInput">Liczba pokolen</label>
+                            <div class="numeric-input-wrapper"><button>-</button><input type="number" id="gaGenerationsInput" min="2" max="50" step="1" value="10"><button>+</button></div>
                         </div>
                         <div class="setting-container">
-                            <label for="gaPopulationInput">Liczba osobnikow<span class="help-icon">?</span></label>
-                            <div class="numeric-input-wrapper">
-                                <button>-</button>
-                                <input type="number" id="gaPopulationInput" min="4" max="20" step="1" value="10">
-                                <button>+</button>
-                            </div>
-                            <div class="help-text">Ile rozwiazan (zestawow PID) bedzie testowanych w kazdym pokoleniu.</div>
+                            <label for="gaPopulationInput">Liczba osobnikow</label>
+                            <div class="numeric-input-wrapper"><button>-</button><input type="number" id="gaPopulationInput" min="4" max="20" step="1" value="10"><button>+</button></div>
+                        </div>
+                        <hr style="border-color: #4a4f58; margin: 15px 0;">
+                        <div class="setting-container">
+                            <label for="gaCrossoverRateInput">Wspolczynnik krzyzowania (%)<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button>-</button><input type="number" id="gaCrossoverRateInput" min="50" max="100" step="5" value="80"><button>+</button></div>
+                            <div class="help-text">Szansa, ze potomkowie powstana z polaczenia dwoch rodzicow. Wyzsza wartosc = wieksza eksploracja.</div>
+                        </div>
+                        <div class="setting-container">
+                            <label for="gaMutationRateInput">Bazowa sila mutacji (%)<span class="help-icon">?</span></label>
+                            <div class="numeric-input-wrapper"><button>-</button><input type="number" id="gaMutationRateInput" min="5" max="50" step="1" value="15"><button>+</button></div>
+                            <div class="help-text">Poczatkowa sila losowej zmiany genow. Bedzie ona dynamicznie rosnac w razie stagnacji.</div>
                         </div>
                     </fieldset>
                 </div>
@@ -555,7 +556,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 19.0 (UI dla DMP)
+    // WERSJA 19.1 (UI dla ulepszonego GA)
     // =======================================================================================
 
     // === DEKLARACJE ZMIENNYCH GLOBALNYCH ===
@@ -859,16 +860,16 @@
         if (data.pitch !== undefined) {
             document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0';
             document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`;
-            currentPitch3D = data.pitch;
+            if(data.type !== '3d_telemetry') currentPitch3D = data.pitch;
             document.getElementById('robot3d-pitch').textContent = data.pitch.toFixed(1) + '°';
         }
         if (data.roll !== undefined) {
             document.getElementById('rollVal').textContent = data.roll.toFixed(1) + ' \u00B0';
-            currentRoll3D = data.roll;
+            if(data.type !== '3d_telemetry') currentRoll3D = data.roll;
             document.getElementById('robot3d-roll').textContent = data.roll.toFixed(1) + '°';
         }
         if (data.yaw !== undefined) {
-            currentYaw3D = data.yaw;
+            if(data.type !== '3d_telemetry') currentYaw3D = data.yaw;
         }
         if (data.speed !== undefined) {
             document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0);
@@ -877,11 +878,11 @@
             document.getElementById('robot3d-wheel-speed').textContent = wheelRpm.toFixed(0) + ' obr/min';
         }
         if (data.encoder_left !== undefined) {
-            currentEncoderLeft = data.encoder_left;
+            if(data.type !== '3d_telemetry') currentEncoderLeft = data.encoder_left;
             document.getElementById('encoderLeftVal').textContent = data.encoder_left;
         }
         if (data.encoder_right !== undefined) {
-            currentEncoderRight = data.encoder_right;
+            if(data.type !== '3d_telemetry') currentEncoderRight = data.encoder_right;
             document.getElementById('encoderRightVal').textContent = data.encoder_right;
         }
         if (data.states && !isApplyingConfig) {
@@ -1041,21 +1042,26 @@
     function handleZnTuningResult(ku, tu) { addLogMessage(`[UI] Otrzymano wynik strojenia Z-N: Ku=${ku.toFixed(4)}, Tu=${tu.toFixed(4)}`, 'success'); resetZnTuningUI(); znResults = { ku, tu }; const resultPanel = document.getElementById('znResultPanel'); resultPanel.style.display = 'block'; const kp = 0.6 * ku; const kd = kp * tu / 8; document.getElementById('znKuResult').textContent = ku.toFixed(4); document.getElementById('znTuResult').textContent = tu.toFixed(4) + " s"; document.getElementById('znKpSuggest').textContent = kp.toFixed(4); document.getElementById('znKdSuggest').textContent = kd.toFixed(4); updateAccordionHeight(resultPanel.closest('.accordion-content')); }
     function applyZnResults() { const { ku, tu } = znResults; if (ku <= 0 || tu <= 0) return; const kp = 0.6 * ku; const kd = kp * tu / 8; isApplyingConfig = true; document.getElementById('balanceKpInput').value = kp.toFixed(4); document.getElementById('balanceKiInput').value = 0.0; document.getElementById('balanceKdInput').value = kd.toFixed(4); isApplyingConfig = false; document.getElementById('balanceKpInput').dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('balanceKiInput').dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true })); addLogMessage('[UI] Zastosowano sugerowane wartosci Kp i Kd. Ki ustawiono na 0.', 'info'); }
 
-    // --- SEKCJA STROJENIA KROK 2: OPTYMALIZACJA I TESTY (GA) ---
+    // =======================================================================================
+    // === SEKCJA STROJENIA KROK 2: ULEPSZONY ALGORYTM GENETYCZNY (GA v2.0) ===
+    // =======================================================================================
     let isOptimizationSessionRunning = false;
     let currentOptimizationMode = 'balance';
     let currentGeneration = 0;
-    let currentIndividualIndex = -1;
     let currentPopulation = [];
-    let evaluatedPopulation = [];
     let bestOverallScore = -Infinity;
     let bestOverallPhenotype = null;
     let finalBestPhenotypeFromGA = null;
     let telemetryForCurrentTest = [];
     let safeStartParams = {};
-    let trialTimeout = null;
     let isBalanceTestRunning = false;
     let individualStartTime = 0;
+
+    // Nowe zmienne stanu dla GA v2.0
+    let stagnationCounter = 0;
+    let currentMutationStrength = 0.15; // Inicjalizowane z UI
+    const STAGNATION_TOLERANCE = 2; // Hardcoded, zgodnie z zyczeniem
+    const IMMIGRATION_RATE = 0.10; // Hardcoded, zgodnie z zyczeniem
     
     function setupAutoTestEventListeners() {
         document.querySelectorAll('input[name="autotest-type"]').forEach(radio => radio.addEventListener('change', renderAutotestOptions));
@@ -1067,11 +1073,7 @@
     }
     
     function handleAutotestAction() {
-        if (isOptimizationSessionRunning) {
-            if(currentOptimizationMode !== 'balance') {
-                testNextIndividualInteractive();
-            }
-        } else {
+        if (!isOptimizationSessionRunning) {
             startOptimizationSession();
         }
     }
@@ -1084,25 +1086,29 @@
 
         isOptimizationSessionRunning = true;
         currentOptimizationMode = document.querySelector('input[name="autotest-type"]:checked').value;
+        
+        // Reset stanu
         currentGeneration = 1;
-        currentIndividualIndex = -1;
         bestOverallScore = -Infinity;
         bestOverallPhenotype = null;
         finalBestPhenotypeFromGA = null;
-        evaluatedPopulation = [];
+        stagnationCounter = 0;
+        currentMutationStrength = parseFloat(document.getElementById('gaMutationRateInput').value) / 100.0;
         
+        // Zapisz bezpieczne parametry startowe
         if (currentOptimizationMode === 'balance') {
             safeStartParams = { kp_b: parseFloat(document.getElementById('balanceKpInput').value), ki_b: 0, kd_b: parseFloat(document.getElementById('balanceKdInput').value) };
-        } else if (currentOptimizationMode === 'speed') {
-            safeStartParams = { kp_s: parseFloat(document.getElementById('speedKpInput').value), ki_s: parseFloat(document.getElementById('speedKiInput').value), kd_s: parseFloat(document.getElementById('speedKdInput').value) };
-        } else if (currentOptimizationMode === 'position') {
-            safeStartParams = { kp_p: parseFloat(document.getElementById('positionKpInput').value), ki_p: parseFloat(document.getElementById('positionKiInput').value), kd_p: parseFloat(document.getElementById('positionKdInput').value) };
+        } else {
+            // ... (logika dla innych trybow, jesli beda wspierane przez GA v2.0)
+            addLogMessage('[GA] Ten tryb optymalizacji nie jest jeszcze w pelni obslugiwany przez GA v2.0', 'warn');
+            cancelOptimizationSession();
+            return;
         }
         
         const populationSize = parseInt(document.getElementById('gaPopulationInput').value);
-        currentPopulation = createInitialPopulation(populationSize);
+        currentPopulation = createInitialPopulation(populationSize, safeStartParams);
 
-        addLogMessage(`[GA] Rozpoczeto sesje strojenia dla petli: ${currentOptimizationMode}.`, 'success');
+        addLogMessage(`[GA v2.0] Rozpoczeto sesje strojenia dla petli: ${currentOptimizationMode}.`, 'success');
         document.getElementById('ga_stop_btn').style.display = 'inline-block';
         document.getElementById('autotestActionBtn').disabled = true;
         document.getElementById('gaResultsPanel').style.display = 'none';
@@ -1111,25 +1117,23 @@
 
         if (currentOptimizationMode === 'balance') {
             document.getElementById('autotestActionBtn').style.display = 'none';
-            runFullBalanceGA();
-        } else {
-            document.getElementById('autotestActionBtn').textContent = `Testuj Osobnika 1/${populationSize}`;
-            document.getElementById('autotestActionBtn').disabled = false;
-            updateStatus(`Gotowy do testu osobnika 1`, 0);
+            runFullBalanceGA(); // Uruchom glowna petle GA
         }
     }
     
     async function runFullBalanceGA() {
-        addLogMessage(`[GA-Auto] Rozpoczeto automatyczna optymalizacje petli balansu.`, 'info');
+        addLogMessage(`[GA v2.0] Rozpoczeto automatyczna optymalizacje petli balansu.`, 'info');
         isBalanceTestRunning = true;
         const totalGenerations = parseInt(document.getElementById('gaGenerationsInput').value);
 
         for (let gen = 0; gen < totalGenerations; gen++) {
             if (!isOptimizationSessionRunning) break;
+            
             currentGeneration = gen + 1;
             document.getElementById('statusGeneration').textContent = `${currentGeneration} / ${totalGenerations}`;
-            evaluatedPopulation = [];
             
+            // Krok 1: Ocena kazdego osobnika w populacji
+            let evaluatedPopulation = [];
             for (let ind = 0; ind < currentPopulation.length; ind++) {
                 if (!isOptimizationSessionRunning) break;
                 
@@ -1141,113 +1145,147 @@
                 individualStartTime = Date.now();
 
                 updateStatus(`Testowanie osobnika ${ind + 1}/${currentPopulation.length}`, (ind / currentPopulation.length) * 100);
-                
                 updateCurrentPhenotypeStatus(individual);
 
                 await applyPhenotype(individual);
-                await sleep(500);
+                await sleep(500); // Czas na ustabilizowanie sie z nowymi parametrami
                 
                 const testDuration = parseFloat(document.getElementById('testDurationInput').value) * 1000;
-                await sleep(testDuration);
+                await sleep(testDuration); // Zbieranie danych
 
-                processTestResult(individual);
+                const score = processTestResult();
+                evaluatedPopulation.push({ ...individual, score });
+                updateScores(score, individual);
             }
-             if (!isOptimizationSessionRunning) break;
-            
-            createNewGeneration();
+            if (!isOptimizationSessionRunning) break;
+
+            // Krok 2: Tworzenie nowej generacji
+            currentPopulation = createNewGeneration(evaluatedPopulation);
         }
         
         finishOptimizationSession();
     }
-
-    async function testNextIndividualInteractive() {
-        if (!isOptimizationSessionRunning || currentIndividualIndex >= currentPopulation.length - 1) return;
-        
-        await waitForRobotIdle();
-
-        currentIndividualIndex++;
-        const individual = currentPopulation[currentIndividualIndex];
-        telemetryForCurrentTest = [];
-        
-        addLogMessage(`[GA-Inter] Przygotowanie do testu osobnika ${currentIndividualIndex + 1}...`);
-        document.getElementById('autotestActionBtn').disabled = true;
-        updateStatus(`Testowanie osobnika ${currentIndividualIndex + 1}...`, (currentIndividualIndex / currentPopulation.length) * 100);
-
-        updateCurrentPhenotypeStatus(individual);
-
-        await applyPhenotype(individual);
-        await sleep(300);
-
-        if (currentOptimizationMode === 'speed') {
-            const distance = parseFloat(document.getElementById('speedTestDistanceInput').value);
-            const speed = parseFloat(document.getElementById('speedTestSpeedInput').value);
-            sendBleMessage({ type: 'execute_speed_test_run', distance_cm: distance, speed_cmps: speed });
-        } else if (currentOptimizationMode === 'position') {
-            const impulse = parseInt(document.getElementById('positionTestImpulseInput').value);
-            sendBleMessage({ type: 'execute_position_test_impulse', impulse_power: impulse });
-        }
-
-        const trialTime = parseFloat(document.getElementById('testDurationInput').value) * 1000;
-        trialTimeout = setTimeout(handleInteractiveTrialEnd, trialTime + 1000); // +1s bufor
+    
+    function processTestResult() {
+        if (telemetryForCurrentTest.length < 20) return 0.0;
+        const weights = { stability: parseFloat(document.getElementById('weightStability').value), stillness: parseFloat(document.getElementById('weightStillness').value), overshoot: parseFloat(document.getElementById('weightOvershoot').value), effort: parseFloat(document.getElementById('weightEffort').value) };
+        return evaluateBalanceFitness(telemetryForCurrentTest, weights);
     }
     
-    async function handleInteractiveTrialEnd() {
-        if (!isOptimizationSessionRunning) return;
-        addLogMessage('[GA-Inter] Czas na zbieranie danych uplynal. Zatrzymuje robota i analizuje...', 'info');
-        sendBleMessage({ type: 'command_stop' });
+    // --- Nowe, kluczowe funkcje GA v2.0 ---
+
+    function createNewGeneration(evaluatedPopulation) {
+        addLogMessage(`[GA v2.0] Tworzenie pokolenia ${currentGeneration + 1}...`);
+        const populationSize = evaluatedPopulation.length;
         
-        await waitForRobotIdle();
+        // Sortowanie populacji od najlepszego do najgorszego
+        evaluatedPopulation.sort((a, b) => b.score - a.score);
 
-        processTestResult(currentPopulation[currentIndividualIndex]);
-
-        const populationSize = currentPopulation.length;
-        if (currentIndividualIndex < populationSize - 1) {
-            document.getElementById('autotestActionBtn').textContent = `Testuj Osobnika ${currentIndividualIndex + 2}/${populationSize}`;
-            document.getElementById('autotestActionBtn').disabled = false;
-            updateStatus('Gotowy na nastepna probe');
+        // Adaptacyjna mutacja
+        if (evaluatedPopulation[0].score > bestOverallScore) {
+            stagnationCounter = 0;
+            currentMutationStrength = parseFloat(document.getElementById('gaMutationRateInput').value) / 100.0; // Reset do bazowej
+            addLogMessage(`[GA v2.0] Postep! Sila mutacji zresetowana do ${currentMutationStrength.toFixed(2)}.`);
         } else {
-            const totalGenerations = parseInt(document.getElementById('gaGenerationsInput').value);
-            if(currentGeneration < totalGenerations){
-                 document.getElementById('autotestActionBtn').textContent = `Rozpocznij Pokolenie ${currentGeneration + 1}`;
-                 document.getElementById('autotestActionBtn').disabled = false;
-                 document.getElementById('autotestActionBtn').onclick = () => {
-                     createNewGeneration();
-                     currentIndividualIndex = -1;
-                     document.getElementById('statusGeneration').textContent = `${currentGeneration} / ${totalGenerations}`;
-                     document.getElementById('autotestActionBtn').textContent = `Testuj Osobnika 1/${populationSize}`;
-                     document.getElementById('autotestActionBtn').onclick = handleAutotestAction;
-                     handleAutotestAction();
-                 };
-                 updateStatus('Pokolenie zakonczone');
-            } else {
-                finishOptimizationSession();
-            }
+            stagnationCounter++;
         }
-    }
-    
-    function processTestResult(individual) {
-        let score = 0.0;
-        if (telemetryForCurrentTest.length > 10) {
-            if (currentOptimizationMode === 'balance') {
-                 const weights = { stability: parseFloat(document.getElementById('weightStability').value), stillness: parseFloat(document.getElementById('weightStillness').value), overshoot: parseFloat(document.getElementById('weightOvershoot').value), effort: parseFloat(document.getElementById('weightEffort').value) };
-                score = evaluateBalanceFitness(telemetryForCurrentTest, weights);
-            } else if (currentOptimizationMode === 'speed') {
-                score = evaluateSpeedFitness(telemetryForCurrentTest);
-            } else if (currentOptimizationMode === 'position') {
-                score = evaluatePositionFitness(telemetryForCurrentTest);
-            }
+
+        if (stagnationCounter >= STAGNATION_TOLERANCE) {
+            currentMutationStrength = Math.min(0.8, currentMutationStrength * 2.5); // Gwaltowne zwiekszenie
+            stagnationCounter = 0; // Reset licznika po zwiekszeniu
+            addLogMessage(`[GA v2.0] Stagnacja! Sila mutacji zwiekszona do ${currentMutationStrength.toFixed(2)}.`);
         }
         
-        individual.score = score;
-        evaluatedPopulation.push(individual);
-        updateScores(score, individual);
+        let newPopulation = [];
+
+        // 1. Elityzm (przeniesienie 1 najlepszego osobnika bez zmian)
+        newPopulation.push(evaluatedPopulation[0]);
+
+        // 2. Krzyzowanie i mutacja
+        const crossoverRate = parseFloat(document.getElementById('gaCrossoverRateInput').value) / 100.0;
+        while (newPopulation.length < populationSize) {
+            const parent1 = selectParentTournament(evaluatedPopulation);
+            const parent2 = selectParentTournament(evaluatedPopulation);
+            
+            let child = crossoverArithmetic(parent1, parent2, crossoverRate);
+            child = mutate(child, currentMutationStrength);
+            
+            newPopulation.push(child);
+        }
+
+        // 3. Imigracja
+        const immigrantCount = Math.floor(populationSize * IMMIGRATION_RATE);
+        for (let i = 0; i < immigrantCount; i++) {
+            newPopulation[populationSize - 1 - i] = createRandomIndividual(safeStartParams);
+        }
+
+        addLogMessage(`[GA v2.0] Stworzono ${immigrantCount} nowych imigrantow.`);
+        return newPopulation;
     }
+
+    function selectParentTournament(population, tournamentSize = 3) {
+        let best = null;
+        for (let i = 0; i < tournamentSize; i++) {
+            const randomIndividual = population[Math.floor(Math.random() * population.length)];
+            if (best === null || randomIndividual.score > best.score) {
+                best = randomIndividual;
+            }
+        }
+        return best;
+    }
+
+    function crossoverArithmetic(parent1, parent2, crossoverRate) {
+        if (Math.random() > crossoverRate) {
+            return { ...parent1 }; // Zwracamy klona jednego z rodzicow, jesli krzyzowanie nie zaszlo
+        }
+        
+        const child = {};
+        const alpha = Math.random(); // Wspolczynnik mieszania
+        
+        for (const key in parent1) {
+            if (key !== 'score') {
+                child[key] = alpha * parent1[key] + (1 - alpha) * parent2[key];
+            }
+        }
+        return child;
+    }
+
+    function mutate(individual, mutationStrength) {
+        const mutated = { ...individual };
+        for (const key in mutated) {
+            if (key !== 'score') {
+                const mutationFactor = 1.0 + (Math.random() - 0.5) * 2 * mutationStrength; // np. od 0.85 do 1.15 dla 15%
+                mutated[key] *= mutationFactor;
+                if (key === 'ki_b' || key === 'ki_s' || key === 'ki_p') mutated[key] = Math.max(0, mutated[key]); // Ki nie moze byc ujemne
+            }
+        }
+        return mutated;
+    }
+
+    function createRandomIndividual(baseParams) {
+        const individual = {};
+        for (const key in baseParams) {
+             // Tworzenie losowych osobnikow w zakresie +/- 50% od wartosci bazowych
+            individual[key] = baseParams[key] * (0.5 + Math.random());
+        }
+        return individual;
+    }
+
+    function createInitialPopulation(size, baseParams) {
+        let population = [];
+        population.push({ ...baseParams }); // Pierwszy osobnik to aktualne ustawienia
+        for (let i = 1; i < size; i++) {
+            population.push(createRandomIndividual(baseParams));
+        }
+        return population;
+    }
+    
+    // --- Koniec nowych funkcji GA v2.0 ---
 
     function cancelOptimizationSession() {
         if (!isOptimizationSessionRunning) return;
         isOptimizationSessionRunning = false;
         isBalanceTestRunning = false;
-        clearTimeout(trialTimeout);
         applyPhenotype(safeStartParams);
         addLogMessage('[GA] Sesja strojenia anulowana przez uzytkownika.', 'warn');
         resetGAUI();
@@ -1327,62 +1365,6 @@
         }
     }
 
-    function createInitialPopulation(size) {
-        let population = [];
-        let baseParams = {};
-        
-        switch (currentOptimizationMode) {
-            case 'balance':
-                baseParams = { kp_b: parseFloat(document.getElementById('balanceKpInput').value), ki_b: 0, kd_b: parseFloat(document.getElementById('balanceKdInput').value) };
-                population.push(baseParams);
-                for (let i = 1; i < size; i++) population.push({ kp_b: Math.max(0, baseParams.kp_b * (1 + (Math.random() - 0.5) * 0.4)), ki_b: 0, kd_b: Math.max(0, baseParams.kd_b * (1 + (Math.random() - 0.5) * 0.4)) });
-                break;
-            case 'speed':
-                baseParams = { kp_s: parseFloat(document.getElementById('speedKpInput').value), ki_s: parseFloat(document.getElementById('speedKiInput').value), kd_s: parseFloat(document.getElementById('speedKdInput').value) };
-                population.push(baseParams);
-                for (let i = 1; i < size; i++) population.push({ kp_s: Math.max(0, baseParams.kp_s * (1 + (Math.random() - 0.5) * 0.8)), ki_s: Math.max(0, baseParams.ki_s * (1 + (Math.random() - 0.5) * 0.8)), kd_s: Math.max(0, baseParams.kd_s * (1 + (Math.random() - 0.5) * 0.8)) });
-                break;
-            case 'position':
-                baseParams = { kp_p: parseFloat(document.getElementById('positionKpInput').value), ki_p: parseFloat(document.getElementById('positionKiInput').value), kd_p: parseFloat(document.getElementById('positionKdInput').value) };
-                population.push(baseParams);
-                for (let i = 1; i < size; i++) population.push({ kp_p: Math.max(0, baseParams.kp_p * (1 + (Math.random() - 0.5) * 0.8)), ki_p: Math.max(0, baseParams.ki_p * (1 + (Math.random() - 0.5) * 0.8)), kd_p: Math.max(0, baseParams.kd_p * (1 + (Math.random() - 0.5) * 0.8)) });
-                break;
-        }
-        return population;
-    }
-
-    function createNewGeneration() {
-        addLogMessage(`[GA] Tworzenie nowej generacji ${currentGeneration + 1}...`);
-        const populationSize = currentPopulation.length;
-        evaluatedPopulation.sort((a,b) => b.score - a.score);
-        
-        let newPopulation = [];
-        const eliteSize = Math.max(1, Math.floor(populationSize * 0.2));
-        for(let i=0; i < eliteSize; i++) newPopulation.push(evaluatedPopulation[i]);
-        
-        while(newPopulation.length < populationSize) {
-            let parent = evaluatedPopulation[Math.floor(Math.random() * (populationSize / 2))];
-            let child = {};
-            
-            switch (currentOptimizationMode) {
-                case 'balance':
-                    child = { kp_b: Math.max(0, parent.kp_b * (1 + (Math.random() - 0.5) * 0.2)), ki_b: 0, kd_b: Math.max(0, parent.kd_b * (1 + (Math.random() - 0.5) * 0.2)) };
-                    break;
-                case 'speed':
-                    child = { kp_s: Math.max(0, parent.kp_s * (1 + (Math.random() - 0.5) * 0.5)), ki_s: Math.max(0, parent.ki_s * (1 + (Math.random() - 0.5) * 0.5)), kd_s: Math.max(0, parent.kd_s * (1 + (Math.random() - 0.5) * 0.5)) };
-                    break;
-                case 'position':
-                     child = { kp_p: Math.max(0, parent.kp_p * (1 + (Math.random() - 0.5) * 0.5)), ki_p: Math.max(0, parent.ki_p * (1 + (Math.random() - 0.5) * 0.5)), kd_p: Math.max(0, parent.kd_p * (1 + (Math.random() - 0.5) * 0.5)) };
-                    break;
-            }
-            newPopulation.push(child);
-        }
-        
-        currentPopulation = newPopulation;
-        currentGeneration++;
-    }
-
-    // --- FUNKCJE OCENY (FITNESS) ---
     function evaluateBalanceFitness(telemetryData, weights) {
         if (!telemetryData || telemetryData.length < 20) return 0.0;
 
@@ -1435,67 +1417,6 @@
         const finalScore = (weights.stability * stabilityScore + weights.stillness * stillnessScore + weights.overshoot * overshootScore + weights.effort * effortScore) / totalWeight;
         return finalScore;
     }
-    
-    function evaluateSpeedFitness(telemetryData) {
-        if (telemetryData.length < 20) return 0.0;
-        const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
-        const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value) || 8.2;
-        const impulsesPerCm = ppr / (Math.PI * wheelDiameter);
-        const targetSpeedCmps = parseFloat(document.getElementById('speedTestSpeedInput').value);
-        const targetSpeedImps = targetSpeedCmps * impulsesPerCm;
-        const targetDistanceCm = parseFloat(document.getElementById('speedTestDistanceInput').value);
-        const targetDistanceImpulses = targetDistanceCm * impulsesPerCm;
-
-        let speedErrorSumSq = 0, maxOvershoot = 0;
-        const startEncoderAvg = (telemetryData[0].encoder_left + telemetryData[0].encoder_right) / 2;
-        const endEncoderAvg = (telemetryData[telemetryData.length-1].encoder_left + telemetryData[telemetryData.length-1].encoder_right) / 2;
-        const actualDistanceImpulses = Math.abs(endEncoderAvg - startEncoderAvg);
-        const positionError = Math.abs(targetDistanceImpulses - actualDistanceImpulses);
-
-        for (const data of telemetryData) {
-            const currentSpeed = Math.abs(data.speed);
-            if (currentSpeed > 0.1 * targetSpeedImps) speedErrorSumSq += Math.pow(targetSpeedImps - currentSpeed, 2);
-            if (currentSpeed > targetSpeedImps) {
-                const overshoot = currentSpeed - targetSpeedImps;
-                if (overshoot > maxOvershoot) maxOvershoot = overshoot;
-            }
-        }
-        
-        const avgSpeedError = Math.sqrt(speedErrorSumSq / telemetryData.length);
-        
-        const speedPenalty = Math.min(1.0, avgSpeedError / (targetSpeedImps + 1));
-        const positionPenalty = Math.min(1.0, positionError / (targetDistanceImpulses + 1));
-        const overshootPenalty = Math.min(1.0, maxOvershoot / (targetSpeedImps + 1));
-
-        const totalPenalty = (speedPenalty * 0.3) + (positionPenalty * 0.5) + (overshootPenalty * 0.2);
-        return 1.0 - totalPenalty;
-    }
-
-    function evaluatePositionFitness(telemetryData) {
-        if (telemetryData.length < 20 || !telemetryData[0]?.trial?.elapsed_ms) return 0.0;
-        const startEncoderAvg = (telemetryData[0].encoder_left + telemetryData[0].encoder_right) / 2;
-        let itae = 0, maxOvershoot = 0, lastTime = 0;
-        
-        for (const data of telemetryData) {
-            const currentTime = data.trial.elapsed_ms / 1000.0;
-            const dt = currentTime - lastTime;
-            if(dt <= 0) continue;
-            const currentPos = (data.encoder_left + data.encoder_right) / 2;
-            const posError = Math.abs(currentPos - startEncoderAvg);
-            itae += posError * currentTime * dt;
-            if(posError > maxOvershoot) maxOvershoot = posError;
-            lastTime = currentTime;
-        }
-
-        const finalPosError = Math.abs(((telemetryData[telemetryData.length-1].encoder_left + telemetryData[telemetryData.length-1].encoder_right) / 2) - startEncoderAvg);
-        
-        const itaePenalty = Math.min(1.0, itae / 50000.0);
-        const overshootPenalty = Math.min(1.0, maxOvershoot / 1000.0);
-        const finalErrorPenalty = Math.min(1.0, finalPosError / 50.0);
-        
-        const totalPenalty = (itaePenalty * 0.4) + (overshootPenalty * 0.3) + (finalErrorPenalty * 0.3);
-        return 1.0 - totalPenalty;
-    }
 
     function renderAutotestOptions() {
         const selectedTest = document.querySelector('input[name="autotest-type"]:checked').value;
@@ -1509,12 +1430,8 @@
         if (selectedTest === 'balance') {
             balancePanel.style.display = 'block';
             actionBtn.textContent = 'Rozpocznij Sesje (Auto)';
-        } else if (selectedTest === 'position') {
-            positionPanel.style.display = 'block';
-            actionBtn.textContent = 'Rozpocznij Sesje (Interaktywnie)';
-        } else if (selectedTest === 'speed') {
-            speedPanel.style.display = 'block';
-            actionBtn.textContent = 'Rozpocznij Sesje (Interaktywnie)';
+        } else {
+            actionBtn.textContent = 'Rozpocznij Sesje (Niedostepne)';
         }
         updateAccordionHeight(document.getElementById('autotestOptions').closest('.accordion-content'));
     }
@@ -1530,7 +1447,7 @@
     async function applyPhenotype(phenotype) {
         isApplyingConfig = true;
         for (const [key, value] of Object.entries(phenotype)) {
-             sendBleMessage({ type: 'set_param', key: key, value: value });
+             if(key !== 'score') sendBleMessage({ type: 'set_param', key: key, value: value });
         }
         await sleep(50);
         isApplyingConfig = false;
@@ -1547,12 +1464,6 @@
         switch(currentOptimizationMode) {
              case 'balance':
                 [kp, ki, kd] = [finalBestPhenotypeFromGA.kp_b, 0, finalBestPhenotypeFromGA.kd_b];
-                break;
-            case 'speed':
-                [kp, ki, kd] = [finalBestPhenotypeFromGA.kp_s, finalBestPhenotypeFromGA.ki_s, finalBestPhenotypeFromGA.kd_s];
-                break;
-            case 'position':
-                [kp, ki, kd] = [finalBestPhenotypeFromGA.kp_p, finalBestPhenotypeFromGA.ki_p, finalBestPhenotypeFromGA.kd_p];
                 break;
         }
         document.getElementById('gaFinalKp').textContent = kp.toFixed(4);
@@ -1575,20 +1486,11 @@
                 document.getElementById('balanceKiInput').value = "0.0000";
                 document.getElementById('balanceKdInput').value = finalBestPhenotypeFromGA.kd_b.toFixed(4);
                 break;
-            case 'speed':
-                document.getElementById('speedKpInput').value = finalBestPhenotypeFromGA.kp_s.toFixed(4);
-                document.getElementById('speedKiInput').value = finalBestPhenotypeFromGA.ki_s.toFixed(4);
-                document.getElementById('speedKdInput').value = finalBestPhenotypeFromGA.kd_s.toFixed(4);
-                break;
-            case 'position':
-                document.getElementById('positionKpInput').value = finalBestPhenotypeFromGA.kp_p.toFixed(4);
-                document.getElementById('positionKiInput').value = finalBestPhenotypeFromGA.ki_p.toFixed(4);
-                document.getElementById('positionKdInput').value = finalBestPhenotypeFromGA.kd_p.toFixed(4);
-                break;
         }
         isApplyingConfig = false;
 
         for(const key in finalBestPhenotypeFromGA) {
+             if(key === 'score') continue;
             const inputId = Object.keys(parameterMapping).find(id => parameterMapping[id] === key);
             if(inputId) document.getElementById(inputId).dispatchEvent(new Event('change', {bubbles:true}));
         }
