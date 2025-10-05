@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v18.5</title>
+    <title>Robot PID - Panel Sterowania v19.0</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -151,7 +151,7 @@
         </div>
     </div>
 
-    <h1>Robot PID - Panel Sterowania</h1>
+    <h1>Robot PID - Panel Sterowania v19.0</h1>
     <div class="main-grid">
         <!-- 1. STEROWANIE -->
         <div class="card" id="controls-card">
@@ -166,7 +166,6 @@
             <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
             <button id="emergencyStopBtn">STOP AWARYJNY</button>
             
-            <!-- PRZENIESIONA SEKCJA JOYSTICKA -->
             <button class="accordion-header" onclick="toggleAccordion(this)" style="margin-top: 15px;">Strojenie Joysticka</button>
             <div class="accordion-content">
                 <div class="setting-container"><label for="joystickSensitivityInput">Czulosc Globalna (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickSensitivityInput" min="10" max="100" step="5" value="100"><button>+</button></div><div class="help-text">Mnoznik dla wszystkich wartosci z joysticka. Zmniejsz, aby robot byl mniej czuly.</div></div>
@@ -281,7 +280,6 @@
                 <button id="deleteSelectedPresetBtn" style="width:100%; margin-top: 10px; background-color: #ff6347;">Usun Wybrany Preset</button>
             </fieldset>
             <div id="allSettings">
-                <!-- NOWA KOLEJNOSC -->
                 <button class="accordion-header" onclick="toggleAccordion(this)">1. Parametry Sprzetowe i Mechaniczne</button>
                 <div class="accordion-content">
                     <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" step="0.1" value="8.2"><button>+</button></div> </div>
@@ -300,43 +298,33 @@
                     <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKIE SILNIKI</button>
                 </div>
                 
-                <button class="accordion-header" onclick="toggleAccordion(this)">3. Konfiguracja Filtr Kalmana</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">3. PID Balansu (Podstawowy)</button>
                 <div class="accordion-content">
-                    <div class="setting-container"><label for="kalmanQAngleInput">Q Angle (Szum Procesu - Kat)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="kalmanQAngleInput" min="0.0001" max="0.01" step="0.0001" value="0.001"><button>+</button></div><div class="help-text">Wspolczynnik zaufania do modelu predykcji kata. Wieksza wartosc = wiekszy szum procesu, filtr bedzie bardziej reagowal na akcelerometr.</div></div>
-                    <div class="setting-container"><label for="kalmanQBiasInput">Q Bias (Szum Procesu - Bias)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="kalmanQBiasInput" min="0.0001" max="0.01" step="0.0001" value="0.003"><button>+</button></div><div class="help-text">Wspolczynnik zaufania do modelu predykcji dryfu zyroskopu. Wieksza wartosc = szybsza adaptacja do dryfu zyroskopu.</div></div>
-                    <div class="setting-container"><label for="kalmanRMeasureInput">R Measure (Szum Pomiaru)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="kalmanRMeasureInput" min="0.001" max="0.1" step="0.001" value="0.03"><button>+</button></div><div class="help-text">Zaufanie do pomiarow akcelerometru. Wieksza wartosc = mniejsze zaufanie do akcelerometru, filtr bedzie bardziej poleganal na zyroskopie.</div></div>
-                    <div class="pwm-info"><strong>Info:</strong> Filtr Kalmana laczy dane z akcelerometru (precyzyjny kat, ale podatny na wstrzasy) z zyroskopem (precyzyjna predkosc katowa, ale z dryfem). Parametry Q i R kontroluja, jak bardzo filtr ufa kazdemu zrodlu danych. <strong>Tip:</strong> Zwieksz Q_angle, jesli robot jest niestabilny, zwieksz R_measure, jesli akcelerometr jest zbyt szumny.</div>
-                </div>
-
-                <button class="accordion-header" onclick="toggleAccordion(this)">4. PID Balansu (Podstawowy)</button>
-                <div class="accordion-content">
-                    <div class="setting-container"> <label for="balanceKpInput">Kp - Sila<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKpInput" step="0.0001" value="97.1850"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Sztywnosc utrzymania pionu. Zwieksz dla szybszej reakcji na wychylenie. Zbyt duza wartosc powoduje oscylacje.</div> </div>
+                    <div class="setting-container"> <label for="balanceKpInput">Kp - Sila<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKpInput" step="0.1" value="95"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Sztywnosc utrzymania pionu. Zwieksz dla szybszej reakcji na wychylenie. Zbyt duza wartosc powoduje oscylacje.</div> </div>
                     <div class="setting-container"> <label for="balanceKiInput">Ki - Korekta<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKiInput" step="0.01" value="0.0"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Usuwa dlugotrwaly blad (np. gdy robot dryfuje). Zwiekszaj bardzo ostroznie, czesto nie jest potrzebny.</div> </div>
-                    <div class="setting-container"> <label for="balanceKdInput">Kd - Tlumienie<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKdInput" step="0.0001" value="3.0039"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Hamuje oscylacje i uspokaja robota. W nowej wersji, ten parametr ma podwojne dzialanie: (1) tlumienie oparte na szybkosci zmiany kata (pochodna bledu) oraz (2) dodatkowe, bezposrednie tlumienie oparte na surowej predkosci katowej z zyroskopu. To czyni go bardzo waznym dla stabilnosci.</div> </div>
-                    <div class="setting-container"> <label for="balanceFilterAlphaInput">Filtr Pochodnej (%)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceFilterAlphaInput" min="1" max="100" step="1" value="40"><button>+</button></div> <div class="help-text">Wygladza odczyt pochodnej, redukujac wplyw szumow. 100% = brak filtrowania. Zmniejsz, jesli robot jest nerwowy.</div> </div>
-                    <div class="control-row"><span class="control-label">Tlumienie z Zyroskopu<span class="help-icon">?</span></span><label class="switch"><input type="checkbox" id="gyroDampingSwitch" checked><span class="slider round"></span></label></div>
-                    <div class="help-text" style="grid-column: 1 / -1;">Bezposrednie tlumienie z zyroskopu (punkt 2 w opisie Kd) znacznie zwieksza stabilnosc robota. Wylacz te opcje, aby przeprowadzic test auto-strojenia Z-N lub jesli chcesz, aby robot byl bardziej "mieciutki".</div>
+                    <div class="setting-container"> <label for="balanceKdInput">Kd - Tlumienie<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKdInput" step="0.01" value="3.23"><button>+</button></div> <div class="help-text"><strong>Wplyw:</strong> Hamuje oscylacje i uspokaja robota. Przeciwdziala gwaltownym zmianom kata, dzialajac jak amortyzator. Zbyt duza wartosc moze spowolnic reakcje, a zbyt mala powodowac drgania.</div> </div>
+                    <div class="setting-container"> <label for="balanceFilterAlphaInput">Filtr Pochodnej (%)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceFilterAlphaInput" min="1" max="100" step="1" value="100"><button>+</button></div> <div class="help-text">Wygladza odczyt pochodnej, redukujac wplyw szumow. 100% = brak filtrowania. Zmniejsz, jesli robot jest nerwowy.</div> </div>
                 </div>
 
-                <button class="accordion-header" onclick="toggleAccordion(this)">5. PID Kaskadowy (Predkosc/Pozycja)</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">4. PID Kaskadowy (Predkosc/Pozycja)</button>
                 <div class="accordion-content">
                     <div class="parameter-group"><h5>PID Predkosci</h5>
                         <div class="setting-container"> <label for="speedKpInput">Kp - Reakcja</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKpInput" step="0.01" value="0.0"><button>+</button></div> </div>
                         <div class="setting-container"> <label for="speedKiInput">Ki - Eliminacja bledu</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKiInput" step="0.001" value="0.0"><button>+</button></div> </div>
                         <div class="setting-container"> <label for="speedKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKdInput" step="0.001" value="0.0"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="maxTargetAngleInput">Max. kat z PID Predk. (st.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxTargetAngleInput" step="0.5" value="5.0"><button>+</button></div> </div>
+                        <div class="setting-container"> <label for="maxTargetAngleInput">Max. kat z PID Predk. (st.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxTargetAngleInput" step="0.5" value="15.0"><button>+</button></div> </div>
                         <div class="setting-container"> <label for="speedDeadbandInput">Strefa martwa (imp/s)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedDeadbandInput" step="1" value="5"><button>+</button></div> </div>
                     </div>
                      <div class="parameter-group"><h5>PID Pozycji</h5>
                         <div class="setting-container"> <label for="positionKpInput">Kp - Sila powrotu</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionKpInput" step="0.1" value="0.0"><button>+</button></div> </div>
                         <div class="setting-container"> <label for="positionKiInput">Ki - Korekta</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionKiInput" step="0.001" value="0.0"><button>+</button></div> </div>
                         <div class="setting-container"> <label for="positionKdInput">Kd - Hamowanie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionKdInput" step="0.05" value="0.0"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="maxTargetSpeedInput">Max. predkosc z PID Poz. (imp/s)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxTargetSpeedInput" step="50" value="500"><button>+</button></div> </div>
-                        <div class="setting-container"> <label for="positionDeadbandInput">Margines bledu (imp.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionDeadbandInput" step="1" value="5"><button>+</button></div> </div>
+                        <div class="setting-container"> <label for="maxTargetSpeedInput">Max. predkosc z PID Poz. (imp/s)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxTargetSpeedInput" step="50" value="1000"><button>+</button></div> </div>
+                        <div class="setting-container"> <label for="positionDeadbandInput">Margines bledu (imp.)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionDeadbandInput" step="1" value="15"><button>+</button></div> </div>
                     </div>
                 </div>
 
-                <button class="accordion-header" onclick="toggleAccordion(this)">6. PID Obrotu i Kursu</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">5. PID Obrotu i Kursu</button>
                 <div class="accordion-content">
                     <div class="parameter-group"><h5>PID Obrotu (Autonomiczny)</h5>
                         <div class="setting-container"> <label for="rotationKpInput">Kp - Sila obrotu</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationKpInput" step="0.1" value="0.0"><button>+</button></div> </div>
@@ -567,7 +555,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 18.5 (UI dla Czasu Petli, Blokada Kamery)
+    // WERSJA 19.0 (UI dla DMP)
     // =======================================================================================
 
     // === DEKLARACJE ZMIENNYCH GLOBALNYCH ===
@@ -590,8 +578,7 @@
         'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone',
         'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr',
         'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd',
-        'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd',
-        'kalmanQAngleInput': 'kalman_q_angle', 'kalmanQBiasInput': 'kalman_q_bias', 'kalmanRMeasureInput': 'kalman_r_measure'
+        'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd'
     };
 
     // === INICJALIZACJA APLIKACJI ===
@@ -662,7 +649,7 @@
         'output': { label: 'Wyjscie PID', color: '#ff6347'}
     };
     const builtInPresetsData = {
-        '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 97.1850, balanceKiInput: 0.0, balanceKdInput: 3.0039 }},
+        '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 95.0, balanceKiInput: 0.0, balanceKdInput: 3.23 }},
         '2': { name: "2. PID Mieciutki (Plynny)", params: { balanceKpInput: 80.0, balanceKiInput: 0.0, balanceKdInput: 2.8 }},
         '3': { name: "3. PID Agresywny (Sztywny)", params: { balanceKpInput: 110.0, balanceKiInput: 0.0, balanceKdInput: 4.0 }}
     };
@@ -706,7 +693,7 @@
         addLogMessage('[UI] Rozlaczono z robotem.', 'warn');
         document.getElementById('connectionStatus').className = 'status-indicator status-disconnected';
         document.getElementById('connectionText').textContent = 'Rozlaczony';
-        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'gyroDampingSwitch'].forEach(id => {
+        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.checked = false;
         });
@@ -804,13 +791,19 @@
                     document.getElementById('znKpTestVal').textContent = data.output.toFixed(2);
                 }
                 break;
+            case '3d_telemetry':
+                if (data.p !== undefined) currentPitch3D = data.p;
+                if (data.r !== undefined) currentRoll3D = data.r;
+                if (data.y !== undefined) currentYaw3D = data.y;
+                if (data.el !== undefined) currentEncoderLeft = data.el;
+                if (data.er !== undefined) currentEncoderRight = data.er;
+                break;
             case 'full_config':
                 if (data.states) {
                     isApplyingConfig = true; 
                     document.getElementById('balanceSwitch').checked = data.states.balancing;
                     document.getElementById('holdPositionSwitch').checked = data.states.holding_pos;
                     document.getElementById('speedModeSwitch').checked = data.states.speed_mode;
-                    document.getElementById('gyroDampingSwitch').checked = data.states.gyro_damping;
                     isApplyingConfig = false;
                 }
                 if (data.params) {
@@ -896,7 +889,6 @@
             document.getElementById('balanceSwitch').checked = data.states.balancing;
             document.getElementById('holdPositionSwitch').checked = data.states.holding_pos;
             document.getElementById('speedModeSwitch').checked = data.states.speed_mode;
-            document.getElementById('gyroDampingSwitch').checked = data.states.gyro_damping;
             isApplyingConfig = false;
         }
         const emergencyBanner = document.getElementById('emergency-banner');
@@ -979,10 +971,10 @@
         document.querySelectorAll('.config-value').forEach(input => { input.addEventListener('change', (e) => { debouncedSendSingleParam(e.target.id, parseFloat(e.target.value)); }); });
         document.getElementById('joystickCanvas').addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); document.getElementById('joystickCanvas').addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd);
         document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
-        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'gyroDampingSwitch'].forEach(id => { 
+        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { 
             document.getElementById(id).addEventListener('change', (e) => { 
                 if (isApplyingConfig) return;
-                const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle', 'gyroDampingSwitch': 'gyro_damping_toggle' }; 
+                const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; 
                 sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); 
             }); 
         });
@@ -1497,9 +1489,9 @@
 
         const finalPosError = Math.abs(((telemetryData[telemetryData.length-1].encoder_left + telemetryData[telemetryData.length-1].encoder_right) / 2) - startEncoderAvg);
         
-        const itaePenalty = Math.min(1.0, itae / 50000.0); // 50000 to stala do skalowania
-        const overshootPenalty = Math.min(1.0, maxOvershoot / 1000.0); // 1000 impulsow to duzy overshoot
-        const finalErrorPenalty = Math.min(1.0, finalPosError / 50.0); // 50 impulsow to duzy blad koncowy
+        const itaePenalty = Math.min(1.0, itae / 50000.0);
+        const overshootPenalty = Math.min(1.0, maxOvershoot / 1000.0);
+        const finalErrorPenalty = Math.min(1.0, finalPosError / 50.0);
         
         const totalPenalty = (itaePenalty * 0.4) + (overshootPenalty * 0.3) + (finalErrorPenalty * 0.3);
         return 1.0 - totalPenalty;
@@ -1797,7 +1789,7 @@
         container.appendChild(renderer3D.domElement);
         controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
         controls3D.target.set(0, 8, 0);
-        controls3D.maxPolarAngle = Math.PI / 2; // ZMIANA: Blokada kamery ponizej podlogi
+        controls3D.maxPolarAngle = Math.PI / 2;
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
         scene3D.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
@@ -1847,7 +1839,7 @@
         if (isAnimation3DEnabled && robotPivot) {
             robotPivot.rotation.x = -THREE.MathUtils.degToRad(currentPitch3D);
             robotPivot.rotation.z = THREE.MathUtils.degToRad(currentRoll3D);
-            robotPivot.rotation.y = 0; // YAW WYLACZONE
+            robotPivot.rotation.y = -THREE.MathUtils.degToRad(currentYaw3D);
 
             const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
             const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
