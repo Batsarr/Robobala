@@ -612,7 +612,7 @@
                     connectBtn.style.backgroundColor = '#ff6347';
                     connectBtn.disabled = false;
                 }
-            }, 3000);
+            }, 5000); // Zwiększony timeout do 5s
 
         } catch (error) { 
             addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); 
@@ -649,6 +649,11 @@
             bleBuffer = bleBuffer.substring(newlineIndex + 1);
             if (line) {
                 try {
+                    // Walidacja: linia musi zaczynać się od { i kończyć na }
+                    if (!line.startsWith('{') || !line.endsWith('}')) {
+                        addLogMessage(`[UI] Odebrana linia nie jest poprawnym JSON: ${line}`, 'error');
+                        continue;
+                    }
                     console.log('[BLE] Parsuję linię:', line);
                     const data = JSON.parse(line);
                     if (data.type === 'chunk' && data.id !== undefined) {
@@ -657,50 +662,42 @@
                             entry = { 
                                 total: data.total || 0, 
                                 parts: new Map(),
-                                // NOWOSC: Ustawiamy timeout na zlozenie wiadomosci
                                 timer: setTimeout(() => {
                                     if (bleChunks.has(data.id)) {
                                         bleChunks.delete(data.id);
                                         addLogMessage(`[UI] Blad: Timeout podczas skladania wiadomosci (ID: ${data.id}). Mozliwa utrata pakietu.`, 'error');
                                     }
-                                }, 2000) // 2-sekundowy timeout
+                                }, 2000)
                             };
                             bleChunks.set(data.id, entry);
                         }
                         entry.parts.set(data.i, data.data || '');
                         entry.total = data.total || entry.total;
-                        
                         if (entry.parts.size === entry.total && entry.total > 0) {
-                            // Wiadomosc kompletna, czyscimy timeout
                             clearTimeout(entry.timer);
                             let combined = '';
                             for (let i = 0; i < entry.total; i++) {
                                 combined += entry.parts.get(i) || '';
                             }
+                            // Walidacja: całość musi być poprawnym JSON
+                            if (!combined.startsWith('{') || !combined.trim().endsWith('}')) {
+                                addLogMessage(`[UI] Chunk nie jest poprawnym JSON: ${combined}`, 'error');
+                                continue;
+                            }
                             console.log('[BLE] Składam chunk:', combined);
                             bleChunks.delete(data.id);
                             try {
-                                if (combined.startsWith('{') && combined.trim().endsWith('}')) {
-                                    const fullMsg = JSON.parse(combined);
-                                    processCompleteMessage(fullMsg);
-                                } else {
-                                    addLogMessage(`[UI] Chunk nie jest poprawnym JSON: ${combined}`, 'error');
-                                }
+                                const fullMsg = JSON.parse(combined);
+                                processCompleteMessage(fullMsg);
                             } catch (e) {
                                 addLogMessage(`[UI] Blad skladania chunkow: ${e}. Dane: ${combined}`, 'error');
                             }
                         }
                     } else {
-                        // Parsuj tylko poprawny JSON
-                        if (line.startsWith('{') && line.endsWith('}')) {
-                            processCompleteMessage(data);
-                        } else {
-                            addLogMessage(`[UI] Odebrana linia nie jest poprawnym JSON: ${line}`, 'error');
-                        }
+                        processCompleteMessage(data);
                     }
                 } catch (e) {
                     addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error');
-                    // Czyszczenie bufora w razie błędu
                     bleBuffer = '';
                 }
             }
