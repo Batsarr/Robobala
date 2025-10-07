@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v20.2</title>
+    <title>Robot PID - Panel Sterowania v20.8</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -151,7 +151,7 @@
         </div>
     </div>
 
-    <h1>Robot PID - Panel Sterowania v20.2</h1>
+    <h1>Robot PID - Panel Sterowania v20.8</h1>
     <div class="main-grid">
         <div class="card" id="controls-card">
             <h2>Sterowanie</h2>
@@ -332,11 +332,19 @@
             <button class="accordion-header" onclick="toggleAccordion(this)">1: Pierwsze Strojenie (Odkrywanie Z-N)</button>
             <div class="accordion-content">
                  <div class="help-text visible" style="max-height: 200px; padding: 10px;">Automatyczne znalezienie podstawowych, dzialajacych parametrow Kp i Kd dla balansu. Robot sam wprowadzi sie w oscylacje, aby zbadac swoja fizyke.</div>
+                <fieldset style="margin-top:15px;">
+                    <legend>Parametry Procedury Z-N</legend>
+                    <div class="setting-container">
+                        <label for="znMaxAmplitudeInput">Max. amplituda (st.)</label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" id="znMaxAmplitudeInput" min="5" max="25" step="1" value="15"><button>+</button></div>
+                    </div>
+                </fieldset>
                 <div id="znTuningStatusPanel" style="margin-top:15px;">
                     <h5>Status Procedury</h5>
                     <div class="info-grid">
                         <strong>Status:</strong> <span id="znStatusText" style="font-weight: bold;">Bezczynny</span>
                         <strong>Testowane Kp:</strong> <span id="znKpTestVal">---</span>
+                        <strong>Amplituda:</strong> <span id="znAmplitudeVal">---</span>
                     </div>
                 </div>
                 <div id="znResultPanel">
@@ -371,8 +379,8 @@
                     <h5>Status Sesji Optymalizacji</h5>
                     <div class="info-grid">
                         <strong>Postep:</strong> <span id="gaStatusGeneration">---</span>
-                        <strong>Najlepszy wynik sesji:</strong> <span id="gaStatusBestScore" style="font-weight: bold; color: #a2f279;">---</span>
-                        <strong>Najlepszy wynik pokolenia:</strong> <span id="gaStatusGenerationBestScore" style="font-weight: bold; color: #61dafb;">---</span>
+                        <strong>Najmniejszy blad sesji:</strong> <span id="gaStatusBestScore" style="font-weight: bold; color: #a2f279;">---</span>
+                        <strong>Najmniejszy blad pokolenia:</strong> <span id="gaStatusGenerationBestScore" style="font-weight: bold; color: #61dafb;">---</span>
                         <strong>Testowane Kp:</strong> <span id="gaStatusCurrentKp">---</span>
                         <strong>Testowane Kd:</strong> <span id="gaStatusCurrentKd">---</span>
                         <strong>Status:</strong> <span id="gaStatusStateText" style="font-weight: bold;">Bezczynny</span>
@@ -382,7 +390,7 @@
                 <div id="gaResultsPanel" class="test-results-panel">
                     <h5>Wyniki Optymalizacji GA</h5>
                     <div class="result-grid">
-                        <strong>Najlepsza Ocena:</strong> <span id="gaFinalScore"></span>
+                        <strong>Najlepszy Blad:</strong> <span id="gaFinalScore"></span>
                         <strong>Znalezione Kp_b:</strong> <span id="gaFinalKp"></span>
                         <strong>Znalezione Kd_b:</strong> <span id="gaFinalKd"></span>
                     </div>
@@ -478,17 +486,13 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 20.7 (Poprawki logiki sledzenia wynikow GA i dodanie pauzy)
+    // WERSJA 20.8 (Nowe, niezawodne moduly strojenia GA i Z-N, poprawki logiki kaskady)
     // =======================================================================================
-    const AppState = { isConnected: false, isSynced: false, isApplyingConfig: false, lastKnownRobotState: 'IDLE', isSequenceRunning: false, isTuningActive: false, syncTimeout: null };
+    const AppState = { isConnected: false, isSynced: false, isApplyingConfig: false, lastKnownRobotState: 'IDLE', isSequenceRunning: false, isTuningActive: false, syncTimeout: null, activeTuner: null };
     let currentSequenceStep = 0;
     const MAX_SEQUENCE_STEPS = 10;
     const parameterMapping = { 'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b', 'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s', 'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedDeadbandInput': 'speed_pid_deadband', 'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p', 'maxTargetSpeedInput': 'max_target_speed_from_pos_pid', 'positionDeadbandInput': 'position_pid_deadband', 'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r', 'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h', 'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd' };
-    let currentTestType = null, telemetryForCurrentTest = [], gaPopulation = [], gaCurrentIndividual = 0, gaCurrentGeneration = 0;
-    let gaOverallBest = { score: Infinity, kp: 0, kd: 0 };
-    let gaGenerationBest = { score: Infinity, kp: 0, kd: 0 };
-    let isGaPaused = false;
-    let znResults = { ku: 0, tu: 0 };
+    let currentTestType = null, telemetryForCurrentTest = [];
     let bleDevice, rxCharacteristic, txCharacteristic;
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b", RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9", TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
     let bleBuffer = '', bleMessageQueue = [], isSendingBleMessage = false; const bleChunks = new Map();
@@ -504,6 +508,265 @@
     let scene3D, camera3D, renderer3D, controls3D, robotPivot, leftWheel, rightWheel, groundMesh, groundTexture;
     let currentPitch3D = 0, currentRoll3D = 0, currentYaw3D = 0, currentEncoderLeft = 0, currentEncoderRight = 0;
     let isAnimation3DEnabled = true, isMovement3DEnabled = false, lastEncoderAvg = 0;
+    let gaInstance = null; // Instancja nowej biblioteki GA
+    
+    // =======================================================================================
+    // === NOWA, NIEZAWODNA KLASA DO STROJENIA ZIEGLER-NICHOLS ===
+    // =======================================================================================
+    class ZieglerNicholsTuner {
+        constructor(options) {
+            this.state = 'IDLE';
+            this.kp = options.startKp || 1.0;
+            this.kpStep = options.kpStep || 0.1;
+            this.maxAmplitude = options.maxAmplitude || 15.0;
+            this.oscillationThreshold = options.oscillationThreshold || 2.0;
+            this.stabilityCycles = options.stabilityCycles || 5;
+            this.measurementSamples = options.measurementSamples || 10;
+            this.onUpdate = options.onUpdate || (() => {});
+            this.onFinish = options.onFinish || (() => {});
+            this.onFail = options.onFail || (() => {});
+            
+            this.reset();
+        }
+
+        reset() {
+            this.kp = 1.0;
+            this.lastPitch = 0;
+            this.peak = -Infinity;
+            this.trough = Infinity;
+            this.crossings = [];
+            this.amplitudes = [];
+            this.stableCycleCount = 0;
+            this.periods = [];
+        }
+
+        start() {
+            if (this.state !== 'IDLE') return;
+            this.reset();
+            this.state = 'RAMPING_UP';
+            addLogMessage('[ZN-Tuner] Rozpoczeto procedure strojenia.', 'info');
+            this.updateRobotKp();
+        }
+
+        cancel() {
+            addLogMessage('[ZN-Tuner] Anulowano procedure.', 'warn');
+            this.state = 'IDLE';
+            sendBleMessage({ type: 'set_param', key: 'kp_b', value: parseFloat(document.getElementById('balanceKpInput').value) });
+        }
+
+        processTelemetry(pitch, dt) {
+            if (this.state === 'IDLE') return;
+            
+            // Wykrywanie przejscia przez punkt zero (srodek oscylacji)
+            if (Math.sign(pitch) !== Math.sign(this.lastPitch)) {
+                const now = performance.now();
+                const amplitude = this.peak - this.trough;
+                
+                if (amplitude > this.oscillationThreshold) {
+                    this.crossings.push(now);
+                    this.amplitudes.push(amplitude);
+                    
+                    if (this.crossings.length > 2) {
+                       const lastPeriod = (this.crossings[this.crossings.length - 1] - this.crossings[this.crossings.length - 3]) / 1000.0;
+                       if(this.state === 'MEASURING') this.periods.push(lastPeriod);
+                    }
+                }
+                
+                this.peak = -Infinity;
+                this.trough = Infinity;
+            }
+
+            this.lastPitch = pitch;
+            this.peak = Math.max(this.peak, pitch);
+            this.trough = Math.min(this.trough, pitch);
+            const currentAmplitude = this.peak - this.trough;
+
+            if (this.state === 'RAMPING_UP') {
+                if (currentAmplitude > this.maxAmplitude) {
+                    addLogMessage(`[ZN-Tuner] Osiagnieto maksymalna amplitude (${this.maxAmplitude} st.). Rozpoczynam pomiar.`, 'warn');
+                    this.state = 'MEASURING';
+                    return;
+                }
+
+                if (this.amplitudes.length > this.stabilityCycles) {
+                    const lastAmplitudes = this.amplitudes.slice(-this.stabilityCycles);
+                    const avgAmplitude = lastAmplitudes.reduce((a, b) => a + b, 0) / lastAmplitudes.length;
+                    const variance = lastAmplitudes.map(amp => Math.pow(amp - avgAmplitude, 2)).reduce((a, b) => a + b, 0) / lastAmplitudes.length;
+                    
+                    if (variance < 1.0) { // Sprawdzamy czy oscylacje sa stabilne
+                        addLogMessage(`[ZN-Tuner] Wykryto stabilne oscylacje przy Kp=${this.kp.toFixed(2)}. Rozpoczynam pomiar.`, 'info');
+                        this.state = 'MEASURING';
+                        return;
+                    }
+                }
+
+                this.kp += this.kpStep * dt;
+                this.updateRobotKp();
+            }
+
+            if (this.state === 'MEASURING') {
+                if (this.periods.length >= this.measurementSamples) {
+                    const avgPeriod = this.periods.reduce((a, b) => a + b, 0) / this.periods.length;
+                    const ku = this.kp;
+                    const tu = avgPeriod;
+                    addLogMessage(`[ZN-Tuner] Pomiar zakonczony! Ku=${ku.toFixed(4)}, Tu=${tu.toFixed(4)}s`, 'success');
+                    this.state = 'FINISHED';
+                    this.onFinish({ ku, tu });
+                }
+            }
+
+            this.onUpdate({ kp: this.kp, amplitude: currentAmplitude, state: this.state });
+        }
+        
+        updateRobotKp() {
+             sendBleMessage({ type: 'set_param', key: 'kp_b', value: this.kp });
+             sendBleMessage({ type: 'set_param', key: 'ki_b', value: 0 }); // Ki musi byc 0
+             sendBleMessage({ type: 'set_param', key: 'kd_b', value: 0 }); // Kd musi byc 0
+        }
+    }
+    
+    // =======================================================================================
+    // === NOWA, NIEZAWODNA KLASA DO OPTYMALIZACJI PRZEZ ALGORYTM GENETYCZNY ===
+    // =======================================================================================
+    class GeneticAlgorithm {
+        constructor(options) {
+            this.options = Object.assign({
+                populationSize: 10,
+                generations: 10,
+                mutationRate: 0.1,
+                crossoverRate: 0.8,
+                elitism: 0.1,
+                paramRanges: { kp: [50, 150], kd: [1, 5] },
+            }, options);
+            this.population = [];
+            this.generation = 0;
+            this.isPaused = false;
+            this.isCancelled = false;
+        }
+
+        async run() {
+            this.isCancelled = false;
+            this.isPaused = false;
+            this._initializePopulation();
+            await this._evaluatePopulation();
+
+            for (this.generation = 1; this.generation <= this.options.generations; this.generation++) {
+                if (this.isCancelled) break;
+                
+                this.options.onGenerationStart?.(this.generation, this.population);
+
+                const newPopulation = [];
+                const eliteCount = Math.floor(this.options.populationSize * this.options.elitism);
+                for (let i = 0; i < eliteCount; i++) {
+                    newPopulation.push(this.population[i]);
+                }
+
+                while (newPopulation.length < this.options.populationSize) {
+                    const parent1 = this._tournamentSelection();
+                    const parent2 = this._tournamentSelection();
+                    let children = Math.random() < this.options.crossoverRate 
+                        ? this._blendCrossover(parent1, parent2) 
+                        : [parent1, parent2];
+                    
+                    children.forEach(child => {
+                        this._mutate(child);
+                        this._clamp(child);
+                        newPopulation.push(child);
+                    });
+                }
+                
+                this.population = newPopulation.slice(0, this.options.populationSize);
+                await this._evaluatePopulation();
+            }
+
+            if (!this.isCancelled) {
+                this.options.onFinish?.(this.population[0]);
+            }
+        }
+
+        pause() { this.isPaused = true; }
+        resume() { this.isPaused = false; }
+        cancel() { this.isCancelled = true; }
+
+        _initializePopulation() {
+            this.population = [];
+            const { kp, kd } = this.options.paramRanges;
+            for (let i = 0; i < this.options.populationSize; i++) {
+                this.population.push({
+                    kp: Math.random() * (kp[1] - kp[0]) + kp[0],
+                    kd: Math.random() * (kd[1] - kd[0]) + kd[0],
+                    fitness: Infinity,
+                });
+            }
+        }
+
+        async _evaluatePopulation() {
+            for (let i = 0; i < this.population.length; i++) {
+                const individual = this.population[i];
+                if (individual.fitness === Infinity) { // Tylko oceniamy nowe osobniki
+                    while (this.isPaused) {
+                        if (this.isCancelled) return;
+                        await sleep(500);
+                    }
+                    if (this.isCancelled) return;
+                    
+                    this.options.onIndividualStart?.(this.generation, i, individual);
+                    individual.fitness = await this.options.fitnessFunction(individual);
+                    this.options.onIndividualFinish?.(this.generation, i, individual);
+                }
+            }
+            this.population.sort((a, b) => a.fitness - b.fitness);
+        }
+
+        _tournamentSelection() {
+            const tournamentSize = 3;
+            let best = null;
+            for (let i = 0; i < tournamentSize; i++) {
+                const randomIndividual = this.population[Math.floor(Math.random() * this.population.length)];
+                if (best === null || randomIndividual.fitness < best.fitness) {
+                    best = randomIndividual;
+                }
+            }
+            return best;
+        }
+
+        _blendCrossover(parent1, parent2) {
+            const alpha = 0.5;
+            const child1 = { fitness: Infinity };
+            const child2 = { fitness: Infinity };
+            
+            const kp_diff = Math.abs(parent1.kp - parent2.kp);
+            const min_kp = Math.min(parent1.kp, parent2.kp) - alpha * kp_diff;
+            const max_kp = Math.max(parent1.kp, parent2.kp) + alpha * kp_diff;
+            child1.kp = Math.random() * (max_kp - min_kp) + min_kp;
+            child2.kp = Math.random() * (max_kp - min_kp) + min_kp;
+            
+            const kd_diff = Math.abs(parent1.kd - parent2.kd);
+            const min_kd = Math.min(parent1.kd, parent2.kd) - alpha * kd_diff;
+            const max_kd = Math.max(parent1.kd, parent2.kd) + alpha * kd_diff;
+            child1.kd = Math.random() * (max_kd - min_kd) + min_kd;
+            child2.kd = Math.random() * (max_kd - min_kd) + min_kd;
+
+            return [child1, child2];
+        }
+
+        _mutate(individual) {
+            if (Math.random() < this.options.mutationRate) {
+                const sigma_kp = (this.options.paramRanges.kp[1] - this.options.paramRanges.kp[0]) * 0.1;
+                individual.kp += (Math.random() - 0.5) * 2 * sigma_kp; // Prosta mutacja gaussowska
+            }
+            if (Math.random() < this.options.mutationRate) {
+                const sigma_kd = (this.options.paramRanges.kd[1] - this.options.paramRanges.kd[0]) * 0.1;
+                individual.kd += (Math.random() - 0.5) * 2 * sigma_kd;
+            }
+        }
+        
+        _clamp(individual) {
+            const { kp, kd } = this.options.paramRanges;
+            individual.kp = Math.max(kp[0], Math.min(kp[1], individual.kp));
+            individual.kd = Math.max(kd[0], Math.min(kd[1], individual.kd));
+        }
+    }
 
     document.addEventListener('DOMContentLoaded', () => {
         initJoystick(); setupChartControls(); populatePresetSelect(); setupNumericInputs(); setupEventListeners();
@@ -592,9 +855,19 @@
         if (!data || !data.type) return;
         const previousState = AppState.lastKnownRobotState;
         if (data.robot_state) { AppState.lastKnownRobotState = data.robot_state; }
-        if (AppState.isTuningActive && data.type === 'telemetry' && data.trial) { telemetryForCurrentTest.push(data); }
+        if (AppState.isTuningActive && data.trial) { telemetryForCurrentTest.push(data); }
+
+        // Przekierowanie danych telemetrycznych do aktywnego tunera
+        if (AppState.activeTuner && data.type === 'telemetry') {
+            const now = performance.now();
+            if (!AppState.activeTuner.lastTime) AppState.activeTuner.lastTime = now;
+            const dt = (now - AppState.activeTuner.lastTime) / 1000.0;
+            AppState.activeTuner.lastTime = now;
+            AppState.activeTuner.processTelemetry(data.pitch, dt);
+        }
+
         switch (data.type) {
-            case 'telemetry': updateTelemetryUI(data); updateChart(data); if (AppState.isSequenceRunning) { checkAndExecuteNextSequenceStep(previousState); } if (AppState.isTuningActive && currentTestType === 'zn') { document.getElementById('znKpTestVal').textContent = data.output.toFixed(2); } break;
+            case 'telemetry': updateTelemetryUI(data); updateChart(data); if (AppState.isSequenceRunning) { checkAndExecuteNextSequenceStep(previousState); } break;
             case '3d_telemetry': if (data.p !== undefined) currentPitch3D = data.p; if (data.r !== undefined) currentRoll3D = data.r; if (data.y !== undefined) currentYaw3D = data.y; if (data.el !== undefined) currentEncoderLeft = data.el; if (data.er !== undefined) currentEncoderRight = data.er; break;
             case 'full_config':
                 clearTimeout(AppState.syncTimeout); AppState.isSynced = true;
@@ -605,14 +878,17 @@
                 break;
             case 'log': addLogMessage(`[ROBOT] ${data.message}`, data.level); break;
             case 'single_pwm_result': const p = data.params; const inputId = `minPwm${p.motor.charAt(0).toUpperCase() + p.motor.slice(1)}${p.direction.charAt(0).toUpperCase() + p.direction.slice(1)}Input`; document.getElementById(inputId).value = p.value; addLogMessage(`[UI] Auto-strojenie dla ${p.motor} ${p.direction} zakonczone. Wynik: ${p.value}`, 'success'); const row = document.querySelector(`.manual-tune-row[data-motor="${p.motor}"][data-direction="${p.direction}"]`); if (row) { const autoBtn = row.querySelector('.auto-btn'); if (autoBtn) { autoBtn.disabled = false; autoBtn.textContent = 'Auto'; } } break;
-            case 'zn_tuning_result': if (data.ku !== undefined && data.tu !== undefined) { handleZnTuningResult(data.ku, data.tu); } break;
-            case 'ga_result': handleGaResult(data); break;
+            case 'zn_tuning_result': /* Obsluga przez nowa klase */ break;
+            case 'ga_result': 
+                if (gaInstance && typeof gaInstance.handleFitnessResult === 'function') {
+                    gaInstance.handleFitnessResult(data.score);
+                }
+                break;
             case 'ack':
                 const command = data.command;
                 if (command === 'execute_balance_step_response') { startTelemetryCollectionForTest(3000, analyzeBalanceResponse); }
                 else if (command === 'execute_position_test_impulse') { startTelemetryCollectionForTest(4000, analyzePositionResponse); }
                 else if (command === 'execute_speed_test_run') { const distance = parseFloat(document.getElementById('speedTestDistanceInput').value); const speed = parseFloat(document.getElementById('speedTestSpeedInput').value); const estimatedDuration = (distance / speed) * 1000 + 2000; startTelemetryCollectionForTest(estimatedDuration, analyzeSpeedResponse); }
-                else if (command === 'start_ga_session') { runNextGAIndividual(); }
                 break;
         }
     }
@@ -660,22 +936,221 @@
     function checkAndExecuteNextSequenceStep(previousState) { const wasWorking = ['RUCH_AUTONOMICZNY', 'OBROT_AUTONOMICZNY'].includes(previousState); const isReady = ['TRZYMA_POZYCJE', 'BALANSUJE'].includes(AppState.lastKnownRobotState); if (AppState.isSequenceRunning && wasWorking && isReady) { addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info'); currentSequenceStep++; executeNextSequenceStep(); } }
     function executeNextSequenceStep() { const steps = document.querySelectorAll('.sequence-step'); if (!AppState.isSequenceRunning || currentSequenceStep >= steps.length) { if (AppState.isSequenceRunning) { AppState.isSequenceRunning = false; addLogMessage('[UI] Sekwencja ukonczona.', 'success'); } updateSequenceUI(); return; } updateSequenceUI(); const stepNode = steps[currentSequenceStep]; const type = stepNode.querySelector('.sequence-type').value; const value = parseFloat(stepNode.querySelector('.sequence-value').value); let command = {}; switch (type) { case 'move_fwd': command = { type: 'execute_move', distance_cm: value }; break; case 'move_bwd': command = { type: 'execute_move', distance_cm: -value }; break; case 'rotate_r': command = { type: 'execute_rotate', angle_deg: value }; break; case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -value }; break; } addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info'); sendBleMessage(command); }
     
-    function setupZnTuningControls() { const actionBtn = document.getElementById('znTuningActionBtn'); const cancelBtn = document.getElementById('znTuningCancelBtn'); const applyBtn = document.getElementById('applyZnResultsBtn'); actionBtn.addEventListener('click', () => { if (!AppState.isTuningActive) { if (!checkIfReadyForTest()) return; if (confirm("UWAGA! Ta procedura wprowadzi robota w kontrolowane oscylacje. Upewnij sie, ze ma wystarczajaco duzo miejsca. Kontynuowac?")) { startZnTuning(); } } }); cancelBtn.addEventListener('click', () => { if (AppState.isTuningActive && currentTestType === 'zn') { cancelZnTuning(); } }); applyBtn.addEventListener('click', () => { if (znResults.ku > 0 && znResults.tu > 0) { applyZnResults(); } }); }
-    function startZnTuning() { AppState.isTuningActive = true; currentTestType = 'zn'; document.getElementById('znStatusText').textContent = "Rozpoczynanie..."; document.getElementById('znTuningActionBtn').disabled = true; document.getElementById('znTuningCancelBtn').style.display = 'block'; document.getElementById('znResultPanel').style.display = 'none'; addLogMessage('[UI] Wysylam polecenie rozpoczecia strojenia Z-N do robota...', 'info'); sendBleMessage({ type: 'start_zn_tuning' }); }
-    function cancelZnTuning() { AppState.isTuningActive = false; currentTestType = null; document.getElementById('znStatusText').textContent = "Anulowanie..."; addLogMessage('[UI] Wysylam polecenie anulowania strojenia do robota...', 'warn'); sendBleMessage({ type: 'cancel_tuning' }); resetZnTuningUI(); }
-    function resetZnTuningUI() { AppState.isTuningActive = false; currentTestType = null; document.getElementById('znStatusText').textContent = "Bezczynny"; document.getElementById('znKpTestVal').textContent = "---"; document.getElementById('znTuningActionBtn').disabled = false; document.getElementById('znTuningActionBtn').textContent = "Rozpocznij Odkrywanie"; document.getElementById('znTuningCancelBtn').style.display = 'none'; }
-    function handleZnTuningResult(ku, tu) { addLogMessage(`[UI] Otrzymano wynik strojenia Z-N: Ku=${ku.toFixed(4)}, Tu=${tu.toFixed(4)}`, 'success'); resetZnTuningUI(); znResults = { ku, tu }; const resultPanel = document.getElementById('znResultPanel'); resultPanel.style.display = 'block'; const kp = 0.6 * ku; const kd = kp * tu / 8; document.getElementById('znKuResult').textContent = ku.toFixed(4); document.getElementById('znTuResult').textContent = tu.toFixed(4) + " s"; document.getElementById('znKpSuggest').textContent = kp.toFixed(4); document.getElementById('znKdSuggest').textContent = kd.toFixed(4); updateAccordionHeight(resultPanel.closest('.accordion-content')); }
-    function applyZnResults() { const { ku, tu } = znResults; if (ku <= 0 || tu <= 0) return; const kp = 0.6 * ku; const kd = kp * tu / 8; AppState.isApplyingConfig = true; document.getElementById('balanceKpInput').value = kp.toFixed(4); document.getElementById('balanceKiInput').value = 0.0; document.getElementById('balanceKdInput').value = kd.toFixed(4); AppState.isApplyingConfig = false; document.getElementById('balanceKpInput').dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('balanceKiInput').dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true })); addLogMessage('[UI] Zastosowano sugerowane wartosci Kp i Kd. Ki ustawiono na 0.', 'info'); }
+    // --- Nowa obsluga Z-N ---
+    function setupZnTuningControls() {
+        document.getElementById('znTuningActionBtn').addEventListener('click', () => {
+            if (AppState.activeTuner) return;
+            if (!checkIfReadyForTest()) return;
+            if (confirm("UWAGA! Ta procedura wprowadzi robota w kontrolowane oscylacje. Upewnij sie, ze ma wystarczajaco duzo miejsca. Kontynuowac?")) {
+                startZnTuning();
+            }
+        });
+        document.getElementById('znTuningCancelBtn').addEventListener('click', () => {
+             if (AppState.activeTuner) AppState.activeTuner.cancel();
+             resetZnTuningUI();
+        });
+        document.getElementById('applyZnResultsBtn').addEventListener('click', applyZnResults);
+    }
+    
+    function startZnTuning() {
+        const tuner = new ZieglerNicholsTuner({
+            maxAmplitude: parseFloat(document.getElementById('znMaxAmplitudeInput').value),
+            onUpdate: (data) => {
+                document.getElementById('znStatusText').textContent = data.state;
+                document.getElementById('znKpTestVal').textContent = data.kp.toFixed(2);
+                document.getElementById('znAmplitudeVal').textContent = data.amplitude.toFixed(2) + " st.";
+            },
+            onFinish: (results) => {
+                handleZnTuningResult(results.ku, results.tu);
+                resetZnTuningUI();
+            },
+            onFail: (reason) => {
+                addLogMessage(`[ZN-Tuner] Blad: ${reason}`, 'error');
+                resetZnTuningUI();
+            }
+        });
+        AppState.activeTuner = tuner;
+        AppState.isTuningActive = true;
+        document.getElementById('znTuningActionBtn').disabled = true;
+        document.getElementById('znTuningCancelBtn').style.display = 'block';
+        document.getElementById('znResultPanel').style.display = 'none';
+        tuner.start();
+    }
 
-    function setupGaListeners() { document.getElementById('gaActionBtn').addEventListener('click', startGaSession); document.getElementById('gaPauseBtn').addEventListener('click', toggleGaPause); document.getElementById('gaCancelBtn').addEventListener('click', cancelGaSession); document.getElementById('applyGaResultsBtn').addEventListener('click', applyGaResults); }
-    function startGaSession() { if (!checkIfReadyForTest()) return; AppState.isTuningActive = true; currentTestType = 'ga'; isGaPaused = false; gaOverallBest = { score: Infinity, kp: 0, kd: 0 }; gaGenerationBest = { score: Infinity, kp: 0, kd: 0 }; const populationSize = parseInt(document.getElementById('gaPopulationInput').value); const baseKp = parseFloat(document.getElementById('balanceKpInput').value); const baseKd = parseFloat(document.getElementById('balanceKdInput').value); gaPopulation = [{kp: baseKp, kd: baseKd, score: -1}]; for(let i=1; i<populationSize; i++) { gaPopulation.push({ kp: baseKp * (0.7 + Math.random() * 0.6), kd: baseKd * (0.7 + Math.random() * 0.6), score: -1 }); } gaCurrentGeneration = 1; gaCurrentIndividual = 0; document.getElementById('gaActionBtn').style.display = 'none'; document.getElementById('gaPauseBtn').style.display = 'inline-block'; document.getElementById('gaPauseBtn').textContent = 'Pauzuj Sesje'; document.getElementById('gaCancelBtn').style.display = 'inline-block'; document.getElementById('gaResultsPanel').style.display = 'none'; document.getElementById('gaStatusGenerationBestScore').textContent = '---'; document.getElementById('gaStatusBestScore').textContent = '---'; addLogMessage(`[GA] Rozpoczeto sesje dla petli balansu. Pokolenie 1.`, 'info'); sendBleMessage({type: 'start_ga_session'}); }
-    function runNextGAIndividual() { if (!AppState.isTuningActive || currentTestType !== 'ga') return; if (isGaPaused) { setTimeout(runNextGAIndividual, 500); return; } const individual = gaPopulation[gaCurrentIndividual]; updateGaStatus(); sendBleMessage({type: 'run_ga_trial', kp: individual.kp, kd: individual.kd }); }
-    function handleGaResult(data) { if (!AppState.isTuningActive || currentTestType !== 'ga') return; gaPopulation[gaCurrentIndividual].score = data.score; if (data.score < gaOverallBest.score) { gaOverallBest.score = data.score; gaOverallBest.kp = gaPopulation[gaCurrentIndividual].kp; gaOverallBest.kd = gaPopulation[gaCurrentIndividual].kd; } if (data.score < gaGenerationBest.score) { gaGenerationBest.score = data.score; } addLogMessage(`[GA] Osobnik ${gaCurrentIndividual+1}/${gaPopulation.length} oceniony na: ${data.score.toFixed(4)}`, 'info'); gaCurrentIndividual++; if (gaCurrentIndividual >= gaPopulation.length) { gaPopulation.sort((a,b) => a.score - b.score); const totalGenerations = parseInt(document.getElementById('gaGenerationsInput').value); if (gaCurrentGeneration >= totalGenerations) { finishGaSession(); return; } const newPopulation = []; newPopulation.push(gaPopulation[0]); while(newPopulation.length < gaPopulation.length) { const parent1 = gaPopulation[0]; const parent2 = gaPopulation[1 + Math.floor(Math.random() * (gaPopulation.length/2))]; const newKp = (parent1.kp + parent2.kp) / 2 * (0.98 + Math.random() * 0.04); const newKd = (parent1.kd + parent2.kd) / 2 * (0.98 + Math.random() * 0.04); newPopulation.push({kp: newKp, kd: newKd, score: -1}); } gaPopulation = newPopulation; gaCurrentGeneration++; gaCurrentIndividual = 0; gaGenerationBest = { score: Infinity, kp: 0, kd: 0 }; addLogMessage(`[GA] Rozpoczeto pokolenie ${gaCurrentGeneration}.`, 'info'); } setTimeout(runNextGAIndividual, 500); }
-    function finishGaSession() { AppState.isTuningActive = false; currentTestType = null; addLogMessage(`[GA] Sesja zakonczona! Najlepszy wynik: ${gaOverallBest.score.toFixed(4)}`, 'success'); document.getElementById('gaActionBtn').style.display = 'inline-block'; document.getElementById('gaPauseBtn').style.display = 'none'; document.getElementById('gaCancelBtn').style.display = 'none'; const panel = document.getElementById('gaResultsPanel'); panel.style.display = 'block'; document.getElementById('gaFinalScore').textContent = gaOverallBest.score.toFixed(4); document.getElementById('gaFinalKp').textContent = gaOverallBest.kp.toFixed(4); document.getElementById('gaFinalKd').textContent = gaOverallBest.kd.toFixed(4); updateAccordionHeight(panel.closest('.accordion-content')); sendBleMessage({type: 'set_param', key: 'kp_b', value: gaOverallBest.kp}); sendBleMessage({type: 'set_param', key: 'kd_b', value: gaOverallBest.kd}); }
-    function cancelGaSession() { AppState.isTuningActive = false; currentTestType = null; isGaPaused = false; sendBleMessage({type: 'cancel_ga_session'}); addLogMessage('[GA] Sesja anulowana przez uzytkownika.', 'warn'); document.getElementById('gaActionBtn').style.display = 'inline-block'; document.getElementById('gaPauseBtn').style.display = 'none'; document.getElementById('gaCancelBtn').style.display = 'none'; updateGaStatus('Anulowano'); }
-    function toggleGaPause() { isGaPaused = !isGaPaused; const pauseBtn = document.getElementById('gaPauseBtn'); if (isGaPaused) { pauseBtn.textContent = 'Wznow Sesje'; updateGaStatus('Wstrzymano'); } else { pauseBtn.textContent = 'Pauzuj Sesje'; updateGaStatus('W trakcie'); runNextGAIndividual(); } }
-    function updateGaStatus(state = 'W trakcie') { const totalGenerations = parseInt(document.getElementById('gaGenerationsInput').value); document.getElementById('gaStatusGeneration').textContent = `Pokolenie ${gaCurrentGeneration}/${totalGenerations}, Osobnik ${gaCurrentIndividual+1}/${gaPopulation.length}`; document.getElementById('gaStatusStateText').textContent = state; const progress = ((gaCurrentGeneration - 1) * gaPopulation.length + gaCurrentIndividual) / (totalGenerations * gaPopulation.length) * 100; document.getElementById('gaProgressBar').value = progress; if (gaCurrentIndividual < gaPopulation.length) { const individual = gaPopulation[gaCurrentIndividual]; document.getElementById('gaStatusCurrentKp').textContent = individual.kp.toFixed(4); document.getElementById('gaStatusCurrentKd').textContent = individual.kd.toFixed(4); } document.getElementById('gaStatusBestScore').textContent = gaOverallBest.score === Infinity ? '---' : gaOverallBest.score.toFixed(4); document.getElementById('gaStatusGenerationBestScore').textContent = gaGenerationBest.score === Infinity ? '---' : gaGenerationBest.score.toFixed(4); }
-    function applyGaResults() { const kp = parseFloat(document.getElementById('gaFinalKp').textContent); const kd = parseFloat(document.getElementById('gaFinalKd').textContent); if(!isNaN(kp) && !isNaN(kd)) { AppState.isApplyingConfig = true; document.getElementById('balanceKpInput').value = kp.toFixed(4); document.getElementById('balanceKdInput').value = kd.toFixed(4); AppState.isApplyingConfig = false; document.getElementById('balanceKpInput').dispatchEvent(new Event('change', { bubbles: true })); document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true })); addLogMessage('[GA] Zastosowano najlepsze znalezione parametry.', 'success'); } }
+    function resetZnTuningUI() {
+        AppState.activeTuner = null;
+        AppState.isTuningActive = false;
+        document.getElementById('znStatusText').textContent = "Bezczynny";
+        document.getElementById('znKpTestVal').textContent = "---";
+        document.getElementById('znAmplitudeVal').textContent = "---";
+        document.getElementById('znTuningActionBtn').disabled = false;
+        document.getElementById('znTuningCancelBtn').style.display = 'none';
+    }
+
+    function handleZnTuningResult(ku, tu) {
+        addLogMessage(`[UI] Otrzymano wynik strojenia Z-N: Ku=${ku.toFixed(4)}, Tu=${tu.toFixed(4)}`, 'success');
+        const resultPanel = document.getElementById('znResultPanel');
+        resultPanel.style.display = 'block';
+        const kp = 0.6 * ku;
+        const kd = kp * tu / 8; // Classic Z-N for PD
+        document.getElementById('znKuResult').textContent = ku.toFixed(4);
+        document.getElementById('znTuResult').textContent = tu.toFixed(4) + " s";
+        document.getElementById('znKpSuggest').textContent = kp.toFixed(4);
+        document.getElementById('znKdSuggest').textContent = kd.toFixed(4);
+        updateAccordionHeight(resultPanel.closest('.accordion-content'));
+    }
+
+    function applyZnResults() {
+        const kp = parseFloat(document.getElementById('znKpSuggest').textContent);
+        const kd = parseFloat(document.getElementById('znKdSuggest').textContent);
+        if (isNaN(kp) || isNaN(kd)) return;
+        
+        AppState.isApplyingConfig = true;
+        document.getElementById('balanceKpInput').value = kp.toFixed(4);
+        document.getElementById('balanceKiInput').value = 0.0;
+        document.getElementById('balanceKdInput').value = kd.toFixed(4);
+        AppState.isApplyingConfig = false;
+        
+        document.getElementById('balanceKpInput').dispatchEvent(new Event('change', { bubbles: true }));
+        document.getElementById('balanceKiInput').dispatchEvent(new Event('change', { bubbles: true }));
+        document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true }));
+        addLogMessage('[UI] Zastosowano sugerowane wartosci Kp i Kd. Ki ustawiono na 0.', 'info');
+    }
+
+    // --- Nowa obsluga GA ---
+    function setupGaListeners() {
+        document.getElementById('gaActionBtn').addEventListener('click', startNewGaSession);
+        document.getElementById('gaPauseBtn').addEventListener('click', () => {
+            if (!gaInstance) return;
+            if (gaInstance.isPaused) {
+                gaInstance.resume();
+                document.getElementById('gaPauseBtn').textContent = 'Pauzuj Sesje';
+                updateGaStatus('W trakcie');
+            } else {
+                gaInstance.pause();
+                document.getElementById('gaPauseBtn').textContent = 'Wznow Sesje';
+                updateGaStatus('Wstrzymano');
+            }
+        });
+        document.getElementById('gaCancelBtn').addEventListener('click', () => {
+             if (gaInstance) gaInstance.cancel();
+             resetGaUi();
+             sendBleMessage({type: 'cancel_ga_session'});
+             addLogMessage('[GA] Sesja anulowana przez uzytkownika.', 'warn');
+        });
+        document.getElementById('applyGaResultsBtn').addEventListener('click', applyGaResults);
+    }
+    
+    function startNewGaSession() {
+        if (!checkIfReadyForTest()) return;
+        AppState.isTuningActive = true;
+        
+        // Funkcja oceny (fitness) dla kazdego osobnika
+        const fitnessFunction = (individual) => {
+            return new Promise((resolve, reject) => {
+                const onResult = (score) => {
+                    gaInstance.handleFitnessResult = null; // Usuwamy listener
+                    resolve(score);
+                };
+                gaInstance.handleFitnessResult = onResult;
+                
+                // Wysylamy do robota probe do oceny
+                sendBleMessage({type: 'run_ga_trial', kp: individual.kp, kd: individual.kd });
+            });
+        };
+
+        const baseKp = parseFloat(document.getElementById('balanceKpInput').value);
+        const baseKd = parseFloat(document.getElementById('balanceKdInput').value);
+
+        gaInstance = new GeneticAlgorithm({
+            populationSize: parseInt(document.getElementById('gaPopulationInput').value),
+            generations: parseInt(document.getElementById('gaGenerationsInput').value),
+            fitnessFunction: fitnessFunction,
+            paramRanges: {
+                kp: [baseKp * 0.5, baseKp * 1.5],
+                kd: [baseKd * 0.5, baseKd * 1.5],
+            },
+            onGenerationStart: (gen, population) => {
+                 const bestInGen = population.filter(p => p.fitness !== Infinity).sort((a,b) => a.fitness - b.fitness)[0];
+                 if(bestInGen) {
+                    document.getElementById('gaStatusGenerationBestScore').textContent = bestInGen.fitness.toFixed(4);
+                 }
+            },
+            onIndividualStart: (gen, index, individual) => {
+                 updateGaStatus('W trakcie', gen, index + 1, individual);
+            },
+            onFinish: (bestIndividual) => {
+                addLogMessage(`[GA] Sesja zakonczona! Najlepszy blad: ${bestIndividual.fitness.toFixed(4)}`, 'success');
+                const panel = document.getElementById('gaResultsPanel');
+                panel.style.display = 'block';
+                document.getElementById('gaFinalScore').textContent = bestIndividual.fitness.toFixed(4);
+                document.getElementById('gaFinalKp').textContent = bestIndividual.kp.toFixed(4);
+                document.getElementById('gaFinalKd').textContent = bestIndividual.kd.toFixed(4);
+                updateAccordionHeight(panel.closest('.accordion-content'));
+                resetGaUi();
+                sendBleMessage({type: 'set_param', key: 'kp_b', value: bestIndividual.kp});
+                sendBleMessage({type: 'set_param', key: 'kd_b', value: bestIndividual.kd});
+            }
+        });
+        
+        document.getElementById('gaActionBtn').style.display = 'none';
+        document.getElementById('gaPauseBtn').style.display = 'inline-block';
+        document.getElementById('gaPauseBtn').textContent = 'Pauzuj Sesje';
+        document.getElementById('gaCancelBtn').style.display = 'inline-block';
+        document.getElementById('gaResultsPanel').style.display = 'none';
+        document.getElementById('gaStatusGenerationBestScore').textContent = '---';
+        document.getElementById('gaStatusBestScore').textContent = '---';
+        addLogMessage(`[GA] Rozpoczeto sesje dla petli balansu.`, 'info');
+        sendBleMessage({type: 'start_ga_session'});
+        gaInstance.run();
+    }
+    
+    function resetGaUi() {
+        AppState.isTuningActive = false;
+        gaInstance = null;
+        document.getElementById('gaActionBtn').style.display = 'inline-block';
+        document.getElementById('gaPauseBtn').style.display = 'none';
+        document.getElementById('gaCancelBtn').style.display = 'none';
+        updateGaStatus('Zakonczono', 0, 0);
+    }
+    
+    function updateGaStatus(state = 'W trakcie', generation = 0, individualNum = 0, individual = null) {
+        const totalGenerations = parseInt(document.getElementById('gaGenerationsInput').value);
+        const populationSize = parseInt(document.getElementById('gaPopulationInput').value);
+        
+        document.getElementById('gaStatusGeneration').textContent = `Pokolenie ${generation}/${totalGenerations}, Osobnik ${individualNum}/${populationSize}`;
+        document.getElementById('gaStatusStateText').textContent = state;
+        
+        const progress = ((generation - 1) * populationSize + individualNum) / (totalGenerations * populationSize) * 100;
+        document.getElementById('gaProgressBar').value = progress;
+        
+        if (individual) {
+            document.getElementById('gaStatusCurrentKp').textContent = individual.kp.toFixed(4);
+            document.getElementById('gaStatusCurrentKd').textContent = individual.kd.toFixed(4);
+        }
+        
+        if (gaInstance && gaInstance.population.length > 0) {
+            const bestOverall = gaInstance.population.filter(p => p.fitness !== Infinity).sort((a,b) => a.fitness - b.fitness)[0];
+            if (bestOverall) {
+                 document.getElementById('gaStatusBestScore').textContent = bestOverall.fitness.toFixed(4);
+            }
+        }
+    }
+    
+    function applyGaResults() {
+        const kp = parseFloat(document.getElementById('gaFinalKp').textContent);
+        const kd = parseFloat(document.getElementById('gaFinalKd').textContent);
+        if(!isNaN(kp) && !isNaN(kd)) {
+            AppState.isApplyingConfig = true;
+            document.getElementById('balanceKpInput').value = kp.toFixed(4);
+            document.getElementById('balanceKdInput').value = kd.toFixed(4);
+            AppState.isApplyingConfig = false;
+            document.getElementById('balanceKpInput').dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true }));
+            addLogMessage('[GA] Zastosowano najlepsze znalezione parametry.', 'success');
+        }
+    }
+
     
     function setupTuningAssistantListeners() {
         document.getElementById('startBalanceTestBtn').addEventListener('click', runBalanceTest);
@@ -698,7 +1173,15 @@
         });
     }
     function runBalanceTest() { if (!checkIfReadyForTest()) return; AppState.isTuningActive = true; currentTestType = 'balance'; const angle = parseFloat(document.getElementById('balanceStepAngleInput').value); addLogMessage(`[Asystent] Test balansu (kat: ${angle} st.).`, 'info'); sendBleMessage({type: 'execute_balance_step_response', angle: angle}); }
-    function runPositionTest() { if (!checkIfReadyForTest(true)) return; AppState.isTuningActive = true; currentTestType = 'position'; const impulse = parseInt(document.getElementById('positionTestImpulseInput').value); addLogMessage(`[Asystent] Test pozycji (impuls: ${impulse}).`, 'info'); sendBleMessage({type: 'execute_position_test_impulse', impulse_power: impulse}); }
+    function runPositionTest() { 
+        if (!checkIfReadyForTest(true)) return; 
+        const speedKp = parseFloat(document.getElementById('speedKpInput').value);
+        if(speedKp <= 0) {
+            addLogMessage('[Asystent] BLAD: Nie mozna testowac petli pozycji, gdy Kp petli predkosci jest zerowe. Ustaw wartosc Kp_s w zakladce "PID Kaskadowy" i sprobuj ponownie.', 'error');
+            return;
+        }
+        AppState.isTuningActive = true; currentTestType = 'position'; const impulse = parseInt(document.getElementById('positionTestImpulseInput').value); addLogMessage(`[Asystent] Test pozycji (impuls: ${impulse}).`, 'info'); sendBleMessage({type: 'execute_position_test_impulse', impulse_power: impulse}); 
+    }
     function runSpeedTest() { if (!checkIfReadyForTest(true)) return; AppState.isTuningActive = true; currentTestType = 'speed'; const distance = parseFloat(document.getElementById('speedTestDistanceInput').value); const speed = parseFloat(document.getElementById('speedTestSpeedInput').value); addLogMessage(`[Asystent] Test predkosci (dystans: ${distance}cm, predkosc: ${speed}cm/s).`, 'info'); sendBleMessage({type: 'execute_speed_test_run', distance_cm: distance, speed_cmps: speed}); }
     
     function analyzeBalanceResponse(data) {
@@ -763,7 +1246,7 @@
     }
     
     function startTelemetryCollectionForTest(duration, callback) { telemetryForCurrentTest = []; setTimeout(() => { AppState.isTuningActive = false; currentTestType = null; callback(telemetryForCurrentTest); }, duration); }
-    function checkIfReadyForTest(isPositionTest = false) { const requiredState = isPositionTest ? 'TRZYMA_POZYCJE' : 'BALANSUJE'; if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState) || (isPositionTest && AppState.lastKnownRobotState !== 'TRZYMA_POZYCJE')) { addLogMessage(`[UI] Blad: Robot musi byc w stanie '${requiredState}', a jest w '${AppState.lastKnownRobotState}'.`, 'error'); return false; } if (AppState.isTuningActive) { addLogMessage('[UI] Blad: Inna procedura strojenia jest juz w toku.', 'warn'); return false; } return true; }
+    function checkIfReadyForTest(isPositionTest = false) { const requiredState = isPositionTest ? 'TRZYMA_POZYCJE' : 'BALANSUJE'; if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState) || (isPositionTest && AppState.lastKnownRobotState !== 'TRZYMA_POZYCJE')) { addLogMessage(`[UI] Blad: Robot musi byc w stanie '${requiredState}', a jest w '${AppState.lastKnownRobotState}'.`, 'error'); return false; } if (AppState.isTuningActive || AppState.activeTuner) { addLogMessage('[UI] Blad: Inna procedura strojenia jest juz w toku.', 'warn'); return false; } return true; }
     function getImpulsesPerCm() { const ppr = parseFloat(document.getElementById('encoderPprInput').value); const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value); if (ppr > 0 && wheelDiameter > 0) { return ppr / (Math.PI * wheelDiameter); } return 30.0; }
 
     function init3DVisualization() { const container = document.getElementById('robot3d-container'); scene3D = new THREE.Scene(); scene3D.background = createSkyTexture(); camera3D = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 2000); camera3D.position.set(28, 22, 48); camera3D.lookAt(0, 8, 0); renderer3D = new THREE.WebGLRenderer({ antialias: true }); renderer3D.setSize(container.clientWidth, container.clientHeight); container.appendChild(renderer3D.domElement); controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement); controls3D.target.set(0, 8, 0); controls3D.maxPolarAngle = Math.PI / 2; const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); scene3D.add(ambientLight); const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9); directionalLight.position.set(10, 20, 15); scene3D.add(directionalLight); const PLANE_SIZE_CM = 2000; groundTexture = createCheckerTexture(20); const repeats = PLANE_SIZE_CM / 20; groundTexture.repeat.set(repeats, repeats); const groundMaterial = new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1.0, metalness: 0.0 }); const groundGeo = new THREE.PlaneGeometry(PLANE_SIZE_CM, PLANE_SIZE_CM, 1, 1); groundMesh = new THREE.Mesh(groundGeo, groundMaterial); groundMesh.rotation.x = -Math.PI / 2; groundMesh.position.y = 0; scene3D.add(groundMesh); robotPivot = createRobotModel3D(); robotPivot.position.y = 4.1; scene3D.add(robotPivot); window.addEventListener('resize', () => { const width = container.clientWidth; const height = container.clientHeight; camera3D.aspect = width / height; camera3D.updateProjectionMatrix(); renderer3D.setSize(width, height); }); setupControls3D(); }
