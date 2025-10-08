@@ -1,11 +1,13 @@
 // =======================================================================================
-// WERSJA 20.6-TUNING-FIX (Poprawki logiki asystenta strojenia i Z-N)
+// WERSJA 20.8 (Refaktoryzacja - Usuniecie logiki Z-N na rzecz sterowania z UI)
 //
 // ZMIANY:
 // -----------------------------------
-// [POPRAWKA LOGIKI] Test Zieglera-Nicholsa teraz poprawnie odczytuje i uzywa
-//                   aktualnego punktu balansu (wraz z korekta reczna), zamiast
-//                   uzywac na sztywno wartosci 0.0.
+// [REFAKTORYZACJA] Calkowicie usunieto wewnetrzna logike strojenia Zieglera-Nicholsa.
+//                  Robot nie posiada juz stanu AUTO_TUNING. Caly proces jest teraz
+//                  sterowany z poziomu panelu w JavaScript, ktory wysyla polecenia
+//                  'set_param' i analizuje dane telemetryczne.
+//                  Upraszcza to kod robota i odciaza jego procesor.
 // =======================================================================================
 
 // --- [DMP] NOWE BIBLIOTEKI DLA MPU6050 I DMP ---
@@ -24,7 +26,7 @@
 
 #include <atomic>
 
-#include "driver/gpio.h"
+#include "driver/gpio.hh"
 #include "driver/ledc.h"
 #include "esp_system.h"
 #include "freertos/queue.h"
@@ -90,11 +92,8 @@ const unsigned long JOYSTICK_TIMEOUT = 250;
 // --- Konfiguracja Mutexow i Synchronizacji ---
 #define JSON_MUTEX_TIMEOUT_MS 100
 
-// --- Konfiguracja Modulu Auto-Strojenia (Ziegler-Nichols) ---
-#define ZN_KP_INCREASE_STEP 0.2f
-#define ZN_OSC_AMPLITUDE_THRESHOLD 2.0f
-#define ZN_OSC_DETECTION_CYCLES 5
-#define ZN_MEASUREMENT_SAMPLES 10
+// --- [USUNIETO] Konfiguracja Modulu Auto-Strojenia (Ziegler-Nichols) ---
+// Ta logika jest teraz po stronie UI
 
 // --- Struktury ---
 struct PIDController {
@@ -189,9 +188,9 @@ struct EEPROMSettings {
     uint32_t crc;
 };
 
-enum RobotState { IDLE, BALANCING, HOLDING_POSITION, AUTONOMOUS_MOVE, AUTONOMOUS_ROTATE, AUTO_TUNING, AUTONOMOUS_SPEED_RUN, AUTONOMOUS_POSITION_RECOVERY, CALIBRATING_ZERO, GA_TRIAL };
-const char* robotStateNames[] = {"IDLE", "BALANSUJE", "TRZYMA_POZYCJE", "RUCH_AUTONOMICZNY", "OBROT_AUTONOMICZNY", "AUTOSTROJENIE", "TEST_PREDKOSCI", "TEST_POZYCJI", "KALIBRACJA_PIONU", "TEST_GA"};
-enum ZnTuningSubState { ZN_IDLE, ZN_RAMP_UP, ZN_MEASURE };
+// [ZMIANA] Usunieto stan AUTO_TUNING
+enum RobotState { IDLE, BALANCING, HOLDING_POSITION, AUTONOMOUS_MOVE, AUTONOMOUS_ROTATE, AUTONOMOUS_SPEED_RUN, AUTONOMOUS_POSITION_RECOVERY, CALIBRATING_ZERO, GA_TRIAL };
+const char* robotStateNames[] = {"IDLE", "BALANSUJE", "TRZYMA_POZYCJE", "RUCH_AUTONOMICZNY", "OBROT_AUTONOMICZNY", "TEST_PREDKOSCI", "TEST_POZYCJI", "KALIBRACJA_PIONU", "TEST_GA"};
 
 // --- Zmienne Globalne ---
 ControlFlags controlFlags; TuningParams tuningParams; MPU6050 mpu;
@@ -221,11 +220,7 @@ volatile long telemetry_encoder_left=0, telemetry_encoder_right=0;
 std::atomic<unsigned long> telemetry_loop_time_micros{0}; std::atomic<long> globalCurrentPosition{0};
 enum TrialType { TRIAL_NONE, TRIAL_BALANCE, TRIAL_SPEED, TRIAL_POSITION, TRIAL_ROTATE };
 volatile TrialType currentTrialType = TRIAL_NONE; volatile unsigned long currentTrialId = 0, currentTrialStartMs = 0;
-ZnTuningSubState znSubState = ZN_IDLE; TuningParams safeTuningParams;
-float zn_test_kp = 0.0; unsigned long zn_last_crossing_time = 0; float zn_last_pitch = 0.0;
-float zn_peak_angle = 0.0, zn_trough_angle = 0.0; int zn_stable_osc_counter = 0;
-float zn_period_samples[ZN_MEASUREMENT_SAMPLES]; int zn_period_sample_count = 0;
-float zn_balance_point = 0.0f;
+TuningParams safeTuningParams; // Zachowane dla GA
 bool isGaSessionActive = false; const int GA_TRIAL_DURATION_MS = 5000; unsigned long gaTrialStartTime = 0;
 float ga_itae = 0, ga_max_overshoot = 0, ga_rms_effort = 0; int ga_sample_count = 0;
 
@@ -243,9 +238,10 @@ float fmap(float, float, float, float, float); float mapMotorOutput(float, int, 
 static void IRAM_ATTR encoder_isr_handler(void*); void setupEncoders(); void IRAM_ATTR dmpDataReady();
 void setupSensors(); float normalizeAngle(float); void resetAllPids();
 void checkLiftDetection(const int16_t&, const int16_t&, const int16_t&);
-void checkSafetySystems(float); void autoRecovery(); void handleZieglerNicholsTuning(float, float);
-void startZnTuning(); void cancelZnTuning(); void finishZnTuning(float, float);
+void checkSafetySystems(float); void autoRecovery();
 void startGaSession(); void runGaTrial(float, float); void finishGaTrial(); void cancelGaSession();
+
+// --- [USUNIETO] Prototypy dla Z-N ---
 
 struct FragmentingPrint : public Print {
     const size_t CHUNK_PAYLOAD_SIZE = 400; char buffer[512]; size_t current_size = 0; unsigned long message_id; int chunk_index = 0;
@@ -336,91 +332,8 @@ float normalizeAngle(float angle) {
 
 void resetAllPids() { balancePID.reset(); speedPID.reset(); positionPID.reset(); rotationPID.reset(); headingPID.reset(); }
 
-void startZnTuning() {
-    if (currentState != BALANCING && currentState != HOLDING_POSITION) {
-        printAndLog("warn", "Nie mozna rozpoczac strojenia. Robot musi byc w stanie balansu.");
-        return;
-    }
-    printAndLog("info", "Rozpoczeto procedure 'Pierwsze Strojenie' (Z-N)...");
-    safeTuningParams = tuningParams;
-    positionSetpoint = globalCurrentPosition.load(std::memory_order_relaxed);
-    zn_balance_point = finalTargetAngle; 
-    resetAllPids();
-    balancePID.configure(0.0f, 0.0f, 0.0f, -PWM_MAX_VALUE, PWM_MAX_VALUE, 0.0f);
-    transitionToState(AUTO_TUNING);
-    znSubState = ZN_RAMP_UP;
-    zn_test_kp = tuningParams.Kp_b > 1.0f ? tuningParams.Kp_b : 10.0f;
-    zn_stable_osc_counter = 0; zn_peak_angle = 0; zn_trough_angle = 0; zn_last_pitch = 0;
-}
-
-void cancelZnTuning() {
-    if (currentState != AUTO_TUNING) return;
-    printAndLog("warn", "Strojenie Z-N anulowane przez uzytkownika.");
-    tuningParams = safeTuningParams;
-    updateSystemConfiguration();
-    transitionToState(BALANCING);
-    znSubState = ZN_IDLE;
-}
-
-void finishZnTuning(float Ku, float Tu) {
-    printAndLog("success", "Strojenie Z-N zakonczone! Zmierzone Ku=%.4f, Tu=%.4f s", Ku, Tu);
-    if (xSemaphoreTake(smallJsonMutex, pdMS_TO_TICKS(20)) == pdTRUE) {
-        smallJsonDoc.clear(); smallJsonDoc["type"] = "zn_tuning_result"; smallJsonDoc["ku"] = Ku; smallJsonDoc["tu"] = Tu;
-        String jsonBuffer; serializeJson(smallJsonDoc, jsonBuffer);
-        xSemaphoreGive(smallJsonMutex);
-        sendBleNotificationSafe(jsonBuffer);
-    }
-    tuningParams = safeTuningParams;
-    updateSystemConfiguration();
-    transitionToState(BALANCING);
-    znSubState = ZN_IDLE;
-}
-
-void handleZieglerNicholsTuning(float current_pitch, float dt) {
-    balancePID.Kp = zn_test_kp;
-    telemetry_balance_output = zn_test_kp;
-    float balance_point = zn_balance_point; 
-
-    switch (znSubState) {
-        case ZN_RAMP_UP: {
-            if (current_pitch > zn_last_pitch) { zn_peak_angle = max(zn_peak_angle, current_pitch); }
-            else { zn_trough_angle = min(zn_trough_angle, current_pitch); }
-
-            if ((zn_last_pitch > balance_point && current_pitch <= balance_point) || (zn_last_pitch < balance_point && current_pitch >= balance_point)) {
-                float amplitude = zn_peak_angle - zn_trough_angle;
-                if (amplitude > ZN_OSC_AMPLITUDE_THRESHOLD) { zn_stable_osc_counter++; }
-                else { zn_stable_osc_counter = 0; }
-                zn_peak_angle = balance_point; zn_trough_angle = balance_point;
-                if (zn_stable_osc_counter >= ZN_OSC_DETECTION_CYCLES) {
-                    printAndLog("info", "Wykryto stabilne oscylacje przy Kp=%.2f. Rozpoczynam pomiar.", zn_test_kp);
-                    znSubState = ZN_MEASURE; zn_period_sample_count = 0; zn_last_crossing_time = millis(); return;
-                }
-            }
-            zn_last_pitch = current_pitch;
-            zn_test_kp += ZN_KP_INCREASE_STEP * dt * 100;
-            break;
-        }
-        case ZN_MEASURE: {
-            if ((zn_last_pitch > balance_point && current_pitch <= balance_point) || (zn_last_pitch < balance_point && current_pitch >= balance_point)) {
-                unsigned long now = millis();
-                if (zn_last_crossing_time > 0) {
-                    float half_period = (now - zn_last_crossing_time) / 1000.0f;
-                    if (zn_period_sample_count < ZN_MEASUREMENT_SAMPLES) { zn_period_samples[zn_period_sample_count++] = half_period * 2.0f; }
-                }
-                zn_last_crossing_time = now;
-                if (zn_period_sample_count >= ZN_MEASUREMENT_SAMPLES) {
-                    float sum_tu = 0;
-                    for (int i = 0; i < ZN_MEASUREMENT_SAMPLES; i++) { sum_tu += zn_period_samples[i]; }
-                    float avg_tu = sum_tu / ZN_MEASUREMENT_SAMPLES;
-                    finishZnTuning(zn_test_kp, avg_tu);
-                }
-            }
-            zn_last_pitch = current_pitch;
-            break;
-        }
-        case ZN_IDLE: default: break;
-    }
-}
+// --- [USUNIETO] Implementacje funkcji Z-N (start, cancel, finish, handle) ---
+// Ta logika zostala przeniesiona do panelu w JavaScript
 
 void startGaSession() {
     if (currentState != BALANCING && currentState != HOLDING_POSITION) {
@@ -584,10 +497,8 @@ void ControlLoopTask(void* pvParameters) {
             }
         }
 
-        if (currentState == AUTO_TUNING) {
-            handleZieglerNicholsTuning((pitch - angleOffset), dt);
-        }
-
+        // --- [USUNIETO] Obsluga stanu AUTO_TUNING ---
+        
         float raw_speed = (float)(currentPosition - lastPosition) / dt;
         lastPosition = currentPosition;
         filtered_actual_speed = (1.0f - SPEED_FILTER_ALPHA) * filtered_actual_speed + SPEED_FILTER_ALPHA * raw_speed;
@@ -640,8 +551,7 @@ void ControlLoopTask(void* pvParameters) {
                         }
                         break;
                     case HOLDING_POSITION:
-                    case AUTO_TUNING:
-                        if (currentState == HOLDING_POSITION && (!controlFlags.holdPositionEnabled || !controlFlags.balancingEnabled)) {
+                        if (!controlFlags.holdPositionEnabled || !controlFlags.balancingEnabled) {
                             nextState = BALANCING;
                         } else {
                             speedSetpoint = positionPID.compute(positionSetpoint, currentPosition, dt);
@@ -792,12 +702,7 @@ void CommunicationManagerTask(void* pvParameters) {
                         runGaTrial(doc_obj["kp"], doc_obj["kd"]);
                     } else if (strcmp(type, "cancel_ga_session") == 0) {
                         cancelGaSession();
-                    } else if (strcmp(type, "start_zn_tuning") == 0) {
-                        startZnTuning();
-                        sendAck("start_zn_tuning", true);
-                    } else if (strcmp(type, "cancel_tuning") == 0) {
-                        cancelZnTuning();
-                        sendAck("cancel_tuning", true);
+                    // --- [USUNIETO] Obsluga komend Z-N ---
                     } else if (strcmp(type, "joystick") == 0) {
                         if (doc_obj.containsKey("x") && doc_obj.containsKey("y")) {
                             joystickX.store(doc_obj["x"], std::memory_order_relaxed);
@@ -1629,7 +1534,7 @@ void setupSensors() {
 void setup() {
     initializeMotorPinsSafe();
     Serial.begin(115200);
-    Serial.println("\n--- ROBOT PID - WERSJA 20.6 ---");
+    Serial.println("\n--- ROBOT PID - WERSJA 20.8 ---");
     printAndLog("info", "Piny silnikow zabezpieczone (stan LOW).");
 
     smallJsonMutex = xSemaphoreCreateMutex();
