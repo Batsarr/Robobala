@@ -361,7 +361,7 @@
                         <strong>Sugerowane Kp:</strong> <span id="znKpSuggest"></span>
                         <strong>Sugerowane Kd:</strong> <span id="znKdSuggest"></span>
                     </div>
-                    <button id="applyZnResultsBtn" class="apply-btn">Zastosuj Sugerowane Wartosci</button>
+                    <button id="applyZnResultsBtn" class="apply-btn">Zastosuj do Panelu</button>
                 </div>
                 <button id="znTuningActionBtn" style="width:100%; margin-top:15px; background-color: #f7b731;">Rozpocznij Odkrywanie</button>
                 <button id="znTuningCancelBtn" style="width:100%; margin-top:10px; background-color:#ff6347; display:none;">Anuluj</button>
@@ -523,10 +523,10 @@
         constructor() { 
             this.reset(); 
             // Konfiguracja 
-            this.kpStep = 0.1; // Poczatkowy krok Kp 
-            this.kpStepMultiplier = 1.2; // Mnoznik przyspieszenia 
-            this.maxKp = 50.0; // Bezpieczny limit 
-            this.minKp = 0.1; // Minimalny Kp 
+            this.kpStep = 0.5; // Poczatkowy krok Kp 
+            this.kpStepMultiplier = 1.5; // Mnoznik przyspieszenia 
+            this.maxKp = 120.0; // Bezpieczny limit 
+            this.minKp = 10.0; // Minimalny Kp 
             this.maxTuningTime = 120000; // 2 min timeout 
             this.maxAmplitude = 15.0; // Maks amplituda (stopnie) 
             // Wykrywanie oscylacji 
@@ -1206,6 +1206,7 @@
                 this.bestFitnessHistory.shift(); 
                 this.diversityHistory.shift(); 
             } 
+            this.options.onStatsUpdate?.({ generationBest: currentBest, globalBest: this.globalBest }); 
         } 
         
         _sleep(ms) { 
@@ -2405,6 +2406,10 @@
                  if(stats.bestFitness) {
                     document.getElementById('gaStatusBestScore').textContent = stats.bestFitness.toFixed(4);
                  }
+            },
+            onStatsUpdate: (stats) => {
+                document.getElementById('gaStatusGenerationBestScore').textContent = stats.generationBest.fitness.toFixed(4);
+                document.getElementById('gaStatusBestScore').textContent = stats.globalBest.fitness.toFixed(4);
             },
             onIndividualStart: (gen, index, individual) => {
                  updateGaStatus('W trakcie', gen, index + 1, individual);
