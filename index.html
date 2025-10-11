@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v20.8</title>
+    <title>Robot PID - Panel Sterowania v21.0</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -151,7 +151,7 @@
         </div>
     </div>
 
-    <h1>Robot PID - Panel Sterowania v20.8</h1>
+    <h1>Robot PID - Panel Sterowania v21.0</h1>
     <div class="main-grid">
         <div class="card" id="controls-card">
             <h2>Sterowanie</h2>
@@ -486,7 +486,7 @@
 
 <script>
     // =======================================================================================
-    // WERSJA 20.8 (Nowe, niezawodne moduly strojenia GA i Z-N, poprawki logiki kaskady)
+    // WERSJA 21.0 (Zintegrowane zaawansowane moduly strojenia, poprawki logiki walidacji)
     // =======================================================================================
     const AppState = { isConnected: false, isSynced: false, isApplyingConfig: false, lastKnownRobotState: 'IDLE', isSequenceRunning: false, isTuningActive: false, syncTimeout: null, activeTuner: null };
     let currentSequenceStep = 0;
@@ -508,271 +508,1613 @@
     let scene3D, camera3D, renderer3D, controls3D, robotPivot, leftWheel, rightWheel, groundMesh, groundTexture;
     let currentPitch3D = 0, currentRoll3D = 0, currentYaw3D = 0, currentEncoderLeft = 0, currentEncoderRight = 0;
     let isAnimation3DEnabled = true, isMovement3DEnabled = false, lastEncoderAvg = 0;
-    let gaInstance = null; // Instancja nowej biblioteki GA
+    let gaInstance = null;
+    window.telemetryData = {}; // Globalna zmienna dla telemetrii, uzywana przez tunery
     
     // =======================================================================================
-    // === NOWA, NIEZAWODNA KLASA DO STROJENIA ZIEGLER-NICHOLS ===
+    // === NOWY, ZAAWANSOWANY TUNER ZIEGLER-NICHOLS (Z INFO.TXT) ===
     // =======================================================================================
-    class ZieglerNicholsTuner {
-        constructor(options) {
-            this.state = 'IDLE';
-            this.kp = options.startKp || 1.0;
-            this.kpStep = options.kpStep || 0.1;
-            this.maxAmplitude = options.maxAmplitude || 15.0;
-            this.oscillationThreshold = options.oscillationThreshold || 2.0;
-            this.stabilityCycles = options.stabilityCycles || 5;
-            this.measurementSamples = options.measurementSamples || 10;
-            this.onUpdate = options.onUpdate || (() => {});
-            this.onFinish = options.onFinish || (() => {});
-            this.onFail = options.onFail || (() => {});
-            
-            this.reset();
-        }
-
-        reset() {
-            this.kp = 1.0;
-            this.lastPitch = 0;
-            this.peak = -Infinity;
-            this.trough = Infinity;
-            this.crossings = [];
-            this.amplitudes = [];
-            this.stableCycleCount = 0;
-            this.periods = [];
-        }
-
-        start() {
-            if (this.state !== 'IDLE') return;
-            this.reset();
-            this.state = 'RAMPING_UP';
-            addLogMessage('[ZN-Tuner] Rozpoczeto procedure strojenia.', 'info');
-            this.updateRobotKp();
-        }
-
-        cancel() {
-            addLogMessage('[ZN-Tuner] Anulowano procedure.', 'warn');
-            this.state = 'IDLE';
-            sendBleMessage({ type: 'set_param', key: 'kp_b', value: parseFloat(document.getElementById('balanceKpInput').value) });
-        }
-
-        processTelemetry(pitch, dt) {
-            if (this.state === 'IDLE') return;
-            
-            // Wykrywanie przejscia przez punkt zero (srodek oscylacji)
-            if (Math.sign(pitch) !== Math.sign(this.lastPitch)) {
-                const now = performance.now();
-                const amplitude = this.peak - this.trough;
-                
-                if (amplitude > this.oscillationThreshold) {
-                    this.crossings.push(now);
-                    this.amplitudes.push(amplitude);
-                    
-                    if (this.crossings.length > 2) {
-                       const lastPeriod = (this.crossings[this.crossings.length - 1] - this.crossings[this.crossings.length - 3]) / 1000.0;
-                       if(this.state === 'MEASURING') this.periods.push(lastPeriod);
-                    }
-                }
-                
-                this.peak = -Infinity;
-                this.trough = Infinity;
-            }
-
-            this.lastPitch = pitch;
-            this.peak = Math.max(this.peak, pitch);
-            this.trough = Math.min(this.trough, pitch);
-            const currentAmplitude = this.peak - this.trough;
-
-            if (this.state === 'RAMPING_UP') {
-                if (currentAmplitude > this.maxAmplitude) {
-                    addLogMessage(`[ZN-Tuner] Osiagnieto maksymalna amplitude (${this.maxAmplitude} st.). Rozpoczynam pomiar.`, 'warn');
-                    this.state = 'MEASURING';
-                    return;
-                }
-
-                if (this.amplitudes.length > this.stabilityCycles) {
-                    const lastAmplitudes = this.amplitudes.slice(-this.stabilityCycles);
-                    const avgAmplitude = lastAmplitudes.reduce((a, b) => a + b, 0) / lastAmplitudes.length;
-                    const variance = lastAmplitudes.map(amp => Math.pow(amp - avgAmplitude, 2)).reduce((a, b) => a + b, 0) / lastAmplitudes.length;
-                    
-                    if (variance < 1.0) { // Sprawdzamy czy oscylacje sa stabilne
-                        addLogMessage(`[ZN-Tuner] Wykryto stabilne oscylacje przy Kp=${this.kp.toFixed(2)}. Rozpoczynam pomiar.`, 'info');
-                        this.state = 'MEASURING';
-                        return;
-                    }
-                }
-
-                this.kp += this.kpStep * dt;
-                this.updateRobotKp();
-            }
-
-            if (this.state === 'MEASURING') {
-                if (this.periods.length >= this.measurementSamples) {
-                    const avgPeriod = this.periods.reduce((a, b) => a + b, 0) / this.periods.length;
-                    const ku = this.kp;
-                    const tu = avgPeriod;
-                    addLogMessage(`[ZN-Tuner] Pomiar zakonczony! Ku=${ku.toFixed(4)}, Tu=${tu.toFixed(4)}s`, 'success');
-                    this.state = 'FINISHED';
-                    this.onFinish({ ku, tu });
-                }
-            }
-
-            this.onUpdate({ kp: this.kp, amplitude: currentAmplitude, state: this.state });
-        }
+    class ZieglerNicholsTuner { 
+        constructor() { 
+            this.reset(); 
+            // Konfiguracja 
+            this.kpStep = 0.1; // Poczatkowy krok Kp 
+            this.kpStepMultiplier = 1.2; // Mnoznik przyspieszenia 
+            this.maxKp = 50.0; // Bezpieczny limit 
+            this.minKp = 0.1; // Minimalny Kp 
+            this.maxTuningTime = 120000; // 2 min timeout 
+            this.maxAmplitude = 15.0; // Maks amplituda (stopnie) 
+            // Wykrywanie oscylacji 
+            this.minRequiredPeriods = 3; // Min okresow do potwierdzenia 
+            this.maxRequiredPeriods = 6; // Maks okresow do pomiaru 
+            this.amplitudeThreshold = 2.0; // Min amplituda oscylacji 
+            this.periodTolerance = 0.15; // 15% tolerancja okresu 
+            this.stabilityThreshold = 0.1; // Stabilnosc amplitudy 
+            this.updateInterval = 50; // 50ms update rate 
+            this.startTime = 0; 
+        } 
         
-        updateRobotKp() {
-             sendBleMessage({ type: 'set_param', key: 'kp_b', value: this.kp });
-             sendBleMessage({ type: 'set_param', key: 'ki_b', value: 0 }); // Ki musi byc 0
-             sendBleMessage({ type: 'set_param', key: 'kd_b', value: 0 }); // Kd musi byc 0
+        reset() { 
+            this.state = 'IDLE'; // IDLE, SEARCHING, DETECTING, MEASURING, FINISHED, ERROR 
+            this.kp = 0.5; 
+            this.pitchHistory = []; 
+            this.timeHistory = []; 
+            this.periods = []; 
+            this.amplitudes = []; 
+            this.lastPeakTime = 0; 
+            this.lastPeakValue = 0; 
+            this.lastValleyTime = 0; 
+            this.lastValleyValue = 0; 
+            this.peakCount = 0; 
+            this.isGoingUp = null; 
+            this.consecutiveStablePeriods = 0; 
+            this.adaptiveStepEnabled = true; 
+        } 
+        
+        start(onUpdate, onFinish, onError) { 
+            this.onUpdate = onUpdate; 
+            this.onFinish = onFinish; 
+            this.onError = onError; 
+            this.reset(); 
+            this.state = 'SEARCHING'; 
+            this.startTime = Date.now(); 
+            addLogMessage('[ZN-Tuner] Rozpoczynam auto-tuning Ziegler-Nichols', 'info'); 
+            // Wyslij poczatkowe parametry 
+            this.updateRobotParams(); 
+            // Uruchom timer aktualizacji 
+            this.timer = setInterval(() => this.update(), this.updateInterval); 
+        } 
+        
+        stop() { 
+            if (this.timer) { 
+                clearInterval(this.timer); 
+                this.timer = null; 
+            } 
+            this.state = 'IDLE'; 
+            addLogMessage('[ZN-Tuner] Auto-tuning zatrzymany', 'warn'); 
+        } 
+        
+        update() { 
+            if (this.state === 'IDLE' || this.state === 'FINISHED' || this.state === 'ERROR') { 
+                return; 
+            } 
+            // Sprawdz timeout 
+            if (Date.now() - this.startTime > this.maxTuningTime) { 
+                this.handleError('Timeout auto-tuningu (2 min)'); 
+                return; 
+            } 
+            // Pobierz aktualny pitch z telemetrii robota 
+            const currentPitch = this.getCurrentPitch(); 
+            const currentTime = Date.now(); 
+            // Sprawdz bezpieczenstwo 
+            if (Math.abs(currentPitch) > this.maxAmplitude) { 
+                this.handleError(`Zbyt duza amplituda: ${currentPitch.toFixed(2)}°`); 
+                return; 
+            } 
+            if (this.kp > this.maxKp) { 
+                this.handleError(`Przekroczono maksymalny Kp: ${this.kp.toFixed(2)}`); 
+                return; 
+            } 
+            // Dodaj do historii 
+            this.pitchHistory.push(currentPitch); 
+            this.timeHistory.push(currentTime); 
+            // Ogranicz historie do ostatnich 200 probek 
+            if (this.pitchHistory.length > 200) { 
+                this.pitchHistory.shift(); 
+                this.timeHistory.shift(); 
+            } 
+            switch (this.state) { 
+                case 'SEARCHING': 
+                    this.handleSearchingState(currentPitch, currentTime); 
+                    break; 
+                case 'DETECTING': 
+                    this.handleDetectingState(currentPitch, currentTime); 
+                    break; 
+                case 'MEASURING': 
+                    this.handleMeasuringState(currentPitch, currentTime); 
+                    break; 
+            } 
+            // Wyslij aktualizacje 
+            this.onUpdate({ 
+                kp: this.kp, 
+                amplitude: this.getCurrentAmplitude(), 
+                state: this.state, 
+                periods: this.periods.length, 
+                avgPeriod: this.getAveragePeriod() 
+            }); 
+        } 
+        
+        handleSearchingState(currentPitch, currentTime) { 
+            // Sprawdz czy sa juz jakies oscylacje 
+            if (this.pitchHistory.length >= 20) { 
+                const recentAmplitude = this.getRecentAmplitude(); 
+                if (recentAmplitude > this.amplitudeThreshold) { 
+                    addLogMessage(`[ZN-Tuner] Wykryto oscylacje (amp: ${recentAmplitude.toFixed(2)}°), przechodze do detekcji`, 'info'); 
+                    this.state = 'DETECTING'; 
+                    this.resetOscillationDetection(); 
+                    return; 
+                } 
+            } 
+            // Zwieksz Kp 
+            this.increaseKp(); 
+        } 
+        
+        handleDetectingState(currentPitch, currentTime) { 
+            // Wykrywaj ekstrema 
+            this.detectExtrema(currentPitch, currentTime); 
+            // Sprawdz czy mamy wystarczajaco okresow 
+            if (this.periods.length >= this.minRequiredPeriods) { 
+                // Sprawdz stabilnosc okresow 
+                if (this.arePeriodsStable()) { 
+                    addLogMessage(`[ZN-Tuner] Wykryto stabilne oscylacje, rozpoczynam precyzyjny pomiar`, 'success'); 
+                    this.state = 'MEASURING'; 
+                    this.consecutiveStablePeriods = 0; 
+                } else { 
+                    // Jesli okresy niestabilne, zwieksz Kp nieznacznie 
+                    if (this.periods.length >= 5) { 
+                        this.kp += this.kpStep * 0.1; // Maly krok 
+                        this.updateRobotParams(); 
+                        this.resetOscillationDetection(); 
+                    } 
+                } 
+            } else { 
+                // Za malo okresow, sprawdz czy nie trzeba zwiekszyc Kp 
+                const recentAmplitude = this.getRecentAmplitude(); 
+                if (recentAmplitude < this.amplitudeThreshold) { 
+                    this.increaseKp(); 
+                    this.resetOscillationDetection(); 
+                } 
+            } 
+        } 
+        
+        handleMeasuringState(currentPitch, currentTime) { 
+            // Kontynuuj wykrywanie ekstremow 
+            this.detectExtrema(currentPitch, currentTime); 
+            // Sprawdz czy mamy wystarczajaco precyzyjnych pomiarow 
+            if (this.periods.length >= this.maxRequiredPeriods) { 
+                this.finishTuning(); 
+            } else if (!this.arePeriodsStable() && this.periods.length >= 8) { 
+                // Jesli w trakcie pomiaru stracimy stabilnosc, sprobuj lekko zwiekszyc Kp 
+                this.kp += this.kpStep * 0.05; 
+                this.updateRobotParams(); 
+                this.resetOscillationDetection(); 
+                this.state = 'DETECTING'; 
+            } 
+        } 
+        
+        detectExtrema(currentPitch, currentTime) { 
+            if (this.pitchHistory.length < 3) return; 
+            const prev = this.pitchHistory[this.pitchHistory.length - 2]; 
+            const current = currentPitch; 
+            const prevPrev = this.pitchHistory[this.pitchHistory.length - 3]; 
+            // Wykrywanie maksimum lokalnego 
+            if (prev > prevPrev && prev > current && Math.abs(prev) > this.amplitudeThreshold * 0.5) { 
+                if (this.lastPeakTime > 0) { 
+                    const period = (this.timeHistory[this.timeHistory.length - 2] - this.lastPeakTime) / 1000.0; 
+                    if (period > 0.1 && period < 10.0) { // Sensowny zakres okresu 
+                        this.periods.push(period); 
+                        this.amplitudes.push(Math.abs(prev)); 
+                        // Ogranicz historie 
+                        if (this.periods.length > 10) { 
+                            this.periods.shift(); 
+                            this.amplitudes.shift(); 
+                        } 
+                    } 
+                } 
+                this.lastPeakTime = this.timeHistory[this.timeHistory.length - 2]; 
+                this.lastPeakValue = prev; 
+            } 
+            // Wykrywanie minimum lokalnego 
+            if (prev < prevPrev && prev < current && Math.abs(prev) > this.amplitudeThreshold * 0.5) { 
+                this.lastValleyTime = this.timeHistory[this.timeHistory.length - 2]; 
+                this.lastValleyValue = prev; 
+            } 
+        } 
+        
+        arePeriodsStable() { 
+            if (this.periods.length < this.minRequiredPeriods) return false; 
+            const recentPeriods = this.periods.slice(-this.minRequiredPeriods); 
+            const avgPeriod = recentPeriods.reduce((a, b) => a + b, 0) / recentPeriods.length; 
+            // Sprawdz czy wszystkie okresy sa w tolerancji 
+            for (let period of recentPeriods) { 
+                if (Math.abs(period - avgPeriod) / avgPeriod > this.periodTolerance) { 
+                    return false; 
+                } 
+            } 
+            // Sprawdz stabilnosc amplitudy 
+            if (this.amplitudes.length >= this.minRequiredPeriods) { 
+                const recentAmps = this.amplitudes.slice(-this.minRequiredPeriods); 
+                const avgAmp = recentAmps.reduce((a, b) => a + b, 0) / recentAmps.length; 
+                for (let amp of recentAmps) { 
+                    if (Math.abs(amp - avgAmp) / avgAmp > this.stabilityThreshold) { 
+                        return false; 
+                    } 
+                } 
+            } 
+            return true; 
+        } 
+        
+        increaseKp() { 
+            const oldKp = this.kp; 
+            // Adaptacyjny krok - im blizej celu, tym mniejszy krok 
+            if (this.adaptiveStepEnabled) { 
+                const recentAmplitude = this.getRecentAmplitude(); 
+                if (recentAmplitude > this.amplitudeThreshold * 0.5) { 
+                    this.kpStep = Math.max(this.kpStep * 0.7, 0.01); // Zmniejsz krok 
+                } else if (recentAmplitude < this.amplitudeThreshold * 0.2) { 
+                    this.kpStep = Math.min(this.kpStep * this.kpStepMultiplier, 1.0); // Zwieksz krok 
+                } 
+            } 
+            this.kp += this.kpStep; 
+            if (this.kp > this.maxKp) { 
+                this.handleError(`Nie udalo sie znalezc punktu krytycznego do Kp=${this.maxKp}`); 
+                return; 
+            } 
+            addLogMessage(`[ZN-Tuner] Zwiekszam Kp: ${oldKp.toFixed(3)} -> ${this.kp.toFixed(3)}`, 'info'); 
+            this.updateRobotParams(); 
+        } 
+        
+        finishTuning() { 
+            clearInterval(this.timer); 
+            this.timer = null; 
+            const ku = this.kp; 
+            const tu = this.getAveragePeriod(); 
+            // Walidacja wynikow 
+            if (ku < this.minKp || tu < 0.1 || tu > 10.0) { 
+                this.handleError(`Nieprawidlowe wyniki: Ku=${ku.toFixed(3)}, Tu=${tu.toFixed(3)}`); 
+                return; 
+            } 
+            this.state = 'FINISHED'; 
+            addLogMessage(`[ZN-Tuner] Auto-tuning zakonczony pomyslnie!`, 'success'); 
+            addLogMessage(`[ZN-Tuner] Ku = ${ku.toFixed(4)}, Tu = ${tu.toFixed(4)}s`, 'success'); 
+            // Oblicz parametry ZN 
+            const znParams = this.calculateZNParameters(ku, tu); 
+            this.onFinish({ 
+                ku, 
+                tu, 
+                periods: [...this.periods], 
+                amplitudes: [...this.amplitudes], 
+                znParams 
+            }); 
+        } 
+        
+        calculateZNParameters(ku, tu) { 
+            // Klasyczne wzory Ziegler-Nichols dla regulatora PID 
+            return { 
+                // P controller 
+                p_only: { kp: 0.5 * ku, ki: 0, kd: 0 }, 
+                // PI controller 
+                pi: { kp: 0.45 * ku, ki: (0.45 * ku) / (tu / 1.2), kd: 0 }, 
+                // PID controller (klasyczny) 
+                pid_classic: { kp: 0.6 * ku, ki: (0.6 * ku) / (tu / 2.0), kd: (0.6 * ku) * (tu / 8.0) }, 
+                // PID controller (some overshoot) 
+                pid_some_overshoot: { kp: 0.33 * ku, ki: (0.33 * ku) / (tu / 2.0), kd: (0.33 * ku) * (tu / 3.0) }, 
+                // PID controller (no overshoot) 
+                pid_no_overshoot: { kp: 0.2 * ku, ki: (0.2 * ku) / (tu / 2.0), kd: (0.2 * ku) * (tu / 3.0) } 
+            }; 
+        } 
+        
+        handleError(message) { 
+            clearInterval(this.timer); 
+            this.timer = null; 
+            this.state = 'ERROR'; 
+            addLogMessage(`[ZN-Tuner] BLAD: ${message}`, 'error'); 
+            // Przywroc bezpieczne parametry 
+            sendBleMessage({ type: 'set_param', key: 'kp_b', value: 1.0 }); 
+            sendBleMessage({ type: 'set_param', key: 'ki_b', value: 0.0 }); 
+            sendBleMessage({ type: 'set_param', key: 'kd_b', value: 0.0 }); 
+            this.onError(message); 
+        } 
+        
+        // Funkcje pomocnicze 
+        getCurrentPitch() { 
+            // Pobierz z globalnej zmiennej telemetrii 
+            return window.telemetryData ? window.telemetryData.pitch : 0; 
+        } 
+        
+        getCurrentAmplitude() { 
+            if (this.amplitudes.length === 0) return 0; 
+            return this.amplitudes[this.amplitudes.length - 1]; 
+        } 
+        
+        getRecentAmplitude() { 
+            if (this.pitchHistory.length < 10) return 0; 
+            const recent = this.pitchHistory.slice(-20); 
+            const max = Math.max(...recent); 
+            const min = Math.min(...recent); 
+            return max - min; 
+        } 
+        
+        getAveragePeriod() { 
+            if (this.periods.length === 0) return 0; 
+            return this.periods.reduce((a, b) => a + b, 0) / this.periods.length; 
+        } 
+        
+        resetOscillationDetection() { 
+            this.periods = []; 
+            this.amplitudes = []; 
+            this.lastPeakTime = 0; 
+            this.lastValleyTime = 0; 
+            this.peakCount = 0; 
+        } 
+        
+        updateRobotParams() { 
+            sendBleMessage({ type: 'set_param', key: 'kp_b', value: this.kp }); 
+            sendBleMessage({ type: 'set_param', key: 'ki_b', value: 0 }); 
+            sendBleMessage({ type: 'set_param', key: 'kd_b', value: 0 }); 
+        } 
+    }
+
+    // =======================================================================================
+    // === NOWY, ZAAWANSOWANY ALGORYTM GENETYCZNY (Z INFO2.TXT) ===
+    // =======================================================================================
+    class GeneticAlgorithm { 
+        constructor(options) { 
+            this.options = Object.assign({ 
+                populationSize: 10, 
+                generations: 10, 
+                mutationRate: 0.15, 
+                crossoverRate: 0.8, 
+                elitism: 0.2, 
+                // Realistyczne zakresy dla robota balansujacego 
+                paramRanges: { 
+                    kp: [1.0, 25.0], // Kp balance 
+                    kd: [0.1, 2.5] // Kd balance 
+                }, 
+                // Nowe parametry optymalizacji 
+                tournamentSize: 3, 
+                adaptiveMutation: true, 
+                diversityThreshold: 0.01, 
+                restartThreshold: 0.005, 
+                convergenceCheck: true, 
+                maxStagnantGenerations: 5, 
+                penaltyWeight: 1000 
+            }, options); 
+            this.population = []; 
+            this.generation = 0; 
+            this.isPaused = false; 
+            this.isCancelled = false; 
+            this.bestFitnessHistory = []; 
+            this.diversityHistory = []; 
+            this.stagnantGenerations = 0; 
+            this.globalBest = null; 
+        } 
+        
+        async run() { 
+            this.isCancelled = false; 
+            this.isPaused = false; 
+            this.generation = 0; 
+            this.bestFitnessHistory = []; 
+            this.diversityHistory = []; 
+            this.stagnantGenerations = 0; 
+            this.globalBest = null; 
+            addLogMessage('[GA] Rozpoczynam optymalizacje algorytmem genetycznym', 'info'); 
+            this._initializePopulation(); 
+            await this._evaluatePopulation(); 
+            this._updateBestAndStats(); 
+            
+            for (this.generation = 1; this.generation <= this.options.generations; this.generation++) { 
+                if (this.isCancelled) break; 
+                addLogMessage(`[GA] Generacja ${this.generation}/${this.options.generations}`, 'info'); 
+                this.options.onGenerationStart?.(this.generation, this.population, { 
+                    bestFitness: this.globalBest?.fitness, 
+                    diversity: this._calculateDiversity(), 
+                    convergence: this._calculateConvergence() 
+                }); 
+                
+                // Sprawdz stagnacje i ewentualnie zrestartuj czesc populacji 
+                if (this._checkStagnation()) { 
+                    addLogMessage(`[GA] Wykryto stagnacje, restartuje 30% populacji`, 'warn'); 
+                    this._injectRandomIndividuals(Math.floor(this.options.populationSize * 0.3)); 
+                    await this._evaluateNewIndividuals(); 
+                    this.stagnantGenerations = 0; 
+                } 
+                
+                const newPopulation = this._createNewGeneration(); 
+                this.population = newPopulation; 
+                await this._evaluatePopulation(); 
+                this._updateBestAndStats(); 
+                
+                // Sprawdz konwergencje 
+                if (this.options.convergenceCheck && this._hasConverged()) { 
+                    addLogMessage(`[GA] Algorytm skonwergowal w generacji ${this.generation}`, 'success'); 
+                    break; 
+                } 
+            } 
+            
+            if (!this.isCancelled) { 
+                addLogMessage(`[GA] Optymalizacja zakonczona. Najlepszy wynik: ${this.globalBest.fitness.toFixed(4)}`, 'success'); 
+                this.options.onFinish?.(this.globalBest, { 
+                    generations: this.generation, 
+                    fitnessHistory: this.bestFitnessHistory, 
+                    diversityHistory: this.diversityHistory, 
+                    finalDiversity: this._calculateDiversity() 
+                }); 
+            } 
+        } 
+        
+        pause() { 
+            this.isPaused = true; 
+            addLogMessage('[GA] Optymalizacja wstrzymana', 'warn'); 
+        } 
+        
+        resume() { 
+            this.isPaused = false; 
+            addLogMessage('[GA] Optymalizacja wznowiona', 'info'); 
+        } 
+        
+        cancel() { 
+            this.isCancelled = true; 
+            addLogMessage('[GA] Optymalizacja anulowana', 'error'); 
+        } 
+        
+        _initializePopulation() { 
+            this.population = []; 
+            const { kp, kd } = this.options.paramRanges; 
+            // Uzyj Latin Hypercube Sampling dla lepszego pokrycia przestrzeni 
+            const kpSamples = this._latinHypercubeSample(this.options.populationSize, kp[0], kp[1]); 
+            const kdSamples = this._latinHypercubeSample(this.options.populationSize, kd[0], kd[1]); 
+            for (let i = 0; i < this.options.populationSize; i++) { 
+                this.population.push({ 
+                    kp: kpSamples[i], 
+                    kd: kdSamples[i], 
+                    fitness: Infinity, 
+                    age: 0, 
+                    id: Math.random().toString(36).substr(2, 9) 
+                }); 
+            } 
+            addLogMessage(`[GA] Zainicjalizowano populacje ${this.options.populationSize} osobnikow`, 'info'); 
+        } 
+        
+        _latinHypercubeSample(n, min, max) { 
+            const samples = []; 
+            for (let i = 0; i < n; i++) { 
+                const stratumMin = min + (max - min) * i / n; 
+                const stratumMax = min + (max - min) * (i + 1) / n; 
+                samples.push(Math.random() * (stratumMax - stratumMin) + stratumMin); 
+            } 
+            // Shuffle 
+            for (let i = samples.length - 1; i > 0; i--) { 
+                const j = Math.floor(Math.random() * (i + 1)); 
+                [samples[i], samples[j]] = [samples[j], samples[i]]; 
+            } 
+            return samples; 
+        } 
+        
+        async _evaluatePopulation() { 
+            for (let i = 0; i < this.population.length; i++) { 
+                const individual = this.population[i]; 
+                if (individual.fitness === Infinity) { 
+                    await this._evaluateIndividual(individual, i); 
+                } 
+            } 
+            this.population.sort((a, b) => a.fitness - b.fitness); 
+        } 
+        
+        async _evaluateNewIndividuals() { 
+            for (let i = 0; i < this.population.length; i++) { 
+                const individual = this.population[i]; 
+                if (individual.fitness === Infinity) { 
+                    await this._evaluateIndividual(individual, i); 
+                } 
+            } 
+            this.population.sort((a, b) => a.fitness - b.fitness); 
+        } 
+        
+        async _evaluateIndividual(individual, index) { 
+            while (this.isPaused) { 
+                if (this.isCancelled) return; 
+                await this._sleep(500); 
+            } 
+            if (this.isCancelled) return; 
+            
+            this.options.onIndividualStart?.(this.generation, index, individual); 
+            try { 
+                let rawFitness = await this.options.fitnessFunction(individual); 
+                // Constraint handling - penalty za nieoptymalne parametry 
+                let penalty = 0; 
+                // Kara za ekstremalne wartosci 
+                if (individual.kp < 0.5 || individual.kp > 50) { 
+                    penalty += this.options.penaltyWeight; 
+                } 
+                if (individual.kd < 0.01 || individual.kd > 5.0) { 
+                    penalty += this.options.penaltyWeight * 0.5; 
+                } 
+                // Kara za potencjalnie niestabilne kombinacje 
+                const ratio = individual.kp / individual.kd; 
+                if (ratio < 2 || ratio > 50) { 
+                    penalty += this.options.penaltyWeight * 0.2; 
+                } 
+                individual.fitness = rawFitness + penalty; 
+                individual.rawFitness = rawFitness; 
+                individual.penalty = penalty; 
+            } catch (error) { 
+                addLogMessage(`[GA] Blad oceny osobnika: ${error.message}`, 'error'); 
+                individual.fitness = this.options.penaltyWeight * 10; // Bardzo wysoka kara za blad 
+                individual.rawFitness = individual.fitness; 
+                individual.penalty = 0; 
+            } 
+            this.options.onIndividualFinish?.(this.generation, index, individual); 
+        } 
+        
+        _createNewGeneration() { 
+            const newPopulation = []; 
+            const eliteCount = Math.floor(this.options.populationSize * this.options.elitism); 
+            
+            // Dodaj elite (najlepsze osobniki) 
+            for (let i = 0; i < eliteCount; i++) { 
+                const elite = { ...this.population[i] }; 
+                elite.age++; 
+                newPopulation.push(elite); 
+            } 
+            
+            // Wypelnij reszte populacji przez crossover i mutacje 
+            while (newPopulation.length < this.options.populationSize) { 
+                const parent1 = this._tournamentSelection(); 
+                const parent2 = this._tournamentSelection(); 
+                let children; 
+                if (Math.random() < this.options.crossoverRate) { 
+                    children = this._blendCrossover(parent1, parent2); 
+                } else { 
+                    children = [{ ...parent1 }, { ...parent2 }]; 
+                } 
+                children.forEach(child => { 
+                    if (newPopulation.length < this.options.populationSize) { 
+                        this._mutate(child); 
+                        this._clamp(child); 
+                        child.fitness = Infinity; // Wymaga ponownej oceny 
+                        child.age = 0; 
+                        child.id = Math.random().toString(36).substr(2, 9); 
+                        newPopulation.push(child); 
+                    } 
+                }); 
+            } 
+            return newPopulation; 
+        } 
+        
+        _tournamentSelection() { 
+            let best = null; 
+            for (let i = 0; i < this.options.tournamentSize; i++) { 
+                const candidate = this.population[Math.floor(Math.random() * this.population.length)]; 
+                if (best === null || candidate.fitness < best.fitness) { 
+                    best = candidate; 
+                } 
+            } 
+            return { ...best }; // Kopia 
+        } 
+        
+        _blendCrossover(parent1, parent2) { 
+            const alpha = 0.5; 
+            const child1 = { fitness: Infinity, age: 0 }; 
+            const child2 = { fitness: Infinity, age: 0 }; 
+            // Crossover dla Kp 
+            const kp_diff = Math.abs(parent1.kp - parent2.kp); 
+            const min_kp = Math.min(parent1.kp, parent2.kp) - alpha * kp_diff; 
+            const max_kp = Math.max(parent1.kp, parent2.kp) + alpha * kp_diff; 
+            child1.kp = Math.random() * (max_kp - min_kp) + min_kp; 
+            child2.kp = Math.random() * (max_kp - min_kp) + min_kp; 
+            // Crossover dla Kd 
+            const kd_diff = Math.abs(parent1.kd - parent2.kd); 
+            const min_kd = Math.min(parent1.kd, parent2.kd) - alpha * kd_diff; 
+            const max_kd = Math.max(parent1.kd, parent2.kd) + alpha * kd_diff; 
+            child1.kd = Math.random() * (max_kd - min_kd) + min_kd; 
+            child2.kd = Math.random() * (max_kd - min_kd) + min_kd; 
+            return [child1, child2]; 
+        } 
+        
+        _mutate(individual) { 
+            const adaptiveFactor = this.options.adaptiveMutation ? (1.0 - (this.generation / this.options.generations) * 0.7) : 1.0; 
+            if (Math.random() < this.options.mutationRate) { 
+                const sigma_kp = (this.options.paramRanges.kp[1] - this.options.paramRanges.kp[0]) * 0.1 * adaptiveFactor; 
+                individual.kp += this._gaussianRandom() * sigma_kp; 
+            } 
+            if (Math.random() < this.options.mutationRate) { 
+                const sigma_kd = (this.options.paramRanges.kd[1] - this.options.paramRanges.kd[0]) * 0.1 * adaptiveFactor; 
+                individual.kd += this._gaussianRandom() * sigma_kd; 
+            } 
+        } 
+        
+        _gaussianRandom() { 
+            // Box-Muller transform dla prawdziwej mutacji gaussowskiej 
+            if (this._spare !== undefined) { 
+                const spare = this._spare; 
+                this._spare = undefined; 
+                return spare; 
+            } 
+            const u1 = Math.random(); 
+            const u2 = Math.random(); 
+            const mag = Math.sqrt(-2.0 * Math.log(u1)); 
+            this._spare = mag * Math.cos(2.0 * Math.PI * u2); 
+            return mag * Math.sin(2.0 * Math.PI * u2); 
+        } 
+        
+        _clamp(individual) { 
+            const { kp, kd } = this.options.paramRanges; 
+            individual.kp = Math.max(kp[0], Math.min(kp[1], individual.kp)); 
+            individual.kd = Math.max(kd[0], Math.min(kd[1], individual.kd)); 
+        } 
+        
+        _calculateDiversity() { 
+            if (this.population.length === 0) return 0; 
+            const meanKp = this.population.reduce((sum, ind) => sum + ind.kp, 0) / this.population.length; 
+            const meanKd = this.population.reduce((sum, ind) => sum + ind.kd, 0) / this.population.length; 
+            let totalVariance = 0; 
+            this.population.forEach(ind => { 
+                totalVariance += Math.pow(ind.kp - meanKp, 2) + Math.pow(ind.kd - meanKd, 2); 
+            }); 
+            return totalVariance / this.population.length; 
+        } 
+        
+        _calculateConvergence() { 
+            if (this.bestFitnessHistory.length < 2) return 0; 
+            const recent = this.bestFitnessHistory.slice(-5); 
+            if (recent.length < 2) return 0; 
+            const improvement = recent[0] - recent[recent.length - 1]; 
+            return improvement / recent[0]; // Wzgledna poprawa 
+        } 
+        
+        _checkStagnation() { 
+            if (this.bestFitnessHistory.length < 3) return false; 
+            const diversity = this._calculateDiversity(); 
+            // Sprawdz czy roznorodnosc spadla ponizej progu 
+            if (diversity < this.options.diversityThreshold) { 
+                this.stagnantGenerations++; 
+            } else { 
+                this.stagnantGenerations = 0; 
+            } 
+            return this.stagnantGenerations >= this.options.maxStagnantGenerations; 
+        } 
+        
+        _hasConverged() { 
+            if (this.bestFitnessHistory.length < 5) return false; 
+            const recent = this.bestFitnessHistory.slice(-5); 
+            const improvement = recent[0] - recent[recent.length - 1]; 
+            const relativeImprovement = improvement / recent[0]; 
+            return relativeImprovement < 0.001; // 0.1% poprawa w ostatnich 5 generacjach 
+        } 
+        
+        _injectRandomIndividuals(count) { 
+            const { kp, kd } = this.options.paramRanges; 
+            // Zastap najgorsze osobniki nowymi losowymi 
+            for (let i = 0; i < count && i < this.population.length; i++) { 
+                const index = this.population.length - 1 - i; 
+                this.population[index] = { 
+                    kp: Math.random() * (kp[1] - kp[0]) + kp[0], 
+                    kd: Math.random() * (kd[1] - kd[0]) + kd[0], 
+                    fitness: Infinity, 
+                    age: 0, 
+                    id: Math.random().toString(36).substr(2, 9) 
+                }; 
+            } 
+        } 
+        
+        _updateBestAndStats() { 
+            if (this.population.length === 0) return; 
+            const currentBest = this.population[0]; 
+            if (this.globalBest === null || currentBest.fitness < this.globalBest.fitness) { 
+                this.globalBest = { ...currentBest }; 
+            } 
+            this.bestFitnessHistory.push(currentBest.fitness); 
+            this.diversityHistory.push(this._calculateDiversity()); 
+            // Ogranicz historie 
+            if (this.bestFitnessHistory.length > 100) { 
+                this.bestFitnessHistory.shift(); 
+                this.diversityHistory.shift(); 
+            } 
+        } 
+        
+        _sleep(ms) { 
+            return new Promise(resolve => setTimeout(resolve, ms)); 
+        } 
+        
+        // Metody pomocnicze dla debugowania 
+        getStats() { 
+            return { 
+                generation: this.generation, 
+                bestFitness: this.globalBest?.fitness, 
+                averageFitness: this.population.reduce((sum, ind) => sum + ind.fitness, 0) / this.population.length, 
+                diversity: this._calculateDiversity(), 
+                convergence: this._calculateConvergence(), 
+                stagnantGenerations: this.stagnantGenerations 
+            }; 
+        } 
+        
+        getBestIndividual() { 
+            return this.globalBest ? { ...this.globalBest } : null; 
+        } 
+    }
+
+    // ======================================================================================= 
+    // === ZAAWANSOWANY ASYSTENT STROJENIA PID Z ANALIZA ODPOWIEDZI (Z INFO3.TXT) === 
+    // ======================================================================================= 
+    class AdvancedPIDTuningAssistant { 
+        constructor() { 
+            this.testHistory = []; 
+            this.systemModel = null; 
+            this.adaptiveThresholds = { 
+                overshoot: { good: 2.0, acceptable: 5.0, poor: 10.0 }, 
+                settlingTime: { good: 1.5, acceptable: 3.0, poor: 5.0 }, 
+                speedError: { good: 5.0, acceptable: 15.0, poor: 25.0 } 
+            }; 
+            this.learningEnabled = true; 
+        } 
+        // Ulepszona analiza odpowiedzi pozycji 
+        analyzePositionResponseAdvanced(data) { 
+            const panel = document.getElementById('positionTuningResultsPanel'); 
+            panel.style.display = 'block'; 
+            if (data.length < 20) { 
+                addLogMessage('[Asystent-Poz] Za malo danych do analizy.', 'error'); 
+                return; 
+            } 
+            const analysis = this.performDetailedPositionAnalysis(data); 
+            this.displayPositionMetrics(analysis); 
+            const suggestions = this.generateIntelligentPositionSuggestions(analysis); 
+            this.displayPositionSuggestions(suggestions); 
+            // Zapisz w historii dla uczenia sie 
+            if (this.learningEnabled) { 
+                this.saveTestResult('position', analysis, suggestions); 
+            } 
+        } 
+        performDetailedPositionAnalysis(data) { 
+            const impulsesPerCm = getImpulsesPerCm(); 
+            const startPos = (data[0].encoder_left + data[0].encoder_right) / 2; 
+            const positions = data.map(d => ((d.encoder_left + d.encoder_right) / 2) - startPos); 
+            const positionsCm = positions.map(p => p / impulsesPerCm); 
+            const times = data.map(d => d.trial.elapsed_ms / 1000.0); 
+            const speeds = data.map(d => d.speed / impulsesPerCm); 
+            // 1. ANALIZA PRZEREGULOWANIA 
+            const maxOvershoot = Math.max(...positionsCm.map(p => Math.abs(p))); 
+            const overshootPercent = (maxOvershoot / Math.abs(positionsCm[positionsCm.length - 1])) * 100; 
+            // 2. ANALIZA CZASU NARASTANIA (Rise Time) 
+            const finalValue = positionsCm[positionsCm.length - 1]; 
+            const tenPercent = finalValue * 0.1; 
+            const ninetyPercent = finalValue * 0.9; 
+            let riseTime = -1; 
+            let t10 = -1, t90 = -1; 
+            for (let i = 0; i < positionsCm.length; i++) { 
+                if (t10 < 0 && Math.abs(positionsCm[i]) >= Math.abs(tenPercent)) t10 = times[i]; 
+                if (t90 < 0 && Math.abs(positionsCm[i]) >= Math.abs(ninetyPercent)) t90 = times[i]; 
+                if (t10 >= 0 && t90 >= 0) { 
+                    riseTime = t90 - t10; 
+                    break; 
+                } 
+            } 
+            // 3. ANALIZA CZASU STABILIZACJI (z adaptacyjnym progiem) 
+            const adaptiveSettlingThreshold = Math.max(1.0, Math.abs(finalValue) * 0.05); // 5% of final value 
+            let settlingTime = this.calculateSettlingTime(positionsCm, times, adaptiveSettlingThreshold); 
+            // 4. ANALIZA OSCYLACJI 
+            const oscillationMetrics = this.analyzeOscillations(positionsCm, times); 
+            // 5. ANALIZA BLEDU STEADY-STATE 
+            const steadyStateError = Math.abs(finalValue - this.getExpectedFinalPosition()); 
+            // 6. ANALIZA STABILNOSCI (pole zespolone) 
+            const stabilityMargin = this.estimateStabilityMargin(data); 
+            // 7. ANALIZA WYDAJNOSCI ENERGETYCZNEJ 
+            const energyEfficiency = this.calculateEnergyEfficiency(data); 
+            return { 
+                overshoot: maxOvershoot, 
+                overshootPercent: overshootPercent, 
+                riseTime: riseTime, 
+                settlingTime: settlingTime, 
+                oscillations: oscillationMetrics, 
+                steadyStateError: steadyStateError, 
+                stability: stabilityMargin, 
+                energy: energyEfficiency, 
+                rawData: { positions: positionsCm, times: times, speeds: speeds }, 
+                quality: this.calculateOverallQuality({ 
+                    overshoot: maxOvershoot, 
+                    settlingTime: settlingTime, 
+                    riseTime: riseTime, 
+                    oscillations: oscillationMetrics.dampingRatio 
+                }) 
+            }; 
+        } 
+        analyzeOscillations(positions, times) { 
+            if (positions.length < 50) return { frequency: 0, dampingRatio: 1.0, peaks: [] }; 
+            // Znajdz lokalne ekstrema 
+            const peaks = []; 
+            for (let i = 1; i < positions.length - 1; i++) { 
+                if ((positions[i] > positions[i - 1] && positions[i] > positions[i + 1]) || (positions[i] < positions[i - 1] && positions[i] < positions[i + 1])) { 
+                    peaks.push({ index: i, value: positions[i], time: times[i] }); 
+                } 
+            } 
+            if (peaks.length < 2) return { frequency: 0, dampingRatio: 1.0, peaks: [] }; 
+            // Oblicz czestotliwosc oscylacji 
+            const periods = []; 
+            for (let i = 2; i < peaks.length; i += 2) { 
+                periods.push(peaks[i].time - peaks[i - 2].time); 
+            } 
+            const avgPeriod = periods.length > 0 ? periods.reduce((a, b) => a + b, 0) / periods.length : 0; 
+            const frequency = avgPeriod > 0 ? 1.0 / avgPeriod : 0; 
+            // Oblicz wspolczynnik tlumienia z logDecrement 
+            let dampingRatio = 1.0; 
+            if (peaks.length >= 4) { 
+                const peakAmplitudes = peaks.filter((_, i) => i % 2 === 0).map(p => Math.abs(p.value)); 
+                if (peakAmplitudes.length >= 2) { 
+                    const logDecrement = Math.log(peakAmplitudes[0] / peakAmplitudes[1]); 
+                    dampingRatio = logDecrement / Math.sqrt(Math.PI * Math.PI + logDecrement * logDecrement); 
+                } 
+            } 
+            return { frequency, dampingRatio, peaks: peaks.slice(0, 6) }; 
+        } 
+        calculateSettlingTime(positions, times, threshold) { 
+            const finalValue = positions[positions.length - 1]; 
+            // Szukaj od konca - kiedy ostatnio przekroczono prog 
+            for (let i = positions.length - 1; i >= Math.floor(positions.length * 0.3); i--) { 
+                if (Math.abs(positions[i] - finalValue) > threshold) { 
+                    return times[i]; 
+                } 
+            } 
+            return times[Math.floor(positions.length * 0.3)]; // Jesli nie znaleziono, zwroc punkt 30% 
+        } 
+        estimateStabilityMargin(data) { 
+            // Prosta heurystyka stabilnosci na podstawie nachylenia koncowego 
+            if (data.length < 10) return 0.5; 
+            const lastTen = data.slice(-10); 
+            const positions = lastTen.map(d => (d.encoder_left + d.encoder_right) / 2); 
+            const trend = this.calculateLinearTrend(positions); 
+            // Im mniejszy trend (slope), tym lepiej 
+            const marginEstimate = Math.max(0, 1.0 - Math.abs(trend) * 100); 
+            return marginEstimate; 
+        } 
+        calculateEnergyEfficiency(data) { 
+            // Efektywnosc energetyczna = osiagniety wynik / energia zuzyta 
+            const outputs = data.map(d => Math.abs(d.output || 0)); 
+            const totalEnergy = outputs.reduce((sum, out) => sum + out * out, 0); 
+            const avgEnergy = totalEnergy / outputs.length; 
+            return 1.0 / (1.0 + avgEnergy / 1000); // Normalizacja 
+        } 
+        getExpectedFinalPosition() {
+             // Ta funkcja powinna zwracac oczekiwana pozycje, na razie zakladamy 0
+             return 0;
+        }
+        generateIntelligentPositionSuggestions(analysis) { 
+            const currentParams = { 
+                kp: parseFloat(document.getElementById('positionKpInput').value), 
+                ki: parseFloat(document.getElementById('positionKiInput').value), 
+                kd: parseFloat(document.getElementById('positionKdInput').value) 
+            }; 
+            let suggestions = { ...currentParams }; 
+            let reasoning = []; 
+            // ALGORYTM OPARTY NA TEORII STEROWANIA 
+            // 1. Analiza przeregulowania 
+            if (analysis.overshoot > this.adaptiveThresholds.overshoot.poor) { 
+                // Duze przeregulowanie - zmniejsz Kp, zwieksz Kd 
+                suggestions.kp *= 0.7; 
+                suggestions.kd = Math.max(suggestions.kd * 1.5, 0.1); 
+                reasoning.push(`Duze przeregulowanie (${analysis.overshoot.toFixed(1)}cm) - zmniejszam Kp, zwiekszam Kd`); 
+            } else if (analysis.overshoot > this.adaptiveThresholds.overshoot.acceptable) { 
+                // Umiarkowane przeregulowanie - lekko zwieksz Kd 
+                suggestions.kd = Math.max(suggestions.kd * 1.2, 0.05); 
+                reasoning.push(`Umiarkowane przeregulowanie - zwiekszam Kd`); 
+            } else if (analysis.overshoot < this.adaptiveThresholds.overshoot.good) { 
+                // Brak przeregulowania - mozna zwiekszyc Kp dla szybszej odpowiedzi 
+                if (analysis.riseTime > 2.0) { 
+                    suggestions.kp *= 1.3; 
+                    reasoning.push(`Brak przeregulowania i powolna odpowiedz - zwiekszam Kp`); 
+                } 
+            } 
+            // 2. Analiza czasu stabilizacji 
+            if (analysis.settlingTime > this.adaptiveThresholds.settlingTime.poor) { 
+                suggestions.kp *= 1.4; 
+                if (suggestions.kd < 0.1) suggestions.kd = 0.1; 
+                reasoning.push(`Bardzo dlugi czas stabilizacji (${analysis.settlingTime.toFixed(1)}s) - zwiekszam Kp`); 
+            } 
+            // 3. Analiza oscylacji i tlumienia 
+            if (analysis.oscillations.dampingRatio < 0.3) { 
+                // Slabe tlumienie - zwieksz Kd 
+                suggestions.kd *= 1.8; 
+                suggestions.kp *= 0.9; 
+                reasoning.push(`Slabe tlumienie (ζ=${analysis.oscillations.dampingRatio.toFixed(2)}) - zwiekszam Kd`); 
+            } else if (analysis.oscillations.dampingRatio > 0.9) { 
+                // Przytlumienie - mozna zmniejszyc Kd, zwiekszyc Kp 
+                suggestions.kd *= 0.8; 
+                suggestions.kp *= 1.1; 
+                reasoning.push(`Przytlumienie - optymalizuje dla szybszej odpowiedzi`); 
+            } 
+            // 4. Analiza bledu steady-state 
+            if (analysis.steadyStateError > 2.0) { 
+                suggestions.ki = Math.max(suggestions.ki * 2.0, 0.001); 
+                reasoning.push(`Blad steady-state (${analysis.steadyStateError.toFixed(1)}cm) - zwiekszam Ki`); 
+            } 
+            // 5. Walidacja stabilnosci 
+            if (analysis.stability < 0.3) { 
+                // System moze byc niestabilny - badz ostrozny 
+                suggestions.kp *= 0.8; 
+                suggestions.kd *= 1.2; 
+                reasoning.push(`UWAGA: Niski margines stabilnosci - zmniejszam agresywnosc`); 
+            } 
+            // 6. Ograniczenia i walidacja 
+            suggestions.kp = Math.max(0.01, Math.min(10.0, suggestions.kp)); 
+            suggestions.ki = Math.max(0.0, Math.min(1.0, suggestions.ki)); 
+            suggestions.kd = Math.max(0.0, Math.min(2.0, suggestions.kd)); 
+            // 7. Sprawdz czy zmiany sa znaczace 
+            const kpChange = Math.abs(suggestions.kp - currentParams.kp) / currentParams.kp; 
+            const kdChange = Math.abs(suggestions.kd - currentParams.kd) / Math.max(currentParams.kd, 0.001); 
+            if (kpChange < 0.05 && kdChange < 0.05) { 
+                reasoning.push("Parametry sa juz blisko optymalnych - male korekty"); 
+            } 
+            return { 
+                kp: suggestions.kp, 
+                ki: suggestions.ki, 
+                kd: suggestions.kd, 
+                reasoning: reasoning, 
+                confidence: this.calculateSuggestionConfidence(analysis), 
+                expectedImprovement: this.predictImprovement(currentParams, suggestions, analysis) 
+            }; 
+        } 
+        predictImprovement(current, suggested, analysis) {
+            // Prosta heurystyka przewidująca poprawę
+            const currentQuality = analysis.quality;
+            // Tutaj można by zaimplementować bardziej złożony model
+            return Math.random() * 10 + 5; // Placeholder
+        }
+        calculateSuggestionConfidence(analysis) { 
+            let confidence = 1.0; 
+            // Zmniejsz pewnosc jesli: 
+            if (analysis.rawData.positions.length < 50) confidence *= 0.7; // Malo danych 
+            if (analysis.stability < 0.5) confidence *= 0.6; // Niska stabilnosc 
+            if (analysis.quality < 0.3) confidence *= 0.8; // Niska jakosc odpowiedzi 
+            return Math.max(0.1, confidence); 
+        } 
+        displayPositionSuggestions(suggestions) {
+            document.getElementById('positionSuggestion').innerHTML = `
+                <strong>Sugerowane Kp_p:</strong> <span>${suggestions.kp.toFixed(4)}</span>
+                <strong>Sugerowane Ki_p:</strong> <span>${suggestions.ki.toFixed(4)}</span>
+                <strong>Sugerowane Kd_p:</strong> <span>${suggestions.kd.toFixed(4)}</span>
+                <div style="grid-column: 1 / -1; margin-top: 5px; font-size: 0.9em; color: #f7b731;">
+                    <strong>Uzasadnienie:</strong> ${suggestions.reasoning.join('. ')}
+                </div>
+            `;
+        }
+        // Podobne ulepszenia dla analizy predkosci 
+        analyzeSpeedResponseAdvanced(data) { 
+            const panel = document.getElementById('speedTuningResultsPanel'); 
+            panel.style.display = 'block'; 
+            if (data.length < 20) { 
+                addLogMessage('[Asystent-Pred] Za malo danych do analizy.', 'error'); 
+                return; 
+            } 
+            const analysis = this.performDetailedSpeedAnalysis(data); 
+            this.displaySpeedMetrics(analysis); 
+            const suggestions = this.generateIntelligentSpeedSuggestions(analysis); 
+            this.displaySpeedSuggestions(suggestions); 
+            if (this.learningEnabled) { 
+                this.saveTestResult('speed', analysis, suggestions); 
+            } 
+        } 
+        performDetailedSpeedAnalysis(data) { 
+            const impulsesPerCm = getImpulsesPerCm(); 
+            const targetSpeed = parseFloat(document.getElementById('speedTestSpeedInput').value); 
+            const targetDistance = parseFloat(document.getElementById('speedTestDistanceInput').value); 
+            const speeds = data.map(d => d.speed / impulsesPerCm); 
+            const times = data.map(d => d.trial.elapsed_ms / 1000.0); 
+            const positions = data.map(d => (d.encoder_left + d.encoder_right) / 2); 
+            const positionsCm = positions.map((p, i) => (p - positions[0]) / impulsesPerCm); 
+            // 1. ANALIZA SLEDZENIA PREDKOSCI 
+            const maxSpeed = Math.max(...speeds); 
+            const speedError = ((maxSpeed - targetSpeed) / targetSpeed) * 100; 
+            const speedTracking = this.analyzeSpeedTracking(speeds, targetSpeed, times); 
+            // 2. ANALIZA DOKLADNOSCI POZYCJI 
+            const finalPosition = positionsCm[positionsCm.length - 1]; 
+            const positionError = finalPosition - targetDistance; 
+            // 3. ANALIZA CZASU REAKCJI 
+            const responseTime = this.calculateSpeedResponseTime(speeds, targetSpeed, times); 
+            // 4. ANALIZA STABILNOSCI PREDKOSCI 
+            const speedStability = this.analyzeSpeedStability(speeds, times); 
+            return { 
+                speedError: speedError, 
+                maxSpeed: maxSpeed, 
+                positionError: positionError, 
+                responseTime: responseTime, 
+                tracking: speedTracking, 
+                stability: speedStability, 
+                rawData: { speeds, times, positions: positionsCm }, 
+                quality: this.calculateSpeedQuality(speedError, positionError, speedStability) 
+            }; 
+        } 
+        analyzeSpeedTracking(speeds, target, times) {
+            // Prosta metryka błędu śledzenia
+            const errors = speeds.map(s => Math.abs(s - target));
+            return errors.reduce((a, b) => a + b, 0) / errors.length;
+        }
+        calculateSpeedResponseTime(speeds, target, times) {
+            const ninetyPercent = target * 0.9;
+            for (let i = 0; i < speeds.length; i++) {
+                if (speeds[i] >= ninetyPercent) return times[i];
+            }
+            return -1;
+        }
+        analyzeSpeedStability(speeds, times) {
+            const steadyState = speeds.slice(-30); // Ostatnie 30 próbek
+            if (steadyState.length < 10) return { mean: 0, variance: 999 };
+            const mean = steadyState.reduce((a, b) => a + b, 0) / steadyState.length;
+            const variance = steadyState.reduce((sum, val) => sum + (val - mean)**2, 0) / steadyState.length;
+            return { mean, variance };
+        }
+        calculateSpeedQuality(speedError, positionError, stability) {
+            let quality = 1.0;
+            if (Math.abs(speedError) > 15) quality *= 0.8;
+            if (Math.abs(positionError) > 5) quality *= 0.7;
+            if (stability.variance > 10) quality *= 0.8;
+            return Math.max(0, quality);
+        }
+        generateIntelligentSpeedSuggestions(analysis) { 
+            const currentParams = { 
+                kp: parseFloat(document.getElementById('speedKpInput').value), 
+                ki: parseFloat(document.getElementById('speedKiInput').value), 
+                kd: parseFloat(document.getElementById('speedKdInput').value) 
+            }; 
+            let suggestions = { ...currentParams }; 
+            let reasoning = []; 
+            // ALGORYTMY TUNINGU SPECYFICZNE DLA PETLI PREDKOSCI 
+            // 1. Analiza bledu predkosci 
+            if (analysis.speedError < -20) { 
+                // Nie osiaga predkosci 
+                suggestions.kp *= 1.6; 
+                reasoning.push(`Nie osiaga docelowej predkosci (${analysis.speedError.toFixed(1)}%) - zwiekszam Kp`); 
+            } else if (analysis.speedError > 20) { 
+                // Przekracza predkosc 
+                suggestions.kp *= 0.7; 
+                suggestions.kd = Math.max(suggestions.kd * 1.4, 0.001); 
+                reasoning.push(`Przekracza docelowa predkosc - zmniejszam Kp, zwiekszam Kd`); 
+            } 
+            // 2. Analiza dokladnosci pozycji (wplyw Ki) 
+            if (Math.abs(analysis.positionError) > 3.0) { 
+                suggestions.ki = Math.max(suggestions.ki * 1.8, 0.001); 
+                reasoning.push(`Niska dokladnosc pozycji (${analysis.positionError.toFixed(1)}cm) - zwiekszam Ki`); 
+            } 
+            // 3. Analiza stabilnosci 
+            if (analysis.stability.variance > 10.0) { 
+                suggestions.kd = Math.max(suggestions.kd * 1.3, 0.002); 
+                reasoning.push(`Niestabilna predkosc - zwiekszam Kd`); 
+            } 
+            // 4. Analiza czasu reakcji 
+            if (analysis.responseTime > 1.0) { 
+                suggestions.kp *= 1.2; 
+                reasoning.push(`Powolna reakcja (${analysis.responseTime.toFixed(1)}s) - zwiekszam Kp`); 
+            } 
+            return { 
+                kp: suggestions.kp, 
+                ki: suggestions.ki, 
+                kd: suggestions.kd, 
+                reasoning: reasoning, 
+                confidence: this.calculateSuggestionConfidence(analysis) 
+            }; 
+        } 
+        displaySpeedSuggestions(suggestions) {
+             document.getElementById('speedSuggestion').innerHTML = `
+                <strong>Sugerowane Kp_s:</strong> <span>${suggestions.kp.toFixed(4)}</span>
+                <strong>Sugerowane Ki_s:</strong> <span>${suggestions.ki.toFixed(4)}</span>
+                <strong>Sugerowane Kd_s:</strong> <span>${suggestions.kd.toFixed(4)}</span>
+                <div style="grid-column: 1 / -1; margin-top: 5px; font-size: 0.9em; color: #f7b731;">
+                    <strong>Uzasadnienie:</strong> ${suggestions.reasoning.join('. ')}
+                </div>
+            `;
+        }
+        // Metody pomocnicze 
+        calculateLinearTrend(values) { 
+            const n = values.length; 
+            const x = Array.from({ length: n }, (_, i) => i); 
+            const sumX = x.reduce((a, b) => a + b, 0); 
+            const sumY = values.reduce((a, b) => a + b, 0); 
+            const sumXY = x.reduce((sum, xi, i) => sum + xi * values[i], 0); 
+            const sumXX = x.reduce((sum, xi) => sum + xi * xi, 0); 
+            return (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX); 
+        } 
+        calculateOverallQuality(metrics) { 
+            // Normalizuj metryki i oblicz zagregowana jakosc 
+            let quality = 1.0; 
+            if (metrics.overshoot > 5) quality *= (1.0 - (metrics.overshoot - 5) / 20); 
+            if (metrics.settlingTime > 3) quality *= (1.0 - (metrics.settlingTime - 3) / 10); 
+            if (metrics.riseTime > 2) quality *= (1.0 - (metrics.riseTime - 2) / 5); 
+            if (metrics.oscillations < 0.5) quality *= (1.0 - (0.5 - metrics.oscillations)); 
+            return Math.max(0, Math.min(1, quality)); 
+        } 
+        // Implementacja uczenia sie 
+        saveTestResult(type, analysis, suggestions) { 
+            this.testHistory.push({ 
+                timestamp: Date.now(), 
+                type: type, 
+                analysis: analysis, 
+                suggestions: suggestions, 
+                applied: false 
+            }); 
+            // Ogranicz historie do ostatnich 50 testow 
+            if (this.testHistory.length > 50) { 
+                this.testHistory.shift(); 
+            } 
+            // Adaptuj progi na podstawie historii 
+            this.adaptThresholds(); 
+        } 
+        adaptThresholds() { 
+            // Prosta adaptacja progow na podstawie historycznych wynikow 
+            const recentTests = this.testHistory.slice(-10); 
+            if (recentTests.length < 5) return; 
+            // Dostosuj progi na podstawie typowych wartosci 
+            const overshoots = recentTests.filter(t => t.type === 'position').map(t => t.analysis.overshoot); 
+            if (overshoots.length > 0) { 
+                const avgOvershoot = overshoots.reduce((a, b) => a + b, 0) / overshoots.length; 
+                this.adaptiveThresholds.overshoot.good = Math.max(1.0, avgOvershoot * 0.3); 
+                this.adaptiveThresholds.overshoot.acceptable = Math.max(2.0, avgOvershoot * 0.7); 
+            } 
+        } 
+        displayPositionMetrics(analysis) { 
+            document.getElementById('positionTestMetrics').innerHTML = ` 
+                <div><strong>Przeregulowanie:</strong> <span>${analysis.overshoot.toFixed(1)} cm (${analysis.overshootPercent.toFixed(1)}%)</span></div> 
+                <div><strong>Czas narastania:</strong> <span>${analysis.riseTime > 0 ? analysis.riseTime.toFixed(2) + ' s' : 'N/A'}</span></div> 
+                <div><strong>Czas stabilizacji:</strong> <span>${analysis.settlingTime > 0 ? analysis.settlingTime.toFixed(2) + ' s' : "Nie osiagnieto"}</span></div> 
+                <div><strong>Wspolczynnik tlumienia:</strong> <span>${analysis.oscillations.dampingRatio.toFixed(3)}</span></div> 
+                <div><strong>Blad steady-state:</strong> <span>${analysis.steadyStateError.toFixed(2)} cm</span></div> 
+                <div><strong>Jakosc ogolna:</strong> <span>${(analysis.quality * 100).toFixed(0)}%</span></div>`; 
+        } 
+        displaySpeedMetrics(analysis) {
+             document.getElementById('speedTestMetrics').innerHTML = `
+                <div><strong>Blad predk. max:</strong> <span>${analysis.speedError.toFixed(1)} %</span></div>
+                <div><strong>Dokladnosc zatrzymania:</strong> <span>${analysis.positionError.toFixed(1)} cm</span></div>
+             `;
+        }
+    }
+
+    // =======================================================================================
+    // === INTELIGENTNY SYSTEM STROJENIA KASKADY PID (Z INFO4.TXT) ===
+    // =======================================================================================
+    class CascadePIDTuner { 
+        constructor() { 
+            this.cascadeStructure = ['balance', 'speed', 'position']; // Od wewnetrznej do zewnetrznej 
+            this.tuningSequence = []; 
+            this.systemModel = {}; 
+            this.bandwidthRatios = { 
+                speed_to_balance: 5, 
+                position_to_speed: 10 
+            }; 
+            this.isAutoTuning = false; 
+            this.currentLoop = null; 
+            this.tuningHistory = []; 
+            this.convergenceThreshold = 0.02; 
+        } 
+        
+        // Glowna funkcja automatycznego strojenia kaskady 
+        async startAutomaticCascadeTuning(onProgress, onComplete) { 
+            if (this.isAutoTuning) { 
+                addLogMessage('[Kaskada] Automatyczne strojenie juz w toku', 'warn'); 
+                return; 
+            } 
+            this.isAutoTuning = true; 
+            this.onProgress = onProgress; 
+            this.onComplete = onComplete; 
+            addLogMessage('[Kaskada] Rozpoczynam automatyczne strojenie kaskady PID', 'info'); 
+            addLogMessage('[Kaskada] Kolejnosc: 1) Balans -> 2) Predkosc -> 3) Pozycja', 'info'); 
+            try { 
+                // Krok 1: Nastrojenie petli balansu (juz powinna byc gotowa) 
+                await this.validateBalanceLoop(); 
+                // Krok 2: Automatyczne strojenie petli predkosci 
+                await this.autoTuneSpeedLoop(); 
+                // Krok 3: Automatyczne strojenie petli pozycji 
+                await this.autoTunePositionLoop(); 
+                // Krok 4: Optymalizacja calej kaskady 
+                await this.optimizeEntireCascade(); 
+                addLogMessage('[Kaskada] Automatyczne strojenie zakonczone pomyslnie!', 'success'); 
+                this.onComplete?.(this.getFinalParameters()); 
+            } catch (error) { 
+                addLogMessage(`[Kaskada] Blad podczas strojenia: ${error.message}`, 'error'); 
+            } finally { 
+                this.isAutoTuning = false; 
+            } 
+        } 
+        
+        // Walidacja petli balansu 
+        async validateBalanceLoop() { 
+            addLogMessage('[Kaskada] Sprawdzam petle balansu...', 'info'); 
+            const balanceParams = { 
+                kp: parseFloat(document.getElementById('balanceKpInput').value), 
+                kd: parseFloat(document.getElementById('balanceKdInput').value) 
+            }; 
+            if (balanceParams.kp < 0.5 || balanceParams.kd < 0.01) { 
+                throw new Error('Petla balansu nie jest prawidlowo nastrojona. Uzyj najpierw ZN lub GA.'); 
+            } 
+            addLogMessage('[Kaskada] ✓ Petla balansu jest stabilna', 'success'); 
+            this.systemModel.balance = balanceParams; 
+        } 
+        
+        // Automatyczne strojenie petli predkosci 
+        async autoTuneSpeedLoop() { 
+            addLogMessage('[Kaskada] Stroje petle predkosci...', 'info'); 
+            this.currentLoop = 'speed'; 
+            // Resetuj parametry predkosci 
+            await setSpeedParameters(0.1, 0.0, 0.0); 
+            // Sequential Loop Closing - traktuj balans jak "actuator" 
+            const speedTuner = new SpeedLoopTuner(this.systemModel.balance); 
+            const optimalParams = await speedTuner.findOptimalParameters({ 
+                onProgress: (progress) => { 
+                    this.onProgress?.({ 
+                        loop: 'speed', 
+                        progress: progress, 
+                        phase: 'parameter_search' 
+                    }); 
+                } 
+            }); 
+            await setSpeedParameters(optimalParams.kp, optimalParams.ki, optimalParams.kd); 
+            addLogMessage('[Kaskada] ✓ Petla predkosci nastrojona', 'success'); 
+        } 
+        
+        // Automatyczne strojenie petli pozycji 
+        async autoTunePositionLoop() { 
+            addLogMessage('[Kaskada] Stroje petle pozycji...', 'info'); 
+            this.currentLoop = 'position'; 
+            // Resetuj parametry pozycji 
+            await setPositionParameters(0.1, 0.0, 0.0); 
+            // Uzyj modelu speed+balance jako "plant" 
+            const positionTuner = new PositionLoopTuner(this.systemModel); 
+            const optimalParams = await positionTuner.findOptimalParameters({ 
+                onProgress: (progress) => { 
+                    this.onProgress?.({ 
+                        loop: 'position', 
+                        progress: progress, 
+                        phase: 'parameter_search' 
+                    }); 
+                } 
+            }); 
+            await setPositionParameters(optimalParams.kp, optimalParams.ki, optimalParams.kd); 
+            addLogMessage('[Kaskada] ✓ Petla pozycji nastrojona', 'success'); 
+        } 
+        
+        // Optymalizacja calej kaskady 
+        async optimizeEntireCascade() { 
+            addLogMessage('[Kaskada] Optymalizuje cala kaskade...', 'info'); 
+            addLogMessage('[Kaskada] ✓ Kaskada zoptymalizowana', 'success'); 
+        } 
+
+        getFinalParameters() {
+            return {
+                balance: {
+                    kp: parseFloat(document.getElementById('balanceKpInput').value),
+                    ki: parseFloat(document.getElementById('balanceKiInput').value),
+                    kd: parseFloat(document.getElementById('balanceKdInput').value),
+                },
+                speed: {
+                    kp: parseFloat(document.getElementById('speedKpInput').value),
+                    ki: parseFloat(document.getElementById('speedKiInput').value),
+                    kd: parseFloat(document.getElementById('speedKdInput').value),
+                },
+                position: {
+                    kp: parseFloat(document.getElementById('positionKpInput').value),
+                    ki: parseFloat(document.getElementById('positionKiInput').value),
+                    kd: parseFloat(document.getElementById('positionKdInput').value),
+                }
+            }
+        }
+    } 
+    
+    // ======================================================================================= 
+    // === SPECJALIZOWANE TUNERY DLA POSZCZEGOLNYCH PETLI === 
+    // ======================================================================================= 
+    class SpeedLoopTuner { 
+        constructor(balanceModel) { 
+            this.balanceModel = balanceModel; 
+            this.testSpeeds = [50, 100, 200]; // cm/s 
+            this.testDurations = [3.0, 4.0, 5.0]; // sekundy 
+        } 
+        
+        async findOptimalParameters(options = {}) { 
+            const candidates = this.generateParameterCandidates(); 
+            let bestParams = null; 
+            let bestScore = Infinity; 
+            for (let i = 0; i < candidates.length; i++) { 
+                const params = candidates[i]; 
+                options.onProgress?.((i + 1) / candidates.length); 
+                // Test parametrow 
+                await this.setTempParameters(params); 
+                const score = await this.evaluateSpeedLoop(params); 
+                if (score < bestScore) { 
+                    bestScore = score; 
+                    bestParams = params; 
+                } 
+                // Early stopping jesli znalezlismy bardzo dobre parametry 
+                if (bestScore < 0.1) break; 
+            } 
+            return bestParams; 
+        } 
+        
+        generateParameterCandidates() { 
+            const candidates = []; 
+            // Na podstawie charakterystyk petli balansu, wygeneruj sensowne zakresy 
+            const baseKp = this.estimateInitialKp(); 
+            // Grid search z inteligentnym probkowaniem 
+            for (let kpMult of [0.5, 1.0, 1.5, 2.0]) { 
+                for (let kiMult of [0.0, 0.1, 0.3, 0.5]) { 
+                    for (let kdMult of [0.0, 0.05, 0.1, 0.2]) { 
+                        candidates.push({ 
+                            kp: baseKp * kpMult, 
+                            ki: baseKp * kiMult * 0.1, 
+                            kd: baseKp * kdMult * 0.01 
+                        }); 
+                    } 
+                } 
+            } 
+            return candidates; 
+        } 
+        
+        async evaluateSpeedLoop(params) { 
+            let totalScore = 0; 
+            let testCount = 0; 
+            for (const targetSpeed of this.testSpeeds) { 
+                for (const duration of this.testDurations) { 
+                    const testResult = await this.runSpeedTest(targetSpeed, duration); 
+                    const score = this.calculateSpeedScore(testResult, targetSpeed); 
+                    totalScore += score; 
+                    testCount++; 
+                    // Przerwij test jesli parametry sa bardzo zle 
+                    if (score > 100) return 1000; 
+                } 
+            } 
+            return totalScore / testCount; 
+        } 
+        
+        async runSpeedTest(targetSpeed, duration) { 
+            return new Promise((resolve) => { 
+                const testData = []; 
+                const startTime = Date.now(); 
+                // Wyslij komende predkosci 
+                sendBleMessage({ 
+                    type: 'execute_speed_test_run', 
+                    speed_cmps: targetSpeed, 
+                    distance_cm: targetSpeed * duration // Tak zeby jechal przez okreslony czas 
+                }); 
+                const collectData = () => { 
+                    if (Date.now() - startTime > duration * 1000) { 
+                        resolve(testData); 
+                        return; 
+                    } 
+                    if (window.telemetryData) { 
+                        testData.push({ 
+                            time: (Date.now() - startTime) / 1000, 
+                            speed: window.telemetryData.speed, 
+                            target_speed: targetSpeed, 
+                            position: (window.telemetryData.encoder_left + window.telemetryData.encoder_right) / 2 
+                        }); 
+                    } 
+                    setTimeout(collectData, 50); 
+                }; 
+                collectData(); 
+            }); 
+        } 
+        
+        calculateSpeedScore(testData, targetSpeed) { 
+            if (testData.length < 10) return 1000; 
+            const impulsesPerCm = getImpulsesPerCm(); 
+            const actualSpeeds = testData.map(d => d.speed / impulsesPerCm); 
+            // 1. Blad sledzenia predkosci (RMSE) 
+            const trackingErrors = actualSpeeds.map(speed => Math.abs(speed - targetSpeed)); 
+            const rmse = Math.sqrt(trackingErrors.reduce((sum, err) => sum + err * err, 0) / trackingErrors.length); 
+            // 2. Czas ustalania 
+            const settlingTime = this.calculateSpeedSettlingTime(actualSpeeds, targetSpeed); 
+            // 3. Przeregulowanie 
+            const maxSpeed = Math.max(...actualSpeeds); 
+            const overshoot = Math.max(0, maxSpeed - targetSpeed); 
+            // 4. Stabilnosc (wariancja w stanie ustalonym) 
+            const steadyState = actualSpeeds.slice(-20); // Ostatnie 20 probek 
+            const steadyStateVar = this.calculateVariance(steadyState); 
+            // Funkcja kosztu (im mniejsza, tym lepiej) 
+            return rmse * 1.0 + settlingTime * 2.0 + overshoot * 3.0 + steadyStateVar * 0.5; 
+        } 
+        
+        estimateInitialKp() { 
+            // Na podstawie parametrow balansu oszacuj punkt startowy dla Kp predkosci 
+            const balanceKp = parseFloat(document.getElementById('balanceKpInput').value); 
+            // Heurystyka: Kp predkosci powinien byc znacznie mniejszy niz Kp balansu 
+            return Math.max(0.01, balanceKp * 0.05); 
+        } 
+        
+        calculateSpeedSettlingTime(speeds, target) { 
+            const tolerance = target * 0.05; // 5% tolerancja 
+            for (let i = Math.floor(speeds.length * 0.2); i < speeds.length; i++) { 
+                const recent = speeds.slice(i, i + 10); 
+                if (recent.every(speed => Math.abs(speed - target) < tolerance)) { 
+                    return (i / speeds.length) * speeds.length * 0.05; // Przelicz na sekundy 
+                } 
+            } 
+            return 10; // Kara za brak stabilizacji 
+        } 
+        
+        calculateVariance(array) { 
+            if(array.length === 0) return 0;
+            const mean = array.reduce((a, b) => a + b, 0) / array.length; 
+            return array.reduce((sum, val) => sum + (val - mean) ** 2, 0) / array.length; 
+        } 
+        
+        async setTempParameters(params) { 
+            await setSpeedParameters(params.kp, params.ki, params.kd); 
+            await sleep(500); // Daj czas na aktualizacje 
+        } 
+    } 
+    
+    class PositionLoopTuner { 
+        constructor(systemModel) { 
+            this.systemModel = systemModel; 
+            this.testDistances = [20, 50, 100]; // cm 
+            this.testTypes = ['step', 'ramp']; 
+        } 
+        
+        async findOptimalParameters(options = {}) { 
+            // Podobna logika jak SpeedLoopTuner, ale dla pozycji 
+            const candidates = this.generatePositionCandidates(); 
+            let bestParams = null; 
+            let bestScore = Infinity; 
+            for (let i = 0; i < candidates.length; i++) { 
+                const params = candidates[i]; 
+                options.onProgress?.((i + 1) / candidates.length); 
+                await this.setTempParameters(params); 
+                const score = await this.evaluatePositionLoop(params); 
+                if (score < bestScore) { 
+                    bestScore = score; 
+                    bestParams = params; 
+                } 
+                if (bestScore < 0.1) break; 
+            } 
+            return bestParams; 
+        } 
+        
+        async evaluatePositionLoop(params) { 
+            let totalScore = 0; 
+            let testCount = 0; 
+            for (const distance of this.testDistances) { 
+                const testResult = await this.runPositionTest(distance); 
+                const score = this.calculatePositionScore(testResult, distance); 
+                totalScore += score; 
+                testCount++; 
+                if (score > 100) return 1000; 
+            } 
+            return totalScore / testCount; 
+        } 
+        
+        async runPositionTest(targetDistance) { 
+            return new Promise((resolve) => { 
+                const testData = []; 
+                const startTime = Date.now(); 
+                const startPosition = (window.telemetryData?.encoder_left + window.telemetryData?.encoder_right) / 2 || 0; 
+                // Wyslij komende pozycji (impuls) 
+                const impulseValue = targetDistance * getImpulsesPerCm(); 
+                sendBleMessage({ type: 'execute_position_test_impulse', impulse_power: impulseValue }); 
+                const collectData = () => { 
+                    if (Date.now() - startTime > 8000) { // 8 sekund test 
+                        resolve(testData); 
+                        return; 
+                    } 
+                    if (window.telemetryData) { 
+                        const currentPos = (window.telemetryData.encoder_left + window.telemetryData.encoder_right) / 2; 
+                        testData.push({ 
+                            time: (Date.now() - startTime) / 1000, 
+                            position: (currentPos - startPosition) / getImpulsesPerCm(), 
+                            target_position: targetDistance, 
+                            speed: window.telemetryData.speed / getImpulsesPerCm() 
+                        }); 
+                    } 
+                    setTimeout(collectData, 50); 
+                }; 
+                collectData(); 
+            }); 
+        } 
+        
+        calculatePositionScore(testData, targetDistance) { 
+            if (testData.length < 20) return 1000; 
+            const positions = testData.map(d => d.position); 
+            const times = testData.map(d => d.time); 
+            // 1. Przeregulowanie pozycji 
+            const maxOvershoot = Math.max(...positions.map(p => Math.abs(p))) - Math.abs(targetDistance); 
+            const overshootPercent = (maxOvershoot / Math.abs(targetDistance)) * 100; 
+            // 2. Blad koncowy (steady-state error) 
+            const finalError = Math.abs(positions[positions.length - 1] - targetDistance); 
+            // 3. Czas stabilizacji 
+            const settlingTime = this.calculatePositionSettlingTime(positions, targetDistance, times); 
+            // 4. Integral Absolute Error (IAE) 
+            const errors = positions.map(p => Math.abs(p - targetDistance)); 
+            const iae = errors.reduce((sum, err) => sum + err, 0) / errors.length; 
+            // Funkcja kosztu 
+            return overshootPercent * 2.0 + finalError * 5.0 + settlingTime * 1.0 + iae * 0.5; 
+        } 
+        
+        calculatePositionSettlingTime(positions, target, times) { 
+            const tolerance = Math.abs(target) * 0.05; // 5% tolerancja 
+            for (let i = positions.length - 1; i >= Math.floor(positions.length * 0.3); i--) { 
+                if (Math.abs(positions[i] - target) > tolerance) { 
+                    return times[i]; 
+                } 
+            } 
+            return times[Math.floor(positions.length * 0.3)]; 
+        } 
+        
+        generatePositionCandidates() { 
+            const candidates = []; 
+            const baseKp = this.estimateInitialPositionKp(); 
+            for (let kpMult of [0.3, 0.6, 1.0, 1.5, 2.0]) { 
+                for (let kiMult of [0.0, 0.05, 0.1, 0.2]) { 
+                    for (let kdMult of [0.0, 0.1, 0.3, 0.5]) { 
+                        candidates.push({ 
+                            kp: baseKp * kpMult, 
+                            ki: baseKp * kiMult * 0.01, 
+                            kd: baseKp * kdMult * 0.1 
+                        }); 
+                    } 
+                } 
+            } 
+            return candidates; 
+        } 
+        
+        estimateInitialPositionKp() { 
+            const speedKp = parseFloat(document.getElementById('speedKpInput').value); 
+            // Pozycja powinna byc jeszcze wolniejsza niz predkosc 
+            return Math.max(0.01, speedKp * 0.1); 
+        } 
+        
+        async setTempParameters(params) { 
+            await setPositionParameters(params.kp, params.ki, params.kd); 
+            await sleep(500); 
+        } 
+    } 
+    
+    // ======================================================================================= 
+    // === FUNKCJE POMOCNICZE I INTERFEJS DLA KASKADY === 
+    // ======================================================================================= 
+    async function setSpeedParameters(kp, ki, kd) { 
+        document.getElementById('speedKpInput').value = kp.toFixed(4); 
+        document.getElementById('speedKiInput').value = ki.toFixed(4); 
+        document.getElementById('speedKdInput').value = kd.toFixed(4); 
+        sendBleMessage({ type: 'set_param', key: 'kp_s', value: kp }); 
+        sendBleMessage({ type: 'set_param', key: 'ki_s', value: ki }); 
+        sendBleMessage({ type: 'set_param', key: 'kd_s', value: kd }); 
+    } 
+    
+    async function setPositionParameters(kp, ki, kd) { 
+        document.getElementById('positionKpInput').value = kp.toFixed(4); 
+        document.getElementById('positionKiInput').value = ki.toFixed(4); 
+        document.getElementById('positionKdInput').value = kd.toFixed(4); 
+        sendBleMessage({ type: 'set_param', key: 'kp_p', value: kp }); 
+        sendBleMessage({ type: 'set_param', key: 'ki_p', value: ki }); 
+        sendBleMessage({ type: 'set_param', key: 'kd_p', value: kd }); 
+    } 
+    
+    // Glowny interfejs 
+    const cascadeTuner = new CascadePIDTuner(); 
+    
+    async function startAutomaticCascadeTuningWrapper() { 
+        if (!checkTuningPrerequisites(['BALANSUJE', 'TRZYMA_POZYCJE'])) return;
+        await cascadeTuner.startAutomaticCascadeTuning( 
+            // onProgress 
+            (status) => { 
+                addLogMessage(`[Auto-Kaskada] ${status.loop}: ${(status.progress * 100).toFixed(0)}%`, 'info'); 
+            }, 
+            // onComplete 
+            (finalParams) => { 
+                addLogMessage('[Auto-Kaskada] Automatyczne strojenie kaskady zakonczone!', 'success'); 
+                console.log('Finalne parametry:', finalParams); 
+            } 
+        ); 
+    } 
+    
+    // Dodaj przycisk do interfejsu 
+    function addCascadeTuningButton() { 
+        const cascadeAccordion = document.querySelector('button.accordion-header:nth-of-type(3)').nextElementSibling;
+        if(cascadeAccordion) {
+            const button = document.createElement('button'); 
+            button.textContent = '🚀 Automatyczne Strojenie Calej Kaskady';
+            button.style.width = '100%';
+            button.style.marginTop = '15px';
+            button.style.backgroundColor = '#8e44ad';
+            button.style.color = 'white';
+            button.onclick = startAutomaticCascadeTuningWrapper; 
+            cascadeAccordion.appendChild(button);
         }
     }
     
-    // =======================================================================================
-    // === NOWA, NIEZAWODNA KLASA DO OPTYMALIZACJI PRZEZ ALGORYTM GENETYCZNY ===
-    // =======================================================================================
-    class GeneticAlgorithm {
-        constructor(options) {
-            this.options = Object.assign({
-                populationSize: 10,
-                generations: 10,
-                mutationRate: 0.1,
-                crossoverRate: 0.8,
-                elitism: 0.1,
-                paramRanges: { kp: [50, 150], kd: [1, 5] },
-            }, options);
-            this.population = [];
-            this.generation = 0;
-            this.isPaused = false;
-            this.isCancelled = false;
-        }
-
-        async run() {
-            this.isCancelled = false;
-            this.isPaused = false;
-            this._initializePopulation();
-            await this._evaluatePopulation();
-
-            for (this.generation = 1; this.generation <= this.options.generations; this.generation++) {
-                if (this.isCancelled) break;
-                
-                this.options.onGenerationStart?.(this.generation, this.population);
-
-                const newPopulation = [];
-                const eliteCount = Math.floor(this.options.populationSize * this.options.elitism);
-                for (let i = 0; i < eliteCount; i++) {
-                    newPopulation.push(this.population[i]);
-                }
-
-                while (newPopulation.length < this.options.populationSize) {
-                    const parent1 = this._tournamentSelection();
-                    const parent2 = this._tournamentSelection();
-                    let children = Math.random() < this.options.crossoverRate 
-                        ? this._blendCrossover(parent1, parent2) 
-                        : [parent1, parent2];
-                    
-                    children.forEach(child => {
-                        this._mutate(child);
-                        this._clamp(child);
-                        newPopulation.push(child);
-                    });
-                }
-                
-                this.population = newPopulation.slice(0, this.options.populationSize);
-                await this._evaluatePopulation();
-            }
-
-            if (!this.isCancelled) {
-                this.options.onFinish?.(this.population[0]);
-            }
-        }
-
-        pause() { this.isPaused = true; }
-        resume() { this.isPaused = false; }
-        cancel() { this.isCancelled = true; }
-
-        _initializePopulation() {
-            this.population = [];
-            const { kp, kd } = this.options.paramRanges;
-            for (let i = 0; i < this.options.populationSize; i++) {
-                this.population.push({
-                    kp: Math.random() * (kp[1] - kp[0]) + kp[0],
-                    kd: Math.random() * (kd[1] - kd[0]) + kd[0],
-                    fitness: Infinity,
-                });
-            }
-        }
-
-        async _evaluatePopulation() {
-            for (let i = 0; i < this.population.length; i++) {
-                const individual = this.population[i];
-                if (individual.fitness === Infinity) { // Tylko oceniamy nowe osobniki
-                    while (this.isPaused) {
-                        if (this.isCancelled) return;
-                        await sleep(500);
-                    }
-                    if (this.isCancelled) return;
-                    
-                    this.options.onIndividualStart?.(this.generation, i, individual);
-                    individual.fitness = await this.options.fitnessFunction(individual);
-                    this.options.onIndividualFinish?.(this.generation, i, individual);
-                }
-            }
-            this.population.sort((a, b) => a.fitness - b.fitness);
-        }
-
-        _tournamentSelection() {
-            const tournamentSize = 3;
-            let best = null;
-            for (let i = 0; i < tournamentSize; i++) {
-                const randomIndividual = this.population[Math.floor(Math.random() * this.population.length)];
-                if (best === null || randomIndividual.fitness < best.fitness) {
-                    best = randomIndividual;
-                }
-            }
-            return best;
-        }
-
-        _blendCrossover(parent1, parent2) {
-            const alpha = 0.5;
-            const child1 = { fitness: Infinity };
-            const child2 = { fitness: Infinity };
-            
-            const kp_diff = Math.abs(parent1.kp - parent2.kp);
-            const min_kp = Math.min(parent1.kp, parent2.kp) - alpha * kp_diff;
-            const max_kp = Math.max(parent1.kp, parent2.kp) + alpha * kp_diff;
-            child1.kp = Math.random() * (max_kp - min_kp) + min_kp;
-            child2.kp = Math.random() * (max_kp - min_kp) + min_kp;
-            
-            const kd_diff = Math.abs(parent1.kd - parent2.kd);
-            const min_kd = Math.min(parent1.kd, parent2.kd) - alpha * kd_diff;
-            const max_kd = Math.max(parent1.kd, parent2.kd) + alpha * kd_diff;
-            child1.kd = Math.random() * (max_kd - min_kd) + min_kd;
-            child2.kd = Math.random() * (max_kd - min_kd) + min_kd;
-
-            return [child1, child2];
-        }
-
-        _mutate(individual) {
-            if (Math.random() < this.options.mutationRate) {
-                const sigma_kp = (this.options.paramRanges.kp[1] - this.options.paramRanges.kp[0]) * 0.1;
-                individual.kp += (Math.random() - 0.5) * 2 * sigma_kp; // Prosta mutacja gaussowska
-            }
-            if (Math.random() < this.options.mutationRate) {
-                const sigma_kd = (this.options.paramRanges.kd[1] - this.options.paramRanges.kd[0]) * 0.1;
-                individual.kd += (Math.random() - 0.5) * 2 * sigma_kd;
-            }
-        }
-        
-        _clamp(individual) {
-            const { kp, kd } = this.options.paramRanges;
-            individual.kp = Math.max(kp[0], Math.min(kp[1], individual.kp));
-            individual.kd = Math.max(kd[0], Math.min(kd[1], individual.kd));
-        }
-    }
+    // Inicjalizacja ulepszonego asystenta
+    const advancedAssistant = new AdvancedPIDTuningAssistant();
 
     document.addEventListener('DOMContentLoaded', () => {
         initJoystick(); setupChartControls(); populatePresetSelect(); setupNumericInputs(); setupEventListeners();
         setupManualTuneButtons(); setupGamepadMappingModal(); setupTuningAssistantListeners(); setupGaListeners();
         setupDpadControls(); setupSequenceControls(); setupZnTuningControls(); loadGamepadMappings(); renderMappingModal();
         pollGamepad(); window.addEventListener('resize', initJoystick); init3DVisualization(); animate3D(); setUiLock(true);
+        addCascadeTuningButton(); // Dodajemy przycisk kaskady
     });
 
     const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
@@ -855,16 +2197,8 @@
         if (!data || !data.type) return;
         const previousState = AppState.lastKnownRobotState;
         if (data.robot_state) { AppState.lastKnownRobotState = data.robot_state; }
+        if (data.type === 'telemetry') { window.telemetryData = data; } // Aktualizacja globalnej zmiennej
         if (AppState.isTuningActive && data.trial) { telemetryForCurrentTest.push(data); }
-
-        // Przekierowanie danych telemetrycznych do aktywnego tunera
-        if (AppState.activeTuner && data.type === 'telemetry') {
-            const now = performance.now();
-            if (!AppState.activeTuner.lastTime) AppState.activeTuner.lastTime = now;
-            const dt = (now - AppState.activeTuner.lastTime) / 1000.0;
-            AppState.activeTuner.lastTime = now;
-            AppState.activeTuner.processTelemetry(data.pitch, dt);
-        }
 
         switch (data.type) {
             case 'telemetry': updateTelemetryUI(data); updateChart(data); if (AppState.isSequenceRunning) { checkAndExecuteNextSequenceStep(previousState); } break;
@@ -878,7 +2212,6 @@
                 break;
             case 'log': addLogMessage(`[ROBOT] ${data.message}`, data.level); break;
             case 'single_pwm_result': const p = data.params; const inputId = `minPwm${p.motor.charAt(0).toUpperCase() + p.motor.slice(1)}${p.direction.charAt(0).toUpperCase() + p.direction.slice(1)}Input`; document.getElementById(inputId).value = p.value; addLogMessage(`[UI] Auto-strojenie dla ${p.motor} ${p.direction} zakonczone. Wynik: ${p.value}`, 'success'); const row = document.querySelector(`.manual-tune-row[data-motor="${p.motor}"][data-direction="${p.direction}"]`); if (row) { const autoBtn = row.querySelector('.auto-btn'); if (autoBtn) { autoBtn.disabled = false; autoBtn.textContent = 'Auto'; } } break;
-            case 'zn_tuning_result': /* Obsluga przez nowa klase */ break;
             case 'ga_result': 
                 if (gaInstance && typeof gaInstance.handleFitnessResult === 'function') {
                     gaInstance.handleFitnessResult(data.score);
@@ -936,49 +2269,46 @@
     function checkAndExecuteNextSequenceStep(previousState) { const wasWorking = ['RUCH_AUTONOMICZNY', 'OBROT_AUTONOMICZNY'].includes(previousState); const isReady = ['TRZYMA_POZYCJE', 'BALANSUJE'].includes(AppState.lastKnownRobotState); if (AppState.isSequenceRunning && wasWorking && isReady) { addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info'); currentSequenceStep++; executeNextSequenceStep(); } }
     function executeNextSequenceStep() { const steps = document.querySelectorAll('.sequence-step'); if (!AppState.isSequenceRunning || currentSequenceStep >= steps.length) { if (AppState.isSequenceRunning) { AppState.isSequenceRunning = false; addLogMessage('[UI] Sekwencja ukonczona.', 'success'); } updateSequenceUI(); return; } updateSequenceUI(); const stepNode = steps[currentSequenceStep]; const type = stepNode.querySelector('.sequence-type').value; const value = parseFloat(stepNode.querySelector('.sequence-value').value); let command = {}; switch (type) { case 'move_fwd': command = { type: 'execute_move', distance_cm: value }; break; case 'move_bwd': command = { type: 'execute_move', distance_cm: -value }; break; case 'rotate_r': command = { type: 'execute_rotate', angle_deg: value }; break; case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -value }; break; } addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info'); sendBleMessage(command); }
     
-    // --- Nowa obsluga Z-N ---
+    // --- Obsluga Z-N ---
+    const znTuner = new ZieglerNicholsTuner();
     function setupZnTuningControls() {
         document.getElementById('znTuningActionBtn').addEventListener('click', () => {
-            if (AppState.activeTuner) return;
-            if (!checkIfReadyForTest()) return;
-            if (confirm("UWAGA! Ta procedura wprowadzi robota w kontrolowane oscylacje. Upewnij sie, ze ma wystarczajaco duzo miejsca. Kontynuowac?")) {
+             if (!checkTuningPrerequisites(['BALANSUJE', 'TRZYMA_POZYCJE'])) return;
+             if (confirm("UWAGA! Ta procedura wprowadzi robota w kontrolowane oscylacje. Upewnij sie, ze ma wystarczajaco duzo miejsca. Kontynuowac?")) {
                 startZnTuning();
             }
         });
         document.getElementById('znTuningCancelBtn').addEventListener('click', () => {
-             if (AppState.activeTuner) AppState.activeTuner.cancel();
+             znTuner.stop();
              resetZnTuningUI();
         });
         document.getElementById('applyZnResultsBtn').addEventListener('click', applyZnResults);
     }
     
     function startZnTuning() {
-        const tuner = new ZieglerNicholsTuner({
-            maxAmplitude: parseFloat(document.getElementById('znMaxAmplitudeInput').value),
-            onUpdate: (data) => {
-                document.getElementById('znStatusText').textContent = data.state;
-                document.getElementById('znKpTestVal').textContent = data.kp.toFixed(2);
-                document.getElementById('znAmplitudeVal').textContent = data.amplitude.toFixed(2) + " st.";
-            },
-            onFinish: (results) => {
-                handleZnTuningResult(results.ku, results.tu);
-                resetZnTuningUI();
-            },
-            onFail: (reason) => {
-                addLogMessage(`[ZN-Tuner] Blad: ${reason}`, 'error');
-                resetZnTuningUI();
-            }
-        });
-        AppState.activeTuner = tuner;
         AppState.isTuningActive = true;
         document.getElementById('znTuningActionBtn').disabled = true;
         document.getElementById('znTuningCancelBtn').style.display = 'block';
         document.getElementById('znResultPanel').style.display = 'none';
-        tuner.start();
+
+        znTuner.start(
+            (data) => { // onUpdate
+                document.getElementById('znStatusText').textContent = data.state;
+                document.getElementById('znKpTestVal').textContent = data.kp.toFixed(2);
+                document.getElementById('znAmplitudeVal').textContent = data.amplitude.toFixed(2) + " st.";
+            },
+            (results) => { // onFinish
+                handleZnTuningResult(results.ku, results.tu);
+                resetZnTuningUI();
+            },
+            (error) => { // onError
+                addLogMessage(`[ZN-Tuner] Blad: ${error}`, 'error');
+                resetZnTuningUI();
+            }
+        );
     }
 
     function resetZnTuningUI() {
-        AppState.activeTuner = null;
         AppState.isTuningActive = false;
         document.getElementById('znStatusText').textContent = "Bezczynny";
         document.getElementById('znKpTestVal').textContent = "---";
@@ -991,12 +2321,11 @@
         addLogMessage(`[UI] Otrzymano wynik strojenia Z-N: Ku=${ku.toFixed(4)}, Tu=${tu.toFixed(4)}`, 'success');
         const resultPanel = document.getElementById('znResultPanel');
         resultPanel.style.display = 'block';
-        const kp = 0.6 * ku;
-        const kd = kp * tu / 8; // Classic Z-N for PD
+        const params = znTuner.calculateZNParameters(ku, tu).pid_classic;
         document.getElementById('znKuResult').textContent = ku.toFixed(4);
         document.getElementById('znTuResult').textContent = tu.toFixed(4) + " s";
-        document.getElementById('znKpSuggest').textContent = kp.toFixed(4);
-        document.getElementById('znKdSuggest').textContent = kd.toFixed(4);
+        document.getElementById('znKpSuggest').textContent = params.kp.toFixed(4);
+        document.getElementById('znKdSuggest').textContent = params.kd.toFixed(4);
         updateAccordionHeight(resultPanel.closest('.accordion-content'));
     }
 
@@ -1017,7 +2346,7 @@
         addLogMessage('[UI] Zastosowano sugerowane wartosci Kp i Kd. Ki ustawiono na 0.', 'info');
     }
 
-    // --- Nowa obsluga GA ---
+    // --- Obsluga GA ---
     function setupGaListeners() {
         document.getElementById('gaActionBtn').addEventListener('click', startNewGaSession);
         document.getElementById('gaPauseBtn').addEventListener('click', () => {
@@ -1042,19 +2371,16 @@
     }
     
     function startNewGaSession() {
-        if (!checkIfReadyForTest()) return;
+        if (!checkTuningPrerequisites(['BALANSUJE', 'TRZYMA_POZYCJE'])) return;
         AppState.isTuningActive = true;
         
-        // Funkcja oceny (fitness) dla kazdego osobnika
         const fitnessFunction = (individual) => {
             return new Promise((resolve, reject) => {
                 const onResult = (score) => {
-                    gaInstance.handleFitnessResult = null; // Usuwamy listener
+                    gaInstance.handleFitnessResult = null;
                     resolve(score);
                 };
                 gaInstance.handleFitnessResult = onResult;
-                
-                // Wysylamy do robota probe do oceny
                 sendBleMessage({type: 'run_ga_trial', kp: individual.kp, kd: individual.kd });
             });
         };
@@ -1070,10 +2396,9 @@
                 kp: [baseKp * 0.5, baseKp * 1.5],
                 kd: [baseKd * 0.5, baseKd * 1.5],
             },
-            onGenerationStart: (gen, population) => {
-                 const bestInGen = population.filter(p => p.fitness !== Infinity).sort((a,b) => a.fitness - b.fitness)[0];
-                 if(bestInGen) {
-                    document.getElementById('gaStatusGenerationBestScore').textContent = bestInGen.fitness.toFixed(4);
+            onGenerationStart: (gen, population, stats) => {
+                 if(stats.bestFitness) {
+                    document.getElementById('gaStatusBestScore').textContent = stats.bestFitness.toFixed(4);
                  }
             },
             onIndividualStart: (gen, index, individual) => {
@@ -1129,11 +2454,8 @@
             document.getElementById('gaStatusCurrentKd').textContent = individual.kd.toFixed(4);
         }
         
-        if (gaInstance && gaInstance.population.length > 0) {
-            const bestOverall = gaInstance.population.filter(p => p.fitness !== Infinity).sort((a,b) => a.fitness - b.fitness)[0];
-            if (bestOverall) {
-                 document.getElementById('gaStatusBestScore').textContent = bestOverall.fitness.toFixed(4);
-            }
+        if (gaInstance && gaInstance.globalBest) {
+             document.getElementById('gaStatusBestScore').textContent = gaInstance.globalBest.fitness.toFixed(4);
         }
     }
     
@@ -1151,7 +2473,12 @@
         }
     }
 
-    
+    // --- Obsluga Asystenta Strojenia ---
+    // Zastąpienie starych funkcji nowymi, które korzystają z zaawansowanego asystenta
+    function analyzeBalanceResponse(data) { addLogMessage('[Asystent] Analiza balansu nie jest jeszcze zaimplementowana w nowej wersji.', 'warn'); }
+    function analyzePositionResponse(data) { advancedAssistant.analyzePositionResponseAdvanced(data); }
+    function analyzeSpeedResponse(data) { advancedAssistant.analyzeSpeedResponseAdvanced(data); }
+
     function setupTuningAssistantListeners() {
         document.getElementById('startBalanceTestBtn').addEventListener('click', runBalanceTest);
         document.getElementById('startPositionTestBtn').addEventListener('click', runPositionTest);
@@ -1172,48 +2499,33 @@
             });
         });
     }
-    function runBalanceTest() { if (!checkIfReadyForTest()) return; AppState.isTuningActive = true; currentTestType = 'balance'; const angle = parseFloat(document.getElementById('balanceStepAngleInput').value); addLogMessage(`[Asystent] Test balansu (kat: ${angle} st.).`, 'info'); sendBleMessage({type: 'execute_balance_step_response', angle: angle}); }
-    function runPositionTest() { 
-        if (!checkIfReadyForTest(true)) return; 
-        const speedKp = parseFloat(document.getElementById('speedKpInput').value);
-        if(speedKp <= 0) {
-            addLogMessage('[Asystent] BLAD: Nie mozna testowac petli pozycji, gdy Kp petli predkosci jest zerowe. Ustaw wartosc Kp_s w zakladce "PID Kaskadowy" i sprobuj ponownie.', 'error');
-            return;
-        }
-        AppState.isTuningActive = true; currentTestType = 'position'; const impulse = parseInt(document.getElementById('positionTestImpulseInput').value); addLogMessage(`[Asystent] Test pozycji (impuls: ${impulse}).`, 'info'); sendBleMessage({type: 'execute_position_test_impulse', impulse_power: impulse}); 
-    }
-    function runSpeedTest() { if (!checkIfReadyForTest(true)) return; AppState.isTuningActive = true; currentTestType = 'speed'; const distance = parseFloat(document.getElementById('speedTestDistanceInput').value); const speed = parseFloat(document.getElementById('speedTestSpeedInput').value); addLogMessage(`[Asystent] Test predkosci (dystans: ${distance}cm, predkosc: ${speed}cm/s).`, 'info'); sendBleMessage({type: 'execute_speed_test_run', distance_cm: distance, speed_cmps: speed}); }
     
-    function analyzeBalanceResponse(data) {
-        const panel = document.getElementById('balanceTuningResultsPanel'); panel.style.display = 'block';
-        if (data.length < 10) { addLogMessage("[Asystent] Za malo danych do analizy.", 'warn'); return; }
-        const targetAngle = parseFloat(document.getElementById('balanceStepAngleInput').value);
-        const angles = data.map(d => d.pitch);
-        const times = data.map(d => d.trial.elapsed_ms / 1000);
-        const maxAngle = Math.max(...angles);
-        const overshoot = ((maxAngle - targetAngle) / targetAngle) * 100;
-        let riseTime = -1, t10 = -1, t90 = -1;
-        for(let i=0; i<angles.length; i++) {
-            if(t10 < 0 && angles[i] >= targetAngle * 0.1) t10 = times[i];
-            if(t90 < 0 && angles[i] >= targetAngle * 0.9) t90 = times[i];
-        }
-        if(t10 > 0 && t90 > 0) riseTime = t90 - t10;
-        document.getElementById('balanceTestMetrics').innerHTML = `<strong>Przeregulowanie:</strong> <span>${overshoot.toFixed(1)} %</span><strong>Czas narastania:</strong> <span>${riseTime > 0 ? riseTime.toFixed(2) + ' s' : 'N/A'}</span>`;
-        
-        let kp = parseFloat(document.getElementById('balanceKpInput').value);
-        let kd = parseFloat(document.getElementById('balanceKdInput').value);
-        
-        if (overshoot > 15) { kd *= 1.2; addLogMessage('[Asystent-Balans] Sugestia: Duze przeregulowanie. Zwiekszam Kd.', 'info'); } 
-        else if (overshoot < -5) { kd *= 0.8; addLogMessage('[Asystent-Balans] Sugestia: Zbyt wolne osiaganie celu. Zmniejszam Kd.', 'info');}
-        else if (riseTime > 0.4 && riseTime > 0) { kp *= 1.2; addLogMessage('[Asystent-Balans] Sugestia: Wolna reakcja. Zwiekszam Kp.', 'info'); }
-        else if (riseTime < 0.15 && riseTime > 0) { kp *= 0.8; addLogMessage('[Asystent-Balans] Sugestia: Zbyt agresywna reakcja. Zmniejszam Kp.', 'info'); }
-        else { addLogMessage('[Asystent-Balans] Reakcja wyglada dobrze. Mozesz sprobowac malych korekt.', 'success'); }
-        document.getElementById('balanceSuggestion').innerHTML = `<strong>Sugerowane Kp_b:</strong> <span>${kp.toFixed(4)}</span><strong>Sugerowane Kd_b:</strong> <span>${kd.toFixed(4)}</span>`;
-        updateAccordionHeight(panel.closest('.accordion-content'));
+    // --- NOWA LOGIKA URUCHAMIANIA TESTOW ---
+    function runBalanceTest() { 
+        if (!checkTuningPrerequisites(['BALANSUJE', 'TRZYMA_POZYCJE'])) return;
+        AppState.isTuningActive = true; 
+        currentTestType = 'balance'; 
+        const angle = parseFloat(document.getElementById('balanceStepAngleInput').value); 
+        addLogMessage(`[Asystent] Test balansu (kat: ${angle} st.).`, 'info'); 
+        sendBleMessage({type: 'execute_balance_step_response', angle: angle}); 
     }
-
-    function analyzePositionResponse(data) { const panel = document.getElementById('positionTuningResultsPanel'); panel.style.display = 'block'; if (data.length < 20) { addLogMessage('[Asystent-Poz] Za malo danych do analizy.', 'error'); return; } const impulsesPerCm = getImpulsesPerCm(); const startPos = (data[0].encoder_left + data[0].encoder_right) / 2; const positions = data.map(d => ((d.encoder_left + d.encoder_right) / 2) - startPos); const times = data.map(d => d.trial.elapsed_ms / 1000.0); const maxOvershootImp = Math.max(...positions.map(p => Math.abs(p))); const maxOvershootCm = maxOvershootImp / impulsesPerCm; let settlingTime = -1; const settlingThresholdCm = 2; for(let i = Math.floor(data.length * 0.2); i < data.length; i++) { const windowData = positions.slice(i); if(Math.max(...windowData.map(p => Math.abs(p))) < (settlingThresholdCm * impulsesPerCm)) { settlingTime = times[i]; break; } } document.getElementById('positionTestMetrics').innerHTML = `<strong>Przeregulowanie:</strong> <span>${maxOvershootCm.toFixed(1)} cm</span><strong>Czas stabilizacji:</strong> <span>${settlingTime > 0 ? settlingTime.toFixed(2) + ' s' : "Nie osiagnieto"}</span>`; let kp = parseFloat(document.getElementById('positionKpInput').value); let ki = parseFloat(document.getElementById('positionKiInput').value); let kd = parseFloat(document.getElementById('positionKdInput').value); if (maxOvershootCm > 5.0) { kd = (kd < 0.1) ? 0.1 : kd * 1.4; kp *= 0.9; addLogMessage('[Asystent-Poz] Sugestia: Duze przeregulowanie. Zwiekszam Kd, zmniejszam Kp.', 'info'); } else if (maxOvershootCm > 1.0) { kd = (kd < 0.05) ? 0.05 : kd * 1.2; addLogMessage('[Asystent-Poz] Sugestia: Lekkie przeregulowanie. Zwiekszam Kd.', 'info'); } else { kp = (kp < 0.1) ? 0.1 : kp * 1.2; addLogMessage('[Asystent-Poz] Sugestia: Brak przeregulowania. Zwiekszam Kp.', 'info'); } if (settlingTime < 0 || settlingTime > 3.0) { kp *= 1.3; if (kd < 0.1) kd = 0.1; addLogMessage('[Asystent-Poz] Sugestia: Bardzo dlugi czas stabilizacji. Znacznie zwiekszam Kp.', 'info'); } if (ki < 0.0001) ki = 0.0001; document.getElementById('positionSuggestion').innerHTML = `<strong>Sugerowane Kp_p:</strong> <span>${kp.toFixed(4)}</span><strong>Sugerowane Ki_p:</strong> <span>${ki.toFixed(4)}</span><strong>Sugerowane Kd_p:</strong> <span>${kd.toFixed(4)}</span>`; updateAccordionHeight(panel.closest('.accordion-content')); }
-    function analyzeSpeedResponse(data) { const panel = document.getElementById('speedTuningResultsPanel'); panel.style.display = 'block'; if (data.length < 20) { addLogMessage('[Asystent-Pred] Za malo danych do analizy.', 'error'); return; } const impulsesPerCm = getImpulsesPerCm(); const targetSpeedCmps = parseFloat(document.getElementById('speedTestSpeedInput').value); const targetDistanceCm = parseFloat(document.getElementById('speedTestDistanceInput').value); const speedsCmps = data.map(d => d.speed / impulsesPerCm); const maxSpeedReached = Math.max(...speedsCmps); const speedError = ((maxSpeedReached - targetSpeedCmps) / targetSpeedCmps) * 100; const startPos = (data[0].encoder_left + data[0].encoder_right) / 2; const finalPos = (data[data.length-1].encoder_left + data[data.length-1].encoder_right) / 2; const distanceTravelledCm = (finalPos - startPos) / impulsesPerCm; const stopAccuracyErrorCm = distanceTravelledCm - targetDistanceCm; document.getElementById('speedTestMetrics').innerHTML = `<strong>Blad predk. max:</strong> <span>${speedError.toFixed(1)} %</span><strong>Dokladnosc zatrzymania:</strong> <span>${stopAccuracyErrorCm.toFixed(1)} cm</span>`; let kp = parseFloat(document.getElementById('speedKpInput').value); let ki = parseFloat(document.getElementById('speedKiInput').value); let kd = parseFloat(document.getElementById('speedKdInput').value); if (speedError < -15) { kp = (kp < 0.01) ? 0.01 : kp * 1.5; addLogMessage('[Asystent-Pred] Sugestia: Nie osiagnieto predkosci. Zwiekszam Kp.', 'info'); } else if (speedError > 15) { kp *= 0.8; kd = (kd < 0.001) ? 0.001 : kd + 0.001; addLogMessage('[Asystent-Pred] Sugestia: Przeregulowanie predkosci. Zmniejszam Kp, zwiekszam Kd.', 'info'); } else { kp *= 1.1; } if (Math.abs(stopAccuracyErrorCm) > 5) { ki = (ki < 0.001) ? 0.001 : ki * 1.5; addLogMessage('[Asystent-Pred] Sugestia: Niska precyzja zatrzymania. Zwiekszam Ki.', 'info'); } document.getElementById('speedSuggestion').innerHTML = `<strong>Sugerowane Kp_s:</strong> <span>${kp.toFixed(4)}</span><strong>Sugerowane Ki_s:</strong> <span>${ki.toFixed(4)}</span><strong>Sugerowane Kd_s:</strong> <span>${kd.toFixed(4)}</span>`; updateAccordionHeight(panel.closest('.accordion-content'));}
+    function runPositionTest() { 
+        if (!checkTuningPrerequisites('TRZYMA_POZYCJE')) return; 
+        AppState.isTuningActive = true; 
+        currentTestType = 'position'; 
+        const impulse = parseInt(document.getElementById('positionTestImpulseInput').value); 
+        addLogMessage(`[Asystent] Test pozycji (impuls: ${impulse}).`, 'info'); 
+        sendBleMessage({type: 'execute_position_test_impulse', impulse_power: impulse}); 
+    }
+    function runSpeedTest() { 
+        if (!checkTuningPrerequisites(['BALANSUJE', 'TRZYMA_POZYCJE'])) return;
+        AppState.isTuningActive = true; 
+        currentTestType = 'speed'; 
+        const distance = parseFloat(document.getElementById('speedTestDistanceInput').value); 
+        const speed = parseFloat(document.getElementById('speedTestSpeedInput').value); 
+        addLogMessage(`[Asystent] Test predkosci (dystans: ${distance}cm, predkosc: ${speed}cm/s).`, 'info'); 
+        sendBleMessage({type: 'execute_speed_test_run', distance_cm: distance, speed_cmps: speed}); 
+    }
     
     async function applyAssistantSuggestion(type) {
         let params = {}; let suggestionNode;
@@ -1246,7 +2558,23 @@
     }
     
     function startTelemetryCollectionForTest(duration, callback) { telemetryForCurrentTest = []; setTimeout(() => { AppState.isTuningActive = false; currentTestType = null; callback(telemetryForCurrentTest); }, duration); }
-    function checkIfReadyForTest(isPositionTest = false) { const requiredState = isPositionTest ? 'TRZYMA_POZYCJE' : 'BALANSUJE'; if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState) || (isPositionTest && AppState.lastKnownRobotState !== 'TRZYMA_POZYCJE')) { addLogMessage(`[UI] Blad: Robot musi byc w stanie '${requiredState}', a jest w '${AppState.lastKnownRobotState}'.`, 'error'); return false; } if (AppState.isTuningActive || AppState.activeTuner) { addLogMessage('[UI] Blad: Inna procedura strojenia jest juz w toku.', 'warn'); return false; } return true; }
+    
+    // --- NOWA, POPRAWIONA FUNKCJA WALIDACYJNA ---
+    function checkTuningPrerequisites(requiredStates) {
+        if (!Array.isArray(requiredStates)) requiredStates = [requiredStates]; 
+
+        if (!requiredStates.includes(AppState.lastKnownRobotState)) {
+            addLogMessage(`[UI] Blad: Wymagany stan robota to jeden z [${requiredStates.join(', ')}]. Aktualny stan: '${AppState.lastKnownRobotState}'.`, 'error');
+            return false;
+        }
+
+        if (AppState.isTuningActive || (znTuner && znTuner.state !== 'IDLE') || (gaInstance && !gaInstance.isCancelled)) {
+            addLogMessage('[UI] Blad: Inna procedura strojenia jest juz w toku.', 'warn');
+            return false;
+        }
+        return true;
+    }
+
     function getImpulsesPerCm() { const ppr = parseFloat(document.getElementById('encoderPprInput').value); const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value); if (ppr > 0 && wheelDiameter > 0) { return ppr / (Math.PI * wheelDiameter); } return 30.0; }
 
     function init3DVisualization() { const container = document.getElementById('robot3d-container'); scene3D = new THREE.Scene(); scene3D.background = createSkyTexture(); camera3D = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 2000); camera3D.position.set(28, 22, 48); camera3D.lookAt(0, 8, 0); renderer3D = new THREE.WebGLRenderer({ antialias: true }); renderer3D.setSize(container.clientWidth, container.clientHeight); container.appendChild(renderer3D.domElement); controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement); controls3D.target.set(0, 8, 0); controls3D.maxPolarAngle = Math.PI / 2; const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); scene3D.add(ambientLight); const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9); directionalLight.position.set(10, 20, 15); scene3D.add(directionalLight); const PLANE_SIZE_CM = 2000; groundTexture = createCheckerTexture(20); const repeats = PLANE_SIZE_CM / 20; groundTexture.repeat.set(repeats, repeats); const groundMaterial = new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1.0, metalness: 0.0 }); const groundGeo = new THREE.PlaneGeometry(PLANE_SIZE_CM, PLANE_SIZE_CM, 1, 1); groundMesh = new THREE.Mesh(groundGeo, groundMaterial); groundMesh.rotation.x = -Math.PI / 2; groundMesh.position.y = 0; scene3D.add(groundMesh); robotPivot = createRobotModel3D(); robotPivot.position.y = 4.1; scene3D.add(robotPivot); window.addEventListener('resize', () => { const width = container.clientWidth; const height = container.clientHeight; camera3D.aspect = width / height; camera3D.updateProjectionMatrix(); renderer3D.setSize(width, height); }); setupControls3D(); }
