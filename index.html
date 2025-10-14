@@ -189,11 +189,14 @@
                 <strong>Predkosc (imp/s):</strong> <span id="speedVal">0</span>
                 <strong>Enkoder L:</strong> <span id="encoderLeftVal">0</span>
                 <strong>Enkoder P:</strong> <span id="encoderRightVal">0</span>
+                <strong>Status Kalibracji IMU (BNO055):</strong>
+                <span id="calibSysVal">-</span> / <span id="calibAccelVal">-</span> / <span id="calibGyroVal">-</span> / <span id="calibMagVal">-</span>
             </div>
              <fieldset style="margin-top: 15px;">
                 <legend>Diagnostyka</legend>
                 <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
-                    <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Pelna Kalibracja Sensorow</button>
+                    <!-- [ZMIANA] Zmiana opisu i funkcji przycisku kalibracji -->
+                    <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Sprawdź Status Kalibracji</button>
                     <button id="calibrateZeroPointBtn" style="width:100%; background-color:#f7b731;">Znajdz Pion Automatycznie</button>
                 </div>
             </fieldset>
@@ -492,11 +495,15 @@
 <script>
     // =======================================================================================
     // WERSJA 21.0 (Zintegrowane zaawansowane moduly strojenia, poprawki logiki walidacji)
+    // ZMIANY DLA BNO055:
+    // - Poprawiono logike i opis przycisku kalibracji sensora.
+    // - Skorygowano mapowanie parametru 'balance_pid_derivative_filter_alpha'.
     // =======================================================================================
     const AppState = { isConnected: false, isSynced: false, isApplyingConfig: false, lastKnownRobotState: 'IDLE', isSequenceRunning: false, isTuningActive: false, syncTimeout: null, activeTuner: null };
     let currentSequenceStep = 0;
     const MAX_SEQUENCE_STEPS = 10;
-                const parameterMapping = { 'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b', 'balanceFilterAlphaInput': 'balance_pid_filter_alpha', 'balanceIntegralLimitInput': 'balance_pid_integral_limit', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s', 'speedFilterAlphaInput': 'speed_pid_filter_alpha', 'maxTargetAngleInput': 'speed_pid_output_limit', 'speedIntegralLimitInput': 'speed_pid_integral_limit', 'speedDeadbandInput': 'speed_pid_deadband', 'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p', 'positionFilterAlphaInput': 'position_pid_filter_alpha', 'maxTargetSpeedInput': 'position_pid_output_limit', 'positionIntegralLimitInput': 'position_pid_integral_limit', 'positionDeadbandInput': 'position_pid_deadband', 'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r', 'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h', 'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd' };
+    // [ZMIANA] Poprawiono klucz 'balance_pid_derivative_filter_alpha'
+    const parameterMapping = { 'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b', 'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 'balanceIntegralLimitInput': 'balance_pid_integral_limit', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s', 'speedFilterAlphaInput': 'speed_pid_filter_alpha', 'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedIntegralLimitInput': 'speed_pid_integral_limit', 'speedDeadbandInput': 'speed_pid_deadband', 'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p', 'positionFilterAlphaInput': 'position_pid_filter_alpha', 'maxTargetSpeedInput': 'max_target_speed_from_pos_pid', 'positionIntegralLimitInput': 'position_pid_integral_limit', 'positionDeadbandInput': 'position_pid_deadband', 'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r', 'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h', 'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd' };
     let currentTestType = null, telemetryForCurrentTest = [];
     let bleDevice, rxCharacteristic, txCharacteristic;
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b", RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9", TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
@@ -515,7 +522,7 @@
     let isAnimation3DEnabled = true, isMovement3DEnabled = false, lastEncoderAvg = 0;
     let gaInstance = null;
     window.telemetryData = {}; // Globalna zmienna dla telemetrii, uzywana przez tunery
-    
+
     // =======================================================================================
     // === NOWY, ZAAWANSOWANY TUNER ZIEGLER-NICHOLS (Z INFO.TXT) ===
     // =======================================================================================
@@ -538,7 +545,7 @@
             this.updateInterval = 50; // 50ms update rate 
             this.startTime = 0; 
         } 
-        
+
         reset() { 
             this.state = 'IDLE'; // IDLE, SEARCHING, DETECTING, MEASURING, FINISHED, ERROR 
             this.kp = 0.5; 
@@ -555,7 +562,7 @@
             this.consecutiveStablePeriods = 0; 
             this.adaptiveStepEnabled = true; 
         } 
-        
+
         start(onUpdate, onFinish, onError) { 
             this.onUpdate = onUpdate; 
             this.onFinish = onFinish; 
@@ -569,7 +576,7 @@
             // Uruchom timer aktualizacji 
             this.timer = setInterval(() => this.update(), this.updateInterval); 
         } 
-        
+
         stop() { 
             if (this.timer) { 
                 clearInterval(this.timer); 
@@ -578,7 +585,7 @@
             this.state = 'IDLE'; 
             addLogMessage('[ZN-Tuner] Auto-tuning zatrzymany', 'warn'); 
         } 
-        
+
         update() { 
             if (this.state === 'IDLE' || this.state === 'FINISHED' || this.state === 'ERROR') { 
                 return; 
@@ -628,7 +635,7 @@
                 avgPeriod: this.getAveragePeriod() 
             }); 
         } 
-        
+
         handleSearchingState(currentPitch, currentTime) { 
             // Sprawdz czy sa juz jakies oscylacje 
             if (this.pitchHistory.length >= 20) { 
@@ -643,7 +650,7 @@
             // Zwieksz Kp 
             this.increaseKp(); 
         } 
-        
+
         handleDetectingState(currentPitch, currentTime) { 
             // Wykrywaj ekstrema 
             this.detectExtrema(currentPitch, currentTime); 
@@ -671,7 +678,7 @@
                 } 
             } 
         } 
-        
+
         handleMeasuringState(currentPitch, currentTime) { 
             // Kontynuuj wykrywanie ekstremow 
             this.detectExtrema(currentPitch, currentTime); 
@@ -686,7 +693,7 @@
                 this.state = 'DETECTING'; 
             } 
         } 
-        
+
         detectExtrema(currentPitch, currentTime) { 
             if (this.pitchHistory.length < 3) return; 
             const prev = this.pitchHistory[this.pitchHistory.length - 2]; 
@@ -715,7 +722,7 @@
                 this.lastValleyValue = prev; 
             } 
         } 
-        
+
         arePeriodsStable() { 
             if (this.periods.length < this.minRequiredPeriods) return false; 
             const recentPeriods = this.periods.slice(-this.minRequiredPeriods); 
@@ -738,7 +745,7 @@
             } 
             return true; 
         } 
-        
+
         increaseKp() { 
             const oldKp = this.kp; 
             // Adaptacyjny krok - im blizej celu, tym mniejszy krok 
@@ -758,7 +765,7 @@
             addLogMessage(`[ZN-Tuner] Zwiekszam Kp: ${oldKp.toFixed(3)} -> ${this.kp.toFixed(3)}`, 'info'); 
             this.updateRobotParams(); 
         } 
-        
+
         finishTuning() { 
             clearInterval(this.timer); 
             this.timer = null; 
@@ -782,7 +789,7 @@
                 znParams 
             }); 
         } 
-        
+
         calculateZNParameters(ku, tu) { 
             // Klasyczne wzory Ziegler-Nichols dla regulatora PID 
             return { 
@@ -798,7 +805,7 @@
                 pid_no_overshoot: { kp: 0.2 * ku, ki: (0.2 * ku) / (tu / 2.0), kd: (0.2 * ku) * (tu / 3.0) } 
             }; 
         } 
-        
+
         handleError(message) { 
             clearInterval(this.timer); 
             this.timer = null; 
@@ -810,18 +817,18 @@
             sendBleMessage({ type: 'set_param', key: 'kd_b', value: 0.0 }); 
             this.onError(message); 
         } 
-        
+
         // Funkcje pomocnicze 
         getCurrentPitch() { 
             // Pobierz z globalnej zmiennej telemetrii 
             return window.telemetryData ? window.telemetryData.pitch : 0; 
         } 
-        
+
         getCurrentAmplitude() { 
             if (this.amplitudes.length === 0) return 0; 
             return this.amplitudes[this.amplitudes.length - 1]; 
         } 
-        
+
         getRecentAmplitude() { 
             if (this.pitchHistory.length < 10) return 0; 
             const recent = this.pitchHistory.slice(-20); 
@@ -829,12 +836,12 @@
             const min = Math.min(...recent); 
             return max - min; 
         } 
-        
+
         getAveragePeriod() { 
             if (this.periods.length === 0) return 0; 
             return this.periods.reduce((a, b) => a + b, 0) / this.periods.length; 
         } 
-        
+
         resetOscillationDetection() { 
             this.periods = []; 
             this.amplitudes = []; 
@@ -842,7 +849,7 @@
             this.lastValleyTime = 0; 
             this.peakCount = 0; 
         } 
-        
+
         updateRobotParams() { 
             sendBleMessage({ type: 'set_param', key: 'kp_b', value: this.kp }); 
             sendBleMessage({ type: 'set_param', key: 'ki_b', value: 0 }); 
@@ -884,7 +891,7 @@
             this.stagnantGenerations = 0; 
             this.globalBest = null; 
         } 
-        
+
         async run() { 
             this.isCancelled = false; 
             this.isPaused = false; 
@@ -897,7 +904,7 @@
             this._initializePopulation(); 
             await this._evaluatePopulation(); 
             this._updateBestAndStats(); 
-            
+
             for (this.generation = 1; this.generation <= this.options.generations; this.generation++) { 
                 if (this.isCancelled) break; 
                 addLogMessage(`[GA] Generacja ${this.generation}/${this.options.generations}`, 'info'); 
@@ -906,7 +913,7 @@
                     diversity: this._calculateDiversity(), 
                     convergence: this._calculateConvergence() 
                 }); 
-                
+
                 // Sprawdz stagnacje i ewentualnie zrestartuj czesc populacji 
                 if (this._checkStagnation()) { 
                     addLogMessage(`[GA] Wykryto stagnacje, restartuje 30% populacji`, 'warn'); 
@@ -914,19 +921,19 @@
                     await this._evaluateNewIndividuals(); 
                     this.stagnantGenerations = 0; 
                 } 
-                
+
                 const newPopulation = this._createNewGeneration(); 
                 this.population = newPopulation; 
                 await this._evaluatePopulation(); 
                 this._updateBestAndStats(); 
-                
+
                 // Sprawdz konwergencje 
                 if (this.options.convergenceCheck && this._hasConverged()) { 
                     addLogMessage(`[GA] Algorytm skonwergowal w generacji ${this.generation}`, 'success'); 
                     break; 
                 } 
             } 
-            
+
             if (!this.isCancelled) { 
                 addLogMessage(`[GA] Optymalizacja zakonczona. Najlepszy wynik: ${this.globalBest.fitness.toFixed(4)}`, 'success'); 
                 this.options.onFinish?.(this.globalBest, { 
@@ -937,22 +944,22 @@
                 }); 
             } 
         } 
-        
+
         pause() { 
             this.isPaused = true; 
             addLogMessage('[GA] Optymalizacja wstrzymana', 'warn'); 
         } 
-        
+
         resume() { 
             this.isPaused = false; 
             addLogMessage('[GA] Optymalizacja wznowiona', 'info'); 
         } 
-        
+
         cancel() { 
             this.isCancelled = true; 
             addLogMessage('[GA] Optymalizacja anulowana', 'error'); 
         } 
-        
+
         _initializePopulation() { 
             this.population = []; 
             const { kp, kd } = this.options.paramRanges; 
@@ -970,7 +977,7 @@
             } 
             addLogMessage(`[GA] Zainicjalizowano populacje ${this.options.populationSize} osobnikow`, 'info'); 
         } 
-        
+
         _latinHypercubeSample(n, min, max) { 
             const samples = []; 
             for (let i = 0; i < n; i++) { 
@@ -985,7 +992,7 @@
             } 
             return samples; 
         } 
-        
+
         async _evaluatePopulation() { 
             for (let i = 0; i < this.population.length; i++) { 
                 const individual = this.population[i]; 
@@ -995,7 +1002,7 @@
             } 
             this.population.sort((a, b) => a.fitness - b.fitness); 
         } 
-        
+
         async _evaluateNewIndividuals() { 
             for (let i = 0; i < this.population.length; i++) { 
                 const individual = this.population[i]; 
@@ -1005,14 +1012,14 @@
             } 
             this.population.sort((a, b) => a.fitness - b.fitness); 
         } 
-        
+
         async _evaluateIndividual(individual, index) { 
             while (this.isPaused) { 
                 if (this.isCancelled) return; 
                 await this._sleep(500); 
             } 
             if (this.isCancelled) return; 
-            
+
             this.options.onIndividualStart?.(this.generation, index, individual); 
             try { 
                 let rawFitness = await this.options.fitnessFunction(individual); 
@@ -1041,18 +1048,18 @@
             } 
             this.options.onIndividualFinish?.(this.generation, index, individual); 
         } 
-        
+
         _createNewGeneration() { 
             const newPopulation = []; 
             const eliteCount = Math.floor(this.options.populationSize * this.options.elitism); 
-            
+
             // Dodaj elite (najlepsze osobniki) 
             for (let i = 0; i < eliteCount; i++) { 
                 const elite = { ...this.population[i] }; 
                 elite.age++; 
                 newPopulation.push(elite); 
             } 
-            
+
             // Wypelnij reszte populacji przez crossover i mutacje 
             while (newPopulation.length < this.options.populationSize) { 
                 const parent1 = this._tournamentSelection(); 
@@ -1076,7 +1083,7 @@
             } 
             return newPopulation; 
         } 
-        
+
         _tournamentSelection() { 
             let best = null; 
             for (let i = 0; i < this.options.tournamentSize; i++) { 
@@ -1087,7 +1094,7 @@
             } 
             return { ...best }; // Kopia 
         } 
-        
+
         _blendCrossover(parent1, parent2) { 
             const alpha = 0.5; 
             const child1 = { fitness: Infinity, age: 0 }; 
@@ -1106,7 +1113,7 @@
             child2.kd = Math.random() * (max_kd - min_kd) + min_kd; 
             return [child1, child2]; 
         } 
-        
+
         _mutate(individual) { 
             const adaptiveFactor = this.options.adaptiveMutation ? (1.0 - (this.generation / this.options.generations) * 0.7) : 1.0; 
             if (Math.random() < this.options.mutationRate) { 
@@ -1118,7 +1125,7 @@
                 individual.kd += this._gaussianRandom() * sigma_kd; 
             } 
         } 
-        
+
         _gaussianRandom() { 
             // Box-Muller transform dla prawdziwej mutacji gaussowskiej 
             if (this._spare !== undefined) { 
@@ -1132,13 +1139,13 @@
             this._spare = mag * Math.cos(2.0 * Math.PI * u2); 
             return mag * Math.sin(2.0 * Math.PI * u2); 
         } 
-        
+
         _clamp(individual) { 
             const { kp, kd } = this.options.paramRanges; 
             individual.kp = Math.max(kp[0], Math.min(kp[1], individual.kp)); 
             individual.kd = Math.max(kd[0], Math.min(kd[1], individual.kd)); 
         } 
-        
+
         _calculateDiversity() { 
             if (this.population.length === 0) return 0; 
             const meanKp = this.population.reduce((sum, ind) => sum + ind.kp, 0) / this.population.length; 
@@ -1149,7 +1156,7 @@
             }); 
             return totalVariance / this.population.length; 
         } 
-        
+
         _calculateConvergence() { 
             if (this.bestFitnessHistory.length < 2) return 0; 
             const recent = this.bestFitnessHistory.slice(-5); 
@@ -1157,7 +1164,7 @@
             const improvement = recent[0] - recent[recent.length - 1]; 
             return improvement / recent[0]; // Wzgledna poprawa 
         } 
-        
+
         _checkStagnation() { 
             if (this.bestFitnessHistory.length < 3) return false; 
             const diversity = this._calculateDiversity(); 
@@ -1169,7 +1176,7 @@
             } 
             return this.stagnantGenerations >= this.options.maxStagnantGenerations; 
         } 
-        
+
         _hasConverged() { 
             if (this.bestFitnessHistory.length < 5) return false; 
             const recent = this.bestFitnessHistory.slice(-5); 
@@ -1177,7 +1184,7 @@
             const relativeImprovement = improvement / recent[0]; 
             return relativeImprovement < 0.001; // 0.1% poprawa w ostatnich 5 generacjach 
         } 
-        
+
         _injectRandomIndividuals(count) { 
             const { kp, kd } = this.options.paramRanges; 
             // Zastap najgorsze osobniki nowymi losowymi 
@@ -1192,7 +1199,7 @@
                 }; 
             } 
         } 
-        
+
         _updateBestAndStats() { 
             if (this.population.length === 0) return; 
             const currentBest = this.population[0]; 
@@ -1208,11 +1215,11 @@
             } 
             this.options.onStatsUpdate?.({ generationBest: currentBest, globalBest: this.globalBest }); 
         } 
-        
+
         _sleep(ms) { 
             return new Promise(resolve => setTimeout(resolve, ms)); 
         } 
-        
+
         // Metody pomocnicze dla debugowania 
         getStats() { 
             return { 
@@ -1224,7 +1231,7 @@
                 stagnantGenerations: this.stagnantGenerations 
             }; 
         } 
-        
+
         getBestIndividual() { 
             return this.globalBest ? { ...this.globalBest } : null; 
         } 
@@ -1661,9 +1668,9 @@
         }
     }
 
-    // =======================================================================================
-    // === INTELIGENTNY SYSTEM STROJENIA KASKADY PID (Z INFO4.TXT) ===
-    // =======================================================================================
+    // ======================================================================================= 
+    // === INTELIGENTNY SYSTEM STROJENIA KASKADY PID (Z INFO4.TXT) === 
+    // ======================================================================================= 
     class CascadePIDTuner { 
         constructor() { 
             this.cascadeStructure = ['balance', 'speed', 'position']; // Od wewnetrznej do zewnetrznej 
@@ -1678,7 +1685,7 @@
             this.tuningHistory = []; 
             this.convergenceThreshold = 0.02; 
         } 
-        
+
         // Glowna funkcja automatycznego strojenia kaskady 
         async startAutomaticCascadeTuning(onProgress, onComplete) { 
             if (this.isAutoTuning) { 
@@ -1707,7 +1714,7 @@
                 this.isAutoTuning = false; 
             } 
         } 
-        
+
         // Walidacja petli balansu 
         async validateBalanceLoop() { 
             addLogMessage('[Kaskada] Sprawdzam petle balansu...', 'info'); 
@@ -1721,7 +1728,7 @@
             addLogMessage('[Kaskada] ✓ Petla balansu jest stabilna', 'success'); 
             this.systemModel.balance = balanceParams; 
         } 
-        
+
         // Automatyczne strojenie petli predkosci 
         async autoTuneSpeedLoop() { 
             addLogMessage('[Kaskada] Stroje petle predkosci...', 'info'); 
@@ -1742,7 +1749,7 @@
             await setSpeedParameters(optimalParams.kp, optimalParams.ki, optimalParams.kd); 
             addLogMessage('[Kaskada] ✓ Petla predkosci nastrojona', 'success'); 
         } 
-        
+
         // Automatyczne strojenie petli pozycji 
         async autoTunePositionLoop() { 
             addLogMessage('[Kaskada] Stroje petle pozycji...', 'info'); 
@@ -1763,7 +1770,7 @@
             await setPositionParameters(optimalParams.kp, optimalParams.ki, optimalParams.kd); 
             addLogMessage('[Kaskada] ✓ Petla pozycji nastrojona', 'success'); 
         } 
-        
+
         // Optymalizacja calej kaskady 
         async optimizeEntireCascade() { 
             addLogMessage('[Kaskada] Optymalizuje cala kaskade...', 'info'); 
@@ -1790,7 +1797,7 @@
             }
         }
     } 
-    
+
     // ======================================================================================= 
     // === SPECJALIZOWANE TUNERY DLA POSZCZEGOLNYCH PETLI === 
     // ======================================================================================= 
@@ -1800,7 +1807,7 @@
             this.testSpeeds = [50, 100, 200]; // cm/s 
             this.testDurations = [3.0, 4.0, 5.0]; // sekundy 
         } 
-        
+
         async findOptimalParameters(options = {}) { 
             const candidates = this.generateParameterCandidates(); 
             let bestParams = null; 
@@ -1820,7 +1827,7 @@
             } 
             return bestParams; 
         } 
-        
+
         generateParameterCandidates() { 
             const candidates = []; 
             // Na podstawie charakterystyk petli balansu, wygeneruj sensowne zakresy 
@@ -1839,7 +1846,7 @@
             } 
             return candidates; 
         } 
-        
+
         async evaluateSpeedLoop(params) { 
             let totalScore = 0; 
             let testCount = 0; 
@@ -1855,7 +1862,7 @@
             } 
             return totalScore / testCount; 
         } 
-        
+
         async runSpeedTest(targetSpeed, duration) { 
             return new Promise((resolve) => { 
                 const testData = []; 
@@ -1884,7 +1891,7 @@
                 collectData(); 
             }); 
         } 
-        
+
         calculateSpeedScore(testData, targetSpeed) { 
             if (testData.length < 10) return 1000; 
             const impulsesPerCm = getImpulsesPerCm(); 
@@ -1903,14 +1910,14 @@
             // Funkcja kosztu (im mniejsza, tym lepiej) 
             return rmse * 1.0 + settlingTime * 2.0 + overshoot * 3.0 + steadyStateVar * 0.5; 
         } 
-        
+
         estimateInitialKp() { 
             // Na podstawie parametrow balansu oszacuj punkt startowy dla Kp predkosci 
             const balanceKp = parseFloat(document.getElementById('balanceKpInput').value); 
             // Heurystyka: Kp predkosci powinien byc znacznie mniejszy niz Kp balansu 
             return Math.max(0.01, balanceKp * 0.05); 
         } 
-        
+
         calculateSpeedSettlingTime(speeds, target) { 
             const tolerance = target * 0.05; // 5% tolerancja 
             for (let i = Math.floor(speeds.length * 0.2); i < speeds.length; i++) { 
@@ -1921,26 +1928,26 @@
             } 
             return 10; // Kara za brak stabilizacji 
         } 
-        
+
         calculateVariance(array) { 
             if(array.length === 0) return 0;
             const mean = array.reduce((a, b) => a + b, 0) / array.length; 
             return array.reduce((sum, val) => sum + (val - mean) ** 2, 0) / array.length; 
         } 
-        
+
         async setTempParameters(params) { 
             await setSpeedParameters(params.kp, params.ki, params.kd); 
             await sleep(500); // Daj czas na aktualizacje 
         } 
     } 
-    
+
     class PositionLoopTuner { 
         constructor(systemModel) { 
             this.systemModel = systemModel; 
             this.testDistances = [20, 50, 100]; // cm 
             this.testTypes = ['step', 'ramp']; 
         } 
-        
+
         async findOptimalParameters(options = {}) { 
             // Podobna logika jak SpeedLoopTuner, ale dla pozycji 
             const candidates = this.generatePositionCandidates(); 
@@ -1959,7 +1966,7 @@
             } 
             return bestParams; 
         } 
-        
+
         async evaluatePositionLoop(params) { 
             let totalScore = 0; 
             let testCount = 0; 
@@ -1972,7 +1979,7 @@
             } 
             return totalScore / testCount; 
         } 
-        
+
         async runPositionTest(targetDistance) { 
             return new Promise((resolve) => { 
                 const testData = []; 
@@ -2000,7 +2007,7 @@
                 collectData(); 
             }); 
         } 
-        
+
         calculatePositionScore(testData, targetDistance) { 
             if (testData.length < 20) return 1000; 
             const positions = testData.map(d => d.position); 
@@ -2018,7 +2025,7 @@
             // Funkcja kosztu 
             return overshootPercent * 2.0 + finalError * 5.0 + settlingTime * 1.0 + iae * 0.5; 
         } 
-        
+
         calculatePositionSettlingTime(positions, target, times) { 
             const tolerance = Math.abs(target) * 0.05; // 5% tolerancja 
             for (let i = positions.length - 1; i >= Math.floor(positions.length * 0.3); i--) { 
@@ -2028,7 +2035,7 @@
             } 
             return times[Math.floor(positions.length * 0.3)]; 
         } 
-        
+
         generatePositionCandidates() { 
             const candidates = []; 
             const baseKp = this.estimateInitialPositionKp(); 
@@ -2045,19 +2052,19 @@
             } 
             return candidates; 
         } 
-        
+
         estimateInitialPositionKp() { 
             const speedKp = parseFloat(document.getElementById('speedKpInput').value); 
             // Pozycja powinna byc jeszcze wolniejsza niz predkosc 
             return Math.max(0.01, speedKp * 0.1); 
         } 
-        
+
         async setTempParameters(params) { 
             await setPositionParameters(params.kp, params.ki, params.kd); 
             await sleep(500); 
         } 
     } 
-    
+
     // ======================================================================================= 
     // === FUNKCJE POMOCNICZE I INTERFEJS DLA KASKADY === 
     // ======================================================================================= 
@@ -2069,7 +2076,7 @@
         sendBleMessage({ type: 'set_param', key: 'ki_s', value: ki }); 
         sendBleMessage({ type: 'set_param', key: 'kd_s', value: kd }); 
     } 
-    
+
     async function setPositionParameters(kp, ki, kd) { 
         document.getElementById('positionKpInput').value = kp.toFixed(4); 
         document.getElementById('positionKiInput').value = ki.toFixed(4); 
@@ -2078,10 +2085,10 @@
         sendBleMessage({ type: 'set_param', key: 'ki_p', value: ki }); 
         sendBleMessage({ type: 'set_param', key: 'kd_p', value: kd }); 
     } 
-    
+
     // Glowny interfejs 
     const cascadeTuner = new CascadePIDTuner(); 
-    
+
     async function startAutomaticCascadeTuningWrapper() { 
         if (!checkTuningPrerequisites(['BALANSUJE', 'TRZYMA_POZYCJE'])) return;
         await cascadeTuner.startAutomaticCascadeTuning( 
@@ -2096,7 +2103,7 @@
             } 
         ); 
     } 
-    
+
     // Dodaj przycisk do interfejsu 
     function addCascadeTuningButton() { 
         const cascadeAccordion = document.querySelector('button.accordion-header:nth-of-type(3)').nextElementSibling;
@@ -2111,7 +2118,7 @@
             cascadeAccordion.appendChild(button);
         }
     }
-    
+
     // Inicjalizacja ulepszonego asystenta
     const advancedAssistant = new AdvancedPIDTuningAssistant();
 
@@ -2194,7 +2201,7 @@
             }
         }
     }
-    
+
     async function _sendRawBleMessage(message) { if (!rxCharacteristic) return; try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
     async function processBleQueue() { if (isSendingBleMessage || bleMessageQueue.length === 0 || !rxCharacteristic) return; isSendingBleMessage = true; const message = bleMessageQueue.shift(); await _sendRawBleMessage(message); setTimeout(() => { isSendingBleMessage = false; processBleQueue(); }, BLE_SEND_INTERVAL); }
     function sendBleMessage(message) { bleMessageQueue.push(message); processBleQueue(); }
@@ -2231,14 +2238,30 @@
                 break;
         }
     }
-    
+
     function applyFullConfig(params) { for (const [inputId, snakeKey] of Object.entries(parameterMapping)) { const input = document.getElementById(inputId); if (input && params[snakeKey] !== undefined) { let value = params[snakeKey]; if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) { value = (value * 100); } input.value = value; } } }
-    function updateTelemetryUI(data) { if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state; if (data.loop_time !== undefined) document.getElementById('loopTimeVal').textContent = data.loop_time + ' \u00B5s'; if (data.pitch !== undefined) { document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0'; document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`; if(data.type !== '3d_telemetry') currentPitch3D = data.pitch; document.getElementById('robot3d-pitch').textContent = data.pitch.toFixed(1) + '°'; } if (data.roll !== undefined) { document.getElementById('rollVal').textContent = data.roll.toFixed(1) + ' \u00B0'; if(data.type !== '3d_telemetry') currentRoll3D = data.roll; document.getElementById('robot3d-roll').textContent = data.roll.toFixed(1) + '°'; } if (data.yaw !== undefined) { if(data.type !== '3d_telemetry') currentYaw3D = data.yaw; } if (data.speed !== undefined) { document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0); const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820; const wheelRpm = (parseFloat(data.speed) / ppr) * 60; document.getElementById('robot3d-wheel-speed').textContent = wheelRpm.toFixed(0) + ' obr/min'; } if (data.encoder_left !== undefined) { if(data.type !== '3d_telemetry') currentEncoderLeft = data.encoder_left; document.getElementById('encoderLeftVal').textContent = data.encoder_left; } if (data.encoder_right !== undefined) { if(data.type !== '3d_telemetry') currentEncoderRight = data.encoder_right; document.getElementById('encoderRightVal').textContent = data.encoder_right; } if (data.states && !AppState.isApplyingConfig) { AppState.isApplyingConfig = true; document.getElementById('balanceSwitch').checked = data.states.balancing; document.getElementById('holdPositionSwitch').checked = data.states.holding_pos; document.getElementById('speedModeSwitch').checked = data.states.speed_mode; AppState.isApplyingConfig = false; } const emergencyBanner = document.getElementById('emergency-banner'); if (emergencyBanner) emergencyBanner.style.display = data.states && data.states.emergency_stop ? 'block' : 'none'; }
-    
+    function updateTelemetryUI(data) {
+        if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
+        if (data.loop_time !== undefined) document.getElementById('loopTimeVal').textContent = data.loop_time + ' \u00B5s';
+        if (data.pitch !== undefined) { document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0'; document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`; if(data.type !== '3d_telemetry') currentPitch3D = data.pitch; document.getElementById('robot3d-pitch').textContent = data.pitch.toFixed(1) + '°'; }
+        if (data.roll !== undefined) { document.getElementById('rollVal').textContent = data.roll.toFixed(1) + ' \u00B0'; if(data.type !== '3d_telemetry') currentRoll3D = data.roll; document.getElementById('robot3d-roll').textContent = data.roll.toFixed(1) + '°'; }
+        if (data.yaw !== undefined) { if(data.type !== '3d_telemetry') currentYaw3D = data.yaw; }
+        if (data.speed !== undefined) { document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0); const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820; const wheelRpm = (parseFloat(data.speed) / ppr) * 60; document.getElementById('robot3d-wheel-speed').textContent = wheelRpm.toFixed(0) + ' obr/min'; }
+        if (data.encoder_left !== undefined) { if(data.type !== '3d_telemetry') currentEncoderLeft = data.encoder_left; document.getElementById('encoderLeftVal').textContent = data.encoder_left; }
+        if (data.encoder_right !== undefined) { if(data.type !== '3d_telemetry') currentEncoderRight = data.encoder_right; document.getElementById('encoderRightVal').textContent = data.encoder_right; }
+        // Dodano obsługę statusu kalibracji BNO055
+        if (data.calib_sys !== undefined) document.getElementById('calibSysVal').textContent = data.calib_sys;
+        if (data.calib_accel !== undefined) document.getElementById('calibAccelVal').textContent = data.calib_accel;
+        if (data.calib_gyro !== undefined) document.getElementById('calibGyroVal').textContent = data.calib_gyro;
+        if (data.calib_mag !== undefined) document.getElementById('calibMagVal').textContent = data.calib_mag;
+        if (data.states && !AppState.isApplyingConfig) { AppState.isApplyingConfig = true; document.getElementById('balanceSwitch').checked = data.states.balancing; document.getElementById('holdPositionSwitch').checked = data.states.holding_pos; document.getElementById('speedModeSwitch').checked = data.states.speed_mode; AppState.isApplyingConfig = false; }
+        const emergencyBanner = document.getElementById('emergency-banner'); if (emergencyBanner) emergencyBanner.style.display = data.states && data.states.emergency_stop ? 'block' : 'none';
+    }
+
     const telemetryChart = new Chart(document.getElementById('telemetryChart'), { type: 'line', data: { labels: Array(200).fill(''), datasets: [] }, options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { type: 'linear', display: true, position: 'left', ticks: { color: '#61dafb' }, title: { display: true, text: 'Wartosc', color: '#61dafb' } } }, plugins: { legend: { labels: { color: '#fff' } } } } });
     function updateChart(data) { const chartData = telemetryChart.data; if (chartData.labels.length >= 200) chartData.labels.shift(); chartData.labels.push(''); for (const [key, value] of Object.entries(data)) { if (availableTelemetry[key] && value !== undefined) { let dataset = chartData.datasets.find(ds => ds.label === availableTelemetry[key].label); if (!dataset) continue; if (dataset.data.length >= 200) dataset.data.shift(); dataset.data.push(value); } } chartData.datasets.forEach(ds => { if (ds.data.length < chartData.labels.length) { if (ds.data.length >= 200) ds.data.shift(); ds.data.push(null); } }); telemetryChart.update('none'); }
     function setupChartControls() { const container = document.getElementById('chartControls'); container.innerHTML = ''; const defaultChecked = ['pitch', 'speed']; Object.keys(availableTelemetry).forEach((key) => { const label = document.createElement('label'), checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.value = key; checkbox.checked = defaultChecked.includes(key); checkbox.addEventListener('change', (e) => { const varName = e.target.value; if (e.target.checked) { if (!telemetryChart.data.datasets.find(ds => ds.label === availableTelemetry[varName].label)) { telemetryChart.data.datasets.push({ label: availableTelemetry[varName].label, data: Array(telemetryChart.data.labels.length).fill(null), borderColor: availableTelemetry[varName].color, fill: false, tension: 0.1, pointRadius: 0 }); } } else { const datasetIndex = telemetryChart.data.datasets.findIndex(ds => ds.label === availableTelemetry[varName].label); if (datasetIndex > -1) telemetryChart.data.datasets.splice(datasetIndex, 1); } telemetryChart.update(); }); label.appendChild(checkbox); label.append(` ${availableTelemetry[key].label}`); container.appendChild(label); if (checkbox.checked) checkbox.dispatchEvent(new Event('change')); }); }
-    
+
     function initJoystick() { const wrapper = document.getElementById('joystickWrapper'); const size = wrapper.clientWidth; const joystickCanvas = document.getElementById('joystickCanvas'); const joystickCtx = joystickCanvas.getContext('2d'); joystickCanvas.width = size; joystickCanvas.height = size; joystickCenter = { x: size / 2, y: size / 2 }; joystickRadius = size / 2 * 0.75; knobRadius = size / 2 * 0.25; drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y); }
     function drawJoystick(ctx, x, y) { ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); ctx.beginPath(); ctx.arc(joystickCenter.x, joystickCenter.y, joystickRadius, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.fill(); ctx.beginPath(); ctx.arc(x, y, knobRadius, 0, 2 * Math.PI); ctx.fillStyle = '#61dafb'; ctx.fill(); }
     function handleJoystickStart(event) { event.preventDefault(); isDragging = true; }
@@ -2250,21 +2273,24 @@
     window.addEventListener('gampaddisconnected', (e) => { gamepadIndex = null; document.getElementById('gamepadStatus').textContent = 'Brak'; document.getElementById('gamepadStatus').style.color = '#f7b731'; addLogMessage('[UI] Gamepad rozlaczony.', 'warn'); });
     function startMapping(action, buttonElement) { if (gamepadIndex === null) { addLogMessage("Podlacz gamepada, aby rozpoczac mapowanie!", "warn"); return; } isMappingButton = true; actionToMap = action; document.querySelectorAll('.mapping-button').forEach(btn => btn.textContent = "Przypisz"); buttonElement.textContent = "Czekam..."; addLogMessage(`[UI] Nasluchiwanie na przycisk dla akcji: ${availableActions[action].label}...`, "info"); }
     function renderMappingModal() { const list = document.getElementById('gamepad-mapping-list'); list.innerHTML = ''; for (const [action, config] of Object.entries(availableActions)) { const row = document.createElement('div'); row.className = 'mapping-row'; const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action); row.innerHTML = `<span class="mapping-label">${config.label}</span><span class="mapping-display">${buttonIndex !== undefined ? `Przycisk ${buttonIndex}` : 'Brak'}</span><button class="mapping-button" data-action="${action}">Przypisz</button>`; list.appendChild(row); } list.querySelectorAll('.mapping-button').forEach(button => { button.addEventListener('click', (e) => { const action = e.target.dataset.action; startMapping(action, e.target); }); }); }
-    
+
     function populatePresetSelect() { const select = document.getElementById('pidPresetSelect'); select.innerHTML = ''; for (const [index, preset] of Object.entries(builtInPresetsData)) { const option = document.createElement('option'); option.value = index; option.textContent = preset.name; select.appendChild(option); } for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key.startsWith(CUSTOM_PRESET_PREFIX)) { const presetName = key.substring(CUSTOM_PRESET_PREFIX.length); const option = document.createElement('option'); option.value = key; option.textContent = `Wlasny: ${presetName}`; select.appendChild(option); } } }
     async function applySelectedPreset() { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; let presetData; if (selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { presetData = JSON.parse(localStorage.getItem(selectedValue)); } else { presetData = builtInPresetsData[selectedValue]?.params; } if (presetData) { AppState.isApplyingConfig = true; for (const [key, value] of Object.entries(presetData)) { const input = document.getElementById(key); if (input) { input.value = value; } } AppState.isApplyingConfig = false; addLogMessage('[UI] Zastosowano wartosci presetu. Zapisz na robocie, aby wyslac.', 'info'); } }
     function saveCurrentAsPreset() { const presetName = prompt("Podaj nazwe dla nowego presetu:", ""); if (presetName && presetName.trim() !== "") { const presetData = {}; Object.keys(parameterMapping).forEach(inputId => { const input = document.getElementById(inputId); if (input) { presetData[inputId] = parseFloat(input.value); } }); localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData)); addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success'); populatePresetSelect(); } }
     function deleteSelectedPreset() { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; if (!selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { addLogMessage('[UI] Nie mozna usunac wbudowanego presetu.', 'warn'); return; } if (confirm(`Czy na pewno chcesz usunac preset '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'?`)) { localStorage.removeItem(selectedValue); addLogMessage(`[UI] Usunieto preset.`, 'info'); populatePresetSelect(); } }
-    
+
     function setupNumericInputs() { document.querySelectorAll('.numeric-input-wrapper').forEach(wrapper => { const container = wrapper.closest('.setting-container') || wrapper.closest('.pwm-input-row'); if (!container) return; const input = container.querySelector('input[type=number]'); const minusBtn = wrapper.querySelector('button:first-child'); const plusBtn = wrapper.querySelector('button:last-child'); if (!input || !minusBtn || !plusBtn || input.disabled) return; const step = parseFloat(input.step) || 1; const isFloat = input.step.includes('.'); const updateValue = (amount) => { let current = parseFloat(input.value); if (isNaN(current)) current = 0; let newValue = current + amount; if (isFloat) { const dp = (step.toString().split('.')[1] || '').length; newValue = parseFloat(newValue.toFixed(dp)); } const min = parseFloat(input.min); const max = parseFloat(input.max); if (!isNaN(min)) newValue = Math.max(min, newValue); if (!isNaN(max)) newValue = Math.min(max, newValue); input.value = newValue; input.dispatchEvent(new Event('change', { bubbles: true })); }; minusBtn.addEventListener('click', () => updateValue(-step)); plusBtn.addEventListener('click', () => updateValue(step)); }); }
     function sendFullConfigToRobot() { const params = {}; for (const [inputId, snakeKey] of Object.entries(parameterMapping)) { const input = document.getElementById(inputId); if (input) { let value = parseFloat(input.value); if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) { value /= 100.0; } params[snakeKey] = value; } } addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info'); sendBleMessage({ type: 'full_config', params }); }
-    function setupEventListeners() { const sendSingleParam = (inputId, value) => { if (AppState.isApplyingConfig) return; const snakeKey = parameterMapping[inputId]; if (snakeKey) { if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) { value /= 100.0; } sendBleMessage({ type: 'set_param', key: snakeKey, value: value }); } }; const debouncedSendSingleParam = debounce(sendSingleParam, 400); document.querySelectorAll('.config-value').forEach(input => { input.addEventListener('change', (e) => { debouncedSendSingleParam(e.target.id, parseFloat(e.target.value)); }); }); document.getElementById('joystickCanvas').addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); document.getElementById('joystickCanvas').addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd); document.getElementById('connectBleBtn').addEventListener('click', connectBLE); ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { if (AppState.isApplyingConfig) return; const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); }); const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } }; for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); } document.getElementById('saveBtn').addEventListener('click', () => { if (confirm("Czy na pewno chcesz trwale zapisac biezaca konfiguracje znajdujaca sie na robocie do jego pamieci EEPROM?")) { sendBleMessage({ type: 'save_tunings' }); } }); document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { sendBleMessage({ type: 'request_full_config' }); } }); document.getElementById('calibrateMpuBtn')?.addEventListener('click', () => { if (confirm("WAZNE! Ta procedura skalibruje zyroskop i ustawi poczatkowy kat zerowy. Upewnij sie, ze robot stoi idealnie nieruchomo i poziomo na ziemi. Kontynuowac?")) { sendBleMessage({ type: 'calibrate_mpu' }); } }); document.getElementById('calibrateZeroPointBtn')?.addEventListener('click', () => { if (confirm("Upewnij sie, ze robot stoi na idealnie plaskiej powierzchni. Robot bedzie balansowal przez 10 sekund w celu znalezienia dokladnego punktu rownowagi. Kontynuowac?")) { sendBleMessage({ type: 'calibrate_zero_point' }); } }); document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset); document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container') || icon.closest('.control-row'); if(!container) return; const helpText = container.nextElementSibling.classList.contains('help-text') ? container.nextElementSibling : container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); }); }
+    function setupEventListeners() { const sendSingleParam = (inputId, value) => { if (AppState.isApplyingConfig) return; const snakeKey = parameterMapping[inputId]; if (snakeKey) { if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) { value /= 100.0; } sendBleMessage({ type: 'set_param', key: snakeKey, value: value }); } }; const debouncedSendSingleParam = debounce(sendSingleParam, 400); document.querySelectorAll('.config-value').forEach(input => { input.addEventListener('change', (e) => { debouncedSendSingleParam(e.target.id, parseFloat(e.target.value)); }); }); document.getElementById('joystickCanvas').addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); document.getElementById('joystickCanvas').addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd); document.getElementById('connectBleBtn').addEventListener('click', connectBLE); ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { if (AppState.isApplyingConfig) return; const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); }); const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } }; for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); } document.getElementById('saveBtn').addEventListener('click', () => { if (confirm("Czy na pewno chcesz trwale zapisac biezaca konfiguracje znajdujaca sie na robocie do jego pamieci EEPROM?")) { sendBleMessage({ type: 'save_tunings' }); } }); document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { sendBleMessage({ type: 'request_full_config' }); } });
+        // [ZMIANA] Zaktualizowano logike przycisku kalibracji dla BNO055
+        document.getElementById('calibrateMpuBtn')?.addEventListener('click', () => { if (confirm("Spowoduje to wyslanie zapytania o status kalibracji czujnika BNO055. Aby poprawic kalibracje, mozesz powoli obracac robotem we wszystkich osiach, az statusy osiagna poziom 3. Kontynuowac?")) { sendBleMessage({ type: 'calibrate_mpu' }); } });
+        document.getElementById('calibrateZeroPointBtn')?.addEventListener('click', () => { if (confirm("Upewnij sie, ze robot stoi na idealnie plaskiej powierzchni. Robot bedzie balansowal przez 10 sekund w celu znalezienia dokladnego punktu rownowagi. Kontynuowac?")) { sendBleMessage({ type: 'calibrate_zero_point' }); } }); document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset); document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container') || icon.closest('.control-row'); if(!container) return; const helpText = container.nextElementSibling.classList.contains('help-text') ? container.nextElementSibling : container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); }); }
     function setupManualTuneButtons() { document.querySelectorAll('.manual-tune-row').forEach(row => { const motor = row.dataset.motor; const direction = row.dataset.direction; const input = row.querySelector('.tune-input'); const testBtn = row.querySelector('.test-btn'); const stopBtn = row.querySelector('.stop-btn'); const autoBtn = row.querySelector('.auto-btn'); testBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: parseInt(input.value) }); }); stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); }); autoBtn.addEventListener('click', (e) => { if (confirm("UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?")) { const startValue = parseInt(document.getElementById('pwmTuneStartInput').value); sendBleMessage({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue }); e.target.disabled = true; e.target.textContent = 'Szukanie...'; addLogMessage(`[UI] Rozpoczynam auto-strojenie dla ${motor} ${direction}...`, 'info'); } }); }); document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); }); }
     function setupGamepadMappingModal() { document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; }); document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; }); }
     function flashElement(element) { if (!element) return; const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element; target.classList.add('gamepad-flash'); setTimeout(() => target.classList.remove('gamepad-flash'), 300); }
     function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
     function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
-    
+
     function setupDpadControls() { document.querySelectorAll('.dpad-btn').forEach(btn => { btn.addEventListener('click', (e) => { const action = e.currentTarget.dataset.dpad; if (action === 'up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'stop') sendBleMessage({ type: 'command_stop' }); }); }); }
     function setupSequenceControls() { document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep); document.getElementById('run-sequence-btn').addEventListener('click', runSequence); document.getElementById('stop-sequence-btn').addEventListener('click', stopSequenceExecution); document.getElementById('clear-sequence-btn').addEventListener('click', clearSequence); }
     function addSequenceStep() { const list = document.getElementById('sequence-list'); if (list.children.length >= MAX_SEQUENCE_STEPS) return; const stepDiv = document.createElement('div'); stepDiv.className = 'sequence-step'; stepDiv.innerHTML = ` <select class="sequence-type"> <option value="move_fwd">Przod (cm)</option><option value="move_bwd">Tyl (cm)</option> <option value="rotate_r">Obrot Prawo (st.)</option><option value="rotate_l">Obrot Lewo (st.)</option> </select> <input type="number" class="sequence-value" value="20"> <button class="remove-step-btn">&times;</button> `; list.appendChild(stepDiv); updateAccordionHeight(list.closest('.accordion-content')); stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => { stepDiv.remove(); updateAccordionHeight(list.closest('.accordion-content')); }); }
@@ -2274,7 +2300,7 @@
     function updateSequenceUI() { document.querySelectorAll('.sequence-step').forEach((step, index) => { step.classList.toggle('executing', AppState.isSequenceRunning && index === currentSequenceStep); }); document.getElementById('run-sequence-btn').disabled = AppState.isSequenceRunning; document.getElementById('add-sequence-step-btn').disabled = AppState.isSequenceRunning; document.getElementById('clear-sequence-btn').disabled = AppState.isSequenceRunning; document.getElementById('stop-sequence-btn').disabled = !AppState.isSequenceRunning; }
     function checkAndExecuteNextSequenceStep(previousState) { const wasWorking = ['RUCH_AUTONOMICZNY', 'OBROT_AUTONOMICZNY'].includes(previousState); const isReady = ['TRZYMA_POZYCJE', 'BALANSUJE'].includes(AppState.lastKnownRobotState); if (AppState.isSequenceRunning && wasWorking && isReady) { addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info'); currentSequenceStep++; executeNextSequenceStep(); } }
     function executeNextSequenceStep() { const steps = document.querySelectorAll('.sequence-step'); if (!AppState.isSequenceRunning || currentSequenceStep >= steps.length) { if (AppState.isSequenceRunning) { AppState.isSequenceRunning = false; addLogMessage('[UI] Sekwencja ukonczona.', 'success'); } updateSequenceUI(); return; } updateSequenceUI(); const stepNode = steps[currentSequenceStep]; const type = stepNode.querySelector('.sequence-type').value; const value = parseFloat(stepNode.querySelector('.sequence-value').value); let command = {}; switch (type) { case 'move_fwd': command = { type: 'execute_move', distance_cm: value }; break; case 'move_bwd': command = { type: 'execute_move', distance_cm: -value }; break; case 'rotate_r': command = { type: 'execute_rotate', angle_deg: value }; break; case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -value }; break; } addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info'); sendBleMessage(command); }
-    
+
     // --- Obsluga Z-N ---
     const znTuner = new ZieglerNicholsTuner();
     function setupZnTuningControls() {
@@ -2290,7 +2316,7 @@
         });
         document.getElementById('applyZnResultsBtn').addEventListener('click', applyZnResults);
     }
-    
+
     function startZnTuning() {
         AppState.isTuningActive = true;
         document.getElementById('znTuningActionBtn').disabled = true;
@@ -2339,13 +2365,13 @@
         const kp = parseFloat(document.getElementById('znKpSuggest').textContent);
         const kd = parseFloat(document.getElementById('znKdSuggest').textContent);
         if (isNaN(kp) || isNaN(kd)) return;
-        
+
         AppState.isApplyingConfig = true;
         document.getElementById('balanceKpInput').value = kp.toFixed(4);
         document.getElementById('balanceKiInput').value = 0.0;
         document.getElementById('balanceKdInput').value = kd.toFixed(4);
         AppState.isApplyingConfig = false;
-        
+
         document.getElementById('balanceKpInput').dispatchEvent(new Event('change', { bubbles: true }));
         document.getElementById('balanceKiInput').dispatchEvent(new Event('change', { bubbles: true }));
         document.getElementById('balanceKdInput').dispatchEvent(new Event('change', { bubbles: true }));
@@ -2375,11 +2401,11 @@
         });
         document.getElementById('applyGaResultsBtn').addEventListener('click', applyGaResults);
     }
-    
+
     function startNewGaSession() {
         if (!checkTuningPrerequisites(['BALANSUJE', 'TRZYMA_POZYCJE'])) return;
         AppState.isTuningActive = true;
-        
+
         const fitnessFunction = (individual) => {
             return new Promise((resolve, reject) => {
                 const onResult = (score) => {
@@ -2427,7 +2453,7 @@
                 sendBleMessage({type: 'set_param', key: 'kd_b', value: bestIndividual.kd});
             }
         });
-        
+
         document.getElementById('gaActionBtn').style.display = 'none';
         document.getElementById('gaPauseBtn').style.display = 'inline-block';
         document.getElementById('gaPauseBtn').textContent = 'Pauzuj Sesje';
@@ -2439,7 +2465,7 @@
         sendBleMessage({type: 'start_ga_session'});
         gaInstance.run();
     }
-    
+
     function resetGaUi() {
         AppState.isTuningActive = false;
         gaInstance = null;
@@ -2448,27 +2474,27 @@
         document.getElementById('gaCancelBtn').style.display = 'none';
         updateGaStatus('Zakonczono', 0, 0);
     }
-    
+
     function updateGaStatus(state = 'W trakcie', generation = 0, individualNum = 0, individual = null) {
         const totalGenerations = parseInt(document.getElementById('gaGenerationsInput').value);
         const populationSize = parseInt(document.getElementById('gaPopulationInput').value);
-        
+
         document.getElementById('gaStatusGeneration').textContent = `Pokolenie ${generation}/${totalGenerations}, Osobnik ${individualNum}/${populationSize}`;
         document.getElementById('gaStatusStateText').textContent = state;
-        
+
         const progress = ((generation - 1) * populationSize + individualNum) / (totalGenerations * populationSize) * 100;
         document.getElementById('gaProgressBar').value = progress;
-        
+
         if (individual) {
             document.getElementById('gaStatusCurrentKp').textContent = individual.kp.toFixed(4);
             document.getElementById('gaStatusCurrentKd').textContent = individual.kd.toFixed(4);
         }
-        
+
         if (gaInstance && gaInstance.globalBest) {
              document.getElementById('gaStatusBestScore').textContent = gaInstance.globalBest.fitness.toFixed(4);
         }
     }
-    
+
     function applyGaResults() {
         const kp = parseFloat(document.getElementById('gaFinalKp').textContent);
         const kd = parseFloat(document.getElementById('gaFinalKd').textContent);
@@ -2494,22 +2520,22 @@
         document.getElementById('startPositionTestBtn').addEventListener('click', runPositionTest);
         document.getElementById('startSpeedTestBtn').addEventListener('click', runSpeedTest);
         document.querySelectorAll('.applyBtn').forEach(btn => btn.addEventListener('click', (e) => applyAssistantSuggestion(e.target.dataset.type)));
-        
+
         document.querySelectorAll('.applyAndRerunBtn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const type = e.target.dataset.type;
                 await applyAssistantSuggestion(type);
-                
+
                 let rerunFunc;
                 if (type === 'balance') rerunFunc = runBalanceTest;
                 else if (type === 'position') rerunFunc = runPositionTest;
                 else if (type === 'speed') rerunFunc = runSpeedTest;
-                
+
                 if(rerunFunc) rerunFunc();
             });
         });
     }
-    
+
     // --- NOWA LOGIKA URUCHAMIANIA TESTOW ---
     function runBalanceTest() { 
         if (!checkTuningPrerequisites(['BALANSUJE', 'TRZYMA_POZYCJE'])) return;
@@ -2536,7 +2562,7 @@
         addLogMessage(`[Asystent] Test predkosci (dystans: ${distance}cm, predkosc: ${speed}cm/s).`, 'info'); 
         sendBleMessage({type: 'execute_speed_test_run', distance_cm: distance, speed_cmps: speed}); 
     }
-    
+
     async function applyAssistantSuggestion(type) {
         let params = {}; let suggestionNode;
         if (type === 'balance') {
@@ -2566,9 +2592,9 @@
         addLogMessage(`[Asystent] Zastosowano i wyslano sugerowane parametry dla petli ${type}.`, 'success');
         await sleep(200);
     }
-    
+
     function startTelemetryCollectionForTest(duration, callback) { telemetryForCurrentTest = []; setTimeout(() => { AppState.isTuningActive = false; currentTestType = null; callback(telemetryForCurrentTest); }, duration); }
-    
+
     // --- NOWA, POPRAWIONA FUNKCJA WALIDACYJNA ---
     function checkTuningPrerequisites(requiredStates) {
         if (!Array.isArray(requiredStates)) requiredStates = [requiredStates]; 
@@ -2597,3 +2623,4 @@
 </script>
 </body>
 </html>
+
