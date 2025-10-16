@@ -2215,7 +2215,6 @@
 
         switch (data.type) {
             case 'telemetry': updateTelemetryUI(data); updateChart(data); if (AppState.isSequenceRunning) { checkAndExecuteNextSequenceStep(previousState); } break;
-            case '3d_telemetry': if (data.p !== undefined) currentPitch3D = data.p; if (data.r !== undefined) currentRoll3D = data.r; if (data.y !== undefined) currentYaw3D = data.y; if (data.el !== undefined) currentEncoderLeft = data.el; if (data.er !== undefined) currentEncoderRight = data.er; break;
             case 'full_config':
                 clearTimeout(AppState.syncTimeout); AppState.isSynced = true;
                 const connectBtn = document.getElementById('connectBleBtn'); connectBtn.textContent = 'POLACZ Z ROBOTEM'; connectBtn.style.backgroundColor = '';
@@ -2243,12 +2242,11 @@
     function updateTelemetryUI(data) {
         if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
         if (data.loop_time !== undefined) document.getElementById('loopTimeVal').textContent = data.loop_time + ' \u00B5s';
-        if (data.pitch !== undefined) { document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0'; document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`; if(data.type !== '3d_telemetry') currentPitch3D = data.pitch; document.getElementById('robot3d-pitch').textContent = data.pitch.toFixed(1) + '°'; }
-        if (data.roll !== undefined) { document.getElementById('rollVal').textContent = data.roll.toFixed(1) + ' \u00B0'; if(data.type !== '3d_telemetry') currentRoll3D = data.roll; document.getElementById('robot3d-roll').textContent = data.roll.toFixed(1) + '°'; }
-        if (data.yaw !== undefined) { if(data.type !== '3d_telemetry') currentYaw3D = data.yaw; }
+        if (data.pitch !== undefined) { document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0'; document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`; document.getElementById('robot3d-pitch').textContent = data.pitch.toFixed(1) + '°'; }
+        if (data.roll !== undefined) { document.getElementById('rollVal').textContent = data.roll.toFixed(1) + ' \u00B0'; document.getElementById('robot3d-roll').textContent = data.roll.toFixed(1) + '°'; }
         if (data.speed !== undefined) { document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0); const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820; const wheelRpm = (parseFloat(data.speed) / ppr) * 60; document.getElementById('robot3d-wheel-speed').textContent = wheelRpm.toFixed(0) + ' obr/min'; }
-        if (data.encoder_left !== undefined) { if(data.type !== '3d_telemetry') currentEncoderLeft = data.encoder_left; document.getElementById('encoderLeftVal').textContent = data.encoder_left; }
-        if (data.encoder_right !== undefined) { if(data.type !== '3d_telemetry') currentEncoderRight = data.encoder_right; document.getElementById('encoderRightVal').textContent = data.encoder_right; }
+        if (data.encoder_left !== undefined) { currentEncoderLeft = data.encoder_left; document.getElementById('encoderLeftVal').textContent = data.encoder_left; }
+        if (data.encoder_right !== undefined) { currentEncoderRight = data.encoder_right; document.getElementById('encoderRightVal').textContent = data.encoder_right; }
         // Dodano obsługę statusu kalibracji BNO055
         if (data.calib_sys !== undefined) document.getElementById('calibSysVal').textContent = data.calib_sys;
         if (data.calib_accel !== undefined) document.getElementById('calibAccelVal').textContent = data.calib_accel;
@@ -2619,7 +2617,50 @@
     function createCheckerTexture(squareSizeCm = 20, colorA = '#C8C8C8', colorB = '#787878') { const size = 256; const squares = 2; const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size; const ctx = canvas.getContext('2d'); const s = size / squares; for (let y = 0; y < squares; y++) { for (let x = 0; x < squares; x++) { ctx.fillStyle = ((x + y) % 2 === 0) ? colorA : colorB; ctx.fillRect(x * s, y * s, s, s); } } const tex = new THREE.CanvasTexture(canvas); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 8; tex.encoding = THREE.sRGBEncoding; return tex; }
     function createSkyTexture() { const width = 1024, height = 512; const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); const grad = ctx.createLinearGradient(0, 0, 0, height); grad.addColorStop(0, '#87CEEB'); grad.addColorStop(1, '#E6F2FA'); ctx.fillStyle = grad; ctx.fillRect(0, 0, width, height); ctx.globalAlpha = 0.15; ctx.fillStyle = '#FFFFFF'; for (let i = 0; i < 12; i++) { const cx = Math.random() * width, cy = Math.random() * height * 0.6, rw = 120 + Math.random() * 180, rh = 30 + Math.random() * 40; ctx.beginPath(); ctx.ellipse(cx, cy, rw, rh, 0, 0, Math.PI * 2); ctx.fill(); } const tex = new THREE.CanvasTexture(canvas); tex.encoding = THREE.sRGBEncoding; return tex; }
     function setupControls3D() { document.getElementById('reset3dViewBtn').addEventListener('click', () => { camera3D.position.set(28, 22, 48); controls3D.target.set(0, 8, 0); controls3D.update(); }); document.getElementById('toggle3dAnimationBtn').addEventListener('click', () => isAnimation3DEnabled = !isAnimation3DEnabled); document.getElementById('toggle3dMovementBtn').addEventListener('click', () => { isMovement3DEnabled = !isMovement3DEnabled; if(!isMovement3DEnabled) { lastEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2; } }); }
-    function animate3D() { requestAnimationFrame(animate3D); if (isAnimation3DEnabled && robotPivot) {                 robotPivot.rotation.set(rollRad, yawRad, pitchRad, 'YXZ'); const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820; const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI; const wheelRotationR = (currentEncoderRight / ppr) * 2 * Math.PI; if (leftWheel) leftWheel.rotation.z = -wheelRotationL; if (rightWheel) rightWheel.rotation.z = -wheelRotationR; if (isMovement3DEnabled) { const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value) || 8.2; const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2; const dist_cm = ((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * wheelDiameter; const angleRad = robotPivot.rotation.y; if (groundTexture) { const dx = Math.sin(angleRad) * dist_cm; const dz = Math.cos(angleRad) * dist_cm; const squaresPerCm = 1 / 20; groundTexture.offset.x += dx * squaresPerCm; groundTexture.offset.y += dz * squaresPerCm; groundTexture.needsUpdate = true; } const logicalX = (groundTexture ? -groundTexture.offset.x * 20 : 0); const logicalZ = (groundTexture ? -groundTexture.offset.y * 20 : 0); document.getElementById('robot3d-position-x').textContent = logicalX.toFixed(1) + ' cm'; document.getElementById('robot3d-position-z').textContent = logicalZ.toFixed(1) + ' cm'; lastEncoderAvg = currentEncoderAvg; } } controls3D.update(); renderer3D.render(scene3D, camera3D); }
+    function animate3D() {
+        requestAnimationFrame(animate3D);
+        if (isAnimation3DEnabled && robotPivot) {
+            // Use the unified window.telemetryData object
+            const pitch = window.telemetryData?.pitch || 0;
+            const roll = window.telemetryData?.roll || 0;
+            const yaw = window.telemetryData?.yaw || 0;
+
+            const pitchRad = pitch * Math.PI / 180;
+            const rollRad = roll * Math.PI / 180;
+            const yawRad = yaw * Math.PI / 180;
+
+            robotPivot.rotation.set(rollRad, yawRad, pitchRad, 'ZYX');
+
+            const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
+            const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
+            const wheelRotationR = (currentEncoderRight / ppr) * 2 * Math.PI;
+            if (leftWheel) leftWheel.rotation.z = -wheelRotationL;
+            if (rightWheel) rightWheel.rotation.z = -wheelRotationR;
+            if (isMovement3DEnabled) {
+                const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value) || 8.2;
+                const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
+                const dist_cm = ((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * wheelDiameter;
+                const angleRad = robotPivot.rotation.y;
+                if (groundTexture) {
+                    const dx = Math.sin(angleRad) * dist_cm;
+                    const dz = Math.cos(angleRad) * dist_cm;
+                    const squaresPerCm = 1 / 20;
+                    groundTexture.offset.x += dx * squaresPerCm;
+                    groundTexture.offset.y += dz * squaresPerCm;
+                    groundTexture.needsUpdate = true;
+                }
+                const logicalX = (groundTexture ? -groundTexture.offset.x * 20 : 0);
+                const logicalZ = (groundTexture ? -groundTexture.offset.y * 20 : 0);
+                document.getElementById('robot3d-position-x').textContent = logicalX.toFixed(1) + ' cm';
+                document.getElementById('robot3d-position-z').textContent = logicalZ.toFixed(1) + ' cm';
+                lastEncoderAvg = currentEncoderAvg;
+            }
+        }
+        if (controls3D && renderer3D && scene3D && camera3D) { // Add safety check
+            controls3D.update();
+            renderer3D.render(scene3D, camera3D);
+        }
+    }
 </script>
 </body>
 </html>
