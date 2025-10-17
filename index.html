@@ -2637,7 +2637,8 @@
             const rollRad = roll * Math.PI / 180;
             const yawRad = yaw * Math.PI / 180;
 
-            robotPivot.rotation.set(rollRad, totalPitchRad, yawRad);
+            // Corrected rotation: pitch around X, roll around Y, yaw around Z
+            robotPivot.rotation.set(totalPitchRad, rollRad, yawRad);
 
             const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
             const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
