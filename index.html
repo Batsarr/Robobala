@@ -190,6 +190,7 @@
             <div class="info-grid">
                 <strong>Kat (Pitch):</strong> <div class="angle-display"><span id="angleVal">0.0 &deg;</span><div class="angle-indicator-wrapper"><div id="angleIndicator" class="angle-indicator-needle"></div></div></div>
                 <strong>Kat (Roll):</strong> <span id="rollVal">0.0 &deg;</span>
+                <strong>Kat (Yaw):</strong> <span id="yawVal">0.0 °</span>
                 <strong>Predkosc (imp/s):</strong> <span id="speedVal">0</span>
                 <strong>Enkoder L:</strong> <span id="encoderLeftVal">0</span>
                 <strong>Enkoder P:</strong> <span id="encoderRightVal">0</span>
@@ -2248,6 +2249,7 @@
         if (data.loop_time !== undefined) document.getElementById('loopTimeVal').textContent = data.loop_time + ' \u00B5s';
         if (data.pitch !== undefined) { document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0'; document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`; document.getElementById('robot3d-pitch').textContent = data.pitch.toFixed(1) + '°'; }
         if (data.roll !== undefined) { document.getElementById('rollVal').textContent = data.roll.toFixed(1) + ' \u00B0'; document.getElementById('robot3d-roll').textContent = data.roll.toFixed(1) + '°'; }
+        if (data.yaw !== undefined) { document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' °'; }
         if (data.speed !== undefined) { document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0); const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820; const wheelRpm = (parseFloat(data.speed) / ppr) * 60; document.getElementById('robot3d-wheel-speed').textContent = wheelRpm.toFixed(0) + ' obr/min'; }
         if (data.encoder_left !== undefined) { currentEncoderLeft = data.encoder_left; document.getElementById('encoderLeftVal').textContent = data.encoder_left; }
         if (data.encoder_right !== undefined) { currentEncoderRight = data.encoder_right; document.getElementById('encoderRightVal').textContent = data.encoder_right; }
@@ -2626,26 +2628,16 @@
     function animate3D() {
         requestAnimationFrame(animate3D);
         if (isAnimation3DEnabled && robotPivot) {
-            // Używamy kwaternionu bezpośrednio zamiast kątów Eulera
-            const qw = window.telemetryData?.qw || 1.0;
-            const qx = window.telemetryData?.qx || 0.0;
-            const qy = window.telemetryData?.qy || 0.0;
-            const qz = window.telemetryData?.qz || 0.0;
-
-            // Ustawiamy kwaternion bezpośrednio na modelu 3D
-            robotPivot.quaternion.set(qx, qy, qz, qw);
-
-            // Aplikujemy dodatkową korekcję pionu jeśli jest ustawiona
+            const pitch = window.telemetryData?.pitch || 0;
+            const roll = window.telemetryData?.roll || 0;
+            const yaw = window.telemetryData?.yaw || 0;
             const trimAngle = window.telemetryData?.trim_angle || 0.0;
-            if (Math.abs(trimAngle) > 0.01) {
-                const trimRad = trimAngle * Math.PI / 180;
-                // Tworzymy kwaternion korekty pionu
-                const cosHalfTrim = Math.cos(trimRad / 2);
-                const sinHalfTrim = Math.sin(trimRad / 2);
-                const trimQuat = new THREE.Quaternion(0, sinHalfTrim, 0, cosHalfTrim);
-                // Mnożymy kwaterniony: korekta * oryginalny
-                robotPivot.quaternion.multiply(trimQuat);
-            }
+
+            const totalPitchRad = (pitch + trimAngle) * Math.PI / 180;
+            const rollRad = roll * Math.PI / 180;
+            const yawRad = yaw * Math.PI / 180;
+
+            robotPivot.rotation.set(rollRad, totalPitchRad, yawRad);
 
             const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
             const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
@@ -2657,9 +2649,6 @@
                 const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value) || 8.2;
                 const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
                 const dist_cm = ((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * wheelDiameter;
-
-                // Pobieramy aktualny kąt yaw z kwaternionu dla ruchu
-                const yawRad = Math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz));
 
                 if (groundTexture) {
                     const dx = Math.sin(yawRad) * dist_cm;
