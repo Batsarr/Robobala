@@ -161,7 +161,11 @@
             <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
             <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Resetuj Osie</button>
-            <div class="trim-controls"> <button id="trimMinusBtn">-</button> <span>Korekta Pionu (Pitch)</span> <button id="trimPlusBtn">+</button> </div>
+            <div class="trim-controls">
+                <button id="trimMinusBtn">-</button>
+                <span>Korekta Pionu (Pitch): <span id="trimValueDisplay">0.0°</span></span>
+                <button id="trimPlusBtn">+</button>
+            </div>
             <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
             <button id="emergencyStopBtn">STOP AWARYJNY</button>
             <button class="accordion-header" onclick="toggleAccordion(this)" style="margin-top: 15px;">Strojenie Joysticka</button>
@@ -2252,6 +2256,8 @@
         if (data.calib_accel !== undefined) document.getElementById('calibAccelVal').textContent = data.calib_accel;
         if (data.calib_gyro !== undefined) document.getElementById('calibGyroVal').textContent = data.calib_gyro;
         if (data.calib_mag !== undefined) document.getElementById('calibMagVal').textContent = data.calib_mag;
+        // Aktualizacja wyświetlacza korekty pionu
+        if (data.trim_angle !== undefined) { document.getElementById('trimValueDisplay').textContent = data.trim_angle.toFixed(1) + '°'; }
         if (data.states && !AppState.isApplyingConfig) { AppState.isApplyingConfig = true; document.getElementById('balanceSwitch').checked = data.states.balancing; document.getElementById('holdPositionSwitch').checked = data.states.holding_pos; document.getElementById('speedModeSwitch').checked = data.states.speed_mode; AppState.isApplyingConfig = false; }
         const emergencyBanner = document.getElementById('emergency-banner'); if (emergencyBanner) emergencyBanner.style.display = data.states && data.states.emergency_stop ? 'block' : 'none';
     }
@@ -2620,35 +2626,50 @@
     function animate3D() {
         requestAnimationFrame(animate3D);
         if (isAnimation3DEnabled && robotPivot) {
-            // Use the unified window.telemetryData object
-            const pitch = window.telemetryData?.pitch || 0;
-            const roll = window.telemetryData?.roll || 0;
-            const yaw = window.telemetryData?.yaw || 0;
+            // Używamy kwaternionu bezpośrednio zamiast kątów Eulera
+            const qw = window.telemetryData?.qw || 1.0;
+            const qx = window.telemetryData?.qx || 0.0;
+            const qy = window.telemetryData?.qy || 0.0;
+            const qz = window.telemetryData?.qz || 0.0;
 
-            const pitchRad = pitch * Math.PI / 180;
-            const rollRad = roll * Math.PI / 180;
-            const yawRad = yaw * Math.PI / 180;
+            // Ustawiamy kwaternion bezpośrednio na modelu 3D
+            robotPivot.quaternion.set(qx, qy, qz, qw);
 
-            robotPivot.rotation.set(rollRad, yawRad, pitchRad, 'ZYX');
+            // Aplikujemy dodatkową korekcję pionu jeśli jest ustawiona
+            const trimAngle = window.telemetryData?.trim_angle || 0.0;
+            if (Math.abs(trimAngle) > 0.01) {
+                const trimRad = trimAngle * Math.PI / 180;
+                // Tworzymy kwaternion korekty pionu
+                const cosHalfTrim = Math.cos(trimRad / 2);
+                const sinHalfTrim = Math.sin(trimRad / 2);
+                const trimQuat = new THREE.Quaternion(0, sinHalfTrim, 0, cosHalfTrim);
+                // Mnożymy kwaterniony: korekta * oryginalny
+                robotPivot.quaternion.multiply(trimQuat);
+            }
 
             const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
             const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
             const wheelRotationR = (currentEncoderRight / ppr) * 2 * Math.PI;
             if (leftWheel) leftWheel.rotation.z = -wheelRotationL;
             if (rightWheel) rightWheel.rotation.z = -wheelRotationR;
+
             if (isMovement3DEnabled) {
                 const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value) || 8.2;
                 const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
                 const dist_cm = ((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * wheelDiameter;
-                const angleRad = robotPivot.rotation.y;
+
+                // Pobieramy aktualny kąt yaw z kwaternionu dla ruchu
+                const yawRad = Math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz));
+
                 if (groundTexture) {
-                    const dx = Math.sin(angleRad) * dist_cm;
-                    const dz = Math.cos(angleRad) * dist_cm;
+                    const dx = Math.sin(yawRad) * dist_cm;
+                    const dz = Math.cos(yawRad) * dist_cm;
                     const squaresPerCm = 1 / 20;
                     groundTexture.offset.x += dx * squaresPerCm;
                     groundTexture.offset.y += dz * squaresPerCm;
                     groundTexture.needsUpdate = true;
                 }
+
                 const logicalX = (groundTexture ? -groundTexture.offset.x * 20 : 0);
                 const logicalZ = (groundTexture ? -groundTexture.offset.y * 20 : 0);
                 document.getElementById('robot3d-position-x').textContent = logicalX.toFixed(1) + ' cm';
@@ -2656,7 +2677,8 @@
                 lastEncoderAvg = currentEncoderAvg;
             }
         }
-        if (controls3D && renderer3D && scene3D && camera3D) { // Add safety check
+
+        if (controls3D && renderer3D && scene3D && camera3D) {
             controls3D.update();
             renderer3D.render(scene3D, camera3D);
         }
