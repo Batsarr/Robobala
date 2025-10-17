@@ -374,12 +374,15 @@
             <h2>Auto Strojenie</h2>
             <button class="accordion-header" onclick="toggleAccordion(this)">1: Pierwsze Strojenie (Odkrywanie Z-N)</button>
             <div class="accordion-content">
-                 <div class="help-text visible" style="max-height: 200px; padding: 10px;">Automatyczne znalezienie podstawowych, dzialajacych parametrow Kp i Kd dla balansu. Robot sam wprowadzi sie w oscylacje, aby zbadac swoja fizyke.</div>
+                 <div class="help-text visible" style="max-height: 200px; padding: 10px;">Automatyczne znalezienie podstawowych, dzialajacych parametrow Kp i Kd dla balansu. Metoda relay z opcjonalnym inteligentnym wyłączaniem filtrowania pochodnej.</div>
                 <fieldset style="margin-top:15px;">
                     <legend>Parametry Procedury Z-N</legend>
                     <div class="setting-container">
                         <label for="znMaxAmplitudeInput">Max. amplituda (st.)</label>
                         <div class="numeric-input-wrapper"><button>-</button><input type="number" id="znMaxAmplitudeInput" min="5" max="25" step="1" value="15"><button>+</button></div>
+                    </div>
+                    <div class="setting-container">
+                        <label style="display:flex; align-items:center; gap:10px;">Smart Mode (Adaptacyjne filtrowanie pochodnej)<input type="checkbox" id="znSmartModeInput" checked style="width:20px; height:20px;"></label>
                     </div>
                 </fieldset>
                 <div id="znTuningStatusPanel" style="margin-top:15px;">
@@ -445,7 +448,60 @@
                     <button id="gaCancelBtn" style="background-color: #ff6347; display: none;">Zatrzymaj</button>
                 </div>
             </div>
-            <button class="accordion-header" onclick="toggleAccordion(this)">3: Asystent Strojenia Petli Kaskadowych</button>
+            <button class="accordion-header" onclick="toggleAccordion(this)">3: PSO Optymalizacja</button>
+            <div class="accordion-content">
+                <div class="help-text visible" style="max-height: 200px; padding: 10px;">Uruchomienie optymalizacji metodą PSO (Particle Swarm Optimization) dla znalezienia optymalnych parametrów Kp i Kd. PSO zwykle jest szybszy i wymaga mniej pamięci niż GA.</div>
+                <fieldset>
+                    <legend>Parametry Algorytmu PSO</legend>
+                    <div class="setting-container">
+                        <label for="psoGenerationsInput">Liczba iteracji</label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="psoGenerationsInput" min="20" max="100" step="10" value="50"><button>+</button></div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="psoPopulationInput">Liczba cząsteczek</label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="psoPopulationInput" min="10" max="50" step="5" value="20"><button>+</button></div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="psoWInput">Współczynnik inercji (w)</label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" id="psoWInput" step="0.1" value="0.7" min="0.1" max="1.0"><button>+</button></div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="psoC1Input">Współczynnik poznawczy (c1)</label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" id="psoC1Input" step="0.1" value="1.5" min="0.5" max="2.5"><button>+</button></div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="psoC2Input">Współczynnik społeczny (c2)</label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" id="psoC2Input" step="0.1" value="1.5" min="0.5" max="2.5"><button>+</button></div>
+                    </div>
+                </fieldset>
+                <div id="psoStatusPanel" style="background-color: #20232a; padding: 12px; border-radius: 6px; margin-top:15px;">
+                    <h5>Status Sesji Optymalizacji PSO</h5>
+                    <div class="info-grid">
+                        <strong>Postęp:</strong> <span id="psoStatusGeneration">---</span>
+                        <strong>Najlepszy błąd sesji:</strong> <span id="psoStatusBestScore" style="font-weight: bold; color: #a2f279;">---</span>
+                        <strong>Najlepszy błąd iteracji:</strong> <span id="psoStatusIterationBestScore" style="font-weight: bold; color: #61dafb;">---</span>
+                        <strong>Testowane Kp:</strong> <span id="psoStatusCurrentKp">---</span>
+                        <strong>Testowane Kd:</strong> <span id="psoStatusCurrentKd">---</span>
+                        <strong>Status:</strong> <span id="psoStatusStateText" style="font-weight: bold;">Bezczynny</span>
+                    </div>
+                    <progress id="psoProgressBar" value="0" max="100" style="margin-top:10px;"></progress>
+                </div>
+                <div id="psoResultsPanel" class="test-results-panel">
+                    <h5>Wyniki Optymalizacji PSO</h5>
+                    <div class="result-grid">
+                        <strong>Najlepszy Błąd:</strong> <span id="psoFinalScore"></span>
+                        <strong>Znalezione Kp_b:</strong> <span id="psoFinalKp"></span>
+                        <strong>Znalezione Kd_b:</strong> <span id="psoFinalKd"></span>
+                    </div>
+                    <button id="applyPsoResultsBtn" class="apply-btn">Zastosuj do Panelu</button>
+                </div>
+                <div class="ga-button-row">
+                    <button id="psoActionBtn">Rozpocznij</button>
+                    <button id="psoPauseBtn" style="background-color: #f7b731; display: none;">Pauzuj</button>
+                    <button id="psoCancelBtn" style="background-color: #ff6347; display: none;">Zatrzymaj</button>
+                </div>
+            </div>
+            <button class="accordion-header" onclick="toggleAccordion(this)">4: Asystent Strojenia Petli Kaskadowych</button>
             <div class="accordion-content">
                 <div class="help-text visible" style="max-height: 200px; padding: 10px;">Uruchomienie serii inteligentnych testow, ktore krok po kroku pomoga Ci znalezc optymalne nastawy dla petli balansu, pozycji i predkosci. Asystent analizuje zachowanie robota i sugeruje najlepsze poprawki.</div>
                  <fieldset>
