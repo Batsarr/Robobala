@@ -155,6 +155,7 @@
         <div class="modal-content">
             <h2>Kalibracja IMU (Czujnik Nachylenia)</h2>
             <p>Aby skalibrować czujnik IMU, powoli obróć robota we wszystkich kierunkach: do przodu, do tyłu, na boki i wokół własnej osi pionowej. Wykonaj co najmniej 3 pełne obroty w każdej płaszczyźnie.</p>
+            <p><strong>Dla akcelerometru (Accel) ważne:</strong> Trzymaj robota nieruchomo na około 10 sekund w każdej z 6 pozycji (sześcian): góra, dół, przednia strona, tylna strona, lewa strona, prawa strona. Powtarzaj obroty i zatrzymania, aż progres osiągnie co najmniej 3/4 dla każdej osi. Obroty powinny być wolne i płynne.</p>
             <div class="calib-axis" style="display: flex; align-items: center; margin: 10px 0; justify-content: space-between;">
                 <span>Sys (System):</span>
                 <progress id="calib-sys-bar" value="0" max="4" style="flex: 1; margin: 0 10px;"></progress>
@@ -2679,7 +2680,13 @@
             sendBleMessage({ type: 'calibrate_mpu' });
         });
         document.getElementById('calib-close-btn').addEventListener('click', () => {
-            if (confirm('Czy jesteś pewien, że kalibracja jest zakończona? Wróć do procesu, aby poprawić.')) {
+            const sys = parseInt(document.getElementById('calib-sys-text').textContent) || 0;
+            const accel = parseInt(document.getElementById('calib-accel-text').textContent) || 0;
+            const gyro = parseInt(document.getElementById('calib-gyro-text').textContent) || 0;
+            const mag = parseInt(document.getElementById('calib-mag-text').textContent) || 0;
+            if (sys >= 3 && accel >= 3 && gyro >= 3 && mag >= 3) {
+                hideCalibrationModal();
+            } else if (confirm('Wszystkie osie nie mają jeszcze poziomu 3 – zamknąć mimo to i utracić pomoc w kalibracji?')) {
                 hideCalibrationModal();
             }
         });
@@ -2715,9 +2722,9 @@
             const accel = parseInt(document.getElementById('calib-accel-text').textContent) || 0;
             const gyro = parseInt(document.getElementById('calib-gyro-text').textContent) || 0;
             const mag = parseInt(document.getElementById('calib-mag-text').textContent) || 0;
-            if (sys >= 4 && accel >= 4 && gyro >= 4 && mag >= 4) {
+            if (sys >= 3 && accel >= 3 && gyro >= 3 && mag >= 3) {
                 hideCalibrationModal();
-                addLogMessage('[UI] Kalibracja IMU zakończona pomyślnie - wszystkie osie osiągnęły poziom ≥4.', 'success');
+                addLogMessage('[UI] Kalibracja IMU zakończona pomyślnie - wszystkie osie osiągnęły poziom ≥3.', 'success');
             }
         }
     }
