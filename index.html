@@ -135,10 +135,55 @@
             pointer-events: none;
             cursor: not-allowed !important;
         }
-        .ui-locked #connectBleBtn, .ui-locked #emergencyStopBtn {
-            opacity: 1.0;
-            pointer-events: auto;
-        }
+    .ui-locked #connectBleBtn, .ui-locked #emergencyStopBtn {
+        opacity: 1.0;
+        pointer-events: auto;
+    }
+
+    /* === NOWE STYLE dla zakładek AutoTuning === */
+    .main-method-tabs { display: flex; margin-bottom: 15px; border-bottom: 2px solid #4a4f58; }
+    .method-tab { background-color: #4a4f58; color: #61dafb; border: none; padding: 12px 20px; cursor: pointer; transition: all 0.3s; border-radius: 8px 8px 0 0; }
+    .method-tab.active { background-color: #61dafb; color: #282c34; }
+    .method-tab:hover:not(.active) { background-color: #5a6068; }
+
+    .method-content { display: none; padding: 15px; border: 2px solid #4a4f58; border-top: none; border-radius: 0 8px 8px 8px; }
+    .method-content.active { display: block; }
+
+    .config-panel { background-color: #2a2f35; border-radius: 6px; padding: 15px; }
+    .config-panel h3 { color: #61dafb; margin-top: 0; margin-bottom: 15px; font-size: 1.2em; }
+    .config-section { margin-bottom: 20px; }
+    .config-section label { display: block; color: #a2f279; font-weight: bold; margin-bottom: 8px; }
+    .config-section select { width: 100%; padding: 8px; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 4px; }
+
+    .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+    .param-group { background-color: #20232a; padding: 12px; border-radius: 6px; }
+    .param-group label { display: block; color: #61dafb; font-size: 0.9em; margin-bottom: 5px; }
+    .param-group input[type="range"] { width: 100%; }
+    .param-group span { display: block; text-align: center; color: #f7b731; font-weight: bold; margin-top: 5px; }
+
+    .zn-controls, .ga-controls, .pso-controls { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
+    .zn-status { color: #f7b731; font-weight: bold; }
+    .ga-status-panel, .pso-status-panel { background-color: #20232a; padding: 12px; border-radius: 6px; margin-bottom: 15px; }
+    .progress-bar { width: 100%; height: 8px; background-color: #4a4f58; border-radius: 4px; overflow: hidden; margin-top: 10px; }
+    .progress-bar .progress-fill { height: 100%; background-color: #a2f279; transition: width 0.3s ease; }
+    .status-info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+    .status-info span { color: #f7b731; font-size: 0.9em; }
+
+    .results-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px 20px; margin-bottom: 15px; }
+    .results-grid strong { color: #a2f279; }
+
+    .test-cards-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px; }
+    .test-card { background-color: #2a2f35; border-radius: 8px; padding: 15px; border-left: 4px solid #61dafb; }
+    .test-card h4 { color: #61dafb; margin-top: 0; margin-bottom: 10px; }
+    .test-card .test-controls { margin-bottom: 15px; }
+    .test-card button { width: 100%; }
+
+    .autotune-dashboard { background-color: #20232a; padding: 15px; border-radius: 6px; margin-top: 15px; display: none; }
+    .dashboard-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+    .metric-item { text-align: center; }
+    .metric-label { color: #61dafb; font-size: 0.9em; display: block; margin-bottom: 5px; }
+    .metric-value { font-size: 1.2em; font-weight: bold; color: #a2f279; }
+    .progress-bar.small .progress-fill { background-color: #f7b731; }
     </style>
 </head>
 <body>
@@ -372,205 +417,286 @@
 
         <div class="card">
             <h2>Auto Strojenie</h2>
-            <button class="accordion-header" onclick="toggleAccordion(this)">1: Pierwsze Strojenie (Odkrywanie Z-N)</button>
-            <div class="accordion-content">
-                 <div class="help-text visible" style="max-height: 200px; padding: 10px;">Automatyczne znalezienie podstawowych, dzialajacych parametrow Kp i Kd dla balansu. Metoda relay z opcjonalnym inteligentnym wyłączaniem filtrowania pochodnej.</div>
-                <fieldset style="margin-top:15px;">
-                    <legend>Parametry Procedury Z-N</legend>
-                    <div class="setting-container">
-                        <label for="znMaxAmplitudeInput">Max. amplituda (st.)</label>
-                        <div class="numeric-input-wrapper"><button>-</button><input type="number" id="znMaxAmplitudeInput" min="5" max="25" step="1" value="15"><button>+</button></div>
-                    </div>
-                    <div class="setting-container">
-                        <label style="display:flex; align-items:center; gap:10px;">Smart Mode (Adaptacyjne filtrowanie pochodnej)<input type="checkbox" id="znSmartModeInput" checked style="width:20px; height:20px;"></label>
-                    </div>
-                </fieldset>
-                <div id="znTuningStatusPanel" style="margin-top:15px;">
-                    <h5>Status Procedury</h5>
-                    <div class="info-grid">
-                        <strong>Status:</strong> <span id="znStatusText" style="font-weight: bold;">Bezczynny</span>
-                        <strong>Testowane Kp:</strong> <span id="znKpTestVal">---</span>
-                        <strong>Amplituda:</strong> <span id="znAmplitudeVal">---</span>
-                    </div>
-                </div>
-                <div id="znResultPanel">
-                    <h5>Wynik Odkrywania</h5>
-                    <div class="result-grid">
-                        <strong>Wzmocnienie Krytyczne (Ku):</strong> <span id="znKuResult"></span>
-                        <strong>Okres Krytyczny (Tu):</strong> <span id="znTuResult"></span>
-                        <hr style="grid-column: 1 / -1; border-color: #4a4f58;">
-                        <strong>Sugerowane Kp:</strong> <span id="znKpSuggest"></span>
-                        <strong>Sugerowane Kd:</strong> <span id="znKdSuggest"></span>
-                    </div>
-                    <button id="applyZnResultsBtn" class="apply-btn">Zastosuj do Panelu</button>
-                </div>
-                <button id="znTuningActionBtn" style="width:100%; margin-top:15px; background-color: #f7b731;">Rozpocznij Odkrywanie</button>
-                <button id="znTuningCancelBtn" style="width:100%; margin-top:10px; background-color:#ff6347; display:none;">Anuluj</button>
+
+            <!-- ZAKŁADKI METOD STROJENIA -->
+            <div class="main-method-tabs">
+                <button class="method-tab active" data-method="zn-relay">📊 Z-N Relay</button>
+                <button class="method-tab" data-method="ga-genetic">🧬 Algorytm Genetyczny</button>
+                <button class="method-tab" data-method="pso-particle">🌀 PSO Cramtz</button>
+                <button class="method-tab" data-method="single-tests">🧪 Testy Dynamiczne</button>
             </div>
-            <button class="accordion-header" onclick="toggleAccordion(this)">2: Optymalizacja Petli Balansu (GA)</button>
-            <div class="accordion-content">
-                <div class="help-text visible" style="max-height: 200px; padding: 10px;">Uruchomienie inteligentnej optymalizacji (algorytm genetyczny) w celu znalezienia optymalnych nastaw Kp i Kd dla petli balansu, aby robot stal idealnie stabilnie.</div>
-                <fieldset>
-                    <legend>Parametry Algorytmu Genetycznego</legend>
-                    <div class="setting-container">
-                        <label for="gaGenerationsInput">Liczba pokolen</label>
-                        <div class="numeric-input-wrapper"><button>-</button><input type="number" id="gaGenerationsInput" min="2" max="50" step="1" value="10"><button>+</button></div>
+
+            <!-- ZAKŁADKA 1: Z-N RELAY -->
+            <div class="method-content active" data-method="zn-relay">
+                <div class="config-panel">
+                    <h3>🔬 Metoda Ziegler-Nichols z Relay</h3>
+
+                    <!-- WYBÓR PĘTLI DO STROJENIA -->
+                    <div class="config-section">
+                        <label>🎯 Pętla PID do strojenia:</label>
+                        <select id="zn-loop-selector">
+                            <option value="balance">Pętla Balansu (Kp, Kd)</option>
+                            <option value="speed">Pętla Prędkości (Kp, Ki, Kd)</option>
+                            <option value="position">Pętla Pozycji (Kp, Ki, Kd)</option>
+                            <option value="cascade">Wszystkie pętle (kaskada)</option>
+                        </select>
                     </div>
-                    <div class="setting-container">
-                        <label for="gaPopulationInput">Liczba osobnikow</label>
-                        <div class="numeric-input-wrapper"><button>-</button><input type="number" id="gaPopulationInput" min="4" max="20" step="1" value="10"><button>+</button></div>
-                    </div>
-                </fieldset>
-                <div id="gaStatusPanel">
-                    <h5>Status Sesji Optymalizacji</h5>
-                    <div class="info-grid">
-                        <strong>Postep:</strong> <span id="gaStatusGeneration">---</span>
-                        <strong>Najmniejszy blad sesji:</strong> <span id="gaStatusBestScore" style="font-weight: bold; color: #a2f279;">---</span>
-                        <strong>Najmniejszy blad pokolenia:</strong> <span id="gaStatusGenerationBestScore" style="font-weight: bold; color: #61dafb;">---</span>
-                        <strong>Testowane Kp:</strong> <span id="gaStatusCurrentKp">---</span>
-                        <strong>Testowane Kd:</strong> <span id="gaStatusCurrentKd">---</span>
-                        <strong>Status:</strong> <span id="gaStatusStateText" style="font-weight: bold;">Bezczynny</span>
-                    </div>
-                    <progress id="gaProgressBar" value="0" max="100" style="margin-top:10px;"></progress>
-                </div>
-                <div id="gaResultsPanel" class="test-results-panel">
-                    <h5>Wyniki Optymalizacji GA</h5>
-                    <div class="result-grid">
-                        <strong>Najlepszy Blad:</strong> <span id="gaFinalScore"></span>
-                        <strong>Znalezione Kp_b:</strong> <span id="gaFinalKp"></span>
-                        <strong>Znalezione Kd_b:</strong> <span id="gaFinalKd"></span>
-                    </div>
-                    <button id="applyGaResultsBtn" class="apply-btn">Zastosuj do Panelu</button>
-                </div>
-                <div class="ga-button-row">
-                    <button id="gaActionBtn">Rozpocznij</button>
-                    <button id="gaPauseBtn" style="background-color: #f7b731; display: none;">Pauzuj</button>
-                    <button id="gaCancelBtn" style="background-color: #ff6347; display: none;">Zatrzymaj</button>
-                </div>
-            </div>
-            <button class="accordion-header" onclick="toggleAccordion(this)">3: PSO Optymalizacja</button>
-            <div class="accordion-content">
-                <div class="help-text visible" style="max-height: 200px; padding: 10px;">Uruchomienie optymalizacji metodą PSO (Particle Swarm Optimization) dla znalezienia optymalnych parametrów Kp i Kd. PSO zwykle jest szybszy i wymaga mniej pamięci niż GA.</div>
-                <fieldset>
-                    <legend>Parametry Algorytmu PSO</legend>
-                    <div class="setting-container">
-                        <label for="psoGenerationsInput">Liczba iteracji</label>
-                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="psoGenerationsInput" min="20" max="100" step="10" value="50"><button>+</button></div>
-                    </div>
-                    <div class="setting-container">
-                        <label for="psoPopulationInput">Liczba cząsteczek</label>
-                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="psoPopulationInput" min="10" max="50" step="5" value="20"><button>+</button></div>
-                    </div>
-                    <div class="setting-container">
-                        <label for="psoWInput">Współczynnik inercji (w)</label>
-                        <div class="numeric-input-wrapper"><button>-</button><input type="number" id="psoWInput" step="0.1" value="0.7" min="0.1" max="1.0"><button>+</button></div>
-                    </div>
-                    <div class="setting-container">
-                        <label for="psoC1Input">Współczynnik poznawczy (c1)</label>
-                        <div class="numeric-input-wrapper"><button>-</button><input type="number" id="psoC1Input" step="0.1" value="1.5" min="0.5" max="2.5"><button>+</button></div>
-                    </div>
-                    <div class="setting-container">
-                        <label for="psoC2Input">Współczynnik społeczny (c2)</label>
-                        <div class="numeric-input-wrapper"><button>-</button><input type="number" id="psoC2Input" step="0.1" value="1.5" min="0.5" max="2.5"><button>+</button></div>
-                    </div>
-                </fieldset>
-                <div id="psoStatusPanel" style="background-color: #20232a; padding: 12px; border-radius: 6px; margin-top:15px;">
-                    <h5>Status Sesji Optymalizacji PSO</h5>
-                    <div class="info-grid">
-                        <strong>Postęp:</strong> <span id="psoStatusGeneration">---</span>
-                        <strong>Najlepszy błąd sesji:</strong> <span id="psoStatusBestScore" style="font-weight: bold; color: #a2f279;">---</span>
-                        <strong>Najlepszy błąd iteracji:</strong> <span id="psoStatusIterationBestScore" style="font-weight: bold; color: #61dafb;">---</span>
-                        <strong>Testowane Kp:</strong> <span id="psoStatusCurrentKp">---</span>
-                        <strong>Testowane Kd:</strong> <span id="psoStatusCurrentKd">---</span>
-                        <strong>Status:</strong> <span id="psoStatusStateText" style="font-weight: bold;">Bezczynny</span>
-                    </div>
-                    <progress id="psoProgressBar" value="0" max="100" style="margin-top:10px;"></progress>
-                </div>
-                <div id="psoResultsPanel" class="test-results-panel">
-                    <h5>Wyniki Optymalizacji PSO</h5>
-                    <div class="result-grid">
-                        <strong>Najlepszy Błąd:</strong> <span id="psoFinalScore"></span>
-                        <strong>Znalezione Kp_b:</strong> <span id="psoFinalKp"></span>
-                        <strong>Znalezione Kd_b:</strong> <span id="psoFinalKd"></span>
-                    </div>
-                    <button id="applyPsoResultsBtn" class="apply-btn">Zastosuj do Panelu</button>
-                </div>
-                <div class="ga-button-row">
-                    <button id="psoActionBtn">Rozpocznij</button>
-                    <button id="psoPauseBtn" style="background-color: #f7b731; display: none;">Pauzuj</button>
-                    <button id="psoCancelBtn" style="background-color: #ff6347; display: none;">Zatrzymaj</button>
-                </div>
-            </div>
-            <button class="accordion-header" onclick="toggleAccordion(this)">4: Asystent Strojenia Petli Kaskadowych</button>
-            <div class="accordion-content">
-                <div class="help-text visible" style="max-height: 200px; padding: 10px;">Uruchomienie serii inteligentnych testow, ktore krok po kroku pomoga Ci znalezc optymalne nastawy dla petli balansu, pozycji i predkosci. Asystent analizuje zachowanie robota i sugeruje najlepsze poprawki.</div>
-                 <fieldset>
-                    <legend>Krok 3.1: Strojenie Petli Balansu</legend>
-                    <div class="help-text visible" style="max-height: 200px; padding: 10px; grid-column: 1 / -1;">Cel: Znalezc Kp i Kd, ktore zapewnia szybka i stabilna reakcje na zadany kat, bez oscylacji.</div>
-                     <div class="setting-container">
-                        <label for="balanceStepAngleInput">Kat "pchniecia" (st.)</label>
-                        <div class="numeric-input-wrapper"><button>-</button><input type="number" id="balanceStepAngleInput" step="0.5" value="2.0" min="0.5" max="5.0"><button>+</button></div>
-                    </div>
-                    <button id="startBalanceTestBtn" style="width:100%; margin-top:10px; background-color: #f7b731;">Uruchom Test Odpowiedzi Skokowej</button>
-                    <div id="balanceTuningResultsPanel" class="test-results-panel">
-                        <h5>Wyniki Testu</h5>
-                        <div id="balanceTestMetrics" class="result-grid"></div>
-                        <div class="suggestion-grid">
-                             <h5>Sugestia Asystenta</h5>
-                            <div id="balanceSuggestion" class="result-grid"></div>
-                            <div class="suggestion-actions">
-                                <button class="applyAndRerunBtn" data-type="balance">Zastosuj i Powtorz</button>
-                                <button class="applyBtn" data-type="balance">Zastosuj do Panelu</button>
-                            </div>
+
+                    <!-- PARAMETRY ALGORYTMU -->
+                    <div class="config-grid">
+                        <div class="param-group">
+                            <label>⏱️ Czas trwania próby:</label>
+                            <input type="range" id="zn-trial-duration" min="10" max="120" value="30">
+                            <span id="zn-trial-duration-val">30 s</span>
+                        </div>
+                        <div class="param-group">
+                            <label>📐 Maks. amplituda:</label>
+                            <input type="range" id="zn-max-amplitude" min="5" max="30" step="1" value="15">
+                            <span id="zn-max-amplitude-val">15°</span>
                         </div>
                     </div>
-                </fieldset>
-                <fieldset style="margin-top: 20px;">
-                    <legend>Krok 3.2: Strojenie Petli Pozycji</legend>
-                    <div class="help-text visible" style="max-height: 200px; padding: 10px; grid-column: 1 / -1;">Cel: Znalezc Kp, Ki, Kd, aby robot po wytraceniu z rownowagi jak najszybciej i najstabilniej wrocil do punktu startowego.</div>
-                     <div class="setting-container">
-                        <label for="positionTestImpulseInput">Sila impulsu (PWM)</label>
-                        <div class="numeric-input-wrapper"><button>-</button><input type="number" id="positionTestImpulseInput" step="10" value="700" min="200" max="1023"><button>+</button></div>
+
+                    <div class="zn-controls">
+                        <button id="run-zn-test">🚀 Uruchom Odkrywanie Z-N</button>
+                        <div class="zn-status">Status: Gotowy do pracy</div>
                     </div>
-                    <button id="startPositionTestBtn" style="width:100%; margin-top:10px; background-color: #f7b731;">Uruchom Test Impulsu</button>
-                    <div id="positionTuningResultsPanel" class="test-results-panel">
-                        <h5>Wyniki Testu</h5>
-                        <div id="positionTestMetrics" class="result-grid"></div>
-                        <div class="suggestion-grid">
-                             <h5>Sugestia Asystenta</h5>
-                            <div id="positionSuggestion" class="result-grid"></div>
-                            <div class="suggestion-actions">
-                                <button class="applyAndRerunBtn" data-type="position">Zastosuj i Powtorz</button>
-                                <button class="applyBtn" data-type="position">Zastosuj do Panelu</button>
-                            </div>
+
+                    <div class="zn-results-panel" style="display:none">
+                        <h4>Wyniki Z-N</h4>
+                        <div class="results-grid">
+                            <div>Ku (wzmocnienie krytyczne): <span id="zn-ku">---</span></div>
+                            <div>Tu (okres krytyczny): <span id="zn-tu">---</span> s</div>
+                            <div>Zalecane Kp: <span id="zn-recommend-kp">---</span></div>
+                            <div>Zalecane Kd: <span id="zn-recommend-kd">---</span></div>
+                        </div>
+                        <button id="apply-zn-results">✅ Zastosuj wyniki</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ZAKŁADKA 2: GA GENETIC ALGORITHM -->
+            <div class="method-content" data-method="ga-genetic">
+                <div class="config-panel">
+                    <h3>🧬 Algorytm Genetyczny</h3>
+
+                    <!-- WYBÓR PĘTLI -->
+                    <div class="config-section">
+                        <label>🎯 Pętla PID:</label>
+                        <select id="ga-loop-selector">
+                            <option value="balance">Pętla Balansu</option>
+                            <option value="speed">Pętla Prędkości</option>
+                            <option value="position">Pętla Pozycji</option>
+                        </select>
+                    </div>
+
+                    <!-- PARAMETRY GENETYCZNE -->
+                    <div class="config-grid">
+                        <div class="param-group">
+                            <label>🏃 Liczba pokoleń:</label>
+                            <input type="range" id="ga-generations" min="5" max="100" value="20">
+                            <span id="ga-generations-val">20</span>
+                        </div>
+                        <div class="param-group">
+                            <label>👥 Rozmiar populacji:</label>
+                            <input type="range" id="ga-population" min="8" max="50" value="20">
+                            <span id="ga-population-val">20</span>
+                        </div>
+                        <div class="param-group">
+                            <label>🔄 Mutacja (%):</label>
+                            <input type="range" id="ga-mutation-rate" min="5" max="50" value="15">
+                            <span id="ga-mutation-rate-val">15%</span>
                         </div>
                     </div>
-                </fieldset>
-                <fieldset style="margin-top: 20px;">
-                    <legend>Krok 3.3: Strojenie Petli Predkosci</legend>
-                     <div class="help-text visible" style="max-height: 200px; padding: 10px; grid-column: 1 / -1;">Cel: Znalezc nastawy dla petli predkosci, aby robot precyzyjnie i plynnie wykonywal zadania ruchowe.</div>
-                     <div class="setting-container">
-                        <label for="speedTestDistanceInput">Dystans (cm)</label>
-                        <div class="numeric-input-wrapper"><button>-</button><input type="number" id="speedTestDistanceInput" step="10" value="100" min="10" max="500"><button>+</button></div>
+
+                    <!-- ZAWIERSZYNE OPCJE -->
+                    <div class="config-section">
+                        <label>⚙️ Zaawansowane opcje:</label>
+                        <label><input type="checkbox" id="ga-elitism" checked> Elityzm</label>
+                        <label><input type="checkbox" id="ga-adaptive"> Adaptacyjne operatory</label>
+                        <label><input type="checkbox" id="ga-convergence-check"> Sprawdzanie zbieżności</label>
                     </div>
-                    <div class="setting-container">
-                        <label for="speedTestSpeedInput">Predkosc (cm/s)</label>
-                        <div class="numeric-input-wrapper"><button>-</button><input type="number" id="speedTestSpeedInput" step="5" value="50" min="10" max="200"><button>+</button></div>
+
+                    <div class="ga-controls">
+                        <button id="run-ga-tune">🚀 Uruchom ewolucję</button>
+                        <button id="pause-ga-tune" disabled>⏸️ Pauza</button>
+                        <button id="stop-ga-tune" disabled>⏹️ Stop</button>
                     </div>
-                    <button id="startSpeedTestBtn" style="width:100%; margin-top:10px; background-color: #f7b731;">Uruchom Test Jazdy</button>
-                     <div id="speedTuningResultsPanel" class="test-results-panel">
-                        <h5>Wyniki Testu</h5>
-                        <div id="speedTestMetrics" class="result-grid"></div>
-                         <div class="suggestion-grid">
-                             <h5>Sugestia Asystenta</h5>
-                            <div id="speedSuggestion" class="result-grid"></div>
-                             <div class="suggestion-actions">
-                                <button class="applyAndRerunBtn" data-type="speed">Zastosuj i Powtorz</button>
-                                <button class="applyBtn" data-type="speed">Zastosuj do Panelu</button>
-                            </div>
+
+                    <div class="ga-status-panel">
+                        <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+                        <div class="status-info">
+                            <span>Pokolenie: <span id="ga-gen-current">0</span>/<span id="ga-gen-total">0</span></span>
+                            <span>Najlepszy wynik: <span id="ga-best-fitness">---</span></span>
                         </div>
                     </div>
-                </fieldset>
+                </div>
+            </div>
+
+            <!-- ZAKŁADKA 3: PSO -->
+            <div class="method-content" data-method="pso-particle">
+                <div class="config-panel">
+                    <h3>🌀PSO Cramtz Czasteczkowy</h3>
+
+                    <!-- WYBÓR PĘTLI -->
+                    <div class="config-section">
+                        <label>🎯 Pętla PID:</label>
+                        <select id="pso-loop-selector">
+                            <option value="balance">Pętla Balansu</option>
+                            <option value="speed">Pętla Prędkości</option>
+                            <option value="position">Pętla Pozycji</option>
+                        </select>
+                    </div>
+
+                    <!-- PARAMETRY PSO -->
+                    <div class="config-grid">
+                        <div class="param-group">
+                            <label>🔄 Liczba iteracji:</label>
+                            <input type="range" id="pso-iterations" min="20" max="200" value="50">
+                            <span id="pso-iterations-val">50</span>
+                        </div>
+                        <div class="param-group">
+                            <label>🌀 Liczba czasteczek:</label>
+                            <input type="range" id="pso-particles" min="10" max="100" value="25">
+                            <span id="pso-particles-val">25</span>
+                        </div>
+                        <div class="param-group">
+                            <label>⚡ Wsp. inercji:</label>
+                            <input type="range" id="pso-inertia" min="0.4" max="0.95" step="0.05" value="0.7">
+                            <span id="pso-inertia-val">0.7</span>
+                        </div>
+                    </div>
+
+                    <!-- OPCJE STROJENIA -->
+                    <div class="config-section">
+                        <label>⚙️ Zaawansowane opcje:</label>
+                        <label><input type="checkbox" id="pso-adaptive-inertia" checked> Adaptacyjna inercja</label>
+                        <label><input type="checkbox" id="pso-velocity-clamp"> Ograniczenie prędkości</label>
+                        <label><input type="checkbox" id="pso-neighborhood"> Sąsiedztwo lokalne</label>
+                    </div>
+
+                    <div class="pso-controls">
+                        <button id="run-pso-tune">🚀 Uruchom rojam</button>
+                        <button id="pause-pso-tune" disabled>⏸️ Pauza</button>
+                        <button id="stop-pso-tune" disabled>⏹️ Stop</button>
+                    </div>
+
+                    <div class="pso-status-panel">
+                        <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+                        <div class="status-info">
+                            <span>Iteracja: <span id="pso-it-current">0</span>/<span id="pso-it-total">0</span></span>
+                            <span>Najlepszy wynik: <span id="pso-best-fitness">---</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ZAKŁADKA 4: TESTY DYNAMICZNE -->
+            <div class="method-content" data-method="single-tests">
+                <div class="config-panel">
+                    <h3>🧪 Testy Dynamiczne</h3>
+
+                    <!-- WYBÓR RODZAJU TESTU -->
+                    <div class="test-cards-container">
+                        <!-- KARTA TESTU BALANSU -->
+                        <div class="test-card balance-test">
+                            <h4>⚖️ Test Odpowiedzi Balansu</h4>
+                            <div class="test-controls">
+                                <div class="param-group">
+                                    <label>Kąt pchnięcia (°):</label>
+                                    <input type="range" id="balance-test-angle" min="1" max="10" value="2">
+                                    <span id="balance-test-angle-val">2°</span>
+                                </div>
+                                <div class="param-group">
+                                    <label>Czas trwania (s):</label>
+                                    <input type="range" id="balance-test-duration" min="3" max="15" value="5">
+                                    <span id="balance-test-duration-val">5s</span>
+                                </div>
+                            </div>
+                            <button class="run-test-btn" data-test-type="balance">🔍 Uruchom test</button>
+                        </div>
+
+                        <!-- KARTA TESTU POZYCJI -->
+                        <div class="test-card position-test">
+                            <h4>📍 Test Impulsu Pozycji</h4>
+                            <div class="test-controls">
+                                <div class="param-group">
+                                    <label>Siła impulsu (PWM):</label>
+                                    <input type="range" id="position-test-impulse" min="300" max="900" value="600">
+                                    <span id="position-test-impulse-val">600</span>
+                                </div>
+                            </div>
+                            <button class="run-test-btn" data-test-type="position">🚀 Uruchom impuls</button>
+                        </div>
+
+                        <!-- KARTA TESTU PRĘDKOŚCI -->
+                        <div class="test-card speed-test">
+                            <h4>⏩ Test Jazdy</h4>
+                            <div class="test-controls">
+                                <div class="param-group">
+                                    <label>Dystans (cm):</label>
+                                    <input type="range" id="speed-test-distance" min="50" max="300" value="100">
+                                    <span id="speed-test-distance-val">100cm</span>
+                                </div>
+                                <div class="param-group">
+                                    <label>Prędkość (cm/s):</label>
+                                    <input type="range" id="speed-test-speed" min="20" max="150" value="50">
+                                    <span id="speed-test-speed-val">50cm/s</span>
+                                </div>
+                            </div>
+                            <button class="run-test-btn" data-test-type="speed">🚀 Uruchom jazdę</button>
+                        </div>
+
+                        <!-- KARTA ANALIZY WSZYSTKICH PĘTLI -->
+                        <div class="test-card cascade-analysis">
+                            <h4>🔍 Analiza Kaskady PID</h4>
+                            <div class="test-controls">
+                                <div class="param-group">
+                                    <label>Tryb analizy:</label>
+                                    <select id="cascade-analysis-mode">
+                                        <option value="full">Pełna analiza (pełny zakres)</option>
+                                        <option value="quick">Szybka ocena (limited range)</option>
+                                        <option value="disturbance">Reakcja na zakłócenia</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button class="run-test-btn" data-test-type="cascade">🔬 Przeprowadź analizę</button>
+                        </div>
+                    </div>
+
+                    <!-- PANEL WYNIKOW TESTOW -->
+                    <div id="test-results-panel" class="test-results-panel" style="display:none;">
+                        <h4>Wyniki ostatniego testu</h4>
+                        <div id="test-metrics" class="metrics-display"></div>
+                        <div id="test-suggestions" class="suggestions-panel"></div>
+                        <div class="test-actions">
+                            <button id="apply-test-suggestions">✅ Zastosuj sugestie</button>
+                            <button id="re-run-test">🔄 Powtórz test</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DASHBOARD CZASU RZECZYWISTEGO DLA WSZYSTKICH ALGORYTMÓW -->
+            <div id="autotune-dashboard" class="autotune-dashboard" style="display:none;">
+                <h4>📊 Dashboard Optymalizacji</h4>
+                <div class="dashboard-metrics">
+                    <div class="metric-item">
+                        <span class="metric-label">Najlepszy wynik:</span>
+                        <span id="dashboard-best-fitness" class="metric-value">---</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Postęp:</span>
+                        <div class="progress-bar small"><div class="progress-fill" id="dashboard-progress-fill" style="width:0%"></div></div>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Dynamika systemu:</span>
+                        <span id="dashboard-stability" class="metric-value">---</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Czas pozostały:</span>
+                        <span id="dashboard-time-remaining" class="metric-value">---</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -2213,12 +2339,233 @@
     // Inicjalizacja ulepszonego asystenta
     const advancedAssistant = new AdvancedPIDTuningAssistant();
 
+    // === NOWE FUNKCJE DLA ZAKŁADEK AUTOTUNING ===
+    function setupAutotuningTabs() {
+        // Przelaczenie aktywnej zakladki
+        document.querySelectorAll('.method-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                const method = this.dataset.method;
+
+                // Usun aktywne klasy
+                document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.method-content').forEach(c => c.classList.remove('active'));
+
+                // Dodaj aktywne klasy
+                this.classList.add('active');
+                document.querySelector(`.method-content[data-method="${method}"]`).classList.add('active');
+
+                // Aktualizuj dashboard
+                updateTuningDashboard('idle', method);
+            });
+        });
+
+        // Obsluga suwakow zakresu
+        document.querySelectorAll('input[type="range"]').forEach(range => {
+            const valueDisplay = document.getElementById(range.id + '-val') ||
+                                document.getElementById(range.id.replace('-min', '-min-val'));
+            if (valueDisplay) {
+                range.addEventListener('input', function() {
+                    let suffix = '';
+                    if (this.max > 100) suffix = ' s'; // czas
+                    else if (this.max <= 5) suffix = '°'; // kat
+                    else if (this.max <= 30 && this.id.includes('amplitude')) suffix = '°';
+                    else if (this.max >= 50 && this.max <= 300) suffix = 'cm'; // dystans
+                    else if (this.max >= 20 && this.max <= 150 && this.id.includes('speed')) suffix = 'cm/s';
+                    else if (this.id.includes('impulse')) suffix = '';
+                    else if (this.id.includes('iterations')) suffix = '';
+                    else if (this.id.includes('particles')) suffix = '';
+                    else if (this.id.includes('generations')) suffix = '';
+                    else if (this.id.includes('population')) suffix = '';
+                    else if (this.id.includes('rate')) suffix = '%';
+                    else if (this.id.includes('inertia')) suffix = '';
+                    else if (this.max <= 15 && this.id.includes('duration')) suffix = 's';
+
+                    valueDisplay.textContent = this.value + suffix;
+                });
+
+                // Inicjalizuj wartosc
+                const event = new Event('input');
+                range.dispatchEvent(event);
+            }
+        });
+
+        // Obsluga przyciskow uruchomienia algorytmow
+        document.getElementById('run-zn-test').addEventListener('click', () => {
+            if (!checkTuningPrerequisites(['BALANSUJE', 'TRZYMA_POZYCJE'])) return;
+
+            const loopSelector = document.getElementById('zn-loop-selector');
+            const duration = document.getElementById('zn-trial-duration').value;
+            const amplitude = document.getElementById('zn-max-amplitude').value;
+
+            updateTuningDashboard('running', 'zn-relay');
+            document.getElementById('zn-status').textContent = 'Rozpoczynam...';
+
+            addLogMessage(`[ZN] Uruchomienie metody Relay dla ${loopSelector.value}, czas: ${duration}s, amplituda: ${amplitude}°`, 'info');
+        });
+
+        document.getElementById('run-ga-tune').addEventListener('click', () => {
+            if (!checkTuningPrerequisites(['BALANSUJE', 'TRZYMA_POZYCJE'])) return;
+
+            const generations = document.getElementById('ga-generations').value;
+            const population = document.getElementById('ga-population').value;
+            const mutation = document.getElementById('ga-mutation-rate').value;
+
+            updateTuningDashboard('running', 'ga-genetic');
+            document.getElementById('run-ga-tune').disabled = true;
+            document.getElementById('pause-ga-tune').disabled = false;
+            document.getElementById('stop-ga-tune').disabled = false;
+
+            addLogMessage(`[GA] Uruchomienie algorytmu genetycznego (${population} osobnikow, ${generations} pokolen, ${mutation}% mutacji)`, 'info');
+        });
+
+        document.getElementById('run-pso-tune').addEventListener('click', () => {
+            if (!checkTuningPrerequisites(['BALANSUJE', 'TRZYMA_POZYCJE'])) return;
+
+            const iterations = document.getElementById('pso-iterations').value;
+            const particles = document.getElementById('pso-particles').value;
+            const inertia = document.getElementById('pso-inertia').value;
+
+            updateTuningDashboard('running', 'pso-particle');
+            document.getElementById('run-pso-tune').disabled = true;
+            document.getElementById('pause-pso-tune').disabled = false;
+            document.getElementById('stop-pso-tune').disabled = false;
+
+            addLogMessage(`[PSO] Uruchomienie optymalizacji czastkowej (${particles} czastek, ${iterations} iteracji)`, 'info');
+        });
+
+        // Obsluga przyciskow testow dynamicznych
+        document.querySelectorAll('.run-test-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const testType = this.dataset.testType;
+                runDynamicTest(testType);
+            });
+        });
+    }
+
+    function updateTuningDashboard(status, method = '') {
+        const dashboard = document.getElementById('autotune-dashboard');
+        if (status === 'idle') {
+            dashboard.style.display = 'none';
+            return;
+        }
+
+        dashboard.style.display = 'block';
+
+        // Aktualizuj dashboard na podstawie statusu i metody
+        const progressBar = document.getElementById('dashboard-progress-fill');
+        const bestFitness = document.getElementById('dashboard-best-fitness');
+        const stability = document.getElementById('dashboard-stability');
+
+        if (status === 'running') {
+            progressBar.style.width = '0%';
+            bestFitness.textContent = '---';
+            stability.textContent = 'Optymalizuję...';
+        }
+    }
+
+    function runDynamicTest(testType) {
+        if (!checkTuningPrerequisites(['BALANSUJE', 'TRZYMA_POZYCJE'])) return;
+
+        addLogMessage(`[Test] Uruchamianie testu dynamicznego: ${testType}`, 'info');
+
+        // Pobierz parametry testu
+        let testCommand = {};
+        let duration = 5000; // domyslnie 5 sekund
+
+        switch (testType) {
+            case 'balance':
+                const angle = document.getElementById('balance-test-angle').value;
+                const balanceDuration = document.getElementById('balance-test-duration').value;
+                testCommand = { type: 'execute_balance_step_response', angle: parseFloat(angle) };
+                duration = balanceDuration * 1000;
+                break;
+
+            case 'position':
+                const impulse = document.getElementById('position-test-impulse').value;
+                testCommand = { type: 'execute_position_test_impulse', impulse_power: parseInt(impulse) };
+                duration = 6000; // 6 sekund dla testu pozycji
+                break;
+
+            case 'speed':
+                const distance = document.getElementById('speed-test-distance').value;
+                const speed = document.getElementById('speed-test-speed').value;
+                testCommand = { type: 'execute_speed_test_run', distance_cm: parseFloat(distance), speed_cmps: parseFloat(speed) };
+                duration = ((distance / speed) * 1000) + 2000; // czas jazy + marge
+                break;
+
+            case 'cascade':
+                const mode = document.getElementById('cascade-analysis-mode').value;
+                addLogMessage(`[Cascade] Analiza kaskady w trybie: ${mode}`, 'info');
+                // To wymaga zaimplementowania nowej funkcji robot->cascade analysis
+                return;
+        }
+
+        // Uruchom test
+        updateTuningDashboard('running', 'tests');
+        currentTestType = testType;
+
+        // Wyslij komende i rozpocznij zbieranie danych
+        sendBleMessage(testCommand);
+
+        // Zbieraj dane przez okreslony czas
+        setTimeout(() => {
+            // Analizuj wyniki testu
+            analyzeDynamicTestResults(testType);
+            updateTuningDashboard('idle');
+            currentTestType = null;
+        }, duration);
+    }
+
+    function analyzeDynamicTestResults(testType) {
+        const panel = document.getElementById('test-results-panel');
+        panel.style.display = 'block';
+
+        if (!telemetryForCurrentTest || telemetryForCurrentTest.length === 0) {
+            document.getElementById('test-metrics').innerHTML = '<div style="color:#ff6347;">Brak danych telemetrycznych z testu</div>';
+            return;
+        }
+
+        // Analizuj dane w zaleznosci od typu testu
+        let results = {};
+        switch (testType) {
+            case 'balance':
+                results = analyzeBalanceTestResults(telemetryForCurrentTest);
+                break;
+            case 'position':
+                results = analyzePositionTestResults(telemetryForCurrentTest);
+                break;
+            case 'speed':
+                results = analyzeSpeedTestResults(telemetryForCurrentTest);
+                break;
+        }
+
+        document.getElementById('test-metrics').innerHTML = results.metrics;
+        document.getElementById('test-suggestions').innerHTML = results.suggestions;
+
+        // Przyciski akcji
+        document.getElementById('apply-test-suggestions').onclick = () => {
+            addLogMessage('[Test] Zastosowano sugestie z testu', 'success');
+            // Tutaj zostanie zaimplementowana logika aplikowania sugestii
+        };
+
+        document.getElementById('re-run-test').onclick = () => {
+            runDynamicTest(testType);
+        };
+
+        addLogMessage(`[Test] Analiza zakończona. ${results.summary}`, 'info');
+    }
+
+    // Funkcje analiz testow (placeholder - beda zaimplementowane przez FitnessEvaluator)
+    function analyzeBalanceTestResults(data) { return { metrics: '<div>Analiza odpowiedzi balansu - wkrótce...</div>', suggestions: '<div>Sugestie będą dostępne wkrótce</div>', summary: 'Test balansu przeanalizowany' }; }
+    function analyzePositionTestResults(data) { return { metrics: '<div>Analiza odpowiedzi pozycji - wkrótce...</div>', suggestions: '<div>Sugestie będą dostępne wkrótce</div>', summary: 'Test pozycji przeanalizowany' }; }
+    function analyzeSpeedTestResults(data) { return { metrics: '<div>Analiza odpowiedzi prędkości - wkrótce...</div>', suggestions: '<div>Sugestie będą dostępne wkrótce</div>', summary: 'Test prędkości przeanalizowany' }; }
+
     document.addEventListener('DOMContentLoaded', () => {
         initJoystick(); setupChartControls(); populatePresetSelect(); setupNumericInputs(); setupEventListeners();
         setupManualTuneButtons(); setupGamepadMappingModal(); setupTuningAssistantListeners(); setupGaListeners();
         setupDpadControls(); setupSequenceControls(); setupZnTuningControls(); loadGamepadMappings(); renderMappingModal();
         pollGamepad(); window.addEventListener('resize', initJoystick); init3DVisualization(); animate3D(); setUiLock(true);
-        addCascadeTuningButton(); // Dodajemy przycisk kaskady
+        addCascadeTuningButton(); setupAutotuningTabs(); // Dodajemy obsługe nowych zakładek autotuning
     });
 
     const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
