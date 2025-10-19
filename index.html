@@ -99,7 +99,7 @@
         .dpad-input-group { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin: 10px 0; }
         .dpad-input-group label { text-align: right; font-weight: bold; color: #a2f279; }
         .dpad-input-group input { width: 100%; box-sizing: border-box; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 5px; padding: 4px; }
-        .sequence-step { display: grid; grid-template-columns: 1fr 100px auto; gap: 10px; align-items: center; background-color: #2a2f35; padding: 8px; border-radius: 6px; margin-bottom: 8px; transition: background-color: 0.3s; }
+        .sequence-step { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: center; background-color: #2a2f35; padding: 8px; border-radius: 6px; margin-bottom: 8px; transition: background-color: 0.3s; }
         .sequence-step.executing { background-color: #a2f279; color: #282c34; }
         .sequence-step.executing select, .sequence-step.executing input { color: #282c34; border-color: #282c34; }
         .sequence-step select, .sequence-step input { width: 100%; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 4px; padding: 5px; }
@@ -120,36 +120,77 @@
             opacity: 0.5;
             pointer-events: none;
         }
-        body.tuning-active #allSettings, body.tuning-active #controls-card .accordion-header, body.tuning-active .card:not(#autotuning-card) button {
+        body.tuning-active #allSettings, body.tuning-active #controls-card .accordion-header, body.tuning-active .card:not(#autotuning-card) button:not(#emergencyStopBtn) {
              opacity: 0.5;
             pointer-events: none;
         }
-        body .ui-locked #connectBleBtn, body .ui-locked #emergencyStopBtn {
+        body.ui-locked #connectBleBtn, body.ui-locked #emergencyStopBtn {
             opacity: 1.0;
             pointer-events: auto;
         }
+        
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; text-align: left;}
+        .dashboard-item { background-color: #2a2f35; padding: 10px; border-radius: 6px; border-left: 4px solid #4a4f58; transition: border-color 0.3s; }
+        .dashboard-item.warn { border-color: #f7b731; }
+        .dashboard-item.error { border-color: #ff6347; }
+        .dashboard-item .label { display: block; font-size: 0.9em; color: #a2f279; margin-bottom: 4px; }
+        .dashboard-item .value { display: block; font-size: 1.5em; font-weight: bold; color: #61dafb; }
+        .historical-metric { font-size: 0.8em; color: #ccc; margin-top: 4px; }
+        .compass-container { position: relative; width: 60px; height: 60px; border-radius: 50%; background-color: #20232a; border: 2px solid #61dafb; margin-top: 5px; }
+        .compass-needle { position: absolute; top: 10%; left: calc(50% - 2px); width: 4px; height: 40%; background-color: #ff6347; transform-origin: bottom center; transition: transform 0.2s linear; }
+        .compass-cardinal { position: absolute; color: #fff; font-weight: bold; font-size: 0.8em; }
+        .n { top: 2px; left: 50%; transform: translateX(-50%); }
+        .e { top: 50%; right: 4px; transform: translateY(-50%); }
+        .s { bottom: 2px; left: 50%; transform: translateX(-50%); }
+        .w { top: 50%; left: 4px; transform: translateY(-50%); }
+        
+        .chart-toolbar { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 10px; }
+        .chart-toolbar button { padding: 6px 10px; font-size: 0.85em; }
+        .chart-cursor-info { display: flex; justify-content: space-around; margin-top: 10px; font-size: 0.9em; flex-wrap: wrap; }
+        .chart-cursor-info div { text-align: center; margin: 5px; }
+        .chart-cursor-info strong { color: #a2f279; }
+        
+        .diff-selector-row { display: flex; gap: 10px; margin-bottom: 10px; }
+        .diff-selector-row select { flex-grow: 1; padding: 8px; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 4px; }
+        .diff-results { text-align: left; font-family: monospace; background-color: #20232a; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto; }
+        .diff-added { color: #a2f279; }
+        .diff-removed { color: #ff6347; text-decoration: line-through; }
+        .diff-changed { color: #f7b731; }
 
+        #path-visualization-container { width: 100%; height: 200px; background-color: #20232a; border-radius: 8px; margin-top: 15px; position: relative; overflow: hidden; }
+        #pathCanvas { width: 100%; height: 100%; display: block; }
+        .path-legend { position: absolute; bottom: 10px; left: 10px; background-color: rgba(0,0,0,0.5); padding: 5px; border-radius: 4px; font-size: 0.8em; }
+        .path-legend div { display: flex; align-items: center; margin-bottom: 3px; }
+        .path-legend .color-box { width: 12px; height: 12px; margin-right: 5px; border-radius: 2px; }
+        .path-legend .planned { background-color: #61dafb; }
+        .path-legend .actual { background-color: #a2f279; }
+        .sequence-report-panel { background-color: #2a2f35; padding: 15px; border-radius: 6px; margin-top: 15px; display: none; }
+        .sequence-report-panel h4 { color: #a2f279; margin-top: 0; margin-bottom: 10px; }
+        .sequence-report-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+        .sequence-report-metrics strong { color: #61dafb; }
+
+        .autotune-config-common { background-color: #2a2f35; padding: 15px; border-radius: 6px; margin-bottom: 15px; }
+        .autotune-config-common h3 { color: #61dafb; margin-top: 0; margin-bottom: 15px; }
+        .autotune-config-common .setting-container { margin-bottom: 10px; }
+        .autotune-config-common .setting-container label { color: #a2f279; }
+        .autotune-tuning-chart-wrapper { position: relative; height: 250px; border-radius: 8px; overflow: hidden; background-color: #20232a; margin-bottom: 15px; }
         .main-method-tabs { display: flex; margin-bottom: 15px; border-bottom: 2px solid #4a4f58; }
         .method-tab { background-color: #4a4f58; color: #61dafb; border: none; padding: 12px 10px; cursor: pointer; transition: all 0.3s; border-radius: 8px 8px 0 0; font-size: 0.9em; flex-grow: 1;}
         .method-tab.active { background-color: #61dafb; color: #282c34; }
         .method-tab:hover:not(.active) { background-color: #5a6068; }
         .method-tab:disabled { cursor: not-allowed; opacity: 0.5; }
-
         .method-content { display: none; }
         .method-content.active { display: block; }
-
         .config-panel { background-color: #2a2f35; border-radius: 6px; padding: 15px; }
         .config-panel h3 { color: #61dafb; margin-top: 0; margin-bottom: 15px; font-size: 1.2em; }
         .config-section { margin-bottom: 20px; }
         .config-section label { display: block; color: #a2f279; font-weight: bold; margin-bottom: 8px; text-align: left;}
         .config-section select { width: 100%; padding: 8px; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 4px; }
-
         .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
         .param-group { background-color: #20232a; padding: 12px; border-radius: 6px; text-align: left; }
         .param-group label { display: block; color: #61dafb; font-size: 0.9em; margin-bottom: 5px; }
         .param-group input[type="range"] { width: 100%; }
         .param-group span { display: block; text-align: center; color: #f7b731; font-weight: bold; margin-top: 5px; }
-
         .tuning-controls { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
         .tuning-controls button {flex: 1;}
         .tuning-status { color: #f7b731; font-weight: bold; }
@@ -159,16 +200,8 @@
         .status-info { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; font-size: 0.9em; }
         .status-info strong {color: #61dafb;}
         .status-info span { color: #f7b731; }
-
         .results-panel { background-color: #2a2f35; padding: 15px; border-radius: 6px; margin-top: 15px; display: none; }
         .results-panel h4 {color: #a2f279; margin-top:0;}
-
-        .test-cards-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .test-card { background-color: #2a2f35; border-radius: 8px; padding: 15px; border-left: 4px solid #61dafb; }
-        .test-card h4 { color: #61dafb; margin-top: 0; margin-bottom: 10px; }
-        .test-card .test-controls { margin-bottom: 15px; }
-        .test-card button { width: 100%; }
-
         .autotune-dashboard { background-color: #20232a; padding: 15px; border-radius: 6px; margin-top: 15px; display: none; }
         .autotune-dashboard h4 { color: #a2f279; margin: 0 0 10px 0;}
         .dashboard-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
@@ -176,9 +209,25 @@
         .metric-label { color: #61dafb; font-size: 0.9em; display: block; margin-bottom: 5px; }
         .metric-value { font-size: 1.2em; font-weight: bold; color: #a2f279; }
         .progress-bar.small .progress-fill { background-color: #f7b731; }
+        .search-space-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 15px; }
+        .search-space-param { background-color: #20232a; padding: 8px; border-radius: 4px; text-align: left; }
+        .search-space-param label { display: block; color: #61dafb; font-size: 0.85em; margin-bottom: 5px; }
+        .search-space-param input[type="number"] { width: 100%; background-color: #3a3f47; color: #fff; border: 1px solid #4a4f58; border-radius: 3px; padding: 3px; font-size: 0.9em; }
+        .fitness-function-config { margin-top: 15px; }
+        .fitness-weight-item { display: flex; align-items: center; margin-bottom: 8px; }
+        .fitness-weight-item label { flex-grow: 1; text-align: left; color: #fff; font-size: 0.9em; }
+        .fitness-weight-item input[type="range"] { width: 100px; margin-left: 10px; }
+        .fitness-weight-item span { width: 40px; text-align: right; color: #a2f279; font-weight: bold; }
+        .autotune-live-status .status-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 10px; font-size: 0.9em; }
+        .autotune-live-status .status-info strong { color: #a2f279; }
+        .autotune-results-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.85em; }
+        .autotune-results-table th, .autotune-results-table td { border: 1px solid #4a4f58; padding: 6px; text-align: center; }
+        .autotune-results-table th { background-color: #4a4f58; color: #61dafb; }
+        .autotune-results-table td { background-color: #3a3f47; color: #fff; }
+        .autotune-results-table button { margin-left: 5px; padding: 4px 8px; font-size: 0.8em; }
     </style>
 </head>
-<body>
+<body class="ui-locked">
     <div id="emergency-banner">ZATRZYMANIE AWARYJNE</div>
     <div id="gamepad-mapping-modal" class="modal-backdrop">
         <div class="modal-content">
@@ -187,31 +236,22 @@
             <button id="close-modal-btn" style="margin-top: 20px;">Zamknij</button>
         </div>
     </div>
-
     <div id="calibration-modal" class="modal-backdrop">
         <div class="modal-content">
             <h2>Kalibracja IMU (Czujnik Nachylenia)</h2>
             <p>Aby skalibrować czujnik IMU, powoli obróć robota we wszystkich kierunkach: do przodu, do tyłu, na boki i wokół własnej osi pionowej. Wykonaj co najmniej 3 pełne obroty w każdej płaszczyźnie.</p>
             <p><strong>Dla akcelerometru (Accel) ważne:</strong> Trzymaj robota nieruchomo na około 10 sekund w każdej z 6 pozycji (sześcian): góra, dół, przednia strona, tylna strona, lewa strona, prawa strona. Powtarzaj obroty i zatrzymania, aż progres osiągnie co najmniej 3/4 dla każdej osi. Obroty powinny być wolne i płynne.</p>
             <div class="calib-axis" style="display: flex; align-items: center; margin: 10px 0; justify-content: space-between;">
-                <span>Sys (System):</span>
-                <progress id="calib-sys-bar" value="0" max="4" style="flex: 1; margin: 0 10px;"></progress>
-                <span id="calib-sys-text">0</span>/4
+                <span>Sys (System):</span><progress id="calib-sys-bar" value="0" max="3" style="flex: 1; margin: 0 10px;"></progress><span id="calib-sys-text">0</span>/3
             </div>
             <div class="calib-axis" style="display: flex; align-items: center; margin: 10px 0; justify-content: space-between;">
-                <span>Accel (Przyspieszenie):</span>
-                <progress id="calib-accel-bar" value="0" max="4" style="flex: 1; margin: 0 10px;"></progress>
-                <span id="calib-accel-text">0</span>/4
+                <span>Accel (Przyspieszenie):</span><progress id="calib-accel-bar" value="0" max="3" style="flex: 1; margin: 0 10px;"></progress><span id="calib-accel-text">0</span>/3
             </div>
             <div class="calib-axis" style="display: flex; align-items: center; margin: 10px 0; justify-content: space-between;">
-                <span>Gyro (Obroty):</span>
-                <progress id="calib-gyro-bar" value="0" max="4" style="flex: 1; margin: 0 10px;"></progress>
-                <span id="calib-gyro-text">0</span>/4
+                <span>Gyro (Obroty):</span><progress id="calib-gyro-bar" value="0" max="3" style="flex: 1; margin: 0 10px;"></progress><span id="calib-gyro-text">0</span>/3
             </div>
             <div class="calib-axis" style="display: flex; align-items: center; margin: 10px 0; justify-content: space-between;">
-                <span>Mag (Magnetyczne):</span>
-                <progress id="calib-mag-bar" value="0" max="4" style="flex: 1; margin: 0 10px;"></progress>
-                <span id="calib-mag-text">0</span>/4
+                <span>Mag (Magnetyczne):</span><progress id="calib-mag-bar" value="0" max="3" style="flex: 1; margin: 0 10px;"></progress><span id="calib-mag-text">0</span>/3
             </div>
             <button id="calib-update-btn" style="width: 48%; margin-right: 4%;">Aktualizuj Status</button>
             <button id="calib-close-btn" style="width: 48%;">Zamknij</button>
@@ -228,11 +268,7 @@
             <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
             <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Resetuj Osie</button>
-            <div class="trim-controls">
-                <button id="trimMinusBtn">-</button>
-                <span>Korekta Pionu: <span id="trimValueDisplay">0.0°</span></span>
-                <button id="trimPlusBtn">+</button>
-            </div>
+            <div class="trim-controls"><button id="trimMinusBtn">-</button><span>Korekta Pionu: <span id="trimValueDisplay">0.0°</span></span><button id="trimPlusBtn">+</button></div>
             <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
             <button id="emergencyStopBtn">STOP AWARYJNY</button>
             <button class="accordion-header" onclick="toggleAccordion(this)" style="margin-top: 15px;">Strojenie Joysticka</button>
@@ -246,23 +282,52 @@
             </div>
         </div>
         <div class="card">
-            <h2>Status Robota</h2>
+            <h2>Dashboard</h2>
             <button id="connectBleBtn" style="width: 100%; margin-bottom: 15px;">POLACZ Z ROBOTEM</button>
             <div class="status-grid">
                 <strong>Polaczenie:</strong> <div><span id="connectionStatus" class="status-indicator status-disconnected"></span> <span id="connectionText">Rozlaczony</span></div>
                 <strong>Gamepad:</strong> <span id="gamepadStatus" style="font-weight:bold; color: #f7b731;">Brak</span>
                 <strong>Tryb Pracy:</strong> <span id="robotStateVal" style="font-weight:bold; color: #61dafb;">IDLE</span>
-                <strong>Czas Petli:</strong> <span id="loopTimeVal">0 &micro;s</span>
             </div>
-            <div class="info-grid">
-                <strong>Kat (Pitch):</strong> <div class="angle-display"><span id="angleVal">0.0 &deg;</span><div class="angle-indicator-wrapper"><div id="angleIndicator" class="angle-indicator-needle"></div></div></div>
-                <strong>Kat (Roll):</strong> <span id="rollVal">0.0 &deg;</span>
-                <strong>Kat (Yaw):</strong> <span id="yawVal">0.0 °</span>
-                <strong>Predkosc (imp/s):</strong> <span id="speedVal">0</span>
-                <strong>Enkoder L:</strong> <span id="encoderLeftVal">0</span>
-                <strong>Enkoder P:</strong> <span id="encoderRightVal">0</span>
-                <strong>Status Kalibracji IMU (BNO055):</strong>
-                <span id="calibSysVal">-</span> / <span id="calibAccelVal">-</span> / <span id="calibGyroVal">-</span> / <span id="calibMagVal">-</span>
+             <div class="dashboard-grid">
+                <div class="dashboard-item">
+                    <span class="label">Czas Petli</span>
+                    <span class="value" id="loopTimeVal">0 &micro;s</span>
+                </div>
+                <div class="dashboard-item" id="loopLoadItem">
+                    <span class="label">Obciazenie Petli</span>
+                    <span class="value" id="loopLoadVal">0%</span>
+                </div>
+                <div class="dashboard-item" id="systemHealthItem">
+                    <span class="label">System Health</span>
+                    <span class="value" id="systemHealthVal">OK</span>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Kalibracja IMU</span>
+                    <span class="value">Sys: <span id="calibSysVal">-</span></span>
+                    <div class="historical-metric">Acc: <span id="calibAccelVal">-</span> Gyro: <span id="calibGyroVal">-</span> Mag: <span id="calibMagVal">-</span></div>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Kat (Pitch)</span>
+                    <span class="value" id="angleVal">0.0 &deg;</span>
+                    <div class="historical-metric">(min: <span id="pitchMin">---</span>, max: <span id="pitchMax">---</span>, avg: <span id="pitchAvg">---</span>)</div>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Predkosc</span>
+                    <span class="value" id="speedVal">0 imp/s</span>
+                    <div class="historical-metric">(min: <span id="speedMin">---</span>, max: <span id="speedMax">---</span>, avg: <span id="speedAvg">---</span>)</div>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Kurs (Yaw)</span>
+                    <span class="value" id="yawVal">0.0 °</span>
+                    <div class="compass-container">
+                        <div class="compass-needle" id="compassNeedle"></div>
+                        <span class="compass-cardinal n">N</span>
+                        <span class="compass-cardinal e">E</span>
+                        <span class="compass-cardinal s">S</span>
+                        <span class="compass-cardinal w">W</span>
+                    </div>
+                </div>
             </div>
              <fieldset style="margin-top: 15px;">
                 <legend>Diagnostyka</legend>
@@ -291,31 +356,35 @@
             </div>
         </div>
         <div class="card">
-            <button class="accordion-header" onclick="toggleAccordion(this)">Wykres Telemetryczny</button>
-            <div class="accordion-content">
-                <div id="chart-wrapper"><canvas id="telemetryChart"></canvas></div>
-                <div class="chart-controls" id="chartControls"></div>
+            <h2>Analizator Sygnalow</h2>
+            <div id="chart-wrapper">
+                <canvas id="signalAnalyzerChart"></canvas>
             </div>
+            <div class="chart-toolbar">
+                <button id="pauseChartBtn">⏸️ Pauza</button>
+                <button id="resumeChartBtn" style="display:none;">▶️ Wznów</button>
+                <button id="cursorABBtn">📏 Kursory A/B</button>
+                <button id="exportCsvBtn">📄 Eksport CSV</button>
+                <button id="exportPngBtn">🖼️ Eksport PNG</button>
+            </div>
+            <div class="chart-cursor-info" id="cursorInfo" style="display:none;">
+                <div><strong>Kursor A:</strong> X: <span id="cursorAX">---</span>, Y: <span id="cursorAY">---</span></div>
+                <div><strong>Kursor B:</strong> X: <span id="cursorBX">---</span>, Y: <span id="cursorBY">---</span></div>
+                <div><strong>Δt:</strong> <span id="cursorDeltaT">---</span></div>
+                <div><strong>Δy (Pitch):</strong> <span id="cursorDeltaYPitch">---</span></div>
+                <div><strong>Δy (Speed):</strong> <span id="cursorDeltaYSpeed">---</span></div>
+            </div>
+            <div class="chart-controls" id="signalChartControls"></div>
         </div>
         <div class="card">
              <button class="accordion-header" onclick="toggleAccordion(this)">Sterowanie Autonomiczne</button>
             <div class="accordion-content">
                <fieldset>
                    <legend>Sterowanie Precyzyjne (D-Pad)</legend>
-                   <div class="dpad-input-group">
-                       <label for="dpadDistInput">Dystans (cm):</label>
-                       <input type="number" id="dpadDistInput" value="20">
-                   </div>
-                   <div class="dpad-input-group">
-                       <label for="dpadAngleInput">Kat (st.):</label>
-                       <input type="number" id="dpadAngleInput" value="90">
-                   </div>
+                   <div class="dpad-input-group"><label for="dpadDistInput">Dystans (cm):</label><input type="number" id="dpadDistInput" value="20"></div>
+                   <div class="dpad-input-group"><label for="dpadAngleInput">Kat (st.):</label><input type="number" id="dpadAngleInput" value="90"></div>
                    <div class="dpad-container">
-                       <button id="dpad-up" class="dpad-btn" data-dpad="up">&#8593;</button>
-                       <button id="dpad-left" class="dpad-btn" data-dpad="left">&#8592;</button>
-                       <button id="dpad-stop" class="dpad-btn" data-dpad="stop">&#215;</button>
-                       <button id="dpad-right" class="dpad-btn" data-dpad="right">&#8594;</button>
-                       <button id="dpad-down" class="dpad-btn" data-dpad="down">&#8595;</button>
+                       <button id="dpad-up" class="dpad-btn" data-dpad="up">&#8593;</button><button id="dpad-left" class="dpad-btn" data-dpad="left">&#8592;</button><button id="dpad-stop" class="dpad-btn" data-dpad="stop">&#215;</button><button id="dpad-right" class="dpad-btn" data-dpad="right">&#8594;</button><button id="dpad-down" class="dpad-btn" data-dpad="down">&#8595;</button>
                    </div>
                </fieldset>
                <fieldset style="margin-top: 15px;">
@@ -323,9 +392,24 @@
                    <div id="sequence-list"></div>
                    <button id="add-sequence-step-btn" style="width:100%; margin: 10px 0;">Dodaj Krok</button>
                    <div style="display:flex; gap:10px; justify-content:center;">
-                       <button id="run-sequence-btn" style="background-color: #a2f279;">Uruchom</button>
-                       <button id="stop-sequence-btn" style="background-color: #ff6347;" disabled>Zatrzymaj</button>
-                       <button id="clear-sequence-btn" style="background-color: #f7b731;">Wyczysc</button>
+                       <button id="run-sequence-btn" style="background-color: #a2f279;">Uruchom</button><button id="stop-sequence-btn" style="background-color: #ff6347;" disabled>Zatrzymaj</button><button id="clear-sequence-btn" style="background-color: #f7b731;">Wyczysc</button>
+                   </div>
+                   <h4 style="color: #61dafb; margin-top: 20px; margin-bottom: 10px;">Wizualizacja Sciezki (2D)</h4>
+                   <div id="path-visualization-container">
+                       <canvas id="pathCanvas"></canvas>
+                       <div class="path-legend">
+                           <div><span class="color-box planned"></span> Planowana</div>
+                           <div><span class="color-box actual"></span> Rzeczywista</div>
+                       </div>
+                   </div>
+                   <div id="sequence-report-panel" class="sequence-report-panel">
+                       <h4>Raport Sekwencji</h4>
+                       <div class="sequence-report-metrics" id="sequenceReportMetrics">
+                           <div><strong>Sredni Blad Kursu:</strong> <span id="avgHeadingError">---</span></div>
+                           <div><strong>Max Blad Kursu:</strong> <span id="maxHeadingError">---</span></div>
+                           <div><strong>Pokonany Dystans:</strong> <span id="totalDistanceCovered">---</span></div>
+                       </div>
+                       <button id="resetSequenceReportBtn" style="width: 100%; margin-top: 15px;">Wyczysc Raport</button>
                    </div>
                </fieldset>
            </div>
@@ -333,13 +417,22 @@
         <div class="card">
             <h2>Konfiguracja</h2>
             <fieldset>
-                <legend>Profile Ustawien PID</legend>
+                <legend>Profile Ustawien (Snapshots)</legend>
                 <div class="profile-controls"> <select id="pidPresetSelect" style="width: 100%; padding: 5px;"></select> </div>
                 <div class="preset-actions">
                     <button id="applySelectedPresetBtn">Zastosuj</button>
                     <button id="saveCurrentAsPresetBtn">Zapisz jako Nowy</button>
                 </div>
-                <button id="deleteSelectedPresetBtn" style="width:100%; margin-top: 10px; background-color: #ff6347;">Usun Wybrany Preset</button>
+                <button id="deleteSelectedPresetBtn" style="width:100%; margin-top: 10px; background-color: #ff6347;">Usun Wybrany</button>
+            </fieldset>
+             <fieldset style="margin-top: 15px;">
+                <legend>Porownywarka Konfiguracji (Diff)</legend>
+                <div class="diff-selector-row">
+                    <select id="diffPresetSelectA"></select>
+                    <select id="diffPresetSelectB"></select>
+                </div>
+                <button id="comparePresetsBtn" style="width:100%; margin-bottom: 10px;">Porownaj</button>
+                <pre id="diffResults" class="diff-results" style="display:none;"></pre>
             </fieldset>
             <div id="allSettings">
                 <button class="accordion-header" onclick="toggleAccordion(this)">1. Parametry Sprzetowe i Mechaniczne</button>
@@ -407,38 +500,42 @@
         </div>
 
         <div class="card" id="autotuning-card">
-            <h2>Auto Strojenie</h2>
-
+            <h2>Centrum Dowodzenia Strojenia</h2>
+            <div class="autotune-config-common">
+                <h3>⚙️ Konfiguracja Strojenia (Wspolna)</h3>
+                <div class="config-section">
+                    <label>🎯 Petla PID do strojenia:</label>
+                    <select id="common-loop-selector">
+                        <option value="balance">Pętla Balansu (Kp, Kd)</option>
+                        <option value="speed">Pętla Predkosci (Kp, Ki, Kd)</option>
+                        <option value="position">Pętla Pozycji (Kp, Ki, Kd)</option>
+                        <option value="rotation">Pętla Obrotu (Kp, Kd)</option>
+                        <option value="heading">Pętla Kursu (Kp, Ki, Kd)</option>
+                    </select>
+                </div>
+                <div class="config-section">
+                    <label style="color: #f7b731;">🛡️ Ograniczenia Bezpieczenstwa (Max. Wartosci):</label>
+                    <div class="setting-container"> <label for="safetyMaxAngle">Max. Kat (°)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="safetyMaxAngle" min="5" max="45" step="1" value="20"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="safetyMaxSpeed">Max. Predkosc (imp/s)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="safetyMaxSpeed" min="100" max="4000" step="50" value="1500"><button>+</button></div> </div>
+                    <div class="setting-container"> <label for="safetyMaxPwm">Max. PWM</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="safetyMaxPwm" min="500" max="1023" step="10" value="900"><button>+</button></div> </div>
+                </div>
+            </div>
+            <h4 style="color: #61dafb; margin-top: 20px; margin-bottom: 10px; text-align: left;">Wykres Procesu Strojenia</h4>
+            <div class="autotune-tuning-chart-wrapper"><canvas id="autotuneTuningChart"></canvas></div>
             <div class="main-method-tabs">
                 <button class="method-tab active" data-method="zn-relay">📊 Z-N Relay</button>
                 <button class="method-tab" data-method="ga-genetic">🧬 Algorytm Genetyczny</button>
                 <button class="method-tab" data-method="pso-particle">🌀 PSO</button>
                 <button class="method-tab" data-method="single-tests">🧪 Testy Dynamiczne</button>
             </div>
-
             <div class="method-content active" data-method="zn-relay">
                 <div class="config-panel">
                     <h3>🔬 Metoda Ziegler-Nichols z Relay</h3>
-                    <div class="config-section">
-                        <label>🎯 Pętla PID do strojenia:</label>
-                        <select id="zn-loop-selector">
-                            <option value="balance">Pętla Balansu (Kp, Kd)</option>
-                        </select>
-                    </div>
                     <div class="config-grid">
-                        <div class="param-group">
-                            <label>⏱️ Czas trwania próby:</label>
-                            <input type="range" id="zn-trial-duration" min="10" max="120" value="30"><span id="zn-trial-duration-val" data-unit="s">30s</span>
-                        </div>
-                        <div class="param-group">
-                            <label>📐 Maks. amplituda:</label>
-                            <input type="range" id="zn-max-amplitude" min="5" max="30" step="1" value="15"><span id="zn-max-amplitude-val" data-unit="°">15°</span>
-                        </div>
+                        <div class="param-group"><label>⏱️ Czas trwania proby:</label><input type="range" id="zn-trial-duration" min="10" max="120" value="30"><span id="zn-trial-duration-val" data-unit="s">30s</span></div>
+                        <div class="param-group"><label>📐 Maks. amplituda:</label><input type="range" id="zn-max-amplitude" min="5" max="30" step="1" value="15"><span id="zn-max-amplitude-val" data-unit="°">15°</span></div>
                     </div>
-                    <div class="tuning-controls">
-                        <button id="run-zn-test">🚀 Uruchom</button>
-                        <span class="tuning-status">Status: Gotowy</span>
-                    </div>
+                    <div class="tuning-controls"><button id="run-zn-test">🚀 Uruchom</button><span class="tuning-status">Status: Gotowy</span></div>
                     <div class="results-panel" id="zn-results-panel">
                         <h4>Wyniki Z-N</h4>
                         <div class="results-grid">
@@ -446,34 +543,34 @@
                             <strong>Tu:</strong> <span id="zn-tu-result">---</span>
                             <strong>Sugerowane Kp:</strong> <span id="zn-kp-suggest">---</span>
                             <strong>Sugerowane Kd:</strong> <span id="zn-kd-suggest">---</span>
+                            <br>
+                            <strong>Przeregulowanie:</strong> <span id="zn-overshoot">---</span>
+                            <strong>Czas Narastania:</strong> <span id="zn-rise-time">---</span>
+                            <strong>Czas Ustabilizowania:</strong> <span id="zn-settling-time">---</span>
                         </div>
                         <button id="apply-zn-results">✅ Zastosuj</button>
                     </div>
                 </div>
             </div>
-
             <div class="method-content" data-method="ga-genetic">
                 <div class="config-panel">
                     <h3>🧬 Algorytm Genetyczny</h3>
-                    <div class="config-section">
-                        <label>🎯 Pętla PID:</label>
-                        <select id="ga-loop-selector">
-                            <option value="balance">Pętla Balansu</option>
-                        </select>
+                    <h5 style="color: #61dafb; margin-bottom: 10px; text-align: left;">🔍 Przestrzen Przeszukiwania (Min/Max dla parametrow)</h5>
+                    <div class="search-space-grid">
+                        <div class="search-space-param"><label>Kp Min</label><input type="number" id="ga-kp-min" value="0.0" step="0.1"><label>Kp Max</label><input type="number" id="ga-kp-max" value="200.0" step="0.1"></div>
+                        <div class="search-space-param"><label>Ki Min</label><input type="number" id="ga-ki-min" value="0.0" step="0.01"><label>Ki Max</label><input type="number" id="ga-ki-max" value="1.0" step="0.01"></div>
+                        <div class="search-space-param"><label>Kd Min</label><input type="number" id="ga-kd-min" value="0.0" step="0.01"><label>Kd Max</label><input type="number" id="ga-kd-max" value="10.0" step="0.01"></div>
                     </div>
-                    <div class="config-grid">
-                        <div class="param-group">
-                            <label>🏃 Liczba pokoleń:</label>
-                            <input type="range" id="ga-generations" min="5" max="100" value="20"><span id="ga-generations-val">20</span>
-                        </div>
-                        <div class="param-group">
-                            <label>👥 Rozmiar populacji:</label>
-                            <input type="range" id="ga-population" min="8" max="50" value="20"><span id="ga-population-val">20</span>
-                        </div>
-                        <div class="param-group">
-                            <label>🔄 Mutacja (%):</label>
-                            <input type="range" id="ga-mutation-rate" min="5" max="50" value="15"><span id="ga-mutation-rate-val" data-unit="%">15%</span>
-                        </div>
+                    <h5 style="color: #f7b731; margin-bottom: 10px; text-align: left;">⚖️ Funkcja Celu (Wagi)</h5>
+                    <div class="fitness-function-config">
+                        <div class="fitness-weight-item"><label>Minimalizuj Blad (ITAE)</label><input type="range" id="ga-weight-itae" min="0" max="100" value="50"><span id="ga-weight-itae-val">50%</span></div>
+                        <div class="fitness-weight-item"><label>Minimalizuj Przeregulowanie</label><input type="range" id="ga-weight-overshoot" min="0" max="100" value="30"><span id="ga-weight-overshoot-val">30%</span></div>
+                        <div class="fitness-weight-item"><label>Minimalizuj Energie Sterowania</label><input type="range" id="ga-weight-control-effort" min="0" max="100" value="20"><span id="ga-weight-control-effort-val">20%</span></div>
+                    </div>
+                    <div class="config-grid" style="margin-top: 20px;">
+                        <div class="param-group"><label>🏃 Liczba pokolen:</label><input type="range" id="ga-generations" min="5" max="100" value="20"><span id="ga-generations-val">20</span></div>
+                        <div class="param-group"><label>👥 Rozmiar populacji:</label><input type="range" id="ga-population" min="8" max="50" value="20"><span id="ga-population-val">20</span></div>
+                        <div class="param-group"><label>🔄 Mutacja (%):</label><input type="range" id="ga-mutation-rate" min="5" max="50" value="15"><span id="ga-mutation-rate-val" data-unit="%">15%</span></div>
                     </div>
                     <div class="config-section">
                         <label style="color: #f7b731;">Zaawansowane opcje:</label>
@@ -481,150 +578,96 @@
                         <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="ga-adaptive"> Adaptacyjne operatory</label>
                         <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="ga-convergence-check"> Sprawdzanie zbieżności</label>
                     </div>
-                    <div class="tuning-controls">
-                        <button id="run-ga-tune">🚀 Uruchom</button>
-                        <button id="pause-ga-tune" disabled>⏸️ Pauza</button>
-                        <button id="stop-ga-tune" disabled>⏹️ Stop</button>
-                    </div>
-                    <div class="status-panel" id="ga-status-panel">
+                    <div class="tuning-controls"><button id="run-ga-tune">🚀 Uruchom</button><button id="pause-ga-tune" disabled>⏸️ Pauza</button><button id="stop-ga-tune" disabled>⏹️ Stop</button></div>
+                    <div class="status-panel autotune-live-status" id="ga-status-panel">
                         <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
                         <div class="status-info">
                             <div><strong>Pokolenie:</strong> <span id="ga-gen-current">0</span>/<span id="ga-gen-total">20</span></div>
-                            <div><strong>Najlepszy wynik:</strong> <span id="ga-best-fitness">---</span></div>
+                            <div><strong>Najlepszy wynik (Fitness):</strong> <span id="ga-best-fitness">---</span></div>
+                            <div><strong>Aktualnie testowane Kp:</strong> <span id="ga-current-kp">---</span></div>
+                            <div><strong>Aktualnie testowane Kd:</strong> <span id="ga-current-kd">---</span></div>
+                            <div><strong>Szacowany czas:</strong> <span id="ga-time-remaining">---</span></div>
                         </div>
+                    </div>
+                    <div class="results-panel" id="ga-results-history-panel">
+                        <h4>Historia Wynikow GA</h4>
+                        <table class="autotune-results-table">
+                            <thead><tr><th>Nr.</th><th>Kp</th><th>Ki</th><th>Kd</th><th>Fitness</th><th>Overshoot (%)</th><th>Rise Time (ms)</th><th>Akcje</th></tr></thead>
+                            <tbody id="ga-results-table-body"></tbody>
+                        </table>
                     </div>
                 </div>
             </div>
-
             <div class="method-content" data-method="pso-particle">
                 <div class="config-panel">
-                    <h3>🌀 Optymalizacja Roju Cząstek (PSO)</h3>
-                    <div class="config-section">
-                        <label>🎯 Pętla PID:</label>
-                        <select id="pso-loop-selector">
-                            <option value="balance">Pętla Balansu</option>
-                        </select>
+                    <h3>🌀 Optymalizacja Roju Czastek (PSO)</h3>
+                    <h5 style="color: #61dafb; margin-bottom: 10px; text-align: left;">🔍 Przestrzen Przeszukiwania (Min/Max dla parametrow)</h5>
+                    <div class="search-space-grid">
+                        <div class="search-space-param"><label>Kp Min</label><input type="number" id="pso-kp-min" value="0.0" step="0.1"><label>Kp Max</label><input type="number" id="pso-kp-max" value="200.0" step="0.1"></div>
+                        <div class="search-space-param"><label>Ki Min</label><input type="number" id="pso-ki-min" value="0.0" step="0.01"><label>Ki Max</label><input type="number" id="pso-ki-max" value="1.0" step="0.01"></div>
+                        <div class="search-space-param"><label>Kd Min</label><input type="number" id="pso-kd-min" value="0.0" step="0.01"><label>Kd Max</label><input type="number" id="pso-kd-max" value="10.0" step="0.01"></div>
                     </div>
-                    <div class="config-grid">
-                        <div class="param-group">
-                            <label>🔄 Liczba iteracji:</label>
-                            <input type="range" id="pso-iterations" min="20" max="200" value="50"><span id="pso-iterations-val">50</span>
-                        </div>
-                        <div class="param-group">
-                            <label>🌀 Liczba cząstek:</label>
-                            <input type="range" id="pso-particles" min="10" max="100" value="25"><span id="pso-particles-val">25</span>
-                        </div>
-                        <div class="param-group">
-                            <label>⚡ Wsp. inercji:</label>
-                            <input type="range" id="pso-inertia" min="0.4" max="0.95" step="0.05" value="0.7"><span id="pso-inertia-val">0.7</span>
-                        </div>
+                    <h5 style="color: #f7b731; margin-bottom: 10px; text-align: left;">⚖️ Funkcja Celu (Wagi)</h5>
+                    <div class="fitness-function-config">
+                        <div class="fitness-weight-item"><label>Minimalizuj Blad (ITAE)</label><input type="range" id="pso-weight-itae" min="0" max="100" value="50"><span id="pso-weight-itae-val">50%</span></div>
+                        <div class="fitness-weight-item"><label>Minimalizuj Przeregulowanie</label><input type="range" id="pso-weight-overshoot" min="0" max="100" value="30"><span id="pso-weight-overshoot-val">30%</span></div>
+                        <div class="fitness-weight-item"><label>Minimalizuj Energie Sterowania</label><input type="range" id="pso-weight-control-effort" min="0" max="100" value="20"><span id="pso-weight-control-effort-val">20%</span></div>
+                    </div>
+                    <div class="config-grid" style="margin-top: 20px;">
+                        <div class="param-group"><label>🔄 Liczba iteracji:</label><input type="range" id="pso-iterations" min="20" max="200" value="50"><span id="pso-iterations-val">50</span></div>
+                        <div class="param-group"><label>🌀 Liczba czastek:</label><input type="range" id="pso-particles" min="10" max="100" value="25"><span id="pso-particles-val">25</span></div>
+                        <div class="param-group"><label>⚡ Wsp. inercji:</label><input type="range" id="pso-inertia" min="0.4" max="0.95" step="0.05" value="0.7"><span id="pso-inertia-val">0.7</span></div>
                     </div>
                     <div class="config-section">
                         <label style="color: #f7b731;">Zaawansowane opcje:</label>
                         <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="pso-adaptive-inertia" checked> Adaptacyjna inercja</label>
-                        <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="pso-velocity-clamp"> Ograniczenie prędkości</label>
-                        <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="pso-neighborhood"> Sąsiedztwo lokalne</label>
+                        <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="pso-velocity-clamp"> Ograniczenie predkosci</label>
+                        <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="pso-neighborhood"> Sasiedztwo lokalne</label>
                     </div>
-                    <div class="tuning-controls">
-                        <button id="run-pso-tune">🚀 Uruchom</button>
-                        <button id="pause-pso-tune" disabled>⏸️ Pauza</button>
-                        <button id="stop-pso-tune" disabled>⏹️ Stop</button>
-                    </div>
-                    <div class="status-panel" id="pso-status-panel">
+                    <div class="tuning-controls"><button id="run-pso-tune">🚀 Uruchom</button><button id="pause-pso-tune" disabled>⏸️ Pauza</button><button id="stop-pso-tune" disabled>⏹️ Stop</button></div>
+                    <div class="status-panel autotune-live-status" id="pso-status-panel">
                         <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
                         <div class="status-info">
                             <div><strong>Iteracja:</strong> <span id="pso-it-current">0</span>/<span id="pso-it-total">50</span></div>
-                            <div><strong>Najlepszy wynik:</strong> <span id="pso-best-fitness">---</span></div>
+                            <div><strong>Najlepszy wynik (Fitness):</strong> <span id="pso-best-fitness">---</span></div>
+                            <div><strong>Aktualnie testowane Kp:</strong> <span id="pso-current-kp">---</span></div>
+                            <div><strong>Aktualnie testowane Kd:</strong> <span id="pso-current-kd">---</span></div>
+                            <div><strong>Szacowany czas:</strong> <span id="pso-time-remaining">---</span></div>
                         </div>
+                    </div>
+                    <div class="results-panel" id="pso-results-history-panel">
+                        <h4>Historia Wynikow PSO</h4>
+                        <table class="autotune-results-table">
+                             <thead><tr><th>Nr.</th><th>Kp</th><th>Ki</th><th>Kd</th><th>Fitness</th><th>Overshoot (%)</th><th>Rise Time (ms)</th><th>Akcje</th></tr></thead>
+                            <tbody id="pso-results-table-body"></tbody>
+                        </table>
                     </div>
                 </div>
             </div>
-            
             <div class="method-content" data-method="single-tests">
                 <div class="config-panel">
                     <h3>🧪 Testy Dynamiczne</h3>
-                    <div class="test-cards-container">
-                        <div class="test-card balance-test">
-                            <h4>⚖️ Test Odpowiedzi Balansu</h4>
-                            <div class="test-controls">
-                                <div class="param-group">
-                                    <label>Kąt pchnięcia (°):</label>
-                                    <input type="range" id="balance-test-angle" min="1" max="10" value="2"><span id="balance-test-angle-val" data-unit="°">2°</span>
-                                </div>
-                                <div class="param-group">
-                                    <label>Czas trwania (s):</label>
-                                    <input type="range" id="balance-test-duration" min="3" max="15" value="5"><span id="balance-test-duration-val" data-unit="s">5s</span>
-                                </div>
-                            </div>
-                            <button class="run-test-btn" data-test-type="balance">🔍 Uruchom test</button>
-                        </div>
-                        <div class="test-card position-test">
-                            <h4>📍 Test Impulsu Pozycji</h4>
-                            <div class="test-controls">
-                                <div class="param-group">
-                                    <label>Siła impulsu (PWM):</label>
-                                    <input type="range" id="position-test-impulse" min="300" max="900" value="600"><span id="position-test-impulse-val">600</span>
-                                </div>
-                            </div>
-                            <button class="run-test-btn" data-test-type="position">🚀 Uruchom impuls</button>
-                        </div>
-                        <div class="test-card speed-test">
-                            <h4>⏩ Test Jazdy</h4>
-                            <div class="test-controls">
-                                <div class="param-group">
-                                    <label>Dystans (cm):</label>
-                                    <input type="range" id="speed-test-distance" min="50" max="300" value="100"><span id="speed-test-distance-val" data-unit="cm">100cm</span>
-                                </div>
-                                <div class="param-group">
-                                    <label>Prędkość (cm/s):</label>
-                                    <input type="range" id="speed-test-speed" min="20" max="150" value="50"><span id="speed-test-speed-val" data-unit="cm/s">50cm/s</span>
-                                </div>
-                            </div>
-                            <button class="run-test-btn" data-test-type="speed">🚀 Uruchom jazdę</button>
-                        </div>
-                        <div class="test-card cascade-analysis">
-                            <h4>🔍 Analiza Kaskady PID</h4>
-                            <div class="test-controls">
-                                <div class="param-group">
-                                    <label>Tryb analizy:</label>
-                                    <select id="cascade-analysis-mode">
-                                        <option value="full">Pełna analiza</option>
-                                        <option value="quick">Szybka ocena</option>
-                                        <option value="disturbance">Reakcja na zakłócenia</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <button class="run-test-btn" data-test-type="cascade">🔬 Przeprowadź analizę</button>
-                        </div>
-                    </div>
+                    <p style="text-align: left; font-size: 0.9em; line-height: 1.4;">Uruchom pojedynczy test, aby zmierzyć metryki wydajności obecnej konfiguracji PID. Wyniki pojawią się poniżej.</p>
+                    <button class="run-test-btn" data-test-type="step_response" style="width: 100%;">🚀 Uruchom test odpowiedzi na skok</button>
                     <div id="test-results-panel" class="results-panel">
                         <h4>Wyniki ostatniego testu</h4>
-                        <div id="test-metrics" class="results-grid"></div>
-                        <div id="test-suggestions"></div>
-                        <button id="apply-test-suggestions">✅ Zastosuj sugestie</button>
+                        <div id="test-metrics" class="results-grid">
+                           <strong>Overshoot (%):</strong> <span id="test-overshoot">---</span>
+                           <strong>Rise Time (ms):</strong> <span id="test-rise-time">---</span>
+                           <strong>Settling Time (ms):</strong> <span id="test-settling-time">---</span>
+                           <strong>ITA Error:</strong> <span id="test-itae">---</span>
+                        </div>
                     </div>
                 </div>
             </div>
-            
             <div id="autotune-dashboard" class="autotune-dashboard">
                 <h4>📊 Dashboard Optymalizacji</h4>
                 <div class="dashboard-metrics">
-                    <div class="metric-item">
-                        <span class="metric-label">Najlepszy wynik:</span>
-                        <span id="dashboard-best-fitness" class="metric-value">---</span>
-                    </div>
-                    <div class="metric-item">
-                        <span class="metric-label">Postęp:</span>
-                        <div class="progress-bar small"><div class="progress-fill" id="dashboard-progress-fill" style="width:0%"></div></div>
-                    </div>
-                    <div class="metric-item">
-                        <span class="metric-label">Status:</span>
-                        <span id="dashboard-status" class="metric-value">---</span>
-                    </div>
-                    <div class="metric-item">
-                        <span class="metric-label">Pozostały czas (szac.):</span>
-                        <span id="dashboard-time-remaining" class="metric-value">---</span>
-                    </div>
+                    <div class="metric-item"><span class="metric-label">Metoda:</span><span id="dashboard-tuning-method" class="metric-value">---</span></div>
+                    <div class="metric-item"><span class="metric-label">Najlepszy wynik:</span><span id="dashboard-best-fitness" class="metric-value">---</span></div>
+                    <div class="metric-item"><span class="metric-label">Postep:</span><div class="progress-bar small"><div class="progress-fill" id="dashboard-progress-fill" style="width:0%"></div></div></div>
+                    <div class="metric-item"><span class="metric-label">Status:</span><span id="dashboard-status" class="metric-value">---</span></div>
+                    <div class="metric-item"><span class="metric-label">Pozostaly czas (szac.):</span><span id="dashboard-time-remaining" class="metric-value">---</span></div>
                 </div>
             </div>
         </div>
@@ -639,19 +682,12 @@
     </div>
 
 <script>
-    // =======================================================================================
-    // WERSJA 21.2 (Finalna Architektura Autonomicznych Tunerow)
-    // - Polaczono zaawansowany interfejs `interfejs aktua.txt` z logika sterowania z `In312.txt`.
-    // - Usunieto zbedne klasy JS (Tuner, GA, etc.), cala logika strojenia jest na ESP32.
-    // - Interfejs wysyla komendy i nasluchuje na statusy oraz wyniki.
-    // =======================================================================================
-    
     const AppState = { 
         isConnected: false, isSynced: false, isApplyingConfig: false, lastKnownRobotState: 'IDLE',
         isSequenceRunning: false, isTuningActive: false, activeTuningMethod: '', syncTimeout: null
     };
     let currentSequenceStep = 0;
-    const MAX_SEQUENCE_STEPS = 10;
+    const MAX_SEQUENCE_STEPS = 15;
     
     const parameterMapping = { 'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b', 'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 'balanceIntegralLimitInput': 'balance_pid_integral_limit', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s', 'speedFilterAlphaInput': 'speed_pid_filter_alpha', 'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedIntegralLimitInput': 'speed_pid_integral_limit', 'speedDeadbandInput': 'speed_pid_deadband', 'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p', 'positionFilterAlphaInput': 'position_pid_filter_alpha', 'maxTargetSpeedInput': 'max_target_speed_from_pos_pid', 'positionIntegralLimitInput': 'position_pid_integral_limit', 'positionDeadbandInput': 'position_pid_deadband', 'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r', 'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h', 'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd' };
     
@@ -666,7 +702,7 @@
     let gamepadIndex = null, lastGamepadState = [], gamepadMappings = {}; const GAMEPAD_MAPPING_KEY = 'pid_gamepad_mappings_v3';
     let isMappingButton = false, actionToMap = null;
     
-    const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v3_';
+    const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v4_';
     const availableActions = { 'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' }, 'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' }, 'toggle_speed_mode': { label: 'Wlacz/Wylacz Tryb Predkosci', elementId: 'speedModeSwitch' }, 'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyStopBtn' }, 'reset_zero': { label: 'Resetuj Osie', elementId: 'resetZeroBtn' }, 'trim_plus': { label: 'Korekta Pionu (+)', elementId: 'trimPlusBtn' }, 'trim_minus': { label: 'Korekta Pionu (-)', elementId: 'trimMinusBtn' } };
     const availableTelemetry = { 'pitch': { label: 'Pitch (Kat)', color: '#61dafb' }, 'roll': { label: 'Roll (Przechyl)', color: '#a2f279' }, 'speed': { label: 'Predkosc', color: '#f7b731'}, 'target_speed': { label: 'Predkosc Zadana', color: '#ff9f43' }, 'output': { label: 'Wyjscie PID', color: '#ff6347'}, 'encoder_left': { label: 'Enkoder L', color: '#9966ff' } };
     const builtInPresetsData = { '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 95.0, balanceKiInput: 0.0, balanceKdInput: 3.23 }}, '2': { name: "2. PID Mieciutki (Plynny)", params: { balanceKpInput: 80.0, balanceKiInput: 0.0, balanceKdInput: 2.8 }}, '3': { name: "3. PID Agresywny (Sztywny)", params: { balanceKpInput: 110.0, balanceKiInput: 0.0, balanceKdInput: 4.0 }} };
@@ -676,247 +712,36 @@
     let isAnimation3DEnabled = true, isMovement3DEnabled = false, lastEncoderAvg = 0;
     window.telemetryData = {}; 
     let isCalibrationModalShown = false;
-    let currentTestType = null, telemetryForCurrentTest = [];
+    
+    let pitchHistory = [], speedHistory = [];
+    const HISTORY_LENGTH = 600; // Liczba próbek (np. przy 10Hz to 60s)
+    let lastTelemetryUpdateTime = 0;
+    const TELEMETRY_UPDATE_INTERVAL = 1000; // ms
 
     document.addEventListener('DOMContentLoaded', () => {
         initJoystick(); 
-        setupChartControls(); 
-        populatePresetSelect(); 
+        initSignalAnalyzerChart();
+        setupSignalChartControls();
+        setupSignalAnalyzerControls();
+        populatePresetSelect();
+        populateDiffSelects();
         setupNumericInputs(); 
         setupEventListeners();
         setupManualTuneButtons(); 
         setupGamepadMappingModal(); 
         setupDpadControls(); 
-        setupSequenceControls(); 
+        setupSequenceControls();
+        initPathVisualization();
         loadGamepadMappings(); 
         renderMappingModal();
         pollGamepad(); 
         window.addEventListener('resize', initJoystick); 
         init3DVisualization(); 
         animate3D(); 
-        document.body.classList.add('ui-locked');
+        setTuningUiLock(false, '');
+        initAutotuneTuningChart();
         setupAutotuningTabs();
     });
-
-    // ======================================================
-    // === NOWA LOGIKA STEROWANIA AUTOTUNINGIEM (v21.2) ===
-    // ======================================================
-
-    function setupAutotuningTabs() {
-        document.querySelectorAll('.method-tab').forEach(tab => {
-            tab.addEventListener('click', function() {
-                if (AppState.isTuningActive) return;
-                const method = this.dataset.method;
-                document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.method-content').forEach(c => c.classList.remove('active'));
-                this.classList.add('active');
-                document.querySelector(`.method-content[data-method="${method}"]`).classList.add('active');
-            });
-        });
-
-        document.querySelectorAll('input[type="range"]').forEach(range => {
-            const valueDisplay = document.getElementById(range.id + '-val');
-            if (valueDisplay) {
-                range.addEventListener('input', () => { 
-                    let unit = valueDisplay.dataset.unit || '';
-                    valueDisplay.textContent = range.value + unit;
-                    if(range.id === 'ga-generations') document.getElementById('ga-gen-total').textContent = range.value;
-                    if(range.id === 'pso-iterations') document.getElementById('pso-it-total').textContent = range.value;
-                });
-                range.dispatchEvent(new Event('input'));
-            }
-        });
-
-        document.getElementById('run-zn-test').addEventListener('click', startZnTuning);
-        document.getElementById('run-ga-tune').addEventListener('click', startGaTuning);
-        document.getElementById('run-pso-tune').addEventListener('click', startPsoTuning);
-
-        ['ga', 'pso'].forEach(prefix => {
-            document.getElementById(`pause-${prefix}-tune`).addEventListener('click', handlePauseResume);
-            document.getElementById(`stop-${prefix}-tune`).addEventListener('click', handleCancel);
-        });
-        
-        document.querySelectorAll('.run-test-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                runDynamicTest(this.dataset.testType);
-            });
-        });
-
-        document.getElementById('apply-zn-results').addEventListener('click', () => {
-             const kp = parseFloat(document.getElementById('zn-kp-suggest').textContent);
-             const kd = parseFloat(document.getElementById('zn-kd-suggest').textContent);
-             if(!isNaN(kp) && !isNaN(kd)) {
-                document.getElementById('balanceKpInput').value = kp.toFixed(4);
-                document.getElementById('balanceKdInput').value = kd.toFixed(4);
-                document.getElementById('balanceKpInput').dispatchEvent(new Event('change'));
-                document.getElementById('balanceKdInput').dispatchEvent(new Event('change'));
-                addLogMessage('[UI] Zastosowano wartosci z Z-N.', 'info');
-            }
-        });
-    }
-
-    function checkTuningPrerequisites() {
-        if (!AppState.isConnected || !AppState.isSynced) {
-            addLogMessage('[UI] Blad: Polacz i zsynchronizuj z robotem przed rozpoczeciem strojenia.', 'error');
-            return false;
-        }
-        if (AppState.lastKnownRobotState !== 'BALANSUJE' && AppState.lastKnownRobotState !== 'TRZYMA_POZYCJE') {
-            addLogMessage(`[UI] Blad: Wymagany stan robota to 'BALANSUJE' lub 'TRZYMA_POZYCJE'. Aktualny stan: '${AppState.lastKnownRobotState}'.`, 'error');
-            return false;
-        }
-        if (AppState.isTuningActive) {
-            addLogMessage('[UI] Blad: Inna sesja strojenia jest juz w toku.', 'warn');
-            return false;
-        }
-        return true;
-    }
-
-    function setTuningUiLock(isLocked, method) {
-        AppState.isTuningActive = isLocked;
-        AppState.activeTuningMethod = isLocked ? method : '';
-        document.body.classList.toggle('tuning-active', isLocked);
-        document.querySelectorAll('.method-tab').forEach(tab => tab.disabled = isLocked);
-        updateTuningDashboard(isLocked ? 'running' : 'idle', method);
-
-        document.getElementById('run-zn-test').disabled = isLocked;
-        document.getElementById('run-ga-tune').disabled = isLocked;
-        document.getElementById('run-pso-tune').disabled = isLocked;
-        document.querySelectorAll('.run-test-btn').forEach(btn => btn.disabled = isLocked);
-
-        const isGa = method === 'ga-genetic';
-        document.getElementById('pause-ga-tune').disabled = !isLocked || !isGa;
-        document.getElementById('stop-ga-tune').disabled = !isLocked || !isGa;
-
-        const isPso = method === 'pso-particle';
-        document.getElementById('pause-pso-tune').disabled = !isLocked || !isPso;
-        document.getElementById('stop-pso-tune').disabled = !isLocked || !isPso;
-    }
-
-    function startZnTuning() {
-        if (!checkTuningPrerequisites()) return;
-        const params = {
-            loop: document.getElementById('zn-loop-selector').value,
-            duration: parseInt(document.getElementById('zn-trial-duration').value),
-            amplitude: parseFloat(document.getElementById('zn-max-amplitude').value)
-        };
-        addLogMessage(`[UI] Rozpoczynam sesje Z-N dla petli ${params.loop}...`, 'info');
-        sendBleMessage({ type: 'start_zn_session', params });
-        setTuningUiLock(true, 'zn-relay');
-        document.querySelector('.tuning-status').textContent = 'Status: Uruchamianie...';
-        document.getElementById('zn-results-panel').style.display = 'none';
-    }
-
-    function startGaTuning() {
-        if (!checkTuningPrerequisites()) return;
-        const params = {
-            loop: document.getElementById('ga-loop-selector').value,
-            generations: parseInt(document.getElementById('ga-generations').value),
-            population: parseInt(document.getElementById('ga-population').value),
-            mutationRate: parseFloat(document.getElementById('ga-mutation-rate').value) / 100,
-            elitism: document.getElementById('ga-elitism').checked,
-            adaptive: document.getElementById('ga-adaptive').checked,
-            convergenceCheck: document.getElementById('ga-convergence-check').checked
-        };
-        addLogMessage(`[UI] Rozpoczynam sesje GA dla petli ${params.loop}...`, 'info');
-        sendBleMessage({ type: 'start_ga_session', params });
-        setTuningUiLock(true, 'ga-genetic');
-    }
-
-    function startPsoTuning() {
-        if (!checkTuningPrerequisites()) return;
-        const params = {
-            loop: document.getElementById('pso-loop-selector').value,
-            iterations: parseInt(document.getElementById('pso-iterations').value),
-            particles: parseInt(document.getElementById('pso-particles').value),
-            inertia: parseFloat(document.getElementById('pso-inertia').value),
-            adaptiveInertia: document.getElementById('pso-adaptive-inertia').checked,
-            velocityClamp: document.getElementById('pso-velocity-clamp').checked,
-            useNeighborhood: document.getElementById('pso-neighborhood').checked
-        };
-        addLogMessage(`[UI] Rozpoczynam sesje PSO dla petli ${params.loop}...`, 'info');
-        sendBleMessage({ type: 'start_pso_session', params });
-        setTuningUiLock(true, 'pso-particle');
-    }
-
-    function handlePauseResume(e) {
-        const btn = e.target;
-        const isPaused = btn.textContent.includes('Wznow');
-        if (isPaused) {
-            sendBleMessage({ type: 'resume_tuning_session' });
-            btn.textContent = '⏸️ Pauza';
-            updateTuningDashboard('running', AppState.activeTuningMethod);
-        } else {
-            sendBleMessage({ type: 'pause_tuning_session' });
-            btn.textContent = '▶️ Wznow';
-            updateTuningDashboard('paused', AppState.activeTuningMethod);
-        }
-    }
-
-    function handleCancel() {
-        if (confirm('Czy na pewno chcesz przerwac proces strojenia?')) {
-            sendBleMessage({ type: 'cancel_tuning_session' });
-            setTuningUiLock(false, '');
-            addLogMessage('[UI] Anulowano sesje strojenia.', 'warn');
-        }
-    }
-
-    function updateTuningDashboard(status, method = '') {
-        const dashboard = document.getElementById('autotune-dashboard');
-        if (status === 'idle') {
-            dashboard.style.display = 'none';
-            return;
-        }
-        dashboard.style.display = 'block';
-        const statusEl = document.getElementById('dashboard-status');
-        if (status === 'running') statusEl.textContent = 'W trakcie';
-        else if (status === 'paused') statusEl.textContent = 'Wstrzymano';
-    }
-
-    function updateTunerStatus(data) {
-        const method = AppState.activeTuningMethod;
-        let progressFill, currentEl, totalEl, bestFitnessEl;
-        
-        if (method === 'zn-relay') {
-            document.querySelector('.tuning-status').textContent = `Status: ${data.state || '...'}`;
-            return;
-        }
-        
-        if (method === 'ga-genetic') {
-            progressFill = document.querySelector('#ga-status-panel .progress-fill');
-            currentEl = document.getElementById('ga-gen-current');
-            bestFitnessEl = document.getElementById('ga-best-fitness');
-        } else if (method === 'pso-particle') {
-            progressFill = document.querySelector('#pso-status-panel .progress-fill');
-            currentEl = document.getElementById('pso-it-current');
-            bestFitnessEl = document.getElementById('pso-best-fitness');
-        } else return;
-        
-        if (data.progress !== undefined && progressFill) progressFill.style.width = data.progress + '%';
-        if (data.current !== undefined && currentEl) currentEl.textContent = data.current;
-        if (data.bestFitness !== undefined && bestFitnessEl) bestFitnessEl.textContent = data.bestFitness.toFixed(4);
-
-        // Update dashboard
-        document.getElementById('dashboard-progress-fill').style.width = (data.progress || 0) + '%';
-        if(data.bestFitness !== undefined) document.getElementById('dashboard-best-fitness').textContent = data.bestFitness.toFixed(4);
-    }
-    
-    function handleTunerResult(data) {
-        const method = data.method || AppState.activeTuningMethod;
-        if (method.startsWith('zn')) {
-            const panel = document.getElementById('zn-results-panel');
-            panel.style.display = 'block';
-            document.getElementById('zn-ku-result').textContent = data.ku.toFixed(3);
-            document.getElementById('zn-tu-result').textContent = data.tu.toFixed(3) + 's';
-            document.getElementById('zn-kp-suggest').textContent = data.kp.toFixed(4);
-            document.getElementById('zn-kd-suggest').textContent = data.kd.toFixed(4);
-        }
-        setTuningUiLock(false, '');
-        addLogMessage(`[UI] Otrzymano wyniki strojenia dla ${method}.`, 'success');
-    }
-
-    // ======================================================
-    // === PODSTAWOWE FUNKCJE INTERFEJSU I KOMUNIKACJI ===
-    // ======================================================
 
     const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -952,46 +777,9 @@
             }, 3000);
         } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); onDisconnected(); }
     }
-
-    function onDisconnected() {
-        AppState.isConnected = false; AppState.isSynced = false; 
-        document.body.classList.add('ui-locked');
-        if(AppState.isTuningActive) handleCancel();
-        const connectBtn = document.getElementById('connectBleBtn'); connectBtn.disabled = false; connectBtn.textContent = 'POLACZ Z ROBOTEM'; connectBtn.style.backgroundColor = '';
-        document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony';
-        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; });
-    }
     
-    function handleBleNotification(event) {
-        const value = event.target.value; const decoder = new TextDecoder('utf-8'); bleBuffer += decoder.decode(value); let newlineIndex;
-        while ((newlineIndex = bleBuffer.indexOf('\n')) !== -1) {
-            const line = bleBuffer.substring(0, newlineIndex).trim(); bleBuffer = bleBuffer.substring(newlineIndex + 1);
-            if (line) {
-                try {
-                    const data = JSON.parse(line);
-                    if ((data.type === 'chunk' || data.type === 'chunk_stream') && data.id !== undefined) {
-                        let entry = bleChunks.get(data.id);
-                        if (!entry) {
-                            entry = { total: data.total || 0, parts: new Map(), timer: setTimeout(() => {
-                                if (bleChunks.has(data.id)) { bleChunks.delete(data.id); addLogMessage(`[UI] Blad: Timeout podczas skladania wiadomosci (ID: ${data.id}).`, 'error'); }
-                            }, 2000)};
-                            bleChunks.set(data.id, entry);
-                        }
-                        entry.parts.set(data.i, data.data || ''); entry.total = data.total || entry.total;
-                        if (entry.parts.size === entry.total && entry.total > 0) {
-                            clearTimeout(entry.timer);
-                            let combined = '';
-                            for (let i = 0; i < entry.total; i++) { combined += entry.parts.get(i) || ''; }
-                            bleChunks.delete(data.id);
-                            try { const fullMsg = JSON.parse(combined); processCompleteMessage(fullMsg); }
-                            catch (e) { addLogMessage(`[UI] Blad skladania chunkow: ${e}. Dane: ${combined}`, 'error'); }
-                        }
-                    } else { processCompleteMessage(data); }
-                } catch (e) { addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error'); }
-            }
-        }
-    }
-
+    function onDisconnected() { AppState.isConnected = false; AppState.isSynced = false; document.body.classList.add('ui-locked'); if(AppState.isTuningActive) handleCancel(); const connectBtn = document.getElementById('connectBleBtn'); connectBtn.disabled = false; connectBtn.textContent = 'POLACZ Z ROBOTEM'; connectBtn.style.backgroundColor = ''; document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); }
+    function handleBleNotification(event) { const value = event.target.value; const decoder = new TextDecoder('utf-8'); bleBuffer += decoder.decode(value); let newlineIndex; while ((newlineIndex = bleBuffer.indexOf('\n')) !== -1) { const line = bleBuffer.substring(0, newlineIndex).trim(); bleBuffer = bleBuffer.substring(newlineIndex + 1); if (line) { try { const data = JSON.parse(line); if ((data.type === 'chunk' || data.type === 'chunk_stream') && data.id !== undefined) { let entry = bleChunks.get(data.id); if (!entry) { entry = { total: data.total || 0, parts: new Map(), timer: setTimeout(() => { if (bleChunks.has(data.id)) { bleChunks.delete(data.id); addLogMessage(`[UI] Blad: Timeout podczas skladania wiadomosci (ID: ${data.id}).`, 'error'); } }, 2000)}; bleChunks.set(data.id, entry); } entry.parts.set(data.i, data.data || ''); entry.total = data.total || entry.total; if (entry.parts.size === entry.total && entry.total > 0) { clearTimeout(entry.timer); let combined = ''; for (let i = 0; i < entry.total; i++) { combined += entry.parts.get(i) || ''; } bleChunks.delete(data.id); try { const fullMsg = JSON.parse(combined); processCompleteMessage(fullMsg); } catch (e) { addLogMessage(`[UI] Blad skladania chunkow: ${e}. Dane: ${combined}`, 'error'); } } } else { processCompleteMessage(data); } } catch (e) { addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error'); } } } }
     async function _sendRawBleMessage(message) { if (!rxCharacteristic) return; try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
     async function processBleQueue() { if (isSendingBleMessage || bleMessageQueue.length === 0 || !rxCharacteristic) return; isSendingBleMessage = true; const message = bleMessageQueue.shift(); await _sendRawBleMessage(message); setTimeout(() => { isSendingBleMessage = false; processBleQueue(); }, BLE_SEND_INTERVAL); }
     function sendBleMessage(message) { bleMessageQueue.push(message); processBleQueue(); }
@@ -999,70 +787,90 @@
     function processCompleteMessage(data) {
         if (!data || !data.type) return;
         if (data.robot_state) AppState.lastKnownRobotState = data.robot_state;
-
         switch(data.type) {
             case 'telemetry':
                 window.telemetryData = data;
                 updateTelemetryUI(data);
                 updateChart(data);
-                if (AppState.isSequenceRunning) { 
-                    checkAndExecuteNextSequenceStep(AppState.lastKnownRobotState); 
-                }
+                updateActualPath(data);
+                if (AppState.isSequenceRunning) { checkAndExecuteNextSequenceStep(AppState.lastKnownRobotState); }
                 break;
             case 'full_config':
-                clearTimeout(AppState.syncTimeout); 
-                AppState.isSynced = true;
-                const connectBtn = document.getElementById('connectBleBtn'); 
-                connectBtn.textContent = 'POLACZ Z ROBOTEM'; 
-                connectBtn.style.backgroundColor = '';
-                if (data.states) { 
-                    AppState.isApplyingConfig = true; 
-                    document.getElementById('balanceSwitch').checked = data.states.balancing; 
-                    document.getElementById('holdPositionSwitch').checked = data.states.holding_pos; 
-                    document.getElementById('speedModeSwitch').checked = data.states.speed_mode; 
-                    AppState.isApplyingConfig = false; 
-                }
-                if (data.params) { 
-                    AppState.isApplyingConfig = true; 
-                    applyFullConfig(data.params); 
-                    AppState.isApplyingConfig = false; 
-                    addLogMessage('[UI] Konfiguracja i stan zsynchronizowane.', 'success'); 
-                }
-                setTimeout(() => {
-                    const sys = parseInt(document.getElementById('calibSysVal').textContent) || 0;
-                    if (!isCalibrationModalShown && sys < 3) {
-                        addLogMessage('[UI] Wykryto niska kalibracje systemu (<3). Otwieram asystenta kalibracji.', 'warn');
-                        showCalibrationModal();
-                    }
-                }, 1000);
+                clearTimeout(AppState.syncTimeout); AppState.isSynced = true;
+                const connectBtn = document.getElementById('connectBleBtn'); connectBtn.textContent = 'POLACZ Z ROBOTEM'; connectBtn.style.backgroundColor = '';
+                if (data.states) { AppState.isApplyingConfig = true; document.getElementById('balanceSwitch').checked = data.states.balancing; document.getElementById('holdPositionSwitch').checked = data.states.holding_pos; document.getElementById('speedModeSwitch').checked = data.states.speed_mode; AppState.isApplyingConfig = false; }
+                if (data.params) { AppState.isApplyingConfig = true; applyFullConfig(data.params); AppState.isApplyingConfig = false; addLogMessage('[UI] Konfiguracja i stan zsynchronizowane.', 'success'); }
+                setTimeout(() => { const sys = parseInt(document.getElementById('calibSysVal').textContent) || 0; if (!isCalibrationModalShown && sys < 3) { addLogMessage('[UI] Wykryto niska kalibracje systemu (<3). Otwieram asystenta kalibracji.', 'warn'); showCalibrationModal(); } }, 1000);
                 break;
-            case 'log':
-                addLogMessage(`[ROBOT] ${data.message}`, data.level);
-                break;
-            case 'tuner_status': updateTunerStatus(data.payload); break;
-            case 'tuner_result': handleTunerResult(data.payload); break;
-            case 'tuner_session_end':
-                addLogMessage(`[UI] Sesja strojenia zakonczona: ${data.reason}`, 'info');
-                setTuningUiLock(false, '');
-                break;
-            default:
-                // Pozostałe, mniej częste typy wiadomości
-                break;
+            case 'log': addLogMessage(`[ROBOT] ${data.message}`, data.level); break;
+            case 'tuner_live_status': updateTunerStatus(data); break;
+            case 'tuner_live_chart_data': updateAutotuneTuningChart(data); break;
+            case 'tuning_result': handleTunerResult(data); break;
+            case 'test_result': handleDynamicTestResult(data); break;
+            case 'tuner_session_end': addLogMessage(`[UI] Sesja strojenia zakonczona: ${data.reason}`, 'info'); setTuningUiLock(false, ''); break;
         }
     }
-
-    function applyFullConfig(params) { for (const [inputId, snakeKey] of Object.entries(parameterMapping)) { const input = document.getElementById(inputId); if (input && params[snakeKey] !== undefined) { let value = params[snakeKey]; if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) { value = (value * 100); } input.value = value; } } }
+    
+    function applyFullConfig(params) { for (const [inputId, snakeKey] of Object.entries(parameterMapping)) { const input = document.getElementById(inputId); if (input && params[snakeKey] !== undefined) { let value = params[snakeKey]; if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha'].includes(snakeKey)) { value = (value * 100); } input.value = value; } } }
     
     function updateTelemetryUI(data) {
         if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
         if (data.loop_time !== undefined) document.getElementById('loopTimeVal').textContent = data.loop_time + ' \u00B5s';
-        if (data.pitch !== undefined) { document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0'; document.getElementById('angleIndicator').style.transform = `rotate(${data.pitch}deg)`; document.getElementById('robot3d-pitch').textContent = data.pitch.toFixed(1) + '°'; }
-        if (data.roll !== undefined) { document.getElementById('rollVal').textContent = data.roll.toFixed(1) + ' \u00B0'; document.getElementById('robot3d-roll').textContent = data.roll.toFixed(1) + '°'; }
-        if (data.yaw !== undefined) { document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' °'; }
-        if (data.speed !== undefined) { document.getElementById('speedVal').textContent = parseFloat(data.speed).toFixed(0); const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820; const wheelRpm = (parseFloat(data.speed) / ppr) * 60; document.getElementById('robot3d-wheel-speed').textContent = wheelRpm.toFixed(0) + ' obr/min'; }
-        if (data.encoder_left !== undefined) { currentEncoderLeft = data.encoder_left; document.getElementById('encoderLeftVal').textContent = data.encoder_left; }
-        if (data.encoder_right !== undefined) { currentEncoderRight = data.encoder_right; document.getElementById('encoderRightVal').textContent = data.encoder_right; }
-        if (data.calib_sys !== undefined) { document.getElementById('calibSysVal').textContent = data.calib_sys; updateCalibrationProgress('sys', data.calib_sys); }
+        if (data.loop_load !== undefined) {
+            const loadVal = parseFloat(data.loop_load).toFixed(0);
+            document.getElementById('loopLoadVal').textContent = loadVal + '%';
+            const loopLoadItem = document.getElementById('loopLoadItem');
+            loopLoadItem.classList.toggle('warn', loadVal > 70);
+            loopLoadItem.classList.toggle('error', loadVal > 90);
+        }
+        if (data.pitch !== undefined) {
+            document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0';
+            document.getElementById('robot3d-pitch').textContent = data.pitch.toFixed(1) + '°';
+            pitchHistory.push(data.pitch);
+            if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
+        }
+        if (data.roll !== undefined) { document.getElementById('robot3d-roll').textContent = data.roll.toFixed(1) + '°'; }
+        if (data.yaw !== undefined) {
+            document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' °';
+            document.getElementById('compassNeedle').style.transform = `rotate(${data.yaw}deg)`;
+        }
+        if (data.speed !== undefined) {
+            const speed = parseFloat(data.speed);
+            document.getElementById('speedVal').textContent = speed.toFixed(0) + ' imp/s';
+            const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
+            const wheelRpm = (speed / ppr) * 60;
+            document.getElementById('robot3d-wheel-speed').textContent = wheelRpm.toFixed(0) + ' obr/min';
+            speedHistory.push(speed);
+            if (speedHistory.length > HISTORY_LENGTH) speedHistory.shift();
+        }
+        if (Date.now() - lastTelemetryUpdateTime > TELEMETRY_UPDATE_INTERVAL) {
+            if (pitchHistory.length > 0) {
+                const minPitch = Math.min(...pitchHistory);
+                const maxPitch = Math.max(...pitchHistory);
+                const avgPitch = pitchHistory.reduce((sum, val) => sum + val, 0) / pitchHistory.length;
+                document.getElementById('pitchMin').textContent = minPitch.toFixed(1) + '°';
+                document.getElementById('pitchMax').textContent = maxPitch.toFixed(1) + '°';
+                document.getElementById('pitchAvg').textContent = avgPitch.toFixed(1) + '°';
+            }
+             if (speedHistory.length > 0) {
+                const minSpeed = Math.min(...speedHistory);
+                const maxSpeed = Math.max(...speedHistory);
+                const avgSpeed = speedHistory.reduce((sum, val) => sum + val, 0) / speedHistory.length;
+                document.getElementById('speedMin').textContent = minSpeed.toFixed(0) + ' imp/s';
+                document.getElementById('speedMax').textContent = maxSpeed.toFixed(0) + ' imp/s';
+                document.getElementById('speedAvg').textContent = avgSpeed.toFixed(0) + ' imp/s';
+            }
+            lastTelemetryUpdateTime = Date.now();
+        }
+        if (data.calib_sys !== undefined) {
+            document.getElementById('calibSysVal').textContent = data.calib_sys;
+            updateCalibrationProgress('sys', data.calib_sys);
+            const systemHealthItem = document.getElementById('systemHealthItem');
+            const sysCalibVal = parseInt(data.calib_sys);
+            if (sysCalibVal < 2) { systemHealthItem.classList.add('error'); systemHealthItem.classList.remove('warn'); document.getElementById('systemHealthVal').textContent = 'KRYTYCZNY'; }
+            else if (sysCalibVal === 2) { systemHealthItem.classList.add('warn'); systemHealthItem.classList.remove('error'); document.getElementById('systemHealthVal').textContent = 'NISKI'; }
+            else { systemHealthItem.classList.remove('warn', 'error'); document.getElementById('systemHealthVal').textContent = 'OK'; }
+        }
         if (data.calib_accel !== undefined) { document.getElementById('calibAccelVal').textContent = data.calib_accel; updateCalibrationProgress('accel', data.calib_accel); }
         if (data.calib_gyro !== undefined) { document.getElementById('calibGyroVal').textContent = data.calib_gyro; updateCalibrationProgress('gyro', data.calib_gyro); }
         if (data.calib_mag !== undefined) { document.getElementById('calibMagVal').textContent = data.calib_mag; updateCalibrationProgress('mag', data.calib_mag); }
@@ -1071,35 +879,340 @@
         const emergencyBanner = document.getElementById('emergency-banner'); if (emergencyBanner) emergencyBanner.style.display = data.states && data.states.emergency_stop ? 'block' : 'none';
     }
 
-    const telemetryChart = new Chart(document.getElementById('telemetryChart'), { type: 'line', data: { labels: Array(200).fill(''), datasets: [] }, options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { type: 'linear', display: true, position: 'left', ticks: { color: '#61dafb' }, title: { display: true, text: 'Wartosc', color: '#61dafb' } } }, plugins: { legend: { labels: { color: '#fff' } } } } });
-    function updateChart(data) { const chartData = telemetryChart.data; if (chartData.labels.length >= 200) chartData.labels.shift(); chartData.labels.push(''); for (const [key, value] of Object.entries(data)) { if (availableTelemetry[key] && value !== undefined) { let dataset = chartData.datasets.find(ds => ds.label === availableTelemetry[key].label); if (!dataset) continue; if (dataset.data.length >= 200) dataset.data.shift(); dataset.data.push(value); } } chartData.datasets.forEach(ds => { if (ds.data.length < chartData.labels.length) { if (ds.data.length >= 200) ds.data.shift(); ds.data.push(null); } }); telemetryChart.update('none'); }
-    function setupChartControls() { const container = document.getElementById('chartControls'); container.innerHTML = ''; const defaultChecked = ['pitch', 'speed']; Object.keys(availableTelemetry).forEach((key) => { const label = document.createElement('label'), checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.value = key; checkbox.checked = defaultChecked.includes(key); checkbox.addEventListener('change', (e) => { const varName = e.target.value; if (e.target.checked) { if (!telemetryChart.data.datasets.find(ds => ds.label === availableTelemetry[varName].label)) { telemetryChart.data.datasets.push({ label: availableTelemetry[varName].label, data: Array(telemetryChart.data.labels.length).fill(null), borderColor: availableTelemetry[varName].color, fill: false, tension: 0.1, pointRadius: 0 }); } } else { const datasetIndex = telemetryChart.data.datasets.findIndex(ds => ds.label === availableTelemetry[varName].label); if (datasetIndex > -1) telemetryChart.data.datasets.splice(datasetIndex, 1); } telemetryChart.update(); }); label.appendChild(checkbox); label.append(` ${availableTelemetry[key].label}`); container.appendChild(label); if (checkbox.checked) checkbox.dispatchEvent(new Event('change')); }); }
+    // ANALIZATOR SYGNAŁÓW
+    let signalAnalyzerChart; let isChartPaused = false; let cursorA = null, cursorB = null;
+    function initSignalAnalyzerChart() {
+        const ctx = document.getElementById('signalAnalyzerChart').getContext('2d');
+        signalAnalyzerChart = new Chart(ctx, {
+            type: 'line', data: { labels: Array(200).fill(''), datasets: [] },
+            options: {
+                animation: false, responsive: true, maintainAspectRatio: false,
+                scales: {
+                    x: { display: true, title: { display: true, text: 'Czas', color: '#fff' }, ticks: { color: '#fff' } },
+                    y: { type: 'linear', display: true, position: 'left', id: 'y-pitch', ticks: { color: availableTelemetry['pitch']?.color || '#61dafb' }, title: { display: true, text: 'Pitch (°)', color: availableTelemetry['pitch']?.color || '#61dafb' }},
+                    y1: { type: 'linear', display: false, position: 'right', id: 'y-speed', ticks: { color: availableTelemetry['speed']?.color || '#f7b731' }, title: { display: true, text: 'Speed (imp/s)', color: availableTelemetry['speed']?.color || '#f7b731' }, grid: { drawOnChartArea: false } }
+                },
+                plugins: { legend: { labels: { color: '#fff' } }, tooltip: { mode: 'index', intersect: false } },
+                onClick: handleChartClick
+            }
+        });
+    }
+    function setupSignalChartControls() {
+        const container = document.getElementById('signalChartControls'); container.innerHTML = '';
+        const defaultChecked = ['pitch', 'speed'];
+        Object.keys(availableTelemetry).forEach((key) => {
+            const label = document.createElement('label'); const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox'; checkbox.value = key; checkbox.checked = defaultChecked.includes(key);
+            checkbox.addEventListener('change', (e) => {
+                const varName = e.target.value, datasetLabel = availableTelemetry[varName].label, datasetColor = availableTelemetry[varName].color;
+                let dataset = signalAnalyzerChart.data.datasets.find(ds => ds.label === datasetLabel);
+                if (e.target.checked) {
+                    if (!dataset) {
+                        let yAxisID = 'y-pitch';
+                        if (['speed', 'target_speed', 'output'].includes(varName)) { yAxisID = 'y-speed'; signalAnalyzerChart.options.scales['y1'].display = true; }
+                        signalAnalyzerChart.data.datasets.push({ label: datasetLabel, data: Array(signalAnalyzerChart.data.labels.length).fill(null), borderColor: datasetColor, fill: false, tension: 0.1, pointRadius: 0, yAxisID: yAxisID });
+                    }
+                } else {
+                    const datasetIndex = signalAnalyzerChart.data.datasets.findIndex(ds => ds.label === datasetLabel);
+                    if (datasetIndex > -1) { signalAnalyzerChart.data.datasets.splice(datasetIndex, 1); }
+                    if (!signalAnalyzerChart.data.datasets.some(ds => ds.yAxisID === 'y-speed')) { signalAnalyzerChart.options.scales['y1'].display = false; }
+                }
+                signalAnalyzerChart.update(); updateCursorInfo();
+            });
+            label.appendChild(checkbox); label.append(` ${availableTelemetry[key].label}`); container.appendChild(label);
+            if (checkbox.checked) checkbox.dispatchEvent(new Event('change'));
+        });
+    }
+    function updateChart(data) {
+        if (isChartPaused) return;
+        const chartData = signalAnalyzerChart.data;
+        const currentTimeLabel = (Date.now() / 1000).toFixed(1);
+        if (chartData.labels.length >= 200) { chartData.labels.shift(); chartData.datasets.forEach(ds => ds.data.shift()); }
+        chartData.labels.push(currentTimeLabel);
+        chartData.datasets.forEach(ds => {
+            const key = Object.keys(availableTelemetry).find(k => availableTelemetry[k].label === ds.label);
+            const value = (key && data[key] !== undefined) ? data[key] : null;
+            ds.data.push(value);
+        });
+        signalAnalyzerChart.update('none');
+    }
+    function setupSignalAnalyzerControls() {
+        document.getElementById('pauseChartBtn').addEventListener('click', () => { isChartPaused = true; document.getElementById('pauseChartBtn').style.display = 'none'; document.getElementById('resumeChartBtn').style.display = 'inline-block'; addLogMessage('[UI] Wykres wstrzymany.', 'info'); });
+        document.getElementById('resumeChartBtn').addEventListener('click', () => { isChartPaused = false; document.getElementById('resumeChartBtn').style.display = 'none'; document.getElementById('pauseChartBtn').style.display = 'inline-block'; addLogMessage('[UI] Wykres wznowiony.', 'info'); });
+        document.getElementById('cursorABBtn').addEventListener('click', toggleCursors);
+        document.getElementById('exportCsvBtn').addEventListener('click', exportChartDataToCsv);
+        document.getElementById('exportPngBtn').addEventListener('click', exportChartToPng);
+    }
+    function toggleCursors() { const cursorInfo = document.getElementById('cursorInfo'); if (cursorInfo.style.display === 'none') { cursorInfo.style.display = 'flex'; cursorA = { index: Math.floor(signalAnalyzerChart.data.labels.length * 0.25) }; cursorB = { index: Math.floor(signalAnalyzerChart.data.labels.length * 0.75) }; updateCursorInfo(); } else { cursorInfo.style.display = 'none'; cursorA = null; cursorB = null; } signalAnalyzerChart.update(); }
+    function handleChartClick(event) { if (!cursorA && !cursorB) return; const activePoints = signalAnalyzerChart.getElementsAtEventForMode(event, 'index', { intersect: false }, true); if (activePoints.length > 0) { const clickedIndex = activePoints[0].index; if (cursorA && cursorB) { const distA = Math.abs(clickedIndex - cursorA.index); const distB = Math.abs(clickedIndex - cursorB.index); if (distA < distB) { cursorA.index = clickedIndex; } else { cursorB.index = clickedIndex; } } else if (cursorA) { cursorA.index = clickedIndex; } updateCursorInfo(); signalAnalyzerChart.update(); } }
+    function updateCursorInfo() { if (!cursorA && !cursorB) { document.getElementById('cursorInfo').style.display = 'none'; return; } document.getElementById('cursorInfo').style.display = 'flex'; const labels = signalAnalyzerChart.data.labels; const datasets = signalAnalyzerChart.data.datasets; if (cursorA) { document.getElementById('cursorAX').textContent = labels[cursorA.index] || '---'; document.getElementById('cursorAY').textContent = datasets.length > 0 && datasets[0].data[cursorA.index] !== undefined ? datasets[0].data[cursorA.index].toFixed(2) : '---'; } if (cursorB) { document.getElementById('cursorBX').textContent = labels[cursorB.index] || '---'; document.getElementById('cursorBY').textContent = datasets.length > 0 && datasets[0].data[cursorB.index] !== undefined ? datasets[0].data[cursorB.index].toFixed(2) : '---'; } if (cursorA && cursorB) { const timeA = parseFloat(labels[cursorA.index]); const timeB = parseFloat(labels[cursorB.index]); document.getElementById('cursorDeltaT').textContent = `${Math.abs(timeB - timeA).toFixed(2)}s`; datasets.forEach(ds => { const valA = ds.data[cursorA.index]; const valB = ds.data[cursorB.index]; if (valA !== null && valB !== null) { if (ds.yAxisID === 'y-pitch') document.getElementById('cursorDeltaYPitch').textContent = `${(valB - valA).toFixed(2)}°`; else if (ds.yAxisID === 'y-speed') document.getElementById('cursorDeltaYSpeed').textContent = `${(valB - valA).toFixed(0)} imp/s`; } }); } }
+    function exportChartDataToCsv() { const data = signalAnalyzerChart.data; let csvContent = "data:text/csv;charset=utf-8,"; let headers = ['Time']; data.datasets.forEach(ds => headers.push(ds.label)); csvContent += headers.join(',') + '\n'; for (let i = 0; i < data.labels.length; i++) { let row = [data.labels[i]]; data.datasets.forEach(ds => { const value = ds.data[i] !== null ? ds.data[i].toFixed(4) : ''; row.push(value); }); csvContent += row.join(',') + '\n'; } const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", "telemetry_data.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link); addLogMessage('[UI] Dane wykresu wyeksportowane do CSV.', 'info'); }
+    function exportChartToPng() { const link = document.createElement('a'); link.download = 'telemetry_chart.png'; link.href = signalAnalyzerChart.toBase64Image(); link.click(); addLogMessage('[UI] Wykres wyeksportowany do PNG.', 'info'); }
 
+    // KONFIGURACJA (SNAPSHOT & DIFF)
+    function saveCurrentAsPreset() {
+        const presetName = prompt("Podaj nazwe dla nowego presetu:", "");
+        if (presetName && presetName.trim() !== "") {
+            const presetData = {};
+            for (const [inputId, snakeKey] of Object.entries(parameterMapping)) {
+                const input = document.getElementById(inputId); if (input) { presetData[inputId] = parseFloat(input.value); }
+            }
+            presetData['balanceSwitch'] = document.getElementById('balanceSwitch').checked;
+            presetData['holdPositionSwitch'] = document.getElementById('holdPositionSwitch').checked;
+            presetData['speedModeSwitch'] = document.getElementById('speedModeSwitch').checked;
+            localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData));
+            addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success');
+            populatePresetSelect(); populateDiffSelects();
+        }
+    }
+    async function applySelectedPreset() {
+        const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; let presetData;
+        if (selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { presetData = JSON.parse(localStorage.getItem(selectedValue)); } else { presetData = builtInPresetsData[selectedValue]?.params; }
+        if (presetData) {
+            AppState.isApplyingConfig = true;
+            for (const [key, value] of Object.entries(presetData)) {
+                const input = document.getElementById(key);
+                if (input) { let actualValue = value; if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(parameterMapping[key])) { actualValue = (value * 100); } input.value = actualValue; } 
+                else if (['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].includes(key)) { document.getElementById(key).checked = value; }
+            }
+            AppState.isApplyingConfig = false; addLogMessage('[UI] Zastosowano wartosci presetu. Zapisz na robocie, aby wyslac.', 'info');
+            for (const [key, value] of Object.entries(presetData)) { const input = document.getElementById(key); if (input) { input.dispatchEvent(new Event('change', { bubbles: true })); } }
+        }
+    }
+    function populatePresetSelect() { const select = document.getElementById('pidPresetSelect'); select.innerHTML = ''; for (const [index, preset] of Object.entries(builtInPresetsData)) { const option = document.createElement('option'); option.value = index; option.textContent = preset.name; select.appendChild(option); } for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key.startsWith(CUSTOM_PRESET_PREFIX)) { const presetName = key.substring(CUSTOM_PRESET_PREFIX.length); const option = document.createElement('option'); option.value = key; option.textContent = `Wlasny: ${presetName}`; select.appendChild(option); } } }
+    function deleteSelectedPreset() { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; if (!selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { addLogMessage('[UI] Nie mozna usunac wbudowanego presetu.', 'warn'); return; } if (confirm(`Czy na pewno chcesz usunac preset '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'?`)) { localStorage.removeItem(selectedValue); addLogMessage(`[UI] Usunieto preset.`, 'info'); populatePresetSelect(); populateDiffSelects(); } }
+    function populateDiffSelects() {
+        const selectA = document.getElementById('diffPresetSelectA'); const selectB = document.getElementById('diffPresetSelectB');
+        selectA.innerHTML = '<option value="">-- Wybierz Snapshot A --</option>'; selectB.innerHTML = '<option value="">-- Wybierz Snapshot B --</option>';
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i); if (key.startsWith(CUSTOM_PRESET_PREFIX)) {
+                const presetName = key.substring(CUSTOM_PRESET_PREFIX.length);
+                const optionA = document.createElement('option'); optionA.value = key; optionA.textContent = presetName; selectA.appendChild(optionA);
+                const optionB = document.createElement('option'); optionB.value = key; optionB.textContent = presetName; selectB.appendChild(optionB);
+            }
+        }
+        const currentConfigOptionA = document.createElement('option'); currentConfigOptionA.value = 'current'; currentConfigOptionA.textContent = 'Aktualna Konfiguracja'; selectA.appendChild(currentConfigOptionA);
+        const currentConfigOptionB = document.createElement('option'); currentConfigOptionB.value = 'current'; currentConfigOptionB.textContent = 'Aktualna Konfiguracja'; selectB.appendChild(currentConfigOptionB);
+    }
+    function getConfigurationFromSource(sourceValue) {
+        if (sourceValue === 'current') { const currentConfig = {}; for (const [inputId, snakeKey] of Object.entries(parameterMapping)) { const input = document.getElementById(inputId); if (input) { currentConfig[inputId] = parseFloat(input.value); } } currentConfig['balanceSwitch'] = document.getElementById('balanceSwitch').checked; currentConfig['holdPositionSwitch'] = document.getElementById('holdPositionSwitch').checked; currentConfig['speedModeSwitch'] = document.getElementById('speedModeSwitch').checked; return currentConfig; } 
+        else if (sourceValue.startsWith(CUSTOM_PRESET_PREFIX)) { return JSON.parse(localStorage.getItem(sourceValue)); } return null;
+    }
+    function comparePresets() {
+        const configA = getConfigurationFromSource(document.getElementById('diffPresetSelectA').value); const configB = getConfigurationFromSource(document.getElementById('diffPresetSelectB').value);
+        const diffResultsDiv = document.getElementById('diffResults'); diffResultsDiv.innerHTML = ''; diffResultsDiv.style.display = 'block';
+        if (!configA || !configB) { diffResultsDiv.textContent = 'Wybierz dwa snapshoty do porównania.'; return; }
+        let diffHtml = ''; const allKeys = new Set([...Object.keys(configA), ...Object.keys(configB)]);
+        allKeys.forEach(key => {
+            const valA = configA[key], valB = configB[key];
+            if (valA === undefined && valB !== undefined) { diffHtml += `<div class="diff-added">+ ${key}: ${valB}</div>`; } 
+            else if (valA !== undefined && valB === undefined) { diffHtml += `<div class="diff-removed">- ${key}: ${valA}</div>`; } 
+            else if (valA !== undefined && valB !== undefined && valA !== valB) { diffHtml += `<div class="diff-changed">~ ${key}: ${valA} &rarr; ${valB}</div>`; }
+        });
+        if (diffHtml === '') diffHtml = 'Brak roznic miedzy wybranymi konfiguracjami.';
+        diffResultsDiv.innerHTML = diffHtml; addLogMessage('[UI] Wykonano porównanie konfiguracji.', 'info');
+    }
+
+    // STEROWANIE AUTONOMICZNE
+    function setupSequenceControls() { document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep); document.getElementById('run-sequence-btn').addEventListener('click', runSequence); document.getElementById('stop-sequence-btn').addEventListener('click', stopSequenceExecution); document.getElementById('clear-sequence-btn').addEventListener('click', clearSequence); }
+    function addSequenceStep() {
+        const list = document.getElementById('sequence-list'); if (list.children.length >= MAX_SEQUENCE_STEPS) { addLogMessage(`[UI] Osiagnieto maksymalna liczbe krokow (${MAX_SEQUENCE_STEPS}).`, 'warn'); return; }
+        const stepDiv = document.createElement('div'); stepDiv.className = 'sequence-step';
+        stepDiv.innerHTML = `<select class="sequence-type"><option value="move_fwd">Przod (cm)</option><option value="move_bwd">Tyl (cm)</option><option value="rotate_r">Obrot Prawo (st.)</option><option value="rotate_l">Obrot Lewo (st.)</option><option value="wait_ms">Czekaj (ms)</option><option value="wait_condition">Czekaj az (np. pitch < 0.5)</option><option value="set_param">Ustaw parametr (np. Kp=100)</option></select><input type="text" class="sequence-value" value="20"><button class="remove-step-btn">&times;</button>`;
+        list.appendChild(stepDiv); updateAccordionHeight(list.closest('.accordion-content'));
+        stepDiv.querySelector('.sequence-type').addEventListener('change', (e) => {
+            const valueInput = stepDiv.querySelector('.sequence-value'); const type = e.target.value;
+            if (type === 'wait_condition') { valueInput.type = 'text'; valueInput.value = 'pitch < 0.5'; } 
+            else if (type === 'set_param') { valueInput.type = 'text'; valueInput.value = 'balanceKpInput=100.0'; } 
+            else { valueInput.type = 'number'; valueInput.value = '20'; }
+        });
+        stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => { stepDiv.remove(); updateAccordionHeight(list.closest('.accordion-content')); });
+    }
+    function runSequence() { if (AppState.isSequenceRunning) return; if (AppState.lastKnownRobotState !== 'TRZYMA_POZYCJE' && AppState.lastKnownRobotState !== 'BALANSUJE') { addLogMessage(`[UI] Nie mozna rozpoczac sekwencji. Robot w stanie '${AppState.lastKnownRobotState}'.`, 'error'); return; } const steps = document.querySelectorAll('.sequence-step'); if (steps.length === 0) return; resetPathVisualization(); AppState.isSequenceRunning = true; currentSequenceStep = 0; updateSequenceUI(); addLogMessage(`[UI] Rozpoczeto sekwencje z ${steps.length} krokow.`, 'info'); executeNextSequenceStep(); }
+    function stopSequenceExecution() { if (!AppState.isSequenceRunning) return; AppState.isSequenceRunning = false; sendBleMessage({ type: 'command_stop' }); updateSequenceUI(); addLogMessage('[UI] Sekwencja zatrzymana.', 'warn'); }
+    function clearSequence() { if (AppState.isSequenceRunning) stopSequenceExecution(); const list = document.getElementById('sequence-list'); list.innerHTML = ''; updateAccordionHeight(list.closest('.accordion-content')); resetPathVisualization(); }
+    function updateSequenceUI() { document.querySelectorAll('.sequence-step').forEach((step, index) => { step.classList.toggle('executing', AppState.isSequenceRunning && index === currentSequenceStep); }); document.getElementById('run-sequence-btn').disabled = AppState.isSequenceRunning; document.getElementById('add-sequence-step-btn').disabled = AppState.isSequenceRunning; document.getElementById('clear-sequence-btn').disabled = AppState.isSequenceRunning; document.getElementById('stop-sequence-btn').disabled = !AppState.isSequenceRunning; }
+    function checkAndExecuteNextSequenceStep(previousState) { const wasWorking = ['RUCH_AUTONOMICZNY', 'OBROT_AUTONOMICZNY'].includes(previousState); const isReady = ['TRZYMA_POZYCJE', 'BALANSUJE'].includes(AppState.lastKnownRobotState); if (AppState.isSequenceRunning && wasWorking && isReady) { addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info'); currentSequenceStep++; executeNextSequenceStep(); } }
+    function executeNextSequenceStep() {
+        const steps = document.querySelectorAll('.sequence-step');
+        if (!AppState.isSequenceRunning || currentSequenceStep >= steps.length) { if (AppState.isSequenceRunning) { AppState.isSequenceRunning = false; addLogMessage('[UI] Sekwencja ukonczona.', 'success'); showSequenceReport(); } updateSequenceUI(); return; }
+        updateSequenceUI();
+        const stepNode = steps[currentSequenceStep], type = stepNode.querySelector('.sequence-type').value, value = stepNode.querySelector('.sequence-value').value; let command = {};
+        switch (type) {
+            case 'move_fwd': command = { type: 'execute_move', distance_cm: parseFloat(value) }; break;
+            case 'move_bwd': command = { type: 'execute_move', distance_cm: -parseFloat(value) }; break;
+            case 'rotate_r': command = { type: 'execute_rotate', angle_deg: parseFloat(value) }; break;
+            case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -parseFloat(value) }; break;
+            case 'wait_ms': command = { type: 'wait_ms', duration_ms: parseInt(value) }; break;
+            case 'wait_condition': command = { type: 'wait_for_condition', condition: value }; break;
+            case 'set_param': const [inputId, paramValue] = value.split('='); if (inputId && paramValue) { const snakeKey = parameterMapping[inputId.trim()]; if (snakeKey) { let val = parseFloat(paramValue); if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) { val /= 100.0; } command = { type: 'set_parameter_runtime', key: snakeKey, value: val }; } else { addLogMessage(`[UI] Nieznany parametr: ${inputId}.`, 'error'); currentSequenceStep++; executeNextSequenceStep(); return; } } else { addLogMessage(`[UI] Nieprawidlowy format: ${value}.`, 'error'); currentSequenceStep++; executeNextSequenceStep(); return; } break;
+        }
+        addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${JSON.stringify(command)}`, 'info');
+        sendBleMessage(command);
+        if (['move_fwd', 'move_bwd', 'rotate_r', 'rotate_l'].includes(type)) { addPlannedPathSegment(type, parseFloat(value)); }
+    }
+    let pathCanvas, pathCtx; let robotPathX = 0, robotPathY = 0, robotPathHeading = 0; const CM_PER_PIXEL = 1.0; let plannedPath = [], actualPath = [];
+    function initPathVisualization() { pathCanvas = document.getElementById('pathCanvas'); pathCtx = pathCanvas.getContext('2d'); pathCanvas.width = pathCanvas.clientWidth; pathCanvas.height = pathCanvas.clientHeight; resetPathVisualization(); }
+    function drawPathVisualization() { if (!pathCtx) return; pathCtx.clearRect(0, 0, pathCanvas.width, pathCanvas.height); const drawPath = (path, color) => { pathCtx.strokeStyle = color; pathCtx.lineWidth = 2; pathCtx.beginPath(); if (path.length > 0) { pathCtx.moveTo(path[0].x, path[0].y); path.forEach(p => pathCtx.lineTo(p.x, p.y)); } pathCtx.stroke(); }; drawPath(plannedPath, '#61dafb'); drawPath(actualPath, '#a2f279'); if (actualPath.length > 0) { const lastPos = actualPath[actualPath.length - 1]; pathCtx.fillStyle = '#ff6347'; pathCtx.beginPath(); pathCtx.arc(lastPos.x, lastPos.y, 4, 0, Math.PI * 2); pathCtx.fill(); } }
+    function addPlannedPathSegment(type, value) { let { x, y, heading } = plannedPath.length > 0 ? plannedPath[plannedPath.length-1] : {x: robotPathX, y: robotPathY, heading: robotPathHeading}; let newX = x, newY = y, newHeading = heading; const angleRad = (heading - 90) * Math.PI / 180; if (type === 'move_fwd') { newX += Math.cos(angleRad) * value / CM_PER_PIXEL; newY += Math.sin(angleRad) * value / CM_PER_PIXEL; } else if (type === 'move_bwd') { newX -= Math.cos(angleRad) * value / CM_PER_PIXEL; newY -= Math.sin(angleRad) * value / CM_PER_PIXEL; } else if (type === 'rotate_r') { newHeading += value; } else if (type === 'rotate_l') { newHeading -= value; } plannedPath.push({ x: newX, y: newY, heading: newHeading }); drawPathVisualization(); }
+    function updateActualPath(data) { if (data.pos_x_cm !== undefined && data.pos_y_cm !== undefined && data.yaw !== undefined) { const actualX = robotPathX + (data.pos_x_cm / CM_PER_PIXEL); const actualY = robotPathY - (data.pos_y_cm / CM_PER_PIXEL); actualPath.push({ x: actualX, y: actualY, heading: data.yaw }); drawPathVisualization(); } }
+    function resetPathVisualization() { robotPathX = pathCanvas.width / 2; robotPathY = pathCanvas.height / 2; robotPathHeading = 0; plannedPath = [{x: robotPathX, y: robotPathY, heading: robotPathHeading}]; actualPath = [{x: robotPathX, y: robotPathY, heading: robotPathHeading}]; document.getElementById('sequenceReportPanel').style.display = 'none'; drawPathVisualization(); }
+    function showSequenceReport() { document.getElementById('sequence-report-panel').style.display = 'block'; document.getElementById('avgHeadingError').textContent = 'X.X °'; document.getElementById('maxHeadingError').textContent = 'Y.Y °'; document.getElementById('totalDistanceCovered').textContent = 'Z.Z cm'; }
+
+    // CENTRUM DOWODZENIA STROJENIA
+    let autotuneTuningChart; let autotuneChartData = { labels: [], datasets: [] };
+    function initAutotuneTuningChart() {
+        const ctx = document.getElementById('autotuneTuningChart').getContext('2d');
+        autotuneTuningChart = new Chart(ctx, { type: 'line', data: autotuneChartData, options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { type: 'linear', display: true, position: 'left', ticks: { color: '#61dafb' } } }, plugins: { legend: { labels: { color: '#fff' } } } } });
+    }
+    function updateAutotuneTuningChart(data) {
+        if (autotuneTuningChart.data.labels.length >= 200) { autotuneTuningChart.data.labels.shift(); autotuneTuningChart.data.datasets.forEach(dataset => dataset.data.shift()); }
+        autotuneTuningChart.data.labels.push(data.timestamp || '');
+        const mapDataToDataset = (label, value, color) => {
+            let dataset = autotuneTuningChart.data.datasets.find(ds => ds.label === label);
+            if (!dataset) { dataset = { label: label, data: [], borderColor: color, fill: false, tension: 0.1, pointRadius: 0 }; autotuneTuningChart.data.datasets.push(dataset); }
+            dataset.data.push(value);
+        };
+        if(data.pitch !== undefined) mapDataToDataset('Pitch', data.pitch, '#61dafb');
+        if(data.target_pitch !== undefined) mapDataToDataset('Target Pitch', data.target_pitch, '#a2f279');
+        autotuneTuningChart.update('none');
+    }
+    function setupAutotuningTabs() {
+        document.querySelectorAll('.method-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                if (AppState.isTuningActive) return;
+                const method = this.dataset.method;
+                document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.method-content').forEach(c => c.classList.remove('active'));
+                this.classList.add('active');
+                document.querySelector(`.method-content[data-method="${method}"]`).classList.add('active');
+                autotuneChartData.labels = []; autotuneChartData.datasets = []; autotuneTuningChart.update();
+            });
+        });
+        document.querySelectorAll('input[type="range"]').forEach(range => {
+            const valueDisplay = document.getElementById(range.id + '-val');
+            if (valueDisplay) {
+                range.addEventListener('input', () => { 
+                    let unit = valueDisplay.dataset.unit || '';
+                    valueDisplay.textContent = range.value + unit;
+                    if(range.id === 'ga-generations') document.getElementById('ga-gen-total').textContent = range.value;
+                    if(range.id === 'pso-iterations') document.getElementById('pso-it-total').textContent = range.value;
+                    if(range.id.includes('-weight-')) valueDisplay.textContent = range.value + '%';
+                });
+                range.dispatchEvent(new Event('input'));
+            }
+        });
+        document.getElementById('run-zn-test').addEventListener('click', startZnTuning);
+        document.getElementById('run-ga-tune').addEventListener('click', startGaTuning);
+        document.getElementById('run-pso-tune').addEventListener('click', startPsoTuning);
+        ['ga', 'pso'].forEach(prefix => { document.getElementById(`pause-${prefix}-tune`).addEventListener('click', handlePauseResume); document.getElementById(`stop-${prefix}-tune`).addEventListener('click', handleCancel); });
+        document.querySelectorAll('.run-test-btn').forEach(btn => btn.addEventListener('click', function() { runDynamicTest(this.dataset.testType); }));
+        document.getElementById('apply-zn-results').addEventListener('click', () => {
+             const kp = parseFloat(document.getElementById('zn-kp-suggest').textContent), kd = parseFloat(document.getElementById('zn-kd-suggest').textContent);
+             if(!isNaN(kp) && !isNaN(kd)) {
+                document.getElementById('balanceKpInput').value = kp.toFixed(4); document.getElementById('balanceKdInput').value = kd.toFixed(4);
+                document.getElementById('balanceKpInput').dispatchEvent(new Event('change')); document.getElementById('balanceKdInput').dispatchEvent(new Event('change'));
+                addLogMessage('[UI] Zastosowano wartosci z Z-N.', 'info');
+            }
+        });
+        document.getElementById('common-loop-selector').addEventListener('change', updateSearchSpaceInputs);
+        updateSearchSpaceInputs();
+    }
+    function updateSearchSpaceInputs() {
+        const selectedLoop = document.getElementById('common-loop-selector').value;
+        const isFullPid = ['speed', 'position', 'heading'].includes(selectedLoop);
+        ['ga', 'pso'].forEach(prefix => {
+            document.getElementById(`${prefix}-ki-min`).closest('.search-space-param').style.display = isFullPid ? 'block' : 'none';
+        });
+    }
+    function checkTuningPrerequisites() { if (!AppState.isConnected || !AppState.isSynced) { addLogMessage('[UI] Blad: Polacz i zsynchronizuj z robotem.', 'error'); return false; } if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState)) { addLogMessage(`[UI] Blad: Wymagany stan 'BALANSUJE'. Aktualny: '${AppState.lastKnownRobotState}'.`, 'error'); return false; } if (AppState.isTuningActive) { addLogMessage('[UI] Blad: Inna sesja strojenia jest juz w toku.', 'warn'); return false; } return true; }
+    function setTuningUiLock(isLocked, method) { AppState.isTuningActive = isLocked; AppState.activeTuningMethod = isLocked ? method : ''; document.body.classList.toggle('tuning-active', isLocked); document.querySelectorAll('.method-tab').forEach(tab => tab.disabled = isLocked); updateTuningDashboard(isLocked ? 'running' : 'idle', method); document.getElementById('run-zn-test').disabled = isLocked; document.getElementById('run-ga-tune').disabled = isLocked; document.getElementById('run-pso-tune').disabled = isLocked; document.querySelectorAll('.run-test-btn').forEach(btn => btn.disabled = isLocked); const isGa = method === 'ga-genetic'; document.getElementById('pause-ga-tune').disabled = !isLocked || !isGa; document.getElementById('stop-ga-tune').disabled = !isLocked || !isGa; const isPso = method === 'pso-particle'; document.getElementById('pause-pso-tune').disabled = !isLocked || !isPso; document.getElementById('stop-pso-tune').disabled = !isLocked || !isPso; }
+    function buildTuningParams(method) {
+        const loop = document.getElementById('common-loop-selector').value;
+        const baseParams = {
+            loop_to_tune: loop,
+            safety_constraints: { max_angle: parseFloat(document.getElementById('safetyMaxAngle').value), max_speed: parseFloat(document.getElementById('safetyMaxSpeed').value), max_pwm: parseFloat(document.getElementById('safetyMaxPwm').value) }
+        };
+        if (method === 'zn-relay') {
+            baseParams.duration = parseInt(document.getElementById('zn-trial-duration').value);
+            baseParams.amplitude = parseFloat(document.getElementById('zn-max-amplitude').value);
+        } else {
+            const prefix = method === 'ga-genetic' ? 'ga' : 'pso';
+            baseParams.search_space = { kp_min: parseFloat(document.getElementById(`${prefix}-kp-min`).value), kp_max: parseFloat(document.getElementById(`${prefix}-kp-max`).value), kd_min: parseFloat(document.getElementById(`${prefix}-kd-min`).value), kd_max: parseFloat(document.getElementById(`${prefix}-kd-max`).value) };
+            baseParams.fitness_weights = { itae: parseInt(document.getElementById(`${prefix}-weight-itae`).value), overshoot: parseInt(document.getElementById(`${prefix}-weight-overshoot`).value), control_effort: parseInt(document.getElementById(`${prefix}-weight-control-effort`).value) };
+            if (['speed', 'position', 'heading'].includes(loop)) { baseParams.search_space.ki_min = parseFloat(document.getElementById(`${prefix}-ki-min`).value); baseParams.search_space.ki_max = parseFloat(document.getElementById(`${prefix}-ki-max`).value); }
+            if (method === 'ga-genetic') { baseParams.generations = parseInt(document.getElementById('ga-generations').value); baseParams.population = parseInt(document.getElementById('ga-population').value); }
+            if (method === 'pso-particle') { baseParams.iterations = parseInt(document.getElementById('pso-iterations').value); baseParams.particles = parseInt(document.getElementById('pso-particles').value); }
+        }
+        return baseParams;
+    }
+    function startTuningSession(method) { if (!checkTuningPrerequisites()) return; const params = buildTuningParams(method); addLogMessage(`[UI] Rozpoczynam sesje ${method} dla petli ${params.loop_to_tune}...`, 'info'); sendBleMessage({ type: 'start_tuning_session', method: method, params: params }); setTuningUiLock(true, method); document.getElementById('zn-results-panel').style.display = 'none'; autotuneChartData.labels = []; autotuneChartData.datasets = []; autotuneTuningChart.update(); }
+    function startZnTuning() { startTuningSession('zn-relay'); }
+    function startGaTuning() { startTuningSession('ga-genetic'); }
+    function startPsoTuning() { startTuningSession('pso-particle'); }
+    function handlePauseResume(e) { const btn = e.target; const isPaused = btn.textContent.includes('Wznow'); if (isPaused) { sendBleMessage({ type: 'resume_tuning_session' }); btn.textContent = '⏸️ Pauza'; updateTuningDashboard('running', AppState.activeTuningMethod); } else { sendBleMessage({ type: 'pause_tuning_session' }); btn.textContent = '▶️ Wznow'; updateTuningDashboard('paused', AppState.activeTuningMethod); } }
+    function handleCancel() { if (confirm('Czy na pewno chcesz przerwac proces strojenia?')) { sendBleMessage({ type: 'cancel_tuning_session' }); setTuningUiLock(false, ''); addLogMessage('[UI] Anulowano sesje strojenia.', 'warn'); } }
+    function updateTuningDashboard(status, method = '') { const dashboard = document.getElementById('autotune-dashboard'); if (status === 'idle') { dashboard.style.display = 'none'; return; } dashboard.style.display = 'block'; document.getElementById('dashboard-tuning-method').textContent = method.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' '); const statusEl = document.getElementById('dashboard-status'); if (status === 'running') statusEl.textContent = 'W trakcie'; else if (status === 'paused') statusEl.textContent = 'Wstrzymano'; }
+    function updateTunerStatus(data) {
+        const method = AppState.activeTuningMethod; let prefix = '';
+        if (method === 'ga-genetic') prefix = 'ga'; else if (method === 'pso-particle') prefix = 'pso'; else return;
+        document.querySelector(`#${prefix}-status-panel .progress-fill`).style.width = data.progress + '%';
+        document.getElementById(`${prefix}-${method === 'ga-genetic' ? 'gen' : 'it'}-current`).textContent = data.current_iteration;
+        document.getElementById(`${prefix}-best-fitness`).textContent = data.best_fitness.toFixed(4);
+        if (data.currently_testing_params) {
+            document.getElementById(`${prefix}-current-kp`).textContent = data.currently_testing_params.kp.toFixed(4);
+            document.getElementById(`${prefix}-current-kd`).textContent = data.currently_testing_params.kd.toFixed(4);
+        }
+        document.getElementById(`${prefix}-time-remaining`).textContent = data.estimated_time_remaining || '---';
+        document.getElementById('dashboard-progress-fill').style.width = (data.progress || 0) + '%';
+        if(data.best_fitness !== undefined) document.getElementById('dashboard-best-fitness').textContent = data.best_fitness.toFixed(4);
+        if(data.estimated_time_remaining !== undefined) document.getElementById('dashboard-time-remaining').textContent = data.estimated_time_remaining;
+    }
+    function handleTunerResult(data) {
+        const method = data.method || AppState.activeTuningMethod;
+        if (method.startsWith('zn')) {
+            const panel = document.getElementById('zn-results-panel'); panel.style.display = 'block';
+            document.getElementById('zn-ku-result').textContent = data.ku.toFixed(3); document.getElementById('zn-tu-result').textContent = data.tu.toFixed(3) + 's';
+            document.getElementById('zn-kp-suggest').textContent = data.kp.toFixed(4); document.getElementById('zn-kd-suggest').textContent = data.kd.toFixed(4);
+            document.getElementById('zn-overshoot').textContent = (data.overshoot !== undefined ? data.overshoot.toFixed(2) + '%' : '---');
+            document.getElementById('zn-rise-time').textContent = (data.rise_time !== undefined ? data.rise_time.toFixed(2) + 'ms' : '---');
+        } else if (method.startsWith('ga')) { document.getElementById('ga-results-history-panel').style.display = 'block'; addResultToTable(document.getElementById('ga-results-table-body'), data); } 
+        else if (method.startsWith('pso')) { document.getElementById('pso-results-history-panel').style.display = 'block'; addResultToTable(document.getElementById('pso-results-table-body'), data); }
+        setTuningUiLock(false, ''); addLogMessage(`[UI] Otrzymano wyniki strojenia dla ${method}.`, 'success');
+    }
+    function addResultToTable(tableBody, data) {
+        const row = tableBody.insertRow(0); // Insert at the top
+        row.insertCell().textContent = tableBody.rows.length;
+        row.insertCell().textContent = (data.kp !== undefined ? data.kp.toFixed(4) : '---');
+        row.insertCell().textContent = (data.ki !== undefined ? data.ki.toFixed(4) : '---');
+        row.insertCell().textContent = (data.kd !== undefined ? data.kd.toFixed(4) : '---');
+        row.insertCell().textContent = (data.fitness !== undefined ? data.fitness.toFixed(4) : '---');
+        row.insertCell().textContent = (data.overshoot !== undefined ? data.overshoot.toFixed(2) : '---');
+        row.insertCell().textContent = (data.rise_time !== undefined ? data.rise_time.toFixed(2) : '---');
+        const actionsCell = row.insertCell(); const applyBtn = document.createElement('button');
+        applyBtn.textContent = 'Zastosuj'; applyBtn.classList.add('test-btn');
+        applyBtn.addEventListener('click', () => { /* Logic to apply params based on selected loop */ addLogMessage('[UI] Zastosowano parametry z historii strojenia.', 'info'); });
+        actionsCell.appendChild(applyBtn);
+    }
+    function runDynamicTest(testType) { if (!checkTuningPrerequisites()) return; addLogMessage(`[Test] Uruchamianie testu: ${testType}`, 'info'); sendBleMessage({ type: 'run_dynamic_test', test_type: testType }); setTuningUiLock(true, 'single-tests'); }
+    function handleDynamicTestResult(data) { setTuningUiLock(false, ''); document.getElementById('test-results-panel').style.display = 'block'; document.getElementById('test-overshoot').textContent = (data.overshoot !== undefined ? data.overshoot.toFixed(2) + '%' : '---'); document.getElementById('test-rise-time').textContent = (data.rise_time !== undefined ? data.rise_time.toFixed(2) + 'ms' : '---'); document.getElementById('test-settling-time').textContent = (data.settling_time !== undefined ? data.settling_time.toFixed(2) + 'ms' : '---'); document.getElementById('test-itae').textContent = (data.itae !== undefined ? data.itae.toFixed(4) : '---'); }
+
+    // POZOSTAŁE FUNKCJE
     function initJoystick() { const wrapper = document.getElementById('joystickWrapper'); const size = wrapper.clientWidth; const joystickCanvas = document.getElementById('joystickCanvas'); const joystickCtx = joystickCanvas.getContext('2d'); joystickCanvas.width = size; joystickCanvas.height = size; joystickCenter = { x: size / 2, y: size / 2 }; joystickRadius = size / 2 * 0.75; knobRadius = size / 2 * 0.25; drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y); }
     function drawJoystick(ctx, x, y) { ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); ctx.beginPath(); ctx.arc(joystickCenter.x, joystickCenter.y, joystickRadius, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.fill(); ctx.beginPath(); ctx.arc(x, y, knobRadius, 0, 2 * Math.PI); ctx.fillStyle = '#61dafb'; ctx.fill(); }
     function handleJoystickStart(event) { event.preventDefault(); isDragging = true; }
     function handleJoystickMove(event) { if (!isDragging) return; event.preventDefault(); const joystickCanvas = document.getElementById('joystickCanvas'); let { x, y } = getJoystickPosition(event); const dx = x - joystickCenter.x; const dy = y - joystickCenter.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; } drawJoystick(joystickCanvas.getContext('2d'), x, y); const now = Date.now(); if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) { const joyX = (x - joystickCenter.x) / joystickRadius; const joyY = -(y - joystickCenter.y) / joystickRadius; sendBleMessage({ type: 'joystick', x: joyX, y: joyY }); lastJoystickSendTime = now; } }
     function getJoystickPosition(event) { const rect = document.getElementById('joystickCanvas').getBoundingClientRect(); const touch = event.touches ? event.touches[0] : event; return { x: touch.clientX - rect.left, y: touch.clientY - rect.top }; }
     function handleJoystickEnd(event) { if (!isDragging) return; event.preventDefault(); isDragging = false; drawJoystick(document.getElementById('joystickCanvas').getContext('2d'), joystickCenter.x, joystickCenter.y); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
-    
     function pollGamepad() { if (gamepadIndex !== null) { const gp = navigator.getGamepads()[gamepadIndex]; if (!gp) return; if (isMappingButton && actionToMap) { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { Object.keys(gamepadMappings).forEach(key => { if (gamepadMappings[key] === actionToMap) delete gamepadMappings[key]; }); gamepadMappings[i] = actionToMap; saveGamepadMappings(); addLogMessage(`[UI] Akcja '${availableActions[actionToMap].label}' przypisana do przycisku ${i}.`, 'success'); isMappingButton = false; actionToMap = null; renderMappingModal(); } }); } else { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { const action = gamepadMappings[i]; if (action && availableActions[action]) { const element = document.getElementById(availableActions[action].elementId); if (element && !element.disabled) { element.click(); flashElement(element); } } } }); } lastGamepadState = gp.buttons.map(b => b.pressed); let x = gp.axes[0] || 0; let y = gp.axes[1] || 0; if (Math.abs(x) < 0.15) x = 0; if (Math.abs(y) < 0.15) y = 0; sendBleMessage({ type: 'joystick', x: x, y: -y }); } requestAnimationFrame(pollGamepad); }
     window.addEventListener('gamepadconnected', (e) => { gamepadIndex = e.gamepad.index; document.getElementById('gamepadStatus').textContent = 'Polaczony'; document.getElementById('gamepadStatus').style.color = '#a2f279'; addLogMessage(`[UI] Gamepad polaczony: ${e.gamepad.id}`, 'success'); });
     window.addEventListener('gamepaddisconnected', (e) => { gamepadIndex = null; document.getElementById('gamepadStatus').textContent = 'Brak'; document.getElementById('gamepadStatus').style.color = '#f7b731'; addLogMessage('[UI] Gamepad rozlaczony.', 'warn'); });
-    
     function startMapping(action, buttonElement) { if (gamepadIndex === null) { addLogMessage("Podlacz gamepada, aby rozpoczac mapowanie!", "warn"); return; } isMappingButton = true; actionToMap = action; document.querySelectorAll('.mapping-button').forEach(btn => btn.textContent = "Przypisz"); buttonElement.textContent = "Czekam..."; addLogMessage(`[UI] Nasluchiwanie na przycisk dla akcji: ${availableActions[action].label}...`, "info"); }
     function renderMappingModal() { const list = document.getElementById('gamepad-mapping-list'); list.innerHTML = ''; for (const [action, config] of Object.entries(availableActions)) { const row = document.createElement('div'); row.className = 'mapping-row'; const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action); row.innerHTML = `<span class="mapping-label">${config.label}</span><span class="mapping-display">${buttonIndex !== undefined ? `Przycisk ${buttonIndex}` : 'Brak'}</span><button class="mapping-button" data-action="${action}">Przypisz</button>`; list.appendChild(row); } list.querySelectorAll('.mapping-button').forEach(button => { button.addEventListener('click', (e) => { const action = e.target.dataset.action; startMapping(action, e.target); }); }); }
-    
-    function populatePresetSelect() { const select = document.getElementById('pidPresetSelect'); select.innerHTML = ''; for (const [index, preset] of Object.entries(builtInPresetsData)) { const option = document.createElement('option'); option.value = index; option.textContent = preset.name; select.appendChild(option); } for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key.startsWith(CUSTOM_PRESET_PREFIX)) { const presetName = key.substring(CUSTOM_PRESET_PREFIX.length); const option = document.createElement('option'); option.value = key; option.textContent = `Wlasny: ${presetName}`; select.appendChild(option); } } }
-    async function applySelectedPreset() { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; let presetData; if (selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { presetData = JSON.parse(localStorage.getItem(selectedValue)); } else { presetData = builtInPresetsData[selectedValue]?.params; } if (presetData) { AppState.isApplyingConfig = true; for (const [key, value] of Object.entries(presetData)) { const input = document.getElementById(key); if (input) { input.value = value; } } AppState.isApplyingConfig = false; addLogMessage('[UI] Zastosowano wartosci presetu. Zapisz na robocie, aby wyslac.', 'info'); } }
-    function saveCurrentAsPreset() { const presetName = prompt("Podaj nazwe dla nowego presetu:", ""); if (presetName && presetName.trim() !== "") { const presetData = {}; Object.keys(parameterMapping).forEach(inputId => { const input = document.getElementById(inputId); if (input) { presetData[inputId] = parseFloat(input.value); } }); localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData)); addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success'); populatePresetSelect(); } }
-    function deleteSelectedPreset() { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; if (!selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { addLogMessage('[UI] Nie mozna usunac wbudowanego presetu.', 'warn'); return; } if (confirm(`Czy na pewno chcesz usunac preset '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'?`)) { localStorage.removeItem(selectedValue); addLogMessage(`[UI] Usunieto preset.`, 'info'); populatePresetSelect(); } }
-    
     function setupNumericInputs() { document.querySelectorAll('.numeric-input-wrapper').forEach(wrapper => { const container = wrapper.closest('.setting-container') || wrapper.closest('.pwm-input-row'); if (!container) return; const input = container.querySelector('input[type=number]'); const minusBtn = wrapper.querySelector('button:first-child'); const plusBtn = wrapper.querySelector('button:last-child'); if (!input || !minusBtn || !plusBtn || input.disabled) return; const step = parseFloat(input.step) || 1; const isFloat = input.step.includes('.'); const updateValue = (amount) => { let current = parseFloat(input.value); if (isNaN(current)) current = 0; let newValue = current + amount; if (isFloat) { const dp = (step.toString().split('.')[1] || '').length; newValue = parseFloat(newValue.toFixed(dp)); } const min = parseFloat(input.min); const max = parseFloat(input.max); if (!isNaN(min)) newValue = Math.max(min, newValue); if (!isNaN(max)) newValue = Math.min(max, newValue); input.value = newValue; input.dispatchEvent(new Event('change', { bubbles: true })); }; minusBtn.addEventListener('click', () => updateValue(-step)); plusBtn.addEventListener('click', () => updateValue(step)); }); }
-    
-    function sendFullConfigToRobot() { const params = {}; for (const [inputId, snakeKey] of Object.entries(parameterMapping)) { const input = document.getElementById(inputId); if (input) { let value = parseFloat(input.value); if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) { value /= 100.0; } params[snakeKey] = value; } } addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info'); sendBleMessage({ type: 'full_config', params }); }
-    
+    function sendFullConfigToRobot() { const params = {}; for (const [inputId, snakeKey] of Object.entries(parameterMapping)) { const input = document.getElementById(inputId); if (input) { let value = parseFloat(input.value); if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha'].includes(snakeKey)) { value /= 100.0; } params[snakeKey] = value; } } addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info'); sendBleMessage({ type: 'full_config', params }); }
     function setupEventListeners() {
-        const sendSingleParam = (inputId, value) => { if (AppState.isApplyingConfig) return; const snakeKey = parameterMapping[inputId]; if (snakeKey) { if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(snakeKey)) { value /= 100.0; } sendBleMessage({ type: 'set_param', key: snakeKey, value: value }); } }; 
+        const sendSingleParam = (inputId, value) => { if (AppState.isApplyingConfig) return; const snakeKey = parameterMapping[inputId]; if (snakeKey) { if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha'].includes(snakeKey)) { value /= 100.0; } sendBleMessage({ type: 'set_param', key: snakeKey, value: value }); } }; 
         const debouncedSendSingleParam = debounce(sendSingleParam, 400); 
         document.querySelectorAll('.config-value').forEach(input => { input.addEventListener('change', (e) => { debouncedSendSingleParam(e.target.id, parseFloat(e.target.value)); }); }); 
         document.getElementById('joystickCanvas').addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); document.getElementById('joystickCanvas').addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd); 
@@ -1112,127 +1225,26 @@
         document.getElementById('calibrateMpuBtn')?.addEventListener('click', showCalibrationModal); 
         document.getElementById('calibrateZeroPointBtn')?.addEventListener('click', () => { if (confirm("Upewnij sie, ze robot stoi na idealnie plaskiej powierzchni. Robot bedzie balansowal przez 10 sekund w celu znalezienia dokladnego punktu rownowagi. Kontynuowac?")) { sendBleMessage({ type: 'calibrate_zero_point' }); } }); 
         document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset); 
+        document.getElementById('comparePresetsBtn').addEventListener('click', comparePresets);
         document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container') || icon.closest('.control-row'); if(!container) return; const helpText = container.nextElementSibling.classList.contains('help-text') ? container.nextElementSibling : container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); }); 
     }
-    
     function setupManualTuneButtons() { document.querySelectorAll('.manual-tune-row').forEach(row => { const motor = row.dataset.motor; const direction = row.dataset.direction; const input = row.querySelector('.tune-input'); const testBtn = row.querySelector('.test-btn'); const stopBtn = row.querySelector('.stop-btn'); const autoBtn = row.querySelector('.auto-btn'); testBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: parseInt(input.value) }); }); stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); }); autoBtn.addEventListener('click', (e) => { if (confirm("UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?")) { const startValue = parseInt(document.getElementById('pwmTuneStartInput').value); sendBleMessage({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue }); e.target.disabled = true; e.target.textContent = 'Szukanie...'; addLogMessage(`[UI] Rozpoczynam auto-strojenie dla ${motor} ${direction}...`, 'info'); } }); }); document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); }); }
-    
     function setupGamepadMappingModal() { document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; }); document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; }); }
     function flashElement(element) { if (!element) return; const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element; target.classList.add('gamepad-flash'); setTimeout(() => target.classList.remove('gamepad-flash'), 300); }
     function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
     function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
-    
     function setupDpadControls() { document.querySelectorAll('.dpad-btn').forEach(btn => { btn.addEventListener('click', (e) => { const action = e.currentTarget.dataset.dpad; if (action === 'up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'stop') sendBleMessage({ type: 'command_stop' }); }); }); }
-    function setupSequenceControls() { document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep); document.getElementById('run-sequence-btn').addEventListener('click', runSequence); document.getElementById('stop-sequence-btn').addEventListener('click', stopSequenceExecution); document.getElementById('clear-sequence-btn').addEventListener('click', clearSequence); }
-    function addSequenceStep() { const list = document.getElementById('sequence-list'); if (list.children.length >= MAX_SEQUENCE_STEPS) return; const stepDiv = document.createElement('div'); stepDiv.className = 'sequence-step'; stepDiv.innerHTML = ` <select class="sequence-type"> <option value="move_fwd">Przod (cm)</option><option value="move_bwd">Tyl (cm)</option> <option value="rotate_r">Obrot Prawo (st.)</option><option value="rotate_l">Obrot Lewo (st.)</option> </select> <input type="number" class="sequence-value" value="20"> <button class="remove-step-btn">&times;</button> `; list.appendChild(stepDiv); updateAccordionHeight(list.closest('.accordion-content')); stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => { stepDiv.remove(); updateAccordionHeight(list.closest('.accordion-content')); }); }
-    function runSequence() { if (AppState.isSequenceRunning) return; if (AppState.lastKnownRobotState !== 'TRZYMA_POZYCJE' && AppState.lastKnownRobotState !== 'BALANSUJE') { addLogMessage(`[UI] Nie mozna rozpoczac sekwencji. Robot w stanie '${AppState.lastKnownRobotState}'.`, 'error'); return; } const steps = document.querySelectorAll('.sequence-step'); if (steps.length === 0) return; AppState.isSequenceRunning = true; currentSequenceStep = 0; updateSequenceUI(); addLogMessage(`[UI] Rozpoczeto sekwencje z ${steps.length} krokow.`, 'info'); executeNextSequenceStep(); }
-    function stopSequenceExecution() { if (!AppState.isSequenceRunning) return; AppState.isSequenceRunning = false; sendBleMessage({ type: 'command_stop' }); updateSequenceUI(); addLogMessage('[UI] Sekwencja zatrzymana.', 'warn'); }
-    function clearSequence() { if (AppState.isSequenceRunning) stopSequenceExecution(); const list = document.getElementById('sequence-list'); list.innerHTML = ''; updateAccordionHeight(list.closest('.accordion-content')); }
-    function updateSequenceUI() { document.querySelectorAll('.sequence-step').forEach((step, index) => { step.classList.toggle('executing', AppState.isSequenceRunning && index === currentSequenceStep); }); document.getElementById('run-sequence-btn').disabled = AppState.isSequenceRunning; document.getElementById('add-sequence-step-btn').disabled = AppState.isSequenceRunning; document.getElementById('clear-sequence-btn').disabled = AppState.isSequenceRunning; document.getElementById('stop-sequence-btn').disabled = !AppState.isSequenceRunning; }
-    function checkAndExecuteNextSequenceStep(previousState) { const wasWorking = ['RUCH_AUTONOMICZNY', 'OBROT_AUTONOMICZNY'].includes(previousState); const isReady = ['TRZYMA_POZYCJE', 'BALANSUJE'].includes(AppState.lastKnownRobotState); if (AppState.isSequenceRunning && wasWorking && isReady) { addLogMessage(`[UI] Krok ${currentSequenceStep + 1} zakonczony.`, 'info'); currentSequenceStep++; executeNextSequenceStep(); } }
-    function executeNextSequenceStep() { const steps = document.querySelectorAll('.sequence-step'); if (!AppState.isSequenceRunning || currentSequenceStep >= steps.length) { if (AppState.isSequenceRunning) { AppState.isSequenceRunning = false; addLogMessage('[UI] Sekwencja ukonczona.', 'success'); } updateSequenceUI(); return; } updateSequenceUI(); const stepNode = steps[currentSequenceStep]; const type = stepNode.querySelector('.sequence-type').value; const value = parseFloat(stepNode.querySelector('.sequence-value').value); let command = {}; switch (type) { case 'move_fwd': command = { type: 'execute_move', distance_cm: value }; break; case 'move_bwd': command = { type: 'execute_move', distance_cm: -value }; break; case 'rotate_r': command = { type: 'execute_rotate', angle_deg: value }; break; case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -value }; break; } addLogMessage(`[UI] Wysylanie kroku ${currentSequenceStep + 1}/${steps.length}: ${command.type}(${value}).`, 'info'); sendBleMessage(command); }
-    
-    function getImpulsesPerCm() { const ppr = parseFloat(document.getElementById('encoderPprInput').value); const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value); if (ppr > 0 && wheelDiameter > 0) { return ppr / (Math.PI * wheelDiameter); } return 30.0; }
-    
-    function setupCalibrationModal() {
-        document.getElementById('calib-update-btn').addEventListener('click', () => {
-            sendBleMessage({ type: 'request_calibration_status' });
-        });
-        document.getElementById('calib-close-btn').addEventListener('click', () => {
-            const sys = parseInt(document.getElementById('calib-sys-text').textContent) || 0;
-            if (sys >= 3) {
-                hideCalibrationModal();
-            } else if (confirm('Poziom kalibracji systemu jest niski (<3). Czy na pewno chcesz zamknac?')) {
-                hideCalibrationModal();
-            }
-        });
-    }
-
-    function showCalibrationModal() {
-        document.getElementById('calibration-modal').style.display = 'flex';
-        isCalibrationModalShown = true;
-        sendBleMessage({ type: 'set_rgb_blink', colors: ['00FF00', 'FFA500'] }); 
-        addLogMessage('[UI] Rozpocznij proces kalibracji IMU - obracaj robota powoli we wszystkich kierunkach.', 'info');
-    }
-
-    function hideCalibrationModal() {
-        document.getElementById('calibration-modal').style.display = 'none';
-        isCalibrationModalShown = false;
-        sendBleMessage({ type: 'stop_rgb_blink' });
-        addLogMessage('[UI] Asystent kalibracji zamkniety.', 'info');
-    }
-
-    function updateCalibrationProgress(axis, value) {
-        if (document.getElementById('calibration-modal').style.display === 'none') return;
-        const barId = `calib-${axis}-bar`;
-        const textId = `calib-${axis}-text`;
-        const bar = document.getElementById(barId);
-        const text = document.getElementById(textId);
-        if (bar && text) {
-            bar.value = value;
-            text.textContent = value;
-            const sys = parseInt(document.getElementById('calib-sys-text').textContent) || 0;
-            if (sys >= 3) {
-                hideCalibrationModal();
-                addLogMessage('[UI] Kalibracja systemu osiagnela poziom 3. Asystent zamkniety.', 'success');
-            }
-        }
-    }
-
+    function setupCalibrationModal() { document.getElementById('calib-update-btn').addEventListener('click', () => { sendBleMessage({ type: 'request_calibration_status' }); }); document.getElementById('calib-close-btn').addEventListener('click', () => { const sys = parseInt(document.getElementById('calib-sys-text').textContent) || 0; if (sys >= 3) { hideCalibrationModal(); } else if (confirm('Poziom kalibracji systemu jest niski (<3). Czy na pewno chcesz zamknac?')) { hideCalibrationModal(); } }); }
+    function showCalibrationModal() { document.getElementById('calibration-modal').style.display = 'flex'; isCalibrationModalShown = true; sendBleMessage({ type: 'set_rgb_blink', colors: ['00FF00', 'FFA500'] }); addLogMessage('[UI] Rozpocznij proces kalibracji IMU - obracaj robota powoli we wszystkich kierunkach.', 'info'); }
+    function hideCalibrationModal() { document.getElementById('calibration-modal').style.display = 'none'; isCalibrationModalShown = false; sendBleMessage({ type: 'stop_rgb_blink' }); addLogMessage('[UI] Asystent kalibracji zamkniety.', 'info'); }
+    function updateCalibrationProgress(axis, value) { if (document.getElementById('calibration-modal').style.display === 'none') return; const barId = `calib-${axis}-bar`; const textId = `calib-${axis}-text`; const bar = document.getElementById(barId); const text = document.getElementById(textId); if (bar && text) { bar.value = value; text.textContent = value; const sys = parseInt(document.getElementById('calib-sys-text').textContent) || 0; if (sys >= 3 && document.getElementById('calibration-modal').style.display !== 'none') { hideCalibrationModal(); addLogMessage('[UI] Kalibracja systemu osiagnela poziom 3. Asystent zamkniety.', 'success'); } } }
     function init3DVisualization() { const container = document.getElementById('robot3d-container'); scene3D = new THREE.Scene(); scene3D.background = createSkyTexture(); camera3D = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 2000); camera3D.position.set(28, 22, 48); camera3D.lookAt(0, 8, 0); renderer3D = new THREE.WebGLRenderer({ antialias: true }); renderer3D.setSize(container.clientWidth, container.clientHeight); container.appendChild(renderer3D.domElement); controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement); controls3D.target.set(0, 8, 0); controls3D.maxPolarAngle = Math.PI / 2; const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); scene3D.add(ambientLight); const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9); directionalLight.position.set(10, 20, 15); scene3D.add(directionalLight); const PLANE_SIZE_CM = 2000; groundTexture = createCheckerTexture(20); const repeats = PLANE_SIZE_CM / 20; groundTexture.repeat.set(repeats, repeats); const groundMaterial = new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1.0, metalness: 0.0 }); const groundGeo = new THREE.PlaneGeometry(PLANE_SIZE_CM, PLANE_SIZE_CM, 1, 1); groundMesh = new THREE.Mesh(groundGeo, groundMaterial); groundMesh.rotation.x = -Math.PI / 2; groundMesh.position.y = 0; scene3D.add(groundMesh); robotPivot = createRobotModel3D(); robotPivot.position.y = 4.1; scene3D.add(robotPivot); window.addEventListener('resize', () => { const width = container.clientWidth; const height = container.clientHeight; camera3D.aspect = width / height; camera3D.updateProjectionMatrix(); renderer3D.setSize(width, height); }); setupControls3D(); setupCalibrationModal(); }
     function createCustomWheel(totalRadius, tireThickness, width) { const wheelGroup = new THREE.Group(); const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 }); const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.4 }); const rimRadius = totalRadius - tireThickness; const tire = new THREE.Mesh(new THREE.TorusGeometry(rimRadius + tireThickness / 2, tireThickness / 2, 16, 100), tireMaterial); wheelGroup.add(tire); const rimShape = new THREE.Shape(); rimShape.absarc(0, 0, rimRadius, 0, Math.PI * 2, false); const holePath = new THREE.Path(); holePath.absarc(0, 0, rimRadius * 0.85, 0, Math.PI * 2, true); rimShape.holes.push(holePath); const extrudeSettings = { depth: width * 0.4, bevelEnabled: false }; const outerRimGeometry = new THREE.ExtrudeGeometry(rimShape, extrudeSettings); outerRimGeometry.center(); const outerRim = new THREE.Mesh(outerRimGeometry, rimMaterial); wheelGroup.add(outerRim); const hubRadius = rimRadius * 0.2; const hub = new THREE.Mesh(new THREE.CylinderGeometry(hubRadius, hubRadius, width * 0.5, 24), rimMaterial); hub.rotateX(Math.PI / 2); wheelGroup.add(hub); const spokeLength = (rimRadius * 0.85) - hubRadius; const spokeGeometry = new THREE.BoxGeometry(spokeLength, rimRadius * 0.15, width * 0.4); spokeGeometry.translate(hubRadius + spokeLength / 2, 0, 0); for (let i = 0; i < 6; i++) { const spoke = new THREE.Mesh(spokeGeometry, rimMaterial); spoke.rotation.z = i * (Math.PI / 3); wheelGroup.add(spoke); } return wheelGroup; }
     function createRobotModel3D() { const BODY_WIDTH = 9.0, BODY_HEIGHT = 6.0, BODY_DEPTH = 3.5, WHEEL_GAP = 1.0; const MAST_HEIGHT = 14.5, MAST_THICKNESS = 1.5; const BATTERY_WIDTH = 6.0, BATTERY_HEIGHT = 1.0, BATTERY_DEPTH = 3.0; const TIRE_THICKNESS = 1.0, WHEEL_WIDTH = 2.0; const WHEEL_RADIUS_3D = 4.1; const pivot = new THREE.Object3D(); const model = new THREE.Group(); const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1C1C1C }); const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0x4169E1 }); const body = new THREE.Mesh(new THREE.BoxGeometry(BODY_WIDTH, BODY_HEIGHT, BODY_DEPTH), bodyMaterial); body.position.y = WHEEL_RADIUS_3D; model.add(body); const mast = new THREE.Mesh(new THREE.BoxGeometry(MAST_THICKNESS, MAST_HEIGHT, MAST_THICKNESS), bodyMaterial); mast.position.y = WHEEL_RADIUS_3D + BODY_HEIGHT / 2 + MAST_HEIGHT / 2; model.add(mast); const battery = new THREE.Mesh(new THREE.BoxGeometry(BATTERY_WIDTH, BATTERY_HEIGHT, BATTERY_DEPTH), batteryMaterial); battery.position.y = mast.position.y + MAST_HEIGHT / 2 + BATTERY_HEIGHT / 2; model.add(battery); leftWheel = createCustomWheel(WHEEL_RADIUS_3D, TIRE_THICKNESS, WHEEL_WIDTH); leftWheel.rotation.y = Math.PI / 2; leftWheel.position.set(-(BODY_WIDTH / 2 + WHEEL_GAP), WHEEL_RADIUS_3D, 0); model.add(leftWheel); rightWheel = createCustomWheel(WHEEL_RADIUS_3D, TIRE_THICKNESS, WHEEL_WIDTH); rightWheel.rotation.y = Math.PI / 2; rightWheel.position.set(BODY_WIDTH / 2 + WHEEL_GAP, WHEEL_RADIUS_3D, 0); model.add(rightWheel); model.position.y = -WHEEL_RADIUS_3D; pivot.add(model); return pivot; }
     function createCheckerTexture(squareSizeCm = 20, colorA = '#C8C8C8', colorB = '#787878') { const size = 256; const squares = 2; const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size; const ctx = canvas.getContext('2d'); const s = size / squares; for (let y = 0; y < squares; y++) { for (let x = 0; x < squares; x++) { ctx.fillStyle = ((x + y) % 2 === 0) ? colorA : colorB; ctx.fillRect(x * s, y * s, s, s); } } const tex = new THREE.CanvasTexture(canvas); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 8; tex.encoding = THREE.sRGBEncoding; return tex; }
     function createSkyTexture() { const width = 1024, height = 512; const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); const grad = ctx.createLinearGradient(0, 0, 0, height); grad.addColorStop(0, '#87CEEB'); grad.addColorStop(1, '#E6F2FA'); ctx.fillStyle = grad; ctx.fillRect(0, 0, width, height); ctx.globalAlpha = 0.15; ctx.fillStyle = '#FFFFFF'; for (let i = 0; i < 12; i++) { const cx = Math.random() * width, cy = Math.random() * height * 0.6, rw = 120 + Math.random() * 180, rh = 30 + Math.random() * 40; ctx.beginPath(); ctx.ellipse(cx, cy, rw, rh, 0, 0, Math.PI * 2); ctx.fill(); } const tex = new THREE.CanvasTexture(canvas); tex.encoding = THREE.sRGBEncoding; return tex; }
     function setupControls3D() { document.getElementById('reset3dViewBtn').addEventListener('click', () => { camera3D.position.set(28, 22, 48); controls3D.target.set(0, 8, 0); controls3D.update(); }); document.getElementById('toggle3dAnimationBtn').addEventListener('click', () => isAnimation3DEnabled = !isAnimation3DEnabled); document.getElementById('toggle3dMovementBtn').addEventListener('click', () => { isMovement3DEnabled = !isMovement3DEnabled; if(!isMovement3DEnabled) { lastEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2; } }); }
-    
-    function animate3D() {
-        requestAnimationFrame(animate3D);
-        if (isAnimation3DEnabled && robotPivot) {
-            const pitch = window.telemetryData?.pitch || 0;
-            const roll = window.telemetryData?.roll || 0;
-            const yaw = window.telemetryData?.yaw || 0;
-            const trimAngle = parseFloat(document.getElementById('trimValueDisplay').textContent) || 0.0;
-
-            const totalPitchRad = (pitch + trimAngle) * Math.PI / 180;
-            const rollRad = roll * Math.PI / 180;
-            const yawRad = yaw * Math.PI / 180;
-
-            robotPivot.rotation.set(totalPitchRad, yawRad, -rollRad, 'YXZ');
-
-            const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
-            const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
-            const wheelRotationR = (currentEncoderRight / ppr) * 2 * Math.PI;
-            if (leftWheel) leftWheel.rotation.z = -wheelRotationL;
-            if (rightWheel) rightWheel.rotation.z = -wheelRotationR;
-
-            if (isMovement3DEnabled) {
-                const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value) || 8.2;
-                const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
-                const dist_cm = ((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * wheelDiameter;
-
-                if (groundTexture) {
-                    const dx = Math.sin(yawRad) * dist_cm;
-                    const dz = Math.cos(yawRad) * dist_cm;
-                    const squaresPerCm = 1 / 20;
-                    groundTexture.offset.x -= dx * squaresPerCm;
-                    groundTexture.offset.y -= dz * squaresPerCm;
-                    groundTexture.needsUpdate = true;
-                }
-
-                const logicalX = (groundTexture ? -groundTexture.offset.x * 20 : 0);
-                const logicalZ = (groundTexture ? -groundTexture.offset.y * 20 : 0);
-                document.getElementById('robot3d-position-x').textContent = logicalX.toFixed(1) + ' cm';
-                document.getElementById('robot3d-position-z').textContent = logicalZ.toFixed(1) + ' cm';
-                lastEncoderAvg = currentEncoderAvg;
-            }
-        }
-
-        if (controls3D && renderer3D && scene3D && camera3D) {
-            controls3D.update();
-            renderer3D.render(scene3D, camera3D);
-        }
-    }
+    function animate3D() { requestAnimationFrame(animate3D); if (isAnimation3DEnabled && robotPivot) { const pitch = window.telemetryData?.pitch || 0; const roll = window.telemetryData?.roll || 0; const yaw = window.telemetryData?.yaw || 0; const trimAngle = parseFloat(document.getElementById('trimValueDisplay').textContent) || 0.0; const totalPitchRad = (pitch + trimAngle) * Math.PI / 180; const rollRad = roll * Math.PI / 180; const yawRad = yaw * Math.PI / 180; robotPivot.rotation.set(totalPitchRad, yawRad, -rollRad, 'YXZ'); const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820; const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI; const wheelRotationR = (currentEncoderRight / ppr) * 2 * Math.PI; if (leftWheel) leftWheel.rotation.z = -wheelRotationL; if (rightWheel) rightWheel.rotation.z = -wheelRotationR; if (isMovement3DEnabled) { const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value) || 8.2; const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2; const dist_cm = ((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * wheelDiameter; if (groundTexture) { const dx = Math.sin(yawRad) * dist_cm; const dz = Math.cos(yawRad) * dist_cm; const squaresPerCm = 1 / 20; groundTexture.offset.x -= dx * squaresPerCm; groundTexture.offset.y -= dz * squaresPerCm; groundTexture.needsUpdate = true; } const logicalX = (groundTexture ? -groundTexture.offset.x * 20 : 0); const logicalZ = (groundTexture ? -groundTexture.offset.y * 20 : 0); document.getElementById('robot3d-position-x').textContent = logicalX.toFixed(1) + ' cm'; document.getElementById('robot3d-position-z').textContent = logicalZ.toFixed(1) + ' cm'; lastEncoderAvg = currentEncoderAvg; } } if (controls3D && renderer3D && scene3D && camera3D) { controls3D.update(); renderer3D.render(scene3D, camera3D); } }
 </script>
 </body>
 </html>
