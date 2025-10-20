@@ -321,14 +321,21 @@
                     <div class="historical-metric">(min: <span id="pitchMin">---</span>, max: <span id="pitchMax">---</span>, avg: <span id="pitchAvg">---</span>)</div>
                 </div>
                 <div class="dashboard-item">
-                    <span class="label">Kat (Roll)</span>
-                    <span class="value" id="rollVal">0.0 &deg;</span>
-                    <div class="historical-metric">(min: <span id="rollMin">---</span>, max: <span id="rollMax">---</span>, avg: <span id="rollAvg">---</span>)</div>
-                </div>
-                <div class="dashboard-item">
                     <span class="label">Predkosc</span>
                     <span class="value" id="speedVal">0 imp/s</span>
                     <div class="historical-metric">(min: <span id="speedMin">---</span>, max: <span id="speedMax">---</span>, avg: <span id="speedAvg">---</span>)</div>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Kat (Roll)</span>
+                    <span class="value" id="rollVal">0.0 &deg;</span>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Enkoder L</span>
+                    <span class="value" id="encoderLeftVal">0</span>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Enkoder P</span>
+                    <span class="value" id="encoderRightVal">0</span>
                 </div>
                 <div class="dashboard-item">
                     <span class="label">Kurs (Yaw)</span>
@@ -734,7 +741,7 @@
     <div id="mapping-wizard-modal" class="modal-backdrop">
         <div class="modal-content">
             <h2>Kreator Mapowania Osi 3D</h2>
-            <p id="wizard-instruction-text" style="font-size: 1.2em; font-weight: bold; color: #a2f279;">Przygotuj się...</p>
+            <p id="wizard-instruction-text" style="font-size: 1.2em; font-weight: bold; color: #a2f279;">Przygotuj sie...</p>
             <div id="wizard-progress" style="display: flex; justify-content: center; gap: 10px; margin: 20px 0;">
             </div>
             <p>Gdy wykonasz ruch, przytrzymaj pozycje przez sekunde, a nastepnie wroc do pionu.</p>
@@ -1068,7 +1075,10 @@
             pitchHistory.push(data.pitch);
             if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
         }
-        if (data.roll !== undefined) { document.getElementById('robot3d-roll').textContent = data.roll.toFixed(1) + '°'; }
+        if (data.roll !== undefined) {
+            document.getElementById('robot3d-roll').textContent = data.roll.toFixed(1) + '°';
+            document.getElementById('rollVal').textContent = data.roll.toFixed(1) + ' \u00B0';
+        }
         if (data.yaw !== undefined) {
             document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' °';
             document.getElementById('compassNeedle').style.transform = `rotate(${data.yaw}deg)`;
@@ -1082,8 +1092,14 @@
             speedHistory.push(speed);
             if (speedHistory.length > HISTORY_LENGTH) speedHistory.shift();
         }
-        if (data.encoder_left !== undefined) { currentEncoderLeft = data.encoder_left; }
-        if (data.encoder_right !== undefined) { currentEncoderRight = data.encoder_right; }
+        if (data.encoder_left !== undefined) {
+            currentEncoderLeft = data.encoder_left;
+            document.getElementById('encoderLeftVal').textContent = data.encoder_left;
+        }
+        if (data.encoder_right !== undefined) {
+            currentEncoderRight = data.encoder_right;
+            document.getElementById('encoderRightVal').textContent = data.encoder_right;
+        }
         if (Date.now() - lastTelemetryUpdateTime > TELEMETRY_UPDATE_INTERVAL) {
             if (pitchHistory.length > 0) {
                 const minPitch = Math.min(...pitchHistory);
