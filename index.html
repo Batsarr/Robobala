@@ -1469,7 +1469,9 @@
     
     function animate3D() {
         requestAnimationFrame(animate3D);
+
         if (isAnimation3DEnabled && robotPivot) {
+            // KROK 1: Bezpieczne pobieranie danych telemetrycznych z wartosciami domyslnymi
             const telemetry = {
                 pitch: window.telemetryData?.pitch || 0,
                 roll: window.telemetryData?.roll || 0,
@@ -1490,8 +1492,17 @@
                 finalRotation.z = (telemetry[axisMapping.z.source] * axisMapping.z.sign) * Math.PI / 180;
             }
             
-            robotPivot.rotation.set(finalRotation.x, finalRotation.y, finalRotation.z, 'YXZ');
+            // KROK 2: KLUCZOWE ZABEZPIECZENIE - Sprawdzenie, czy obliczone wartosci sa prawidlowymi liczbami
+            if (isNaN(finalRotation.x) || isNaN(finalRotation.y) || isNaN(finalRotation.z)) {
+                // Jesli ktorakolwiek wartosc jest nieprawidlowa (NaN), nie aktualizuj rotacji modelu.
+                // Zamiast tego, zaloguj blad, aby ulatwic diagnoze.
+                console.error("Wykryto nieprawidlowa wartosc rotacji (NaN). Aktualizacja modelu 3D wstrzymana.", finalRotation);
+            } else {
+                // Dopiero gdy wszystkie wartosci sa poprawne, zaktualizuj rotacje modelu.
+                robotPivot.rotation.set(finalRotation.x, finalRotation.y, finalRotation.z, 'YXZ');
+            }
 
+            // Reszta funkcji pozostaje bez zmian (obrot kol, ruch podloza itp.)
             const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
             const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
             const wheelRotationR = (currentEncoderRight / ppr) * 2 * Math.PI;
@@ -1502,7 +1513,8 @@
                 const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
                 const dist_cm = ((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * wheelDiameter;
                 if (groundTexture) {
-                    const yawRad = finalRotation.y;
+                    // Uzyj juz ustawionej, bezpiecznej rotacji z samego modelu, aby uniknac bledu NaN
+                    const yawRad = robotPivot.rotation.y; 
                     const dx = Math.sin(yawRad) * dist_cm;
                     const dz = Math.cos(yawRad) * dist_cm;
                     const squaresPerCm = 1 / 20;
@@ -1525,3 +1537,4 @@
 </script>
 </body>
 </html>
+
