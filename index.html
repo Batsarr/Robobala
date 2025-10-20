@@ -225,6 +225,14 @@
         .autotune-results-table th { background-color: #4a4f58; color: #61dafb; }
         .autotune-results-table td { background-color: #3a3f47; color: #fff; }
         .autotune-results-table button { margin-left: 5px; padding: 4px 8px; font-size: 0.8em; }
+        .axis-mapping-row {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 8px;
+            text-align: left;
+        }
     </style>
 </head>
 <body class="ui-locked">
@@ -239,8 +247,8 @@
     <div id="calibration-modal" class="modal-backdrop">
         <div class="modal-content">
             <h2>Kalibracja IMU (Czujnik Nachylenia)</h2>
-            <p>Aby skalibrować czujnik IMU, powoli obróć robota we wszystkich kierunkach: do przodu, do tyłu, na boki i wokół własnej osi pionowej. Wykonaj co najmniej 3 pełne obroty w każdej płaszczyźnie.</p>
-            <p><strong>Dla akcelerometru (Accel) ważne:</strong> Trzymaj robota nieruchomo na około 10 sekund w każdej z 6 pozycji (sześcian): góra, dół, przednia strona, tylna strona, lewa strona, prawa strona. Powtarzaj obroty i zatrzymania, aż progres osiągnie co najmniej 3/4 dla każdej osi. Obroty powinny być wolne i płynne.</p>
+            <p>Aby skalibrowac czujnik IMU, powoli obroc robota we wszystkich kierunkach: do przodu, do tylu, na boki i wokol wlasnej osi pionowej. Wykonaj co najmniej 3 pelne obroty w kazdej plaszczyznie.</p>
+            <p><strong>Dla akcelerometru (Accel) wazne:</strong> Trzymaj robota nieruchomo na okolo 10 sekund w kazdej z 6 pozycji (szescian): gora, dol, przednia strona, tylna strona, lewa strona, prawa strona. Powtarzaj obroty i zatrzymania, az progres osiagnie co najmniej 3/4 dla kazdej osi. Obroty powinny byc wolne i plynne.</p>
             <div class="calib-axis" style="display: flex; align-items: center; margin: 10px 0; justify-content: space-between;">
                 <span>Sys (System):</span><progress id="calib-sys-bar" value="0" max="3" style="flex: 1; margin: 0 10px;"></progress><span id="calib-sys-text">0</span>/3
             </div>
@@ -354,6 +362,51 @@
                     <strong>Pozycja Z:</strong> <span id="robot3d-position-z">0.0 cm</span>
                 </div>
             </div>
+            <fieldset style="margin-top: 15px;">
+                <legend>Mapowanie Osi Modelu 3D</legend>
+                <div class="axis-mapping-row">
+                    <label>Obrot modelu X (Pitch):</label>
+                    <select class="axis-source" id="map-rot-x-source">
+                        <option value="none">Brak</option>
+                        <option value="pitch" selected>Pitch (Pochylenie)</option>
+                        <option value="roll">Roll (Przechyl)</option>
+                        <option value="yaw">Yaw (Obrot)</option>
+                    </select>
+                    <select class="axis-sign" id="map-rot-x-sign">
+                        <option value="1">Znak (+1)</option>
+                        <option value="-1">Znak (-1)</option>
+                    </select>
+                </div>
+                <div class="axis-mapping-row">
+                    <label>Obrot modelu Y (Yaw):</label>
+                    <select class="axis-source" id="map-rot-y-source">
+                        <option value="none">Brak</option>
+                        <option value="pitch">Pitch (Pochylenie)</option>
+                        <option value="roll">Roll (Przechyl)</option>
+                        <option value="yaw" selected>Yaw (Obrot)</option>
+                    </select>
+                    <select class="axis-sign" id="map-rot-y-sign">
+                        <option value="1">Znak (+1)</option>
+                        <option value="-1">Znak (-1)</option>
+                    </select>
+                </div>
+                <div class="axis-mapping-row">
+                    <label>Obrot modelu Z (Roll):</label>
+                    <select class="axis-source" id="map-rot-z-source">
+                        <option value="none">Brak</option>
+                        <option value="pitch">Pitch (Pochylenie)</option>
+                        <option value="roll" selected>Roll (Przechyl)</option>
+                        <option value="yaw">Yaw (Obrot)</option>
+                    </select>
+                    <select class="axis-sign" id="map-rot-z-sign">
+                        <option value="1">Znak (+1)</option>
+                        <option value="-1" selected>Znak (-1)</option>
+                    </select>
+                </div>
+                <button id="startMappingWizardBtn" style="width: 100%; margin-top: 10px; background-color: #f7b731;">
+                    Uruchom Kreator Mapowania Krok-po-Kroku
+                </button>
+            </fieldset>
         </div>
         <div class="card">
             <h2>Analizator Sygnalow</h2>
@@ -362,7 +415,7 @@
             </div>
             <div class="chart-toolbar">
                 <button id="pauseChartBtn">⏸️ Pauza</button>
-                <button id="resumeChartBtn" style="display:none;">▶️ Wznów</button>
+                <button id="resumeChartBtn" style="display:none;">▶️ Wznow</button>
                 <button id="cursorABBtn">📏 Kursory A/B</button>
                 <button id="exportCsvBtn">📄 Eksport CSV</button>
                 <button id="exportPngBtn">🖼️ Eksport PNG</button>
@@ -425,15 +478,6 @@
                 </div>
                 <button id="deleteSelectedPresetBtn" style="width:100%; margin-top: 10px; background-color: #ff6347;">Usun Wybrany</button>
             </fieldset>
-             <fieldset style="margin-top: 15px;">
-                <legend>Porownywarka Konfiguracji (Diff)</legend>
-                <div class="diff-selector-row">
-                    <select id="diffPresetSelectA"></select>
-                    <select id="diffPresetSelectB"></select>
-                </div>
-                <button id="comparePresetsBtn" style="width:100%; margin-bottom: 10px;">Porownaj</button>
-                <pre id="diffResults" class="diff-results" style="display:none;"></pre>
-            </fieldset>
             <div id="allSettings">
                 <button class="accordion-header" onclick="toggleAccordion(this)">1. Parametry Sprzetowe i Mechaniczne</button>
                 <div class="accordion-content">
@@ -492,183 +536,185 @@
                         <div class="setting-container"> <label for="headingKdInput">Kd - Tlumienie</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKdInput" step="0.01" value="0.0"><button>+</button></div> </div>
                     </div>
                 </div>
+                
+                <button class="accordion-header" onclick="toggleAccordion(this)">6. Autostrojenie</button>
+                <div class="accordion-content">
+                    <div id="autotuning-card-content">
+                        <div class="autotune-config-common">
+                            <h3>⚙️ Konfiguracja Strojenia (Wspolna)</h3>
+                            <div class="config-section">
+                                <label>🎯 Petla PID do strojenia:</label>
+                                <select id="common-loop-selector">
+                                    <option value="balance">Petla Balansu (Kp, Kd)</option>
+                                    <option value="speed">Petla Predkosci (Kp, Ki, Kd)</option>
+                                    <option value="position">Petla Pozycji (Kp, Ki, Kd)</option>
+                                    <option value="rotation">Petla Obrotu (Kp, Kd)</option>
+                                    <option value="heading">Petla Kursu (Kp, Ki, Kd)</option>
+                                </select>
+                            </div>
+                            <div class="config-section">
+                                <label style="color: #f7b731;">🛡️ Ograniczenia Bezpieczenstwa (Max. Wartosci):</label>
+                                <div class="setting-container"> <label for="safetyMaxAngle">Max. Kat (°)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="safetyMaxAngle" min="5" max="45" step="1" value="20"><button>+</button></div> </div>
+                                <div class="setting-container"> <label for="safetyMaxSpeed">Max. Predkosc (imp/s)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="safetyMaxSpeed" min="100" max="4000" step="50" value="1500"><button>+</button></div> </div>
+                                <div class="setting-container"> <label for="safetyMaxPwm">Max. PWM</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="safetyMaxPwm" min="500" max="1023" step="10" value="900"><button>+</button></div> </div>
+                            </div>
+                        </div>
+                        <h4 style="color: #61dafb; margin-top: 20px; margin-bottom: 10px; text-align: left;">Wykres Procesu Strojenia</h4>
+                        <div class="autotune-tuning-chart-wrapper"><canvas id="autotuneTuningChart"></canvas></div>
+                        <div class="main-method-tabs">
+                            <button class="method-tab active" data-method="zn-relay">📊 Z-N Relay</button>
+                            <button class="method-tab" data-method="ga-genetic">🧬 Algorytm Genetyczny</button>
+                            <button class="method-tab" data-method="pso-particle">🌀 PSO</button>
+                            <button class="method-tab" data-method="single-tests">🧪 Testy Dynamiczne</button>
+                        </div>
+                        <div class="method-content active" data-method="zn-relay">
+                            <div class="config-panel">
+                                <h3>🔬 Metoda Ziegler-Nichols z Relay</h3>
+                                <div class="config-grid">
+                                    <div class="param-group"><label>⏱️ Czas trwania proby:</label><input type="range" id="zn-trial-duration" min="10" max="120" value="30"><span id="zn-trial-duration-val" data-unit="s">30s</span></div>
+                                    <div class="param-group"><label>📐 Maks. amplituda:</label><input type="range" id="zn-max-amplitude" min="5" max="30" step="1" value="15"><span id="zn-max-amplitude-val" data-unit="°">15°</span></div>
+                                </div>
+                                <div class="tuning-controls"><button id="run-zn-test">🚀 Uruchom</button><span class="tuning-status">Status: Gotowy</span></div>
+                                <div class="results-panel" id="zn-results-panel">
+                                    <h4>Wyniki Z-N</h4>
+                                    <div class="results-grid">
+                                        <strong>Ku:</strong> <span id="zn-ku-result">---</span>
+                                        <strong>Tu:</strong> <span id="zn-tu-result">---</span>
+                                        <strong>Sugerowane Kp:</strong> <span id="zn-kp-suggest">---</span>
+                                        <strong>Sugerowane Kd:</strong> <span id="zn-kd-suggest">---</span>
+                                        <br>
+                                        <strong>Przeregulowanie:</strong> <span id="zn-overshoot">---</span>
+                                        <strong>Czas Narastania:</strong> <span id="zn-rise-time">---</span>
+                                        <strong>Czas Ustabilizowania:</strong> <span id="zn-settling-time">---</span>
+                                    </div>
+                                    <button id="apply-zn-results">✅ Zastosuj</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="method-content" data-method="ga-genetic">
+                            <div class="config-panel">
+                                <h3>🧬 Algorytm Genetyczny</h3>
+                                <h5 style="color: #61dafb; margin-bottom: 10px; text-align: left;">🔍 Przestrzen Przeszukiwania (Min/Max dla parametrow)</h5>
+                                <div class="search-space-grid">
+                                    <div class="search-space-param"><label>Kp Min</label><input type="number" id="ga-kp-min" value="0.0" step="0.1"><label>Kp Max</label><input type="number" id="ga-kp-max" value="200.0" step="0.1"></div>
+                                    <div class="search-space-param"><label>Ki Min</label><input type="number" id="ga-ki-min" value="0.0" step="0.01"><label>Ki Max</label><input type="number" id="ga-ki-max" value="1.0" step="0.01"></div>
+                                    <div class="search-space-param"><label>Kd Min</label><input type="number" id="ga-kd-min" value="0.0" step="0.01"><label>Kd Max</label><input type="number" id="ga-kd-max" value="10.0" step="0.01"></div>
+                                </div>
+                                <h5 style="color: #f7b731; margin-bottom: 10px; text-align: left;">⚖️ Funkcja Celu (Wagi)</h5>
+                                <div class="fitness-function-config">
+                                    <div class="fitness-weight-item"><label>Minimalizuj Blad (ITAE)</label><input type="range" id="ga-weight-itae" min="0" max="100" value="50"><span id="ga-weight-itae-val">50%</span></div>
+                                    <div class="fitness-weight-item"><label>Minimalizuj Przeregulowanie</label><input type="range" id="ga-weight-overshoot" min="0" max="100" value="30"><span id="ga-weight-overshoot-val">30%</span></div>
+                                    <div class="fitness-weight-item"><label>Minimalizuj Energie Sterowania</label><input type="range" id="ga-weight-control-effort" min="0" max="100" value="20"><span id="ga-weight-control-effort-val">20%</span></div>
+                                </div>
+                                <div class="config-grid" style="margin-top: 20px;">
+                                    <div class="param-group"><label>🏃 Liczba pokolen:</label><input type="range" id="ga-generations" min="5" max="100" value="20"><span id="ga-generations-val">20</span></div>
+                                    <div class="param-group"><label>👥 Rozmiar populacji:</label><input type="range" id="ga-population" min="8" max="50" value="20"><span id="ga-population-val">20</span></div>
+                                    <div class="param-group"><label>🔄 Mutacja (%):</label><input type="range" id="ga-mutation-rate" min="5" max="50" value="15"><span id="ga-mutation-rate-val" data-unit="%">15%</span></div>
+                                </div>
+                                <div class="config-section">
+                                    <label style="color: #f7b731;">Zaawansowane opcje:</label>
+                                    <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="ga-elitism" checked> Elityzm</label>
+                                    <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="ga-adaptive"> Adaptacyjne operatory</label>
+                                    <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="ga-convergence-check"> Sprawdzanie zbieznosci</label>
+                                </div>
+                                <div class="tuning-controls"><button id="run-ga-tune">🚀 Uruchom</button><button id="pause-ga-tune" disabled>⏸️ Pauza</button><button id="stop-ga-tune" disabled>⏹️ Stop</button></div>
+                                <div class="status-panel autotune-live-status" id="ga-status-panel">
+                                    <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+                                    <div class="status-info">
+                                        <div><strong>Pokolenie:</strong> <span id="ga-gen-current">0</span>/<span id="ga-gen-total">20</span></div>
+                                        <div><strong>Najlepszy wynik (Fitness):</strong> <span id="ga-best-fitness">---</span></div>
+                                        <div><strong>Aktualnie testowane Kp:</strong> <span id="ga-current-kp">---</span></div>
+                                        <div><strong>Aktualnie testowane Kd:</strong> <span id="ga-current-kd">---</span></div>
+                                        <div><strong>Szacowany czas:</strong> <span id="ga-time-remaining">---</span></div>
+                                    </div>
+                                </div>
+                                <div class="results-panel" id="ga-results-history-panel">
+                                    <h4>Historia Wynikow GA</h4>
+                                    <table class="autotune-results-table">
+                                        <thead><tr><th>Nr.</th><th>Kp</th><th>Ki</th><th>Kd</th><th>Fitness</th><th>Overshoot (%)</th><th>Rise Time (ms)</th><th>Akcje</th></tr></thead>
+                                        <tbody id="ga-results-table-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="method-content" data-method="pso-particle">
+                            <div class="config-panel">
+                                <h3>🌀 Optymalizacja Roju Czastek (PSO)</h3>
+                                <h5 style="color: #61dafb; margin-bottom: 10px; text-align: left;">🔍 Przestrzen Przeszukiwania (Min/Max dla parametrow)</h5>
+                                <div class="search-space-grid">
+                                    <div class="search-space-param"><label>Kp Min</label><input type="number" id="pso-kp-min" value="0.0" step="0.1"><label>Kp Max</label><input type="number" id="pso-kp-max" value="200.0" step="0.1"></div>
+                                    <div class="search-space-param"><label>Ki Min</label><input type="number" id="pso-ki-min" value="0.0" step="0.01"><label>Ki Max</label><input type="number" id="pso-ki-max" value="1.0" step="0.01"></div>
+                                    <div class="search-space-param"><label>Kd Min</label><input type="number" id="pso-kd-min" value="0.0" step="0.01"><label>Kd Max</label><input type="number" id="pso-kd-max" value="10.0" step="0.01"></div>
+                                </div>
+                                <h5 style="color: #f7b731; margin-bottom: 10px; text-align: left;">⚖️ Funkcja Celu (Wagi)</h5>
+                                <div class="fitness-function-config">
+                                    <div class="fitness-weight-item"><label>Minimalizuj Blad (ITAE)</label><input type="range" id="pso-weight-itae" min="0" max="100" value="50"><span id="pso-weight-itae-val">50%</span></div>
+                                    <div class="fitness-weight-item"><label>Minimalizuj Przeregulowanie</label><input type="range" id="pso-weight-overshoot" min="0" max="100" value="30"><span id="pso-weight-overshoot-val">30%</span></div>
+                                    <div class="fitness-weight-item"><label>Minimalizuj Energie Sterowania</label><input type="range" id="pso-weight-control-effort" min="0" max="100" value="20"><span id="pso-weight-control-effort-val">20%</span></div>
+                                </div>
+                                <div class="config-grid" style="margin-top: 20px;">
+                                    <div class="param-group"><label>🔄 Liczba iteracji:</label><input type="range" id="pso-iterations" min="20" max="200" value="50"><span id="pso-iterations-val">50</span></div>
+                                    <div class="param-group"><label>🌀 Liczba czastek:</label><input type="range" id="pso-particles" min="10" max="100" value="25"><span id="pso-particles-val">25</span></div>
+                                    <div class="param-group"><label>⚡ Wsp. inercji:</label><input type="range" id="pso-inertia" min="0.4" max="0.95" step="0.05" value="0.7"><span id="pso-inertia-val">0.7</span></div>
+                                </div>
+                                <div class="config-section">
+                                    <label style="color: #f7b731;">Zaawansowane opcje:</label>
+                                    <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="pso-adaptive-inertia" checked> Adaptacyjna inercja</label>
+                                    <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="pso-velocity-clamp"> Ograniczenie predkosci</label>
+                                    <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="pso-neighborhood"> Sasiedztwo lokalne</label>
+                                </div>
+                                <div class="tuning-controls"><button id="run-pso-tune">🚀 Uruchom</button><button id="pause-pso-tune" disabled>⏸️ Pauza</button><button id="stop-pso-tune" disabled>⏹️ Stop</button></div>
+                                <div class="status-panel autotune-live-status" id="pso-status-panel">
+                                    <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+                                    <div class="status-info">
+                                        <div><strong>Iteracja:</strong> <span id="pso-it-current">0</span>/<span id="pso-it-total">50</span></div>
+                                        <div><strong>Najlepszy wynik (Fitness):</strong> <span id="pso-best-fitness">---</span></div>
+                                        <div><strong>Aktualnie testowane Kp:</strong> <span id="pso-current-kp">---</span></div>
+                                        <div><strong>Aktualnie testowane Kd:</strong> <span id="pso-current-kd">---</span></div>
+                                        <div><strong>Szacowany czas:</strong> <span id="pso-time-remaining">---</span></div>
+                                    </div>
+                                </div>
+                                <div class="results-panel" id="pso-results-history-panel">
+                                    <h4>Historia Wynikow PSO</h4>
+                                    <table class="autotune-results-table">
+                                         <thead><tr><th>Nr.</th><th>Kp</th><th>Ki</th><th>Kd</th><th>Fitness</th><th>Overshoot (%)</th><th>Rise Time (ms)</th><th>Akcje</th></tr></thead>
+                                        <tbody id="pso-results-table-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="method-content" data-method="single-tests">
+                            <div class="config-panel">
+                                <h3>🧪 Testy Dynamiczne</h3>
+                                <p style="text-align: left; font-size: 0.9em; line-height: 1.4;">Uruchom pojedynczy test, aby zmierzyc metryki wydajnosci obecnej konfiguracji PID. Wyniki pojawia sie ponizej.</p>
+                                <button class="run-test-btn" data-test-type="step_response" style="width: 100%;">🚀 Uruchom test odpowiedzi na skok</button>
+                                <div id="test-results-panel" class="results-panel">
+                                    <h4>Wyniki ostatniego testu</h4>
+                                    <div id="test-metrics" class="results-grid">
+                                       <strong>Overshoot (%):</strong> <span id="test-overshoot">---</span>
+                                       <strong>Rise Time (ms):</strong> <span id="test-rise-time">---</span>
+                                       <strong>Settling Time (ms):</strong> <span id="test-settling-time">---</span>
+                                       <strong>ITA Error:</strong> <span id="test-itae">---</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="autotune-dashboard" class="autotune-dashboard">
+                            <h4>📊 Dashboard Optymalizacji</h4>
+                            <div class="dashboard-metrics">
+                                <div class="metric-item"><span class="metric-label">Metoda:</span><span id="dashboard-tuning-method" class="metric-value">---</span></div>
+                                <div class="metric-item"><span class="metric-label">Najlepszy wynik:</span><span id="dashboard-best-fitness" class="metric-value">---</span></div>
+                                <div class="metric-item"><span class="metric-label">Postep:</span><div class="progress-bar small"><div class="progress-fill" id="dashboard-progress-fill" style="width:0%"></div></div></div>
+                                <div class="metric-item"><span class="metric-label">Status:</span><span id="dashboard-status" class="metric-value">---</span></div>
+                                <div class="metric-item"><span class="metric-label">Pozostaly czas (szac.):</span><span id="dashboard-time-remaining" class="metric-value">---</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="button-group" style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
                 <button id="loadBtn">Wczytaj z Robota</button>
                 <button id="saveBtn">Zapisz na Robocie</button>
-            </div>
-        </div>
-
-        <div class="card" id="autotuning-card">
-            <h2>Centrum Dowodzenia Strojenia</h2>
-            <div class="autotune-config-common">
-                <h3>⚙️ Konfiguracja Strojenia (Wspolna)</h3>
-                <div class="config-section">
-                    <label>🎯 Petla PID do strojenia:</label>
-                    <select id="common-loop-selector">
-                        <option value="balance">Pętla Balansu (Kp, Kd)</option>
-                        <option value="speed">Pętla Predkosci (Kp, Ki, Kd)</option>
-                        <option value="position">Pętla Pozycji (Kp, Ki, Kd)</option>
-                        <option value="rotation">Pętla Obrotu (Kp, Kd)</option>
-                        <option value="heading">Pętla Kursu (Kp, Ki, Kd)</option>
-                    </select>
-                </div>
-                <div class="config-section">
-                    <label style="color: #f7b731;">🛡️ Ograniczenia Bezpieczenstwa (Max. Wartosci):</label>
-                    <div class="setting-container"> <label for="safetyMaxAngle">Max. Kat (°)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="safetyMaxAngle" min="5" max="45" step="1" value="20"><button>+</button></div> </div>
-                    <div class="setting-container"> <label for="safetyMaxSpeed">Max. Predkosc (imp/s)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="safetyMaxSpeed" min="100" max="4000" step="50" value="1500"><button>+</button></div> </div>
-                    <div class="setting-container"> <label for="safetyMaxPwm">Max. PWM</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="safetyMaxPwm" min="500" max="1023" step="10" value="900"><button>+</button></div> </div>
-                </div>
-            </div>
-            <h4 style="color: #61dafb; margin-top: 20px; margin-bottom: 10px; text-align: left;">Wykres Procesu Strojenia</h4>
-            <div class="autotune-tuning-chart-wrapper"><canvas id="autotuneTuningChart"></canvas></div>
-            <div class="main-method-tabs">
-                <button class="method-tab active" data-method="zn-relay">📊 Z-N Relay</button>
-                <button class="method-tab" data-method="ga-genetic">🧬 Algorytm Genetyczny</button>
-                <button class="method-tab" data-method="pso-particle">🌀 PSO</button>
-                <button class="method-tab" data-method="single-tests">🧪 Testy Dynamiczne</button>
-            </div>
-            <div class="method-content active" data-method="zn-relay">
-                <div class="config-panel">
-                    <h3>🔬 Metoda Ziegler-Nichols z Relay</h3>
-                    <div class="config-grid">
-                        <div class="param-group"><label>⏱️ Czas trwania proby:</label><input type="range" id="zn-trial-duration" min="10" max="120" value="30"><span id="zn-trial-duration-val" data-unit="s">30s</span></div>
-                        <div class="param-group"><label>📐 Maks. amplituda:</label><input type="range" id="zn-max-amplitude" min="5" max="30" step="1" value="15"><span id="zn-max-amplitude-val" data-unit="°">15°</span></div>
-                    </div>
-                    <div class="tuning-controls"><button id="run-zn-test">🚀 Uruchom</button><span class="tuning-status">Status: Gotowy</span></div>
-                    <div class="results-panel" id="zn-results-panel">
-                        <h4>Wyniki Z-N</h4>
-                        <div class="results-grid">
-                            <strong>Ku:</strong> <span id="zn-ku-result">---</span>
-                            <strong>Tu:</strong> <span id="zn-tu-result">---</span>
-                            <strong>Sugerowane Kp:</strong> <span id="zn-kp-suggest">---</span>
-                            <strong>Sugerowane Kd:</strong> <span id="zn-kd-suggest">---</span>
-                            <br>
-                            <strong>Przeregulowanie:</strong> <span id="zn-overshoot">---</span>
-                            <strong>Czas Narastania:</strong> <span id="zn-rise-time">---</span>
-                            <strong>Czas Ustabilizowania:</strong> <span id="zn-settling-time">---</span>
-                        </div>
-                        <button id="apply-zn-results">✅ Zastosuj</button>
-                    </div>
-                </div>
-            </div>
-            <div class="method-content" data-method="ga-genetic">
-                <div class="config-panel">
-                    <h3>🧬 Algorytm Genetyczny</h3>
-                    <h5 style="color: #61dafb; margin-bottom: 10px; text-align: left;">🔍 Przestrzen Przeszukiwania (Min/Max dla parametrow)</h5>
-                    <div class="search-space-grid">
-                        <div class="search-space-param"><label>Kp Min</label><input type="number" id="ga-kp-min" value="0.0" step="0.1"><label>Kp Max</label><input type="number" id="ga-kp-max" value="200.0" step="0.1"></div>
-                        <div class="search-space-param"><label>Ki Min</label><input type="number" id="ga-ki-min" value="0.0" step="0.01"><label>Ki Max</label><input type="number" id="ga-ki-max" value="1.0" step="0.01"></div>
-                        <div class="search-space-param"><label>Kd Min</label><input type="number" id="ga-kd-min" value="0.0" step="0.01"><label>Kd Max</label><input type="number" id="ga-kd-max" value="10.0" step="0.01"></div>
-                    </div>
-                    <h5 style="color: #f7b731; margin-bottom: 10px; text-align: left;">⚖️ Funkcja Celu (Wagi)</h5>
-                    <div class="fitness-function-config">
-                        <div class="fitness-weight-item"><label>Minimalizuj Blad (ITAE)</label><input type="range" id="ga-weight-itae" min="0" max="100" value="50"><span id="ga-weight-itae-val">50%</span></div>
-                        <div class="fitness-weight-item"><label>Minimalizuj Przeregulowanie</label><input type="range" id="ga-weight-overshoot" min="0" max="100" value="30"><span id="ga-weight-overshoot-val">30%</span></div>
-                        <div class="fitness-weight-item"><label>Minimalizuj Energie Sterowania</label><input type="range" id="ga-weight-control-effort" min="0" max="100" value="20"><span id="ga-weight-control-effort-val">20%</span></div>
-                    </div>
-                    <div class="config-grid" style="margin-top: 20px;">
-                        <div class="param-group"><label>🏃 Liczba pokolen:</label><input type="range" id="ga-generations" min="5" max="100" value="20"><span id="ga-generations-val">20</span></div>
-                        <div class="param-group"><label>👥 Rozmiar populacji:</label><input type="range" id="ga-population" min="8" max="50" value="20"><span id="ga-population-val">20</span></div>
-                        <div class="param-group"><label>🔄 Mutacja (%):</label><input type="range" id="ga-mutation-rate" min="5" max="50" value="15"><span id="ga-mutation-rate-val" data-unit="%">15%</span></div>
-                    </div>
-                    <div class="config-section">
-                        <label style="color: #f7b731;">Zaawansowane opcje:</label>
-                        <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="ga-elitism" checked> Elityzm</label>
-                        <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="ga-adaptive"> Adaptacyjne operatory</label>
-                        <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="ga-convergence-check"> Sprawdzanie zbieżności</label>
-                    </div>
-                    <div class="tuning-controls"><button id="run-ga-tune">🚀 Uruchom</button><button id="pause-ga-tune" disabled>⏸️ Pauza</button><button id="stop-ga-tune" disabled>⏹️ Stop</button></div>
-                    <div class="status-panel autotune-live-status" id="ga-status-panel">
-                        <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
-                        <div class="status-info">
-                            <div><strong>Pokolenie:</strong> <span id="ga-gen-current">0</span>/<span id="ga-gen-total">20</span></div>
-                            <div><strong>Najlepszy wynik (Fitness):</strong> <span id="ga-best-fitness">---</span></div>
-                            <div><strong>Aktualnie testowane Kp:</strong> <span id="ga-current-kp">---</span></div>
-                            <div><strong>Aktualnie testowane Kd:</strong> <span id="ga-current-kd">---</span></div>
-                            <div><strong>Szacowany czas:</strong> <span id="ga-time-remaining">---</span></div>
-                        </div>
-                    </div>
-                    <div class="results-panel" id="ga-results-history-panel">
-                        <h4>Historia Wynikow GA</h4>
-                        <table class="autotune-results-table">
-                            <thead><tr><th>Nr.</th><th>Kp</th><th>Ki</th><th>Kd</th><th>Fitness</th><th>Overshoot (%)</th><th>Rise Time (ms)</th><th>Akcje</th></tr></thead>
-                            <tbody id="ga-results-table-body"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            <div class="method-content" data-method="pso-particle">
-                <div class="config-panel">
-                    <h3>🌀 Optymalizacja Roju Czastek (PSO)</h3>
-                    <h5 style="color: #61dafb; margin-bottom: 10px; text-align: left;">🔍 Przestrzen Przeszukiwania (Min/Max dla parametrow)</h5>
-                    <div class="search-space-grid">
-                        <div class="search-space-param"><label>Kp Min</label><input type="number" id="pso-kp-min" value="0.0" step="0.1"><label>Kp Max</label><input type="number" id="pso-kp-max" value="200.0" step="0.1"></div>
-                        <div class="search-space-param"><label>Ki Min</label><input type="number" id="pso-ki-min" value="0.0" step="0.01"><label>Ki Max</label><input type="number" id="pso-ki-max" value="1.0" step="0.01"></div>
-                        <div class="search-space-param"><label>Kd Min</label><input type="number" id="pso-kd-min" value="0.0" step="0.01"><label>Kd Max</label><input type="number" id="pso-kd-max" value="10.0" step="0.01"></div>
-                    </div>
-                    <h5 style="color: #f7b731; margin-bottom: 10px; text-align: left;">⚖️ Funkcja Celu (Wagi)</h5>
-                    <div class="fitness-function-config">
-                        <div class="fitness-weight-item"><label>Minimalizuj Blad (ITAE)</label><input type="range" id="pso-weight-itae" min="0" max="100" value="50"><span id="pso-weight-itae-val">50%</span></div>
-                        <div class="fitness-weight-item"><label>Minimalizuj Przeregulowanie</label><input type="range" id="pso-weight-overshoot" min="0" max="100" value="30"><span id="pso-weight-overshoot-val">30%</span></div>
-                        <div class="fitness-weight-item"><label>Minimalizuj Energie Sterowania</label><input type="range" id="pso-weight-control-effort" min="0" max="100" value="20"><span id="pso-weight-control-effort-val">20%</span></div>
-                    </div>
-                    <div class="config-grid" style="margin-top: 20px;">
-                        <div class="param-group"><label>🔄 Liczba iteracji:</label><input type="range" id="pso-iterations" min="20" max="200" value="50"><span id="pso-iterations-val">50</span></div>
-                        <div class="param-group"><label>🌀 Liczba czastek:</label><input type="range" id="pso-particles" min="10" max="100" value="25"><span id="pso-particles-val">25</span></div>
-                        <div class="param-group"><label>⚡ Wsp. inercji:</label><input type="range" id="pso-inertia" min="0.4" max="0.95" step="0.05" value="0.7"><span id="pso-inertia-val">0.7</span></div>
-                    </div>
-                    <div class="config-section">
-                        <label style="color: #f7b731;">Zaawansowane opcje:</label>
-                        <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="pso-adaptive-inertia" checked> Adaptacyjna inercja</label>
-                        <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="pso-velocity-clamp"> Ograniczenie predkosci</label>
-                        <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="pso-neighborhood"> Sasiedztwo lokalne</label>
-                    </div>
-                    <div class="tuning-controls"><button id="run-pso-tune">🚀 Uruchom</button><button id="pause-pso-tune" disabled>⏸️ Pauza</button><button id="stop-pso-tune" disabled>⏹️ Stop</button></div>
-                    <div class="status-panel autotune-live-status" id="pso-status-panel">
-                        <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
-                        <div class="status-info">
-                            <div><strong>Iteracja:</strong> <span id="pso-it-current">0</span>/<span id="pso-it-total">50</span></div>
-                            <div><strong>Najlepszy wynik (Fitness):</strong> <span id="pso-best-fitness">---</span></div>
-                            <div><strong>Aktualnie testowane Kp:</strong> <span id="pso-current-kp">---</span></div>
-                            <div><strong>Aktualnie testowane Kd:</strong> <span id="pso-current-kd">---</span></div>
-                            <div><strong>Szacowany czas:</strong> <span id="pso-time-remaining">---</span></div>
-                        </div>
-                    </div>
-                    <div class="results-panel" id="pso-results-history-panel">
-                        <h4>Historia Wynikow PSO</h4>
-                        <table class="autotune-results-table">
-                             <thead><tr><th>Nr.</th><th>Kp</th><th>Ki</th><th>Kd</th><th>Fitness</th><th>Overshoot (%)</th><th>Rise Time (ms)</th><th>Akcje</th></tr></thead>
-                            <tbody id="pso-results-table-body"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            <div class="method-content" data-method="single-tests">
-                <div class="config-panel">
-                    <h3>🧪 Testy Dynamiczne</h3>
-                    <p style="text-align: left; font-size: 0.9em; line-height: 1.4;">Uruchom pojedynczy test, aby zmierzyć metryki wydajności obecnej konfiguracji PID. Wyniki pojawią się poniżej.</p>
-                    <button class="run-test-btn" data-test-type="step_response" style="width: 100%;">🚀 Uruchom test odpowiedzi na skok</button>
-                    <div id="test-results-panel" class="results-panel">
-                        <h4>Wyniki ostatniego testu</h4>
-                        <div id="test-metrics" class="results-grid">
-                           <strong>Overshoot (%):</strong> <span id="test-overshoot">---</span>
-                           <strong>Rise Time (ms):</strong> <span id="test-rise-time">---</span>
-                           <strong>Settling Time (ms):</strong> <span id="test-settling-time">---</span>
-                           <strong>ITA Error:</strong> <span id="test-itae">---</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div id="autotune-dashboard" class="autotune-dashboard">
-                <h4>📊 Dashboard Optymalizacji</h4>
-                <div class="dashboard-metrics">
-                    <div class="metric-item"><span class="metric-label">Metoda:</span><span id="dashboard-tuning-method" class="metric-value">---</span></div>
-                    <div class="metric-item"><span class="metric-label">Najlepszy wynik:</span><span id="dashboard-best-fitness" class="metric-value">---</span></div>
-                    <div class="metric-item"><span class="metric-label">Postep:</span><div class="progress-bar small"><div class="progress-fill" id="dashboard-progress-fill" style="width:0%"></div></div></div>
-                    <div class="metric-item"><span class="metric-label">Status:</span><span id="dashboard-status" class="metric-value">---</span></div>
-                    <div class="metric-item"><span class="metric-label">Pozostaly czas (szac.):</span><span id="dashboard-time-remaining" class="metric-value">---</span></div>
-                </div>
             </div>
         </div>
 
@@ -680,6 +726,16 @@
             </div>
         </div>
     </div>
+    <div id="mapping-wizard-modal" class="modal-backdrop">
+        <div class="modal-content">
+            <h2>Kreator Mapowania Osi 3D</h2>
+            <p id="wizard-instruction-text" style="font-size: 1.2em; font-weight: bold; color: #a2f279;">Przygotuj się...</p>
+            <div id="wizard-progress" style="display: flex; justify-content: center; gap: 10px; margin: 20px 0;">
+            </div>
+            <p>Gdy wykonasz ruch, przytrzymaj pozycje przez sekunde, a nastepnie wroc do pionu.</p>
+            <button id="cancel-wizard-btn" style="background-color: #ff6347; margin-top: 15px;">Anuluj</button>
+        </div>
+    </div>
 
 <script>
     const AppState = { 
@@ -689,6 +745,181 @@
     let currentSequenceStep = 0;
     const MAX_SEQUENCE_STEPS = 15;
     
+    // ======================================================
+    // === KREATOR MAPOWANIA OSI 3D - POCZATEK BLOKU KODU ===
+    // ======================================================
+    
+    // --- Konfiguracja i Stan Kreatora ---
+    const WIZARD_ACTIVATION_THRESHOLD = 35.0; // W stopniach, prog aktywacji kroku
+    const WIZARD_RETURN_THRESHOLD = 5.0;     // W stopniach, prog powrotu do pionu
+    
+    let axisMapping = {
+        x: { source: 'pitch', sign: 1 },
+        y: { source: 'yaw', sign: 1 },
+        z: { source: 'roll', sign: -1 }
+    };
+    
+    const mappingWizard = {
+        isActive: false,
+        currentStep: 0,
+        waitingForReturn: false,
+        startOrientation: null,
+        detectedAxes: {},
+        steps: [
+            { id: 'forward',  instruction: "1/4: POCHYL ROBOTA DO PRZODU o >40°" },
+            { id: 'right',    instruction: "2/4: PRZECHYL ROBOTA W PRAWO o >40°" },
+            { id: 'cw',       instruction: "3/4: OBROC ROBOTA W PRAWO (zgodnie z zegarem)" },
+            { id: 'validate', instruction: "4/4: Weryfikacja... POCHYL ROBOTA DO TYLU" } // Krok walidacyjny
+        ]
+    };
+    
+    // --- Funkcje Sterujace Kreatorem i UI ---
+    
+    function setupAxisRemappingControls() {
+        const controls = document.querySelectorAll('.axis-source, .axis-sign');
+        
+        function updateMappingFromUI() {
+            axisMapping.x.source = document.getElementById('map-rot-x-source').value;
+            axisMapping.x.sign = parseInt(document.getElementById('map-rot-x-sign').value);
+            axisMapping.y.source = document.getElementById('map-rot-y-source').value;
+            axisMapping.y.sign = parseInt(document.getElementById('map-rot-y-sign').value);
+            axisMapping.z.source = document.getElementById('map-rot-z-source').value;
+            axisMapping.z.sign = parseInt(document.getElementById('map-rot-z-sign').value);
+            addLogMessage('[UI] Recznie zaktualizowano mapowanie osi modelu 3D.', 'info');
+        }
+    
+        controls.forEach(control => control.addEventListener('change', updateMappingFromUI));
+        updateMappingFromUI(); // Inicjalizacja na starcie
+    }
+    
+    function startMappingWizard() {
+        if (!AppState.isConnected) {
+            addLogMessage('[UI] Polacz z robotem przed rozpoczeciem mapowania.', 'warn');
+            return;
+        }
+        Object.assign(mappingWizard, {
+            isActive: true,
+            currentStep: 0,
+            waitingForReturn: false,
+            startOrientation: { ...window.telemetryData },
+            detectedAxes: {}
+        });
+        document.getElementById('mapping-wizard-modal').style.display = 'flex';
+        runWizardStep();
+    }
+    
+    function cancelMappingWizard() {
+        mappingWizard.isActive = false;
+        document.getElementById('mapping-wizard-modal').style.display = 'none';
+        addLogMessage('[UI] Kreator mapowania anulowany.', 'info');
+    }
+    
+    function runWizardStep() {
+        if (!mappingWizard.isActive || mappingWizard.currentStep >= mappingWizard.steps.length) {
+            finalizeMapping();
+            return;
+        }
+    
+        const step = mappingWizard.steps[mappingWizard.currentStep];
+        document.getElementById('wizard-instruction-text').textContent = step.instruction;
+        
+        mappingWizard.startOrientation = { 
+            pitch: window.telemetryData.pitch || 0,
+            roll: window.telemetryData.roll || 0,
+            yaw: window.telemetryData.yaw || 0,
+         };
+        mappingWizard.waitingForReturn = false;
+    
+        const progressDiv = document.getElementById('wizard-progress');
+        progressDiv.innerHTML = '';
+        mappingWizard.steps.forEach((s, index) => {
+            const dot = document.createElement('span');
+            dot.style.cssText = `display:block; width:15px; height:15px; border-radius:50%; background-color:${index < mappingWizard.currentStep ? '#a2f279' : (index === mappingWizard.currentStep ? '#f7b731' : '#4a4f58')};`;
+            progressDiv.appendChild(dot);
+        });
+    }
+    
+    // --- Glowna Logika Detekcji i Finalizacji ---
+    
+    function calculateAngleDiff(a, b) {
+        let diff = a - b;
+        while (diff <= -180) diff += 360;
+        while (diff > 180) diff -= 360;
+        return diff;
+    }
+    
+    function processWizardTelemetry(data) {
+        if (!mappingWizard.isActive) return;
+    
+        const start = mappingWizard.startOrientation;
+        if (!start) return;
+    
+        const deltaPitch = Math.abs(data.pitch - start.pitch);
+        const deltaRoll = Math.abs(data.roll - start.roll);
+        const deltaYaw = Math.abs(calculateAngleDiff(data.yaw, start.yaw));
+    
+        if (mappingWizard.waitingForReturn) {
+            if (deltaPitch < WIZARD_RETURN_THRESHOLD && deltaRoll < WIZARD_RETURN_THRESHOLD && deltaYaw < WIZARD_RETURN_THRESHOLD) {
+                addLogMessage(`[Wizard] Krok ${mappingWizard.currentStep + 1} zakonczony.`, 'success');
+                mappingWizard.currentStep++;
+                runWizardStep();
+            }
+        } else {
+            const values = { pitch: data.pitch - start.pitch, roll: data.roll - start.roll, yaw: calculateAngleDiff(data.yaw, start.yaw) };
+            const deltas = { pitch: deltaPitch, roll: deltaRoll, yaw: deltaYaw };
+    
+            if (Math.max(deltaPitch, deltaRoll, deltaYaw) > WIZARD_ACTIVATION_THRESHOLD) {
+                let dominantAxis = Object.keys(deltas).reduce((a, b) => deltas[a] > deltas[b] ? a : b);
+                let sign = Math.sign(values[dominantAxis]) || 1;
+                
+                const step = mappingWizard.steps[mappingWizard.currentStep];
+                mappingWizard.detectedAxes[step.id] = { axis: dominantAxis, sign: sign };
+                
+                addLogMessage(`[Wizard] Wykryto ruch: ${step.id} -> Os: ${dominantAxis}, Znak: ${sign}`, 'info');
+                
+                mappingWizard.waitingForReturn = true;
+                document.getElementById('wizard-instruction-text').textContent = "Swietnie! Teraz wroc do pozycji wyjsciowej.";
+            }
+        }
+    }
+    
+    function finalizeMapping() {
+        mappingWizard.isActive = false;
+        document.getElementById('mapping-wizard-modal').style.display = 'none';
+    
+        try {
+            const detected = mappingWizard.detectedAxes;
+            
+            // Sprawdzenie, czy krok walidacyjny jest zgodny z krokiem 'forward'
+            if (detected.validate.axis === detected.forward.axis && detected.validate.sign !== detected.forward.sign) {
+                addLogMessage('[Wizard] Walidacja pomyslna!', 'success');
+            } else {
+                addLogMessage('[Wizard] Blad walidacji! Sprawdz, czy ruchy zostaly wykonane poprawnie.', 'error');
+                return; // Przerwij, jesli walidacja sie nie powiodla
+            }
+    
+            // Ustaw mapowanie dla osi modelu 3D (X=pitch, Y=yaw, Z=roll)
+            document.getElementById('map-rot-x-source').value = detected.forward.axis;
+            document.getElementById('map-rot-x-sign').value = detected.forward.sign;
+    
+            document.getElementById('map-rot-y-source').value = detected.cw.axis;
+            document.getElementById('map-rot-y-sign').value = detected.cw.sign;
+    
+            document.getElementById('map-rot-z-source').value = detected.right.axis;
+            document.getElementById('map-rot-z-sign').value = detected.right.sign;
+            
+            document.querySelectorAll('.axis-source, .axis-sign').forEach(el => el.dispatchEvent(new Event('change')));
+    
+            addLogMessage('[UI] Kreator mapowania zakonczony! Osie modelu 3D zostaly skonfigurowane.', 'success');
+        } catch (e) {
+            addLogMessage('[UI] Blad podczas finalizacji mapowania. Upewnij sie, ze wszystkie kroki zostaly wykonane.', 'error');
+        }
+    }
+    
+    // ======================================================
+    // === KREATOR MAPOWANIA OSI 3D - KONIEC BLOKU KODU ===
+    // ======================================================
+
     const parameterMapping = { 'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b', 'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 'balanceIntegralLimitInput': 'balance_pid_integral_limit', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s', 'speedFilterAlphaInput': 'speed_pid_filter_alpha', 'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedIntegralLimitInput': 'speed_pid_integral_limit', 'speedDeadbandInput': 'speed_pid_deadband', 'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p', 'positionFilterAlphaInput': 'position_pid_filter_alpha', 'maxTargetSpeedInput': 'max_target_speed_from_pos_pid', 'positionIntegralLimitInput': 'position_pid_integral_limit', 'positionDeadbandInput': 'position_pid_deadband', 'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r', 'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h', 'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd' };
     
     let bleDevice, rxCharacteristic, txCharacteristic;
@@ -714,9 +945,9 @@
     let isCalibrationModalShown = false;
     
     let pitchHistory = [], speedHistory = [];
-    const HISTORY_LENGTH = 600; // Liczba próbek (np. przy 10Hz to 60s)
+    const HISTORY_LENGTH = 600; 
     let lastTelemetryUpdateTime = 0;
-    const TELEMETRY_UPDATE_INTERVAL = 1000; // ms
+    const TELEMETRY_UPDATE_INTERVAL = 1000; 
 
     document.addEventListener('DOMContentLoaded', () => {
         initJoystick(); 
@@ -724,7 +955,6 @@
         setupSignalChartControls();
         setupSignalAnalyzerControls();
         populatePresetSelect();
-        populateDiffSelects();
         setupNumericInputs(); 
         setupEventListeners();
         setupManualTuneButtons(); 
@@ -741,6 +971,7 @@
         setTuningUiLock(false, '');
         initAutotuneTuningChart();
         setupAutotuningTabs();
+        setupAxisRemappingControls();
     });
 
     const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
@@ -793,6 +1024,9 @@
                 updateTelemetryUI(data);
                 updateChart(data);
                 updateActualPath(data);
+                if (mappingWizard.isActive) {
+                    processWizardTelemetry(data);
+                }
                 if (AppState.isSequenceRunning) { checkAndExecuteNextSequenceStep(AppState.lastKnownRobotState); }
                 break;
             case 'full_config':
@@ -843,6 +1077,8 @@
             speedHistory.push(speed);
             if (speedHistory.length > HISTORY_LENGTH) speedHistory.shift();
         }
+        if (data.encoder_left !== undefined) { currentEncoderLeft = data.encoder_left; }
+        if (data.encoder_right !== undefined) { currentEncoderRight = data.encoder_right; }
         if (Date.now() - lastTelemetryUpdateTime > TELEMETRY_UPDATE_INTERVAL) {
             if (pitchHistory.length > 0) {
                 const minPitch = Math.min(...pitchHistory);
@@ -879,7 +1115,6 @@
         const emergencyBanner = document.getElementById('emergency-banner'); if (emergencyBanner) emergencyBanner.style.display = data.states && data.states.emergency_stop ? 'block' : 'none';
     }
 
-    // ANALIZATOR SYGNAŁÓW
     let signalAnalyzerChart; let isChartPaused = false; let cursorA = null, cursorB = null;
     function initSignalAnalyzerChart() {
         const ctx = document.getElementById('signalAnalyzerChart').getContext('2d');
@@ -949,7 +1184,6 @@
     function exportChartDataToCsv() { const data = signalAnalyzerChart.data; let csvContent = "data:text/csv;charset=utf-8,"; let headers = ['Time']; data.datasets.forEach(ds => headers.push(ds.label)); csvContent += headers.join(',') + '\n'; for (let i = 0; i < data.labels.length; i++) { let row = [data.labels[i]]; data.datasets.forEach(ds => { const value = ds.data[i] !== null ? ds.data[i].toFixed(4) : ''; row.push(value); }); csvContent += row.join(',') + '\n'; } const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", "telemetry_data.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link); addLogMessage('[UI] Dane wykresu wyeksportowane do CSV.', 'info'); }
     function exportChartToPng() { const link = document.createElement('a'); link.download = 'telemetry_chart.png'; link.href = signalAnalyzerChart.toBase64Image(); link.click(); addLogMessage('[UI] Wykres wyeksportowany do PNG.', 'info'); }
 
-    // KONFIGURACJA (SNAPSHOT & DIFF)
     function saveCurrentAsPreset() {
         const presetName = prompt("Podaj nazwe dla nowego presetu:", "");
         if (presetName && presetName.trim() !== "") {
@@ -962,7 +1196,7 @@
             presetData['speedModeSwitch'] = document.getElementById('speedModeSwitch').checked;
             localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData));
             addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success');
-            populatePresetSelect(); populateDiffSelects();
+            populatePresetSelect();
         }
     }
     async function applySelectedPreset() {
@@ -980,40 +1214,8 @@
         }
     }
     function populatePresetSelect() { const select = document.getElementById('pidPresetSelect'); select.innerHTML = ''; for (const [index, preset] of Object.entries(builtInPresetsData)) { const option = document.createElement('option'); option.value = index; option.textContent = preset.name; select.appendChild(option); } for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key.startsWith(CUSTOM_PRESET_PREFIX)) { const presetName = key.substring(CUSTOM_PRESET_PREFIX.length); const option = document.createElement('option'); option.value = key; option.textContent = `Wlasny: ${presetName}`; select.appendChild(option); } } }
-    function deleteSelectedPreset() { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; if (!selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { addLogMessage('[UI] Nie mozna usunac wbudowanego presetu.', 'warn'); return; } if (confirm(`Czy na pewno chcesz usunac preset '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'?`)) { localStorage.removeItem(selectedValue); addLogMessage(`[UI] Usunieto preset.`, 'info'); populatePresetSelect(); populateDiffSelects(); } }
-    function populateDiffSelects() {
-        const selectA = document.getElementById('diffPresetSelectA'); const selectB = document.getElementById('diffPresetSelectB');
-        selectA.innerHTML = '<option value="">-- Wybierz Snapshot A --</option>'; selectB.innerHTML = '<option value="">-- Wybierz Snapshot B --</option>';
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i); if (key.startsWith(CUSTOM_PRESET_PREFIX)) {
-                const presetName = key.substring(CUSTOM_PRESET_PREFIX.length);
-                const optionA = document.createElement('option'); optionA.value = key; optionA.textContent = presetName; selectA.appendChild(optionA);
-                const optionB = document.createElement('option'); optionB.value = key; optionB.textContent = presetName; selectB.appendChild(optionB);
-            }
-        }
-        const currentConfigOptionA = document.createElement('option'); currentConfigOptionA.value = 'current'; currentConfigOptionA.textContent = 'Aktualna Konfiguracja'; selectA.appendChild(currentConfigOptionA);
-        const currentConfigOptionB = document.createElement('option'); currentConfigOptionB.value = 'current'; currentConfigOptionB.textContent = 'Aktualna Konfiguracja'; selectB.appendChild(currentConfigOptionB);
-    }
-    function getConfigurationFromSource(sourceValue) {
-        if (sourceValue === 'current') { const currentConfig = {}; for (const [inputId, snakeKey] of Object.entries(parameterMapping)) { const input = document.getElementById(inputId); if (input) { currentConfig[inputId] = parseFloat(input.value); } } currentConfig['balanceSwitch'] = document.getElementById('balanceSwitch').checked; currentConfig['holdPositionSwitch'] = document.getElementById('holdPositionSwitch').checked; currentConfig['speedModeSwitch'] = document.getElementById('speedModeSwitch').checked; return currentConfig; } 
-        else if (sourceValue.startsWith(CUSTOM_PRESET_PREFIX)) { return JSON.parse(localStorage.getItem(sourceValue)); } return null;
-    }
-    function comparePresets() {
-        const configA = getConfigurationFromSource(document.getElementById('diffPresetSelectA').value); const configB = getConfigurationFromSource(document.getElementById('diffPresetSelectB').value);
-        const diffResultsDiv = document.getElementById('diffResults'); diffResultsDiv.innerHTML = ''; diffResultsDiv.style.display = 'block';
-        if (!configA || !configB) { diffResultsDiv.textContent = 'Wybierz dwa snapshoty do porównania.'; return; }
-        let diffHtml = ''; const allKeys = new Set([...Object.keys(configA), ...Object.keys(configB)]);
-        allKeys.forEach(key => {
-            const valA = configA[key], valB = configB[key];
-            if (valA === undefined && valB !== undefined) { diffHtml += `<div class="diff-added">+ ${key}: ${valB}</div>`; } 
-            else if (valA !== undefined && valB === undefined) { diffHtml += `<div class="diff-removed">- ${key}: ${valA}</div>`; } 
-            else if (valA !== undefined && valB !== undefined && valA !== valB) { diffHtml += `<div class="diff-changed">~ ${key}: ${valA} &rarr; ${valB}</div>`; }
-        });
-        if (diffHtml === '') diffHtml = 'Brak roznic miedzy wybranymi konfiguracjami.';
-        diffResultsDiv.innerHTML = diffHtml; addLogMessage('[UI] Wykonano porównanie konfiguracji.', 'info');
-    }
+    function deleteSelectedPreset() { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; if (!selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { addLogMessage('[UI] Nie mozna usunac wbudowanego presetu.', 'warn'); return; } if (confirm(`Czy na pewno chcesz usunac preset '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'?`)) { localStorage.removeItem(selectedValue); addLogMessage(`[UI] Usunieto preset.`, 'info'); populatePresetSelect(); } }
 
-    // STEROWANIE AUTONOMICZNE
     function setupSequenceControls() { document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep); document.getElementById('run-sequence-btn').addEventListener('click', runSequence); document.getElementById('stop-sequence-btn').addEventListener('click', stopSequenceExecution); document.getElementById('clear-sequence-btn').addEventListener('click', clearSequence); }
     function addSequenceStep() {
         const list = document.getElementById('sequence-list'); if (list.children.length >= MAX_SEQUENCE_STEPS) { addLogMessage(`[UI] Osiagnieto maksymalna liczbe krokow (${MAX_SEQUENCE_STEPS}).`, 'warn'); return; }
@@ -1059,7 +1261,6 @@
     function resetPathVisualization() { robotPathX = pathCanvas.width / 2; robotPathY = pathCanvas.height / 2; robotPathHeading = 0; plannedPath = [{x: robotPathX, y: robotPathY, heading: robotPathHeading}]; actualPath = [{x: robotPathX, y: robotPathY, heading: robotPathHeading}]; document.getElementById('sequenceReportPanel').style.display = 'none'; drawPathVisualization(); }
     function showSequenceReport() { document.getElementById('sequence-report-panel').style.display = 'block'; document.getElementById('avgHeadingError').textContent = 'X.X °'; document.getElementById('maxHeadingError').textContent = 'Y.Y °'; document.getElementById('totalDistanceCovered').textContent = 'Z.Z cm'; }
 
-    // CENTRUM DOWODZENIA STROJENIA
     let autotuneTuningChart; let autotuneChartData = { labels: [], datasets: [] };
     function initAutotuneTuningChart() {
         const ctx = document.getElementById('autotuneTuningChart').getContext('2d');
@@ -1181,7 +1382,7 @@
         setTuningUiLock(false, ''); addLogMessage(`[UI] Otrzymano wyniki strojenia dla ${method}.`, 'success');
     }
     function addResultToTable(tableBody, data) {
-        const row = tableBody.insertRow(0); // Insert at the top
+        const row = tableBody.insertRow(0); 
         row.insertCell().textContent = tableBody.rows.length;
         row.insertCell().textContent = (data.kp !== undefined ? data.kp.toFixed(4) : '---');
         row.insertCell().textContent = (data.ki !== undefined ? data.ki.toFixed(4) : '---');
@@ -1191,13 +1392,12 @@
         row.insertCell().textContent = (data.rise_time !== undefined ? data.rise_time.toFixed(2) : '---');
         const actionsCell = row.insertCell(); const applyBtn = document.createElement('button');
         applyBtn.textContent = 'Zastosuj'; applyBtn.classList.add('test-btn');
-        applyBtn.addEventListener('click', () => { /* Logic to apply params based on selected loop */ addLogMessage('[UI] Zastosowano parametry z historii strojenia.', 'info'); });
+        applyBtn.addEventListener('click', () => { addLogMessage('[UI] Zastosowano parametry z historii strojenia.', 'info'); });
         actionsCell.appendChild(applyBtn);
     }
     function runDynamicTest(testType) { if (!checkTuningPrerequisites()) return; addLogMessage(`[Test] Uruchamianie testu: ${testType}`, 'info'); sendBleMessage({ type: 'run_dynamic_test', test_type: testType }); setTuningUiLock(true, 'single-tests'); }
     function handleDynamicTestResult(data) { setTuningUiLock(false, ''); document.getElementById('test-results-panel').style.display = 'block'; document.getElementById('test-overshoot').textContent = (data.overshoot !== undefined ? data.overshoot.toFixed(2) + '%' : '---'); document.getElementById('test-rise-time').textContent = (data.rise_time !== undefined ? data.rise_time.toFixed(2) + 'ms' : '---'); document.getElementById('test-settling-time').textContent = (data.settling_time !== undefined ? data.settling_time.toFixed(2) + 'ms' : '---'); document.getElementById('test-itae').textContent = (data.itae !== undefined ? data.itae.toFixed(4) : '---'); }
 
-    // POZOSTAŁE FUNKCJE
     function initJoystick() { const wrapper = document.getElementById('joystickWrapper'); const size = wrapper.clientWidth; const joystickCanvas = document.getElementById('joystickCanvas'); const joystickCtx = joystickCanvas.getContext('2d'); joystickCanvas.width = size; joystickCanvas.height = size; joystickCenter = { x: size / 2, y: size / 2 }; joystickRadius = size / 2 * 0.75; knobRadius = size / 2 * 0.25; drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y); }
     function drawJoystick(ctx, x, y) { ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); ctx.beginPath(); ctx.arc(joystickCenter.x, joystickCenter.y, joystickRadius, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.fill(); ctx.beginPath(); ctx.arc(x, y, knobRadius, 0, 2 * Math.PI); ctx.fillStyle = '#61dafb'; ctx.fill(); }
     function handleJoystickStart(event) { event.preventDefault(); isDragging = true; }
@@ -1225,8 +1425,9 @@
         document.getElementById('calibrateMpuBtn')?.addEventListener('click', showCalibrationModal); 
         document.getElementById('calibrateZeroPointBtn')?.addEventListener('click', () => { if (confirm("Upewnij sie, ze robot stoi na idealnie plaskiej powierzchni. Robot bedzie balansowal przez 10 sekund w celu znalezienia dokladnego punktu rownowagi. Kontynuowac?")) { sendBleMessage({ type: 'calibrate_zero_point' }); } }); 
         document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset); 
-        document.getElementById('comparePresetsBtn').addEventListener('click', comparePresets);
         document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container') || icon.closest('.control-row'); if(!container) return; const helpText = container.nextElementSibling.classList.contains('help-text') ? container.nextElementSibling : container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); }); 
+        document.getElementById('startMappingWizardBtn').addEventListener('click', startMappingWizard);
+        document.getElementById('cancel-wizard-btn').addEventListener('click', cancelMappingWizard);
     }
     function setupManualTuneButtons() { document.querySelectorAll('.manual-tune-row').forEach(row => { const motor = row.dataset.motor; const direction = row.dataset.direction; const input = row.querySelector('.tune-input'); const testBtn = row.querySelector('.test-btn'); const stopBtn = row.querySelector('.stop-btn'); const autoBtn = row.querySelector('.auto-btn'); testBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: parseInt(input.value) }); }); stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); }); autoBtn.addEventListener('click', (e) => { if (confirm("UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?")) { const startValue = parseInt(document.getElementById('pwmTuneStartInput').value); sendBleMessage({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue }); e.target.disabled = true; e.target.textContent = 'Szukanie...'; addLogMessage(`[UI] Rozpoczynam auto-strojenie dla ${motor} ${direction}...`, 'info'); } }); }); document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); }); }
     function setupGamepadMappingModal() { document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; }); document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; }); }
@@ -1244,8 +1445,62 @@
     function createCheckerTexture(squareSizeCm = 20, colorA = '#C8C8C8', colorB = '#787878') { const size = 256; const squares = 2; const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size; const ctx = canvas.getContext('2d'); const s = size / squares; for (let y = 0; y < squares; y++) { for (let x = 0; x < squares; x++) { ctx.fillStyle = ((x + y) % 2 === 0) ? colorA : colorB; ctx.fillRect(x * s, y * s, s, s); } } const tex = new THREE.CanvasTexture(canvas); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 8; tex.encoding = THREE.sRGBEncoding; return tex; }
     function createSkyTexture() { const width = 1024, height = 512; const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); const grad = ctx.createLinearGradient(0, 0, 0, height); grad.addColorStop(0, '#87CEEB'); grad.addColorStop(1, '#E6F2FA'); ctx.fillStyle = grad; ctx.fillRect(0, 0, width, height); ctx.globalAlpha = 0.15; ctx.fillStyle = '#FFFFFF'; for (let i = 0; i < 12; i++) { const cx = Math.random() * width, cy = Math.random() * height * 0.6, rw = 120 + Math.random() * 180, rh = 30 + Math.random() * 40; ctx.beginPath(); ctx.ellipse(cx, cy, rw, rh, 0, 0, Math.PI * 2); ctx.fill(); } const tex = new THREE.CanvasTexture(canvas); tex.encoding = THREE.sRGBEncoding; return tex; }
     function setupControls3D() { document.getElementById('reset3dViewBtn').addEventListener('click', () => { camera3D.position.set(28, 22, 48); controls3D.target.set(0, 8, 0); controls3D.update(); }); document.getElementById('toggle3dAnimationBtn').addEventListener('click', () => isAnimation3DEnabled = !isAnimation3DEnabled); document.getElementById('toggle3dMovementBtn').addEventListener('click', () => { isMovement3DEnabled = !isMovement3DEnabled; if(!isMovement3DEnabled) { lastEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2; } }); }
-    function animate3D() { requestAnimationFrame(animate3D); if (isAnimation3DEnabled && robotPivot) { const pitch = window.telemetryData?.pitch || 0; const roll = window.telemetryData?.roll || 0; const yaw = window.telemetryData?.yaw || 0; const trimAngle = parseFloat(document.getElementById('trimValueDisplay').textContent) || 0.0; const totalPitchRad = (pitch + trimAngle) * Math.PI / 180; const rollRad = roll * Math.PI / 180; const yawRad = yaw * Math.PI / 180; robotPivot.rotation.set(totalPitchRad, yawRad, -rollRad, 'YXZ'); const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820; const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI; const wheelRotationR = (currentEncoderRight / ppr) * 2 * Math.PI; if (leftWheel) leftWheel.rotation.z = -wheelRotationL; if (rightWheel) rightWheel.rotation.z = -wheelRotationR; if (isMovement3DEnabled) { const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value) || 8.2; const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2; const dist_cm = ((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * wheelDiameter; if (groundTexture) { const dx = Math.sin(yawRad) * dist_cm; const dz = Math.cos(yawRad) * dist_cm; const squaresPerCm = 1 / 20; groundTexture.offset.x -= dx * squaresPerCm; groundTexture.offset.y -= dz * squaresPerCm; groundTexture.needsUpdate = true; } const logicalX = (groundTexture ? -groundTexture.offset.x * 20 : 0); const logicalZ = (groundTexture ? -groundTexture.offset.y * 20 : 0); document.getElementById('robot3d-position-x').textContent = logicalX.toFixed(1) + ' cm'; document.getElementById('robot3d-position-z').textContent = logicalZ.toFixed(1) + ' cm'; lastEncoderAvg = currentEncoderAvg; } } if (controls3D && renderer3D && scene3D && camera3D) { controls3D.update(); renderer3D.render(scene3D, camera3D); } }
+    
+    function animate3D() {
+        requestAnimationFrame(animate3D);
+        if (isAnimation3DEnabled && robotPivot) {
+            const telemetry = {
+                pitch: window.telemetryData?.pitch || 0,
+                roll: window.telemetryData?.roll || 0,
+                yaw: window.telemetryData?.yaw || 0
+            };
+            const trimAngle = parseFloat(document.getElementById('trimValueDisplay').textContent) || 0.0;
+            telemetry.pitch += trimAngle;
+
+            const finalRotation = { x: 0, y: 0, z: 0 };
+            
+            if (axisMapping.x.source !== 'none') {
+                finalRotation.x = (telemetry[axisMapping.x.source] * axisMapping.x.sign) * Math.PI / 180;
+            }
+            if (axisMapping.y.source !== 'none') {
+                finalRotation.y = (telemetry[axisMapping.y.source] * axisMapping.y.sign) * Math.PI / 180;
+            }
+            if (axisMapping.z.source !== 'none') {
+                finalRotation.z = (telemetry[axisMapping.z.source] * axisMapping.z.sign) * Math.PI / 180;
+            }
+            
+            robotPivot.rotation.set(finalRotation.x, finalRotation.y, finalRotation.z, 'YXZ');
+
+            const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
+            const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
+            const wheelRotationR = (currentEncoderRight / ppr) * 2 * Math.PI;
+            if (leftWheel) leftWheel.rotation.z = -wheelRotationL;
+            if (rightWheel) rightWheel.rotation.z = -wheelRotationR;
+            if (isMovement3DEnabled) {
+                const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value) || 8.2;
+                const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
+                const dist_cm = ((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * wheelDiameter;
+                if (groundTexture) {
+                    const yawRad = finalRotation.y;
+                    const dx = Math.sin(yawRad) * dist_cm;
+                    const dz = Math.cos(yawRad) * dist_cm;
+                    const squaresPerCm = 1 / 20;
+                    groundTexture.offset.x -= dx * squaresPerCm;
+                    groundTexture.offset.y -= dz * squaresPerCm;
+                    groundTexture.needsUpdate = true;
+                }
+                const logicalX = (groundTexture ? -groundTexture.offset.x * 20 : 0);
+                const logicalZ = (groundTexture ? -groundTexture.offset.y * 20 : 0);
+                document.getElementById('robot3d-position-x').textContent = logicalX.toFixed(1) + ' cm';
+                document.getElementById('robot3d-position-z').textContent = logicalZ.toFixed(1) + ' cm';
+                lastEncoderAvg = currentEncoderAvg;
+            }
+        }
+        if (controls3D && renderer3D && scene3D && camera3D) {
+            controls3D.update();
+            renderer3D.render(scene3D, camera3D);
+        }
+    }
 </script>
 </body>
 </html>
-
