@@ -750,12 +750,12 @@
     </div>
 
 <script>
-    const AppState = { 
+    const AppState = {
         isConnected: false, isSynced: false, isApplyingConfig: false, lastKnownRobotState: 'IDLE',
-        isSequenceRunning: false, isTuningActive: false, activeTuningMethod: '', syncTimeout: null
+        isSequenceRunning: false, isTuningActive: false, activeTuningMethod: '', syncTimeout: null,
+        isSyncingConfig: false, tempParams: {}, tempStates: {}
     };
-    let currentSequenceStep = 0;
-    const MAX_SEQUENCE_STEPS = 15;
+    let currentSequenceStep = 0; const MAX_SEQUENCE_STEPS = 15;
     
     // ======================================================
     // === KREATOR MAPOWANIA OSI 3D - POCZATEK BLOKU KODU ===
@@ -1009,15 +1009,18 @@
             addLogMessage('[UI] Polaczono! Rozpoczynam synchronizacje...', 'success');
             document.body.classList.remove('ui-locked');
             document.getElementById('connectBleBtn').textContent = 'Synchronizowanie...';
+            AppState.isSynced = false;
+            AppState.tempParams = {};
+            AppState.tempStates = {};
             sendBleMessage({ type: 'request_full_config' });
             clearTimeout(AppState.syncTimeout);
             AppState.syncTimeout = setTimeout(() => {
                 if (!AppState.isSynced) {
-                    addLogMessage('[UI] BLAD: Timeout synchronizacji. Robot nie odpowiedzial na czas.', 'error');
+                    addLogMessage('[UI] BLAD: Timeout synchronizacji. Robot nie odpowiedzial na czas (20s).', 'error');
                     document.getElementById('connectionText').textContent = 'Blad synchronizacji';
                     document.getElementById('connectBleBtn').textContent = 'SPROBUJ PONOWNIE ZSYNCHRONIZOWAC'; document.getElementById('connectBleBtn').style.backgroundColor = '#ff6347'; document.getElementById('connectBleBtn').disabled = false;
                 }
-            }, 10000);
+            }, 20000); // Zwiększony timeout do 20s dla synchronizacji małe-pakietowej
         } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); onDisconnected(); }
     }
     
@@ -1032,21 +1035,69 @@
         if (data.robot_state) AppState.lastKnownRobotState = data.robot_state;
         switch(data.type) {
             case 'telemetry':
-                window.telemetryData = data;
                 updateTelemetryUI(data);
                 updateChart(data);
                 updateActualPath(data);
                 if (mappingWizard.isActive) {
                     processWizardTelemetry(data);
                 }
-                if (AppState.isSequenceRunning) { checkAndExecuteNextSequenceStep(AppState.lastKnownRobotState); }
+                break;
+            case 'sync_begin':
+                clearTimeout(AppState.syncTimeout);
+                AppState.isSynced = false;
+                document.getElementById('connectionText').textContent = 'Synchronizowanie...';
+                addLogMessage('[UI] Rozpoczeto odbieranie konfiguracji...', 'info');
+                break;
+            case 'set_param':
+                if (!AppState.isSynced) { // Jeśli jesteśmy w trakcie synchronizacji
+                    if (data.key === 'balancing' || data.key === 'holding_pos' || data.key === 'speed_mode') {
+                        AppState.tempStates[data.key] = data.value;
+                    } else {
+                        AppState.tempParams[data.key] = data.value;
+                    }
+                } else {
+                    applySingleParam(data.key, data.value);
+                }
+                break;
+            case 'ack':
+                if (data.operation === 'request_full_config' && data.success) {
+                    AppState.isApplyingConfig = true;
+                    for (const [key, value] of Object.entries(AppState.tempParams)) {
+                        applySingleParam(key, value);
+                    }
+                    if (AppState.tempStates.balancing !== undefined) document.getElementById('balanceSwitch').checked = AppState.tempStates.balancing;
+                    if (AppState.tempStates.holding_pos !== undefined) document.getElementById('holdPositionSwitch').checked = AppState.tempStates.holding_pos;
+                    if (AppState.tempStates.speed_mode !== undefined) document.getElementById('speedModeSwitch').checked = AppState.tempStates.speed_mode;
+                    AppState.isApplyingConfig = false;
+                    clearTimeout(AppState.syncTimeout);
+                    AppState.isSynced = true;
+                    document.getElementById('connectionText').textContent = 'Polaczony';
+                    document.getElementById('connectBleBtn').textContent = 'POLACZ Z ROBOTEM';
+                    setTimeout(() => {
+                        const sys = parseInt(document.getElementById('calibSysVal').textContent) || 0;
+                        if (!isCalibrationModalShown && sys < 3) {
+                            addLogMessage('[UI] Wykryto niska kalibracje systemu (<3). Otwieram asystenta kalibracji.', 'warn');
+                            showCalibrationModal();
+                        }
+                    }, 1000);
+                    addLogMessage('[UI] Konfiguracja zsynchronizowana pomyslnie.', 'success');
+                    AppState.tempParams = {};
+                    AppState.tempStates = {};
+                }
                 break;
             case 'full_config':
-                clearTimeout(AppState.syncTimeout); AppState.isSynced = true;
-                const connectBtn = document.getElementById('connectBleBtn'); connectBtn.textContent = 'POLACZ Z ROBOTEM'; connectBtn.style.backgroundColor = '';
+                // Obsługa starej wiadomości full_config, jeśli się pojawi
                 if (data.states) { AppState.isApplyingConfig = true; document.getElementById('balanceSwitch').checked = data.states.balancing; document.getElementById('holdPositionSwitch').checked = data.states.holding_pos; document.getElementById('speedModeSwitch').checked = data.states.speed_mode; AppState.isApplyingConfig = false; }
-                if (data.params) { AppState.isApplyingConfig = true; applyFullConfig(data.params); AppState.isApplyingConfig = false; addLogMessage('[UI] Konfiguracja i stan zsynchronizowane.', 'success'); }
-                setTimeout(() => { const sys = parseInt(document.getElementById('calibSysVal').textContent) || 0; if (!isCalibrationModalShown && sys < 3) { addLogMessage('[UI] Wykryto niska kalibracje systemu (<3). Otwieram asystenta kalibracji.', 'warn'); showCalibrationModal(); } }, 1000);
+                if (data.params) { AppState.isApplyingConfig = true; applyFullConfig(data.params); AppState.isApplyingConfig = false; }
+                if (!AppState.isSynced) { clearTimeout(AppState.syncTimeout); AppState.isSynced = true; document.getElementById('connectBleBtn').textContent = 'POLACZ Z ROBOTEM'; document.getElementById('connectBleBtn').style.backgroundColor = ''; addLogMessage('[UI] Konfiguracja zsynchronizowana pomyslnie.', 'success'); setTimeout(() => { const sys = parseInt(document.getElementById('calibSysVal').textContent) || 0; if (!isCalibrationModalShown && sys < 3) { addLogMessage('[UI] Wykryto niska kalibracje systemu (<3). Otwieram asystenta kalibracji.', 'warn'); showCalibrationModal(); } }, 1000); }
+                break;
+            case 'sync_complete':
+                clearTimeout(AppState.syncTimeout);
+                AppState.isSynced = true;
+                document.getElementById('connectionText').textContent = 'Polaczony';
+                document.getElementById('connectBleBtn').textContent = 'POLACZ Z ROBOTEM';
+                addLogMessage('[UI] Synchronizacja konfiguracji zakonczona pomyslnie.', 'success');
+                // Można dodać dodatkowe akcje po synchronizacji, np. sprawdzenie kalibracji
                 break;
             case 'log': addLogMessage(`[ROBOT] ${data.message}`, data.level); break;
             case 'tuner_live_status': updateTunerStatus(data); break;
@@ -1057,9 +1108,24 @@
         }
     }
     
+    function applySingleParam(snakeKey, value) {
+        const inputId = Object.keys(parameterMapping).find(key => parameterMapping[key] === snakeKey);
+        if (inputId) {
+            const input = document.getElementById(inputId);
+            if (input) {
+                let displayValue = value;
+                if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha'].includes(snakeKey)) {
+                    displayValue = (value * 100);
+                }
+                input.value = displayValue;
+            }
+        }
+    }
+
     function applyFullConfig(params) { for (const [inputId, snakeKey] of Object.entries(parameterMapping)) { const input = document.getElementById(inputId); if (input && params[snakeKey] !== undefined) { let value = params[snakeKey]; if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha'].includes(snakeKey)) { value = (value * 100); } input.value = value; } } }
     
     function updateTelemetryUI(data) {
+        window.telemetryData = data; // Zapisz ostatnie dane telemetryczne globalnie
         if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
         if (data.loop_time !== undefined) document.getElementById('loopTimeVal').textContent = data.loop_time + ' \u00B5s';
         if (data.loop_load !== undefined) {
@@ -1442,7 +1508,7 @@
         const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } }; 
         for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); } 
         document.getElementById('saveBtn').addEventListener('click', () => { if (confirm("Czy na pewno chcesz trwale zapisac biezaca konfiguracje znajdujaca sie na robocie do jego pamieci EEPROM?")) { sendBleMessage({ type: 'save_tunings' }); } }); 
-        document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { sendBleMessage({ type: 'request_full_config' }); } }); 
+        document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { AppState.isSynced = false; AppState.tempParams = {}; AppState.tempStates = {}; sendBleMessage({ type: 'request_full_config' }); } });
         document.getElementById('calibrateMpuBtn')?.addEventListener('click', showCalibrationModal); 
         document.getElementById('calibrateZeroPointBtn')?.addEventListener('click', () => { if (confirm("Upewnij sie, ze robot stoi na idealnie plaskiej powierzchni. Robot bedzie balansowal przez 10 sekund w celu znalezienia dokladnego punktu rownowagi. Kontynuowac?")) { sendBleMessage({ type: 'calibrate_zero_point' }); } }); 
         document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset); 
@@ -1537,4 +1603,3 @@
 </script>
 </body>
 </html>
-
