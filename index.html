@@ -1017,7 +1017,7 @@
                     document.getElementById('connectionText').textContent = 'Blad synchronizacji';
                     document.getElementById('connectBleBtn').textContent = 'SPROBUJ PONOWNIE ZSYNCHRONIZOWAC'; document.getElementById('connectBleBtn').style.backgroundColor = '#ff6347'; document.getElementById('connectBleBtn').disabled = false;
                 }
-            }, 6000);
+            }, 10000);
         } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); onDisconnected(); }
     }
     
