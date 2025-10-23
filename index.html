@@ -1535,11 +1535,21 @@
         document.getElementById('saveBtn').addEventListener('click', async () => {
             if (confirm("Czy na pewno chcesz trwale zapisac biezaca konfiguracje z panelu do pamieci EEPROM robota?")) {
                 addLogMessage('[UI] Wysylanie polecenia zapisu do EEPROM...', 'info');
-                // Najpierw wyslij wszystkie parametry z UI
-                await streamFullConfigToRobot(); 
-                // Nastepnie wyslij komende zapisu
-                await sleep(100); // Daj robotowi chwile na przetworzenie ostatniego parametru
-                sendBleMessage({ type: 'save_tunings' }); 
+
+                // KROK 1: Wyslij wszystkie parametry z UI do robota
+                for (const [inputId, snakeKey] of Object.entries(parameterMapping)) {
+                    const input = document.getElementById(inputId);
+                    if (input) {
+                        let value = parseFloat(input.value);
+                        if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha'].includes(snakeKey)) {
+                            value /= 100.0;
+                        }
+                        sendBleMessage({ type: 'set_param', key: snakeKey, value: value });
+                        await sleep(BLE_SEND_INTERVAL); // Mała pauza między wiadomościami
+                    }
+                }
+                // KROK 2: Wyślij komendę zapisu do EEPROM
+                sendBleMessage({ type: 'save_tunings' });
             }
         });
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { AppState.isSynced = false; AppState.tempParams = {}; AppState.tempStates = {}; sendBleMessage({ type: 'request_full_config' }); } });
