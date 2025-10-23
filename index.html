@@ -1015,17 +1015,17 @@
             sendBleMessage({ type: 'request_full_config' });
             clearTimeout(AppState.syncTimeout);
             AppState.syncTimeout = setTimeout(() => {
-                if (!AppState.isSynced) {
+                if (!AppState.isSynced && AppState.isConnected) {
                     addLogMessage('[UI] BLAD: Timeout synchronizacji. Robot nie odpowiedzial na czas (20s).', 'error');
                     document.getElementById('connectionText').textContent = 'Blad synchronizacji';
                     document.getElementById('connectBleBtn').textContent = 'SPROBUJ PONOWNIE ZSYNCHRONIZOWAC'; document.getElementById('connectBleBtn').style.backgroundColor = '#ff6347'; document.getElementById('connectBleBtn').disabled = false;
                 }
-            }, 20000); // Zwiększony timeout do 20s dla synchronizacji małe-pakietowej
+            }, 20000); // Timeout na całą operację synchronizacji
         } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); onDisconnected(); }
     }
     
     function onDisconnected() { AppState.isConnected = false; AppState.isSynced = false; document.body.classList.add('ui-locked'); if(AppState.isTuningActive) handleCancel(); const connectBtn = document.getElementById('connectBleBtn'); connectBtn.disabled = false; connectBtn.textContent = 'POLACZ Z ROBOTEM'; connectBtn.style.backgroundColor = ''; document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); }
-    function handleBleNotification(event) { const value = event.target.value; const decoder = new TextDecoder('utf-8'); bleBuffer += decoder.decode(value); let newlineIndex; while ((newlineIndex = bleBuffer.indexOf('\n')) !== -1) { const line = bleBuffer.substring(0, newlineIndex).trim(); bleBuffer = bleBuffer.substring(newlineIndex + 1); if (line) { try { const data = JSON.parse(line); if ((data.type === 'chunk' || data.type === 'chunk_stream') && data.id !== undefined) { let entry = bleChunks.get(data.id); if (!entry) { entry = { total: data.total || 0, parts: new Map(), timer: setTimeout(() => { if (bleChunks.has(data.id)) { bleChunks.delete(data.id); addLogMessage(`[UI] Blad: Timeout podczas skladania wiadomosci (ID: ${data.id}).`, 'error'); } }, 2000)}; bleChunks.set(data.id, entry); } entry.parts.set(data.i, data.data || ''); entry.total = data.total || entry.total; if (entry.parts.size === entry.total && entry.total > 0) { clearTimeout(entry.timer); let combined = ''; for (let i = 0; i < entry.total; i++) { combined += entry.parts.get(i) || ''; } bleChunks.delete(data.id); try { const fullMsg = JSON.parse(combined); processCompleteMessage(fullMsg); } catch (e) { addLogMessage(`[UI] Blad skladania chunkow: ${e}. Dane: ${combined}`, 'error'); } } } else { processCompleteMessage(data); } } catch (e) { addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error'); } } } }
+    function handleBleNotification(event) { const value = event.target.value; const decoder = new TextDecoder('utf-8'); bleBuffer += decoder.decode(value); let newlineIndex; while ((newlineIndex = bleBuffer.indexOf('\n')) !== -1) { const line = bleBuffer.substring(0, newlineIndex).trim(); bleBuffer = bleBuffer.substring(newlineIndex + 1); if (line) { try { const data = JSON.parse(line); if (data.type === 'chunk' && data.id !== undefined) { let entry = bleChunks.get(data.id); if (!entry) { entry = { total: data.total || 0, parts: new Map(), timer: setTimeout(() => { if (bleChunks.has(data.id)) { bleChunks.delete(data.id); addLogMessage(`[UI] Blad: Timeout podczas skladania wiadomosci (ID: ${data.id}).`, 'error'); } }, 5000)}; bleChunks.set(data.id, entry); } entry.parts.set(data.i, data.data || ''); if (data.total) entry.total = data.total; if (entry.parts.size === entry.total && entry.total > 0) { clearTimeout(entry.timer); let combined = ''; for (let i = 0; i < entry.total; i++) { combined += entry.parts.get(i) || ''; } bleChunks.delete(data.id); try { const fullMsg = JSON.parse(combined); processCompleteMessage(fullMsg); } catch (e) { addLogMessage(`[UI] Blad skladania chunkow: ${e}. Dane: ${combined}`, 'error'); } } } else { processCompleteMessage(data); } } catch (e) { addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error'); } } } }
     async function _sendRawBleMessage(message) { if (!rxCharacteristic) return; try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
     async function processBleQueue() { if (isSendingBleMessage || bleMessageQueue.length === 0 || !rxCharacteristic) return; isSendingBleMessage = true; const message = bleMessageQueue.shift(); await _sendRawBleMessage(message); setTimeout(() => { isSendingBleMessage = false; processBleQueue(); }, BLE_SEND_INTERVAL); }
     function sendBleMessage(message) { bleMessageQueue.push(message); processBleQueue(); }
@@ -1060,7 +1060,7 @@
                 }
                 break;
             case 'ack':
-                if (data.operation === 'request_full_config' && data.success) {
+                if (data.operation === 'request_full_config' && data.success && !AppState.isSynced) {
                     AppState.isApplyingConfig = true;
                     for (const [key, value] of Object.entries(AppState.tempParams)) {
                         applySingleParam(key, value);
@@ -1092,12 +1092,24 @@
                 if (!AppState.isSynced) { clearTimeout(AppState.syncTimeout); AppState.isSynced = true; document.getElementById('connectBleBtn').textContent = 'POLACZ Z ROBOTEM'; document.getElementById('connectBleBtn').style.backgroundColor = ''; addLogMessage('[UI] Konfiguracja zsynchronizowana pomyslnie.', 'success'); setTimeout(() => { const sys = parseInt(document.getElementById('calibSysVal').textContent) || 0; if (!isCalibrationModalShown && sys < 3) { addLogMessage('[UI] Wykryto niska kalibracje systemu (<3). Otwieram asystenta kalibracji.', 'warn'); showCalibrationModal(); } }, 1000); }
                 break;
             case 'sync_complete':
+                // Zastosuj wszystkie zebrane parametry i stany
+                AppState.isApplyingConfig = true;
+                for (const [key, value] of Object.entries(AppState.tempParams)) {
+                    applySingleParam(key, value);
+                }
+                if (AppState.tempStates.balancing !== undefined) document.getElementById('balanceSwitch').checked = AppState.tempStates.balancing;
+                if (AppState.tempStates.holding_pos !== undefined) document.getElementById('holdPositionSwitch').checked = AppState.tempStates.holding_pos;
+                if (AppState.tempStates.speed_mode !== undefined) document.getElementById('speedModeSwitch').checked = AppState.tempStates.speed_mode;
+                AppState.isApplyingConfig = false;
+                
+                // Zaktualizuj UI
                 clearTimeout(AppState.syncTimeout);
                 AppState.isSynced = true;
                 document.getElementById('connectionText').textContent = 'Polaczony';
                 document.getElementById('connectBleBtn').textContent = 'POLACZ Z ROBOTEM';
                 addLogMessage('[UI] Synchronizacja konfiguracji zakonczona pomyslnie.', 'success');
-                // Można dodać dodatkowe akcje po synchronizacji, np. sprawdzenie kalibracji
+                AppState.tempParams = {};
+                AppState.tempStates = {};
                 break;
             case 'log': addLogMessage(`[ROBOT] ${data.message}`, data.level); break;
             case 'tuner_live_status': updateTunerStatus(data); break;
