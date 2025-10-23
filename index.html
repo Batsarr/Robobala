@@ -1527,10 +1527,14 @@
         const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
         for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); }
 
-        document.getElementById('saveBtn').addEventListener('click', () => {
+        document.getElementById('saveBtn').addEventListener('click', async () => {
             if (confirm("Czy na pewno chcesz trwale zapisac biezaca konfiguracje z panelu do pamieci EEPROM robota?")) {
-                sendFullConfigToRobot(); // Najpierw wyslij wszystkie parametry z UI
-                sendBleMessage({ type: 'save_tunings' }); // Nastepnie wyslij komende zapisu
+                // Krok 1: Wyślij wszystkie parametry z UI jako strumień małych pakietów
+                await streamFullConfigToRobot();
+                // Krok 2: Daj robotowi chwilę na przetworzenie ostatniego pakietu
+                await sleep(100);
+                // Krok 3: Wyślij komendę zapisu do EEPROM
+                sendBleMessage({ type: 'save_tunings' });
             }
         });
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { AppState.isSynced = false; AppState.tempParams = {}; AppState.tempStates = {}; sendBleMessage({ type: 'request_full_config' }); } });
