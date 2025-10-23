@@ -1532,24 +1532,9 @@
         const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
         for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); }
 
-        document.getElementById('saveBtn').addEventListener('click', async () => {
+        document.getElementById('saveBtn').addEventListener('click', () => {
             if (confirm("Czy na pewno chcesz trwale zapisac biezaca konfiguracje z panelu do pamieci EEPROM robota?")) {
-                addLogMessage('[UI] Przygotowywanie i wysylanie konfiguracji do zapisu w EEPROM...', 'info');
-
-                // KROK 1: Zbierz wszystkie parametry z UI do jednego obiektu
-                const paramsToSave = {};
-                for (const [inputId, snakeKey] of Object.entries(parameterMapping)) {
-                    const input = document.getElementById(inputId);
-                    if (input) {
-                        let value = parseFloat(input.value);
-                        if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha'].includes(snakeKey)) {
-                            value /= 100.0;
-                        }
-                        paramsToSave[snakeKey] = value;
-                    }
-                }
-                // KROK 2: Wyślij jedną, kompletną komendę z wszystkimi parametrami do zapisu
-                sendBleMessage({ type: 'apply_and_save_tunings', params: paramsToSave });
+                saveConfigSequentially();
             }
         });
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { AppState.isSynced = false; AppState.tempParams = {}; AppState.tempStates = {}; sendBleMessage({ type: 'request_full_config' }); } });
@@ -1561,6 +1546,31 @@
         document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container') || icon.closest('.control-row'); if(!container) return; const helpText = container.nextElementSibling.classList.contains('help-text') ? container.nextElementSibling : container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); }); 
         document.getElementById('startMappingWizardBtn').addEventListener('click', startMappingWizard);
         document.getElementById('cancel-wizard-btn').addEventListener('click', cancelMappingWizard);
+    }
+    async function saveConfigSequentially() {
+        addLogMessage('[UI] Rozpoczynam sekwencyjny zapis konfiguracji do EEPROM...', 'info');
+        const saveBtn = document.getElementById('saveBtn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Zapisywanie...';
+
+        sendBleMessage({ type: 'start_save_session' });
+        await sleep(100); // Daj robotowi chwilę na przygotowanie
+
+        for (const [inputId, snakeKey] of Object.entries(parameterMapping)) {
+            const input = document.getElementById(inputId);
+            if (input) {
+                let value = parseFloat(input.value);
+                if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha'].includes(snakeKey)) {
+                    value /= 100.0;
+                }
+                sendBleMessage({ type: 'set_param_for_save', key: snakeKey, value: value });
+                await sleep(BLE_SEND_INTERVAL + 5); // Czekaj na wysłanie
+            }
+        }
+        await sleep(100); // Ostatnia chwila na przetworzenie
+        sendBleMessage({ type: 'commit_saved_session' });
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Zapisz na Robocie';
     }
     function setupManualTuneButtons() { document.querySelectorAll('.manual-tune-row').forEach(row => { const motor = row.dataset.motor; const direction = row.dataset.direction; const input = row.querySelector('.tune-input'); const testBtn = row.querySelector('.test-btn'); const stopBtn = row.querySelector('.stop-btn'); const autoBtn = row.querySelector('.auto-btn'); testBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: parseInt(input.value) }); }); stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); }); autoBtn.addEventListener('click', (e) => { if (confirm("UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?")) { const startValue = parseInt(document.getElementById('pwmTuneStartInput').value); sendBleMessage({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue }); e.target.disabled = true; e.target.textContent = 'Szukanie...'; addLogMessage(`[UI] Rozpoczynam auto-strojenie dla ${motor} ${direction}...`, 'info'); } }); }); document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); }); }
     function setupGamepadMappingModal() { document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; }); document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; }); }
