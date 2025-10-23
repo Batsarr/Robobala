@@ -1597,11 +1597,12 @@
                 const dist_cm = ((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * wheelDiameter;
                 if (groundTexture) {
                     // Uzyj juz ustawionej, bezpiecznej rotacji z samego modelu, aby uniknac bledu NaN
-                    const yawRad = robotPivot.rotation.y; 
+                    // Pobieramy rotację modelu wokół osi Y, która odpowiada za kurs (yaw)
+                    const yawRad = robotPivot.rotation.y;
                     const dx = Math.sin(yawRad) * dist_cm;
                     const dz = Math.cos(yawRad) * dist_cm;
                     const squaresPerCm = 1 / 20;
-                    groundTexture.offset.x -= dx * squaresPerCm;
+                    groundTexture.offset.x += dx * squaresPerCm;
                     groundTexture.offset.y -= dz * squaresPerCm;
                     groundTexture.needsUpdate = true;
                 }
