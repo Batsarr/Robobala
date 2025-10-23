@@ -1089,6 +1089,11 @@
                     AppState.tempParams = {};
                     AppState.tempStates = {};
                 }
+                // Ogólna obsługa ACK
+                if (data.operation === 'save_tunings') {
+                    const level = data.success ? 'success' : 'error';
+                    addLogMessage(`[ROBOT] Zapis do EEPROM: ${data.message || (data.success ? 'OK' : 'Blad')}`, level);
+                }
                 break;
             case 'full_config':
                 // Obsługa starej wiadomości full_config, jeśli się pojawi
@@ -1529,12 +1534,12 @@
 
         document.getElementById('saveBtn').addEventListener('click', async () => {
             if (confirm("Czy na pewno chcesz trwale zapisac biezaca konfiguracje z panelu do pamieci EEPROM robota?")) {
-                // Krok 1: Wyślij wszystkie parametry z UI jako strumień małych pakietów
-                await streamFullConfigToRobot();
-                // Krok 2: Daj robotowi chwilę na przetworzenie ostatniego pakietu
-                await sleep(100);
-                // Krok 3: Wyślij komendę zapisu do EEPROM
-                sendBleMessage({ type: 'save_tunings' });
+                addLogMessage('[UI] Wysylanie polecenia zapisu do EEPROM...', 'info');
+                // Najpierw wyslij wszystkie parametry z UI
+                await streamFullConfigToRobot(); 
+                // Nastepnie wyslij komende zapisu
+                await sleep(100); // Daj robotowi chwile na przetworzenie ostatniego parametru
+                sendBleMessage({ type: 'save_tunings' }); 
             }
         });
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { AppState.isSynced = false; AppState.tempParams = {}; AppState.tempStates = {}; sendBleMessage({ type: 'request_full_config' }); } });
