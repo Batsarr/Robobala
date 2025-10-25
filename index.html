@@ -1533,9 +1533,9 @@
         for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); }
 
         document.getElementById('saveBtn').addEventListener('click', () => {
-            if (confirm("Czy na pewno chcesz trwale zapisac biezaca konfiguracje z panelu do pamieci EEPROM robota?")) {
+            if (AppState.isConnected && confirm("Czy na pewno chcesz trwale zapisać bieżącą konfigurację z panelu do pamięci EEPROM robota?")) {
                 saveConfigSequentially();
-            }
+            } else if (!AppState.isConnected) { addLogMessage('[UI] Połącz z robotem przed zapisem konfiguracji.', 'warn'); }
         });
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { AppState.isSynced = false; AppState.tempParams = {}; AppState.tempStates = {}; sendBleMessage({ type: 'request_full_config' }); } });
 
