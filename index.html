@@ -1534,6 +1534,7 @@
 
         document.getElementById('saveBtn').addEventListener('click', () => {
             if (AppState.isConnected && confirm("Czy na pewno chcesz trwale zapisać bieżącą konfigurację z panelu do pamięci EEPROM robota?")) {
+                addLogMessage('[UI] Wyslano polecenie zapisu konfiguracji do EEPROM...', 'info');
                 sendBleMessage({ type: 'save_config' });
             } else if (!AppState.isConnected) { addLogMessage('[UI] Połącz z robotem przed zapisem konfiguracji.', 'warn'); }
         });
