@@ -1090,7 +1090,7 @@
                     AppState.tempStates = {};
                 }
                 // Ogólna obsługa ACK
-                if (data.operation === 'save_tunings') {
+                if (data.operation === 'commit_saved_session') {
                     const level = data.success ? 'success' : 'error';
                     addLogMessage(`[ROBOT] Zapis do EEPROM: ${data.message || (data.success ? 'OK' : 'Blad')}`, level);
                 }
