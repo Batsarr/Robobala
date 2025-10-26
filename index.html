@@ -1397,9 +1397,13 @@
                 this.classList.add('active');
                 document.querySelector(`.method-content[data-method="${method}"]`).classList.add('active');
                 autotuneChartData.labels = []; autotuneChartData.datasets = []; autotuneTuningChart.update();
-                // --- POPRAWKA: Aktualizacja wysokości akordeonu po zmianie zakładki ---
-                const accordionContent = this.closest('.accordion-content');
-                if (accordionContent) updateAccordionHeight(accordionContent);
+                // --- POPRAWKA v2: Aktualizacja wysokości akordeonu po zmianie zakładki ---
+                // Znajdujemy kontener akordeonu, w którym są zakładki.
+                const accordionContent = document.querySelector('#autotuning-card-content').closest('.accordion-content');
+                if (accordionContent) {
+                    // Używamy setTimeout, aby dać przeglądarce czas na przeliczenie nowej wysokości po zmianie display: block.
+                    setTimeout(() => updateAccordionHeight(accordionContent), 50);
+                }
             });
         });
         document.querySelectorAll('input[type="range"]').forEach(range => {
