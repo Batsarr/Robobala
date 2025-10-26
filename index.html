@@ -1397,6 +1397,9 @@
                 this.classList.add('active');
                 document.querySelector(`.method-content[data-method="${method}"]`).classList.add('active');
                 autotuneChartData.labels = []; autotuneChartData.datasets = []; autotuneTuningChart.update();
+                // --- POPRAWKA: Aktualizacja wysokości akordeonu po zmianie zakładki ---
+                const accordionContent = this.closest('.accordion-content');
+                if (accordionContent) updateAccordionHeight(accordionContent);
             });
         });
         document.querySelectorAll('input[type="range"]').forEach(range => {
