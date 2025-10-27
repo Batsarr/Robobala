@@ -1654,6 +1654,21 @@
                 // Dopiero gdy wszystkie wartosci sa poprawne, zaktualizuj rotacje modelu.
                 robotPivot.rotation.set(finalRotation.x, finalRotation.y, finalRotation.z, 'YXZ');
             }
+
+        // KROK 3: DYNAMICZNA KOREKTA WYSOKOSCI, ABY KOLA NIE ZNIKALY POD PODLOGA
+        if (robotPivot && leftWheel) {
+            // Pobierz aktualny kat przechylu (roll) z modelu. Uzywamy wartosci z modelu, a nie telemetrycznej,
+            // poniewaz jest ona juz przetworzona przez mapowanie osi.
+            const rollAngle = robotPivot.rotation.z; 
+
+            // Oblicz odleglosc kola od srodka robota.
+            const wheelDistance = Math.abs(leftWheel.position.x);
+
+            // Oblicz wymagana korekte wysokosci. Jest to wartosc bezwzgledna, poniewaz
+            // niezaleznie od kierunku przechylu, robot musi byc podniesiony.
+            const heightCorrection = wheelDistance * Math.abs(Math.sin(rollAngle));
+            robotPivot.position.y = 4.1 + heightCorrection;
+        }
             
             // Aktualizacja kamery w trybie "Perspektywa Robota"
             const isRobotPerspective = document.getElementById('robotPerspectiveCheckbox').checked;
