@@ -276,11 +276,10 @@
             <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
             <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Resetuj Korekte Pionu</button>
-            <!-- POPRAWKA: Usunięto zduplikowaną sekcję. Zostaje tylko wersja z precyzyjnymi przyciskami. -->
             <div class="trim-controls">
                 <button id="trimMinus01Btn">-0.1</button>
                 <button id="trimMinus001Btn">-0.01</button>
-                <span>Korekta Pionu: <span id="trimValueDisplay">0.00°</span></span> <!-- Poprawiony ID -->
+                <span>Korekta Pionu: <span id="trimValueDisplay">0.00°</span></span>
                 <button id="trimPlus001Btn">+0.01</button>
                 <button id="trimPlus01Btn">+0.1</button>
             </div>
@@ -1134,12 +1133,23 @@
             case 'tuning_result': handleTunerResult(data); break;
             // POPRAWKA: Dodano obsługę wyniku strojenia PWM
             case 'min_pwm_autotune_result':
-                if (data.params && data.params.kp !== undefined) {
-                    const foundPwm = parseInt(data.params.kp); // Wynik jest w polu 'kp' dla uproszczenia
-                    const motor = data.motor; // Robot powinien odesłać, którego silnika to dotyczy
-                    const direction = data.direction;
-                    addLogMessage(`[UI] Auto-strojenie zakończone dla ${motor} ${direction}. Znaleziono PWM: ${foundPwm}`, 'success');
-                    // Można by tu automatycznie zaktualizować odpowiednie pole input
+                if (data.motor && data.direction && data.found_pwm !== undefined) {
+                    const { motor, direction, found_pwm } = data;
+                    addLogMessage(`[UI] Auto-strojenie zakończone dla ${motor} ${direction}. Znaleziono PWM: ${found_pwm}`, 'success');
+                    
+                    // Znajdź odpowiedni wiersz i pole input
+                    const row = document.querySelector(`.manual-tune-row[data-motor="${motor}"][data-direction="${direction}"]`);
+                    if (row) {
+                        const input = row.querySelector('.tune-input');
+                        const autoBtn = row.querySelector('.auto-btn');
+                        // Zastosuj znalezioną wartość do pola input
+                        if (input) input.value = found_pwm;
+                        // Odblokuj przycisk "Auto"
+                        if (autoBtn) {
+                            autoBtn.disabled = false;
+                            autoBtn.textContent = 'Auto';
+                        }
+                    }
                 }
                 break;
             case 'test_result': handleDynamicTestResult(data); break;
