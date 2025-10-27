@@ -277,6 +277,14 @@
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
             <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Resetuj Osie</button>
             <div class="trim-controls"><button id="trimMinusBtn">-</button><span>Korekta Pionu: <span id="trimValueDisplay">0.0°</span></span><button id="trimPlusBtn">+</button></div>
+            <!-- ZMIANA: Nowe przyciski do precyzyjnej korekty pionu -->
+            <div class="trim-controls">
+                <button id="trimMinus01Btn">-0.1</button>
+                <button id="trimMinus001Btn">-0.01</button>
+                <span>Korekta Pionu: <span id="trimValueDisplay">0.00°</span></span>
+                <button id="trimPlus001Btn">+0.01</button>
+                <button id="trimPlus01Btn">+0.1</button>
+            </div>
             <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
             <button id="emergencyStopBtn">STOP AWARYJNY</button>
             <button class="accordion-header" onclick="toggleAccordion(this)" style="margin-top: 15px;">Strojenie Joysticka</button>
@@ -1200,7 +1208,7 @@
              if (speedHistory.length > 0) {
                 const minSpeed = Math.min(...speedHistory);
                 const maxSpeed = Math.max(...speedHistory);
-                const avgSpeed = speedHistory.reduce((sum, val) => sum + val, 0) / speedHistory.length;
+                const avgSpeed = speedHistory.reduce((sum, val) => sum + val, 0) / speedHistory.length; // Poprawka: toFixed(0) dla speedAvg
                 document.getElementById('speedMin').textContent = minSpeed.toFixed(0) + ' imp/s';
                 document.getElementById('speedMax').textContent = maxSpeed.toFixed(0) + ' imp/s';
                 document.getElementById('speedAvg').textContent = avgSpeed.toFixed(0) + ' imp/s';
@@ -1220,7 +1228,8 @@
         if (data.calib_gyro !== undefined) { document.getElementById('calibGyroVal').textContent = data.calib_gyro; updateCalibrationProgress('gyro', data.calib_gyro); }
         if (data.calib_mag !== undefined) { document.getElementById('calibMagVal').textContent = data.calib_mag; updateCalibrationProgress('mag', data.calib_mag); }
         if (data.trim_angle !== undefined) { document.getElementById('trimValueDisplay').textContent = data.trim_angle.toFixed(1) + '°'; }
-        if (data.states && !AppState.isApplyingConfig) { AppState.isApplyingConfig = true; document.getElementById('balanceSwitch').checked = data.states.balancing; document.getElementById('holdPositionSwitch').checked = data.states.holding_pos; document.getElementById('speedModeSwitch').checked = data.states.speed_mode; AppState.isApplyingConfig = false; }
+        if (data.trim_angle !== undefined) { document.getElementById('trimValueDisplay').textContent = data.trim_angle.toFixed(2) + '°'; } // ZMIANA: Dwa miejsca po przecinku
+        if (data.states && !AppState.isApplyingConfig) { AppState.isApplyingConfig = true; document.getElementById('balanceSwitch').checked = data.states.balancing; document.getElementById('holdPositionSwitch').checked = data.states.holding_pos; document.getElementById('speedModeSwitch').checked = data.states.speed_mode; AppState.isApplyingConfig = false; } // Pozostała logika
         const emergencyBanner = document.getElementById('emergency-banner'); if (emergencyBanner) emergencyBanner.style.display = data.states && data.states.emergency_stop ? 'block' : 'none';
     }
 
@@ -1552,7 +1561,12 @@
         ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { if (AppState.isApplyingConfig) return; const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
 
         // PRZYWRÓCONE EVENT LISTENERY
-        const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
+        // ZMIANA: Zaktualizowane event listenery dla nowych przycisków korekty pionu
+        const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
+        document.getElementById('trimMinus01Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -0.1 }));
+        document.getElementById('trimMinus001Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -0.01 }));
+        document.getElementById('trimPlus001Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 0.01 }));
+        document.getElementById('trimPlus01Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 0.1 }));
         for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); }
 
         document.getElementById('saveBtn').addEventListener('click', () => {
