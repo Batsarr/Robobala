@@ -275,13 +275,12 @@
             <div class="control-row"><span class="control-label">Trzymaj Pozycje</span><label class="switch"><input type="checkbox" id="holdPositionSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
-            <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Resetuj Osie</button>
-            <div class="trim-controls"><button id="trimMinusBtn">-</button><span>Korekta Pionu: <span id="trimValueDisplay">0.0°</span></span><button id="trimPlusBtn">+</button></div>
-            <!-- ZMIANA: Nowe przyciski do precyzyjnej korekty pionu -->
+            <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Resetuj Korekte Pionu</button>
+            <!-- POPRAWKA: Usunięto zduplikowaną sekcję. Zostaje tylko wersja z precyzyjnymi przyciskami. -->
             <div class="trim-controls">
                 <button id="trimMinus01Btn">-0.1</button>
                 <button id="trimMinus001Btn">-0.01</button>
-                <span>Korekta Pionu: <span id="trimValueDisplay">0.00°</span></span>
+                <span>Korekta Pionu: <span id="trimValueDisplay">0.00°</span></span> <!-- Poprawiony ID -->
                 <button id="trimPlus001Btn">+0.01</button>
                 <button id="trimPlus01Btn">+0.1</button>
             </div>
@@ -1133,6 +1132,16 @@
             case 'tuner_live_status': updateTunerStatus(data); break;
             case 'tuner_live_chart_data': updateAutotuneTuningChart(data); break;
             case 'tuning_result': handleTunerResult(data); break;
+            // POPRAWKA: Dodano obsługę wyniku strojenia PWM
+            case 'min_pwm_autotune_result':
+                if (data.params && data.params.kp !== undefined) {
+                    const foundPwm = parseInt(data.params.kp); // Wynik jest w polu 'kp' dla uproszczenia
+                    const motor = data.motor; // Robot powinien odesłać, którego silnika to dotyczy
+                    const direction = data.direction;
+                    addLogMessage(`[UI] Auto-strojenie zakończone dla ${motor} ${direction}. Znaleziono PWM: ${foundPwm}`, 'success');
+                    // Można by tu automatycznie zaktualizować odpowiednie pole input
+                }
+                break;
             case 'test_result': handleDynamicTestResult(data); break;
             case 'tuner_session_end': addLogMessage(`[UI] Sesja strojenia zakonczona: ${data.reason}`, 'info'); setTuningUiLock(false, ''); break;
         }
@@ -1221,8 +1230,7 @@
             const systemHealthItem = document.getElementById('systemHealthItem');
             const sysCalibVal = parseInt(data.calib_sys);
             if (sysCalibVal < 2) { systemHealthItem.classList.add('error'); systemHealthItem.classList.remove('warn'); document.getElementById('systemHealthVal').textContent = 'KRYTYCZNY'; }
-            else if (sysCalibVal === 2) { systemHealthItem.classList.add('warn'); systemHealthItem.classList.remove('error'); document.getElementById('systemHealthVal').textContent = 'NISKI'; }
-            else { systemHealthItem.classList.remove('warn', 'error'); document.getElementById('systemHealthVal').textContent = 'OK'; }
+            else if (sysCalibVal === 2) { systemHealthItem.classList.add('warn'); systemHealthItem.classList.remove('error'); document.getElementById('systemHealthVal').textContent = 'NISKI'; } else { systemHealthItem.classList.remove('warn', 'error'); document.getElementById('systemHealthVal').textContent = 'OK'; }
         }
         if (data.calib_accel !== undefined) { document.getElementById('calibAccelVal').textContent = data.calib_accel; updateCalibrationProgress('accel', data.calib_accel); }
         if (data.calib_gyro !== undefined) { document.getElementById('calibGyroVal').textContent = data.calib_gyro; updateCalibrationProgress('gyro', data.calib_gyro); }
@@ -1560,13 +1568,13 @@
         document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
         ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { if (AppState.isApplyingConfig) return; const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
 
-        // PRZYWRÓCONE EVENT LISTENERY
-        // ZMIANA: Zaktualizowane event listenery dla nowych przycisków korekty pionu
+        // POPRAWKA: Usunięto stare listenery dla trim+/- i dodano nowe, poprawne dla precyzyjnych przycisków.
         const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
         document.getElementById('trimMinus01Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -0.1 }));
         document.getElementById('trimMinus001Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -0.01 }));
         document.getElementById('trimPlus001Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 0.01 }));
         document.getElementById('trimPlus01Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 0.1 }));
+
         for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); }
 
         document.getElementById('saveBtn').addEventListener('click', () => {
