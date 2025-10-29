@@ -1492,19 +1492,20 @@
     }
     function checkTuningPrerequisites() { if (!AppState.isConnected || !AppState.isSynced) { addLogMessage('[UI] Blad: Polacz i zsynchronizuj z robotem.', 'error'); return false; } if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState)) { addLogMessage(`[UI] Blad: Wymagany stan 'BALANSUJE'. Aktualny: '${AppState.lastKnownRobotState}'.`, 'error'); return false; } if (AppState.isTuningActive) { addLogMessage('[UI] Blad: Inna sesja strojenia jest juz w toku.', 'warn'); return false; } return true; }
     function setTuningUiLock(isLocked, method) { AppState.isTuningActive = isLocked; AppState.activeTuningMethod = isLocked ? method : ''; document.body.classList.toggle('tuning-active', isLocked); document.querySelectorAll('.method-tab').forEach(tab => tab.disabled = isLocked); updateTuningDashboard(isLocked ? 'running' : 'idle', method); document.getElementById('run-zn-test').disabled = isLocked; document.getElementById('run-ga-tune').disabled = isLocked; document.getElementById('run-pso-tune').disabled = isLocked; document.querySelectorAll('.run-test-btn').forEach(btn => btn.disabled = isLocked); const isGa = method === 'ga-genetic'; document.getElementById('pause-ga-tune').disabled = !isLocked || !isGa; document.getElementById('stop-ga-tune').disabled = !isLocked || !isGa; const isPso = method === 'pso-particle'; document.getElementById('pause-pso-tune').disabled = !isLocked || !isPso; document.getElementById('stop-pso-tune').disabled = !isLocked || !isPso; }
-    function buildTuningParams(method) {
-        // ZMIANA: Usunięcie blokady UI. Interfejs pozostaje aktywny.
+    function setTuningUiLock(isLocked, method) {
         AppState.isTuningActive = isLocked;
         AppState.activeTuningMethod = isLocked ? method : '';
-        // document.body.classList.toggle('tuning-active', isLocked); // Usunięta linia blokująca UI
-
-        // Przyciski startu są wyłączane, ale reszta UI działa
+    
+        // Usuwamy blokadę całego UI
+        // document.body.classList.toggle('tuning-active', isLocked);
+    
+        // Wyłączamy tylko przyciski rozpoczynające strojenie i przełączanie zakładek
         document.getElementById('run-zn-test').disabled = isLocked;
         document.getElementById('run-ga-tune').disabled = isLocked;
         document.getElementById('run-pso-tune').disabled = isLocked;
         document.querySelectorAll('.run-test-btn').forEach(btn => btn.disabled = isLocked);
         document.querySelectorAll('.method-tab').forEach(tab => tab.disabled = isLocked);
-
+    
         // Logika przycisków pauzy/stopu pozostaje bez zmian
         const isGa = method === 'ga-genetic';
         document.getElementById('pause-ga-tune').disabled = !isLocked || !isGa;
@@ -1512,7 +1513,7 @@
         const isPso = method === 'pso-particle';
         document.getElementById('pause-pso-tune').disabled = !isLocked || !isPso;
         document.getElementById('stop-pso-tune').disabled = !isLocked || !isPso;
-
+    
         updateTuningDashboard(isLocked ? 'running' : 'idle', method);
     }
     function buildTuningParams(method) {
