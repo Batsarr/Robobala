@@ -1080,11 +1080,6 @@
                     if (AppState.tempStates.holding_pos !== undefined) document.getElementById('holdPositionSwitch').checked = AppState.tempStates.holding_pos;
                     if (AppState.tempStates.speed_mode !== undefined) document.getElementById('speedModeSwitch').checked = AppState.tempStates.speed_mode;
                     AppState.isApplyingConfig = false;
-                    // ZMIANA: Obsługa ACK dla start_tuning_session
-                    if (data.operation === 'start_tuning_session' && data.success) {
-                        handleTuningStartAck(AppState.activeTuningMethod);
-                        return; // Nie kontynuuj, bo to tylko potwierdzenie startu
-                    }
                     clearTimeout(AppState.syncTimeout);
                     AppState.isSynced = true;
                     document.getElementById('connectionText').textContent = 'Polaczony';
@@ -1535,6 +1530,9 @@
         // Włącz odpowiednie przyciski pauzy/stopu
         const isGa = method === 'ga-genetic'; document.getElementById('pause-ga-tune').disabled = !isGa; document.getElementById('stop-ga-tune').disabled = !isGa;
         const isPso = method === 'pso-particle'; document.getElementById('pause-pso-tune').disabled = !isPso; document.getElementById('stop-pso-tune').disabled = !isPso;
+
+        // KLUCZOWA POPRAWKA: Zaktualizuj dashboard, aby pokazywał status "W trakcie"
+        updateTuningDashboard('running', method);
     }
     function buildTuningParams(method) {
         const loop = document.getElementById('common-loop-selector').value;
