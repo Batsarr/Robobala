@@ -1071,35 +1071,20 @@
                     applySingleParam(data.key, data.value);
                 }
                 break;
-            case 'ack':
-                if (data.operation === 'request_full_config' && data.success && !AppState.isSynced) {
-                    AppState.isApplyingConfig = true;
-                    for (const [key, value] of Object.entries(AppState.tempParams)) {
-                        applySingleParam(key, value);
+            case 'ack': // POPRAWKA: Uogólniona obsługa ACK
+                if (data.command === 'start_tuning_session') {
+                    if (data.success) {
+                        handleTuningStartAck(AppState.activeTuningMethod);
+                    } else {
+                        addLogMessage(`[UI] Robot odrzucil start strojenia: ${data.message || 'Nieznany blad'}`, 'error');
+                        // Odblokuj UI, jeśli start się nie powiódł
+                        setTuningUiLock(false, '');
                     }
-                    if (AppState.tempStates.balancing !== undefined) document.getElementById('balanceSwitch').checked = AppState.tempStates.balancing;
-                    if (AppState.tempStates.holding_pos !== undefined) document.getElementById('holdPositionSwitch').checked = AppState.tempStates.holding_pos;
-                    if (AppState.tempStates.speed_mode !== undefined) document.getElementById('speedModeSwitch').checked = AppState.tempStates.speed_mode;
-                    AppState.isApplyingConfig = false;
-                    clearTimeout(AppState.syncTimeout);
-                    AppState.isSynced = true;
-                    document.getElementById('connectionText').textContent = 'Polaczony';
-                    document.getElementById('connectBleBtn').textContent = 'POLACZ Z ROBOTEM';
-                    setTimeout(() => {
-                        const sys = parseInt(document.getElementById('calibSysVal').textContent) || 0;
-                        if (!isCalibrationModalShown && sys < 3) {
-                            addLogMessage('[UI] Wykryto niska kalibracje systemu (<3). Otwieram asystenta kalibracji.', 'warn');
-                            showCalibrationModal();
-                        }
-                    }, 1000);
-                    addLogMessage('[UI] Konfiguracja zsynchronizowana pomyslnie.', 'success');
-                    AppState.tempParams = {};
-                    AppState.tempStates = {};
-                }
-                // Ogólna obsługa ACK
-                if (data.operation === 'save_config') {
-                    const level = data.success ? 'success' : 'error';
-                    addLogMessage(`[ROBOT] Zapis do EEPROM: ${data.message || (data.success ? 'OK' : 'Blad')}`, level);
+                } else {
+                    // Ogólna obsługa dla innych poleceń
+                    const level = data.success ? 'info' : 'warn';
+                    const message = `[ROBOT ACK] ${data.command}: ${data.success ? 'OK' : 'FAILED'} ${data.message ? `(${data.message})` : ''}`;
+                    addLogMessage(message, level);
                 }
                 break;
             case 'full_config':
@@ -1574,12 +1559,11 @@
     function startGaTuning() { startTuningSession('ga-genetic'); }
     function startPsoTuning() { startTuningSession('pso-particle'); }
     function handlePauseResume(e) { const btn = e.target; const isPaused = btn.textContent.includes('Wznow'); if (isPaused) { sendBleMessage({ type: 'resume_tuning_session' }); btn.textContent = '⏸️ Pauza'; updateTuningDashboard('running', AppState.activeTuningMethod); } else { sendBleMessage({ type: 'pause_tuning_session' }); btn.textContent = '▶️ Wznow'; updateTuningDashboard('paused', AppState.activeTuningMethod); } }
-    function handleCancel(sendCmd = true) { if (sendCmd && AppState.isTuningActive && confirm('Czy na pewno chcesz przerwac proces strojenia?')) { sendBleMessage({ type: 'cancel_tuning_session' }); } setTuningUiLock(false, ''); addLogMessage('[UI] Anulowano/zakonczono sesje strojenia.', 'warn'); }
+    function handleCancel(sendCmd = true) { if (sendCmd && AppState.isTuningActive && confirm('Czy na pewno chcesz przerwac proces strojenia?')) { sendBleMessage({ type: 'cancel_tuning_session' }); } setTuningUiLock(false, ''); addLogMessage('[UI] Anulowano/zakonczono sesje strojenia.', 'warn'); updateTuningDashboard('idle'); }
     function updateTuningDashboard(status, method = '') {
         const dashboard = document.getElementById('autotune-dashboard');
         if (status === 'idle') { dashboard.style.display = 'none'; return; }
         dashboard.style.display = 'block';
-        document.getElementById('dashboard-tuning-method').textContent = (method || AppState.activeTuningMethod).split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
         const statusEl = document.getElementById('dashboard-status');
         if (status === 'running') statusEl.textContent = 'W trakcie';
         else if (status === 'paused') statusEl.textContent = 'Wstrzymano';
