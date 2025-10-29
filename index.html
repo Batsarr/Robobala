@@ -119,6 +119,7 @@
         body.tuning-active .main-grid > .card:not(#autotuning-card):not(#log-card) {
             opacity: 0.5;
             pointer-events: none;
+            /* Usunięto globalne blokowanie UI */
         }
         body.tuning-active #allSettings, body.tuning-active #controls-card .accordion-header, body.tuning-active .card:not(#autotuning-card) button:not(#emergencyStopBtn) {
              opacity: 0.5;
@@ -1154,10 +1155,12 @@
                 break;
             case 'test_result': handleDynamicTestResult(data); break;
             case 'tuner_session_end':
-                // POPRAWKA: Dodano obsługę komunikatu o zakończeniu sesji strojenia.
-                // To kluczowe, aby odblokować UI, gdy strojenie zostanie przerwane na robocie.
+                // POPRAWKA: Obsługa komunikatu o zakończeniu sesji strojenia.
+                // Odblokowuje UI, gdy strojenie zostanie przerwane na robocie lub zakończy się naturalnie.
                 addLogMessage(`[UI] Sesja strojenia zakonczona: ${data.reason || 'Zdalne zatrzymanie'}`, 'info');
-                setTuningUiLock(false, ''); // Odblokuj interfejs
+                // Używamy funkcji handleCancel, która już zawiera logikę czyszczenia stanu UI.
+                // Przekazujemy 'false', aby uniknąć wysyłania kolejnego polecenia anulowania.
+                handleCancel(false);
                 break;
         }
     }
@@ -1571,12 +1574,12 @@
     function startGaTuning() { startTuningSession('ga-genetic'); }
     function startPsoTuning() { startTuningSession('pso-particle'); }
     function handlePauseResume(e) { const btn = e.target; const isPaused = btn.textContent.includes('Wznow'); if (isPaused) { sendBleMessage({ type: 'resume_tuning_session' }); btn.textContent = '⏸️ Pauza'; updateTuningDashboard('running', AppState.activeTuningMethod); } else { sendBleMessage({ type: 'pause_tuning_session' }); btn.textContent = '▶️ Wznow'; updateTuningDashboard('paused', AppState.activeTuningMethod); } }
-    function handleCancel() { if (confirm('Czy na pewno chcesz przerwac proces strojenia?')) { sendBleMessage({ type: 'cancel_tuning_session' }); setTuningUiLock(false, ''); addLogMessage('[UI] Anulowano sesje strojenia.', 'warn'); } }
+    function handleCancel(sendCmd = true) { if (sendCmd && AppState.isTuningActive && confirm('Czy na pewno chcesz przerwac proces strojenia?')) { sendBleMessage({ type: 'cancel_tuning_session' }); } setTuningUiLock(false, ''); addLogMessage('[UI] Anulowano/zakonczono sesje strojenia.', 'warn'); }
     function updateTuningDashboard(status, method = '') {
         const dashboard = document.getElementById('autotune-dashboard');
         if (status === 'idle') { dashboard.style.display = 'none'; return; }
         dashboard.style.display = 'block';
-        document.getElementById('dashboard-tuning-method').textContent = method.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+        document.getElementById('dashboard-tuning-method').textContent = (method || AppState.activeTuningMethod).split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
         const statusEl = document.getElementById('dashboard-status');
         if (status === 'running') statusEl.textContent = 'W trakcie';
         else if (status === 'paused') statusEl.textContent = 'Wstrzymano';
