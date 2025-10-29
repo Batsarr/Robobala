@@ -1560,6 +1560,9 @@
         const params = buildTuningParams(method);
         addLogMessage(`[UI] Wysylam polecenie rozpoczecia sesji ${method}...`, 'info');
         sendBleMessage({ type: 'start_tuning_session', method: method, params: params });
+
+        // KLUCZOWA POPRAWKA: Zapamiętujemy, którą metodę uruchamiamy, aby poprawnie obsłużyć ACK.
+        AppState.activeTuningMethod = method;
         
         // ZMIANA: Natychmiast pokazujemy, ze cos sie dzieje, ale jeszcze nie blokujemy wszystkiego
         updateTuningDashboard('starting', method);
