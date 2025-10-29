@@ -1483,7 +1483,6 @@
         });
     }
     function checkTuningPrerequisites() { if (!AppState.isConnected || !AppState.isSynced) { addLogMessage('[UI] Blad: Polacz i zsynchronizuj z robotem.', 'error'); return false; } if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState)) { addLogMessage(`[UI] Blad: Wymagany stan 'BALANSUJE'. Aktualny: '${AppState.lastKnownRobotState}'.`, 'error'); return false; } if (AppState.isTuningActive) { addLogMessage('[UI] Blad: Inna sesja strojenia jest juz w toku.', 'warn'); return false; } return true; }
-    function setTuningUiLock(isLocked, method) { AppState.isTuningActive = isLocked; AppState.activeTuningMethod = isLocked ? method : ''; document.body.classList.toggle('tuning-active', isLocked); document.querySelectorAll('.method-tab').forEach(tab => tab.disabled = isLocked); updateTuningDashboard(isLocked ? 'running' : 'idle', method); document.getElementById('run-zn-test').disabled = isLocked; document.getElementById('run-ga-tune').disabled = isLocked; document.getElementById('run-pso-tune').disabled = isLocked; document.querySelectorAll('.run-test-btn').forEach(btn => btn.disabled = isLocked); const isGa = method === 'ga-genetic'; document.getElementById('pause-ga-tune').disabled = !isLocked || !isGa; document.getElementById('stop-ga-tune').disabled = !isLocked || !isGa; const isPso = method === 'pso-particle'; document.getElementById('pause-pso-tune').disabled = !isLocked || !isPso; document.getElementById('stop-pso-tune').disabled = !isLocked || !isPso; }
     function setTuningUiLock(isLocked, method) {
         AppState.isTuningActive = isLocked;
         AppState.activeTuningMethod = isLocked ? method : '';
@@ -1508,24 +1507,10 @@
     
         updateTuningDashboard(isLocked ? 'running' : 'idle', method);
     }
-    function handleTuningStartAck(method) {
-        addLogMessage('[UI] Robot potwierdzil rozpoczecie strojenia. Blokuje interfejs.', 'success');
-        AppState.isTuningActive = true; // Teraz oficjalnie jestesmy w trybie strojenia
-        
-        // Zablokuj przyciski startu i zakładki
-        document.getElementById('run-zn-test').disabled = true;
-        document.getElementById('run-ga-tune').disabled = true;
-        document.getElementById('run-pso-tune').disabled = true;
-        document.querySelectorAll('.run-test-btn').forEach(btn => btn.disabled = true);
-        document.querySelectorAll('.method-tab').forEach(tab => tab.disabled = true);
-
-        // Włącz odpowiednie przyciski pauzy/stopu
-        const isGa = method === 'ga-genetic'; document.getElementById('pause-ga-tune').disabled = !isGa; document.getElementById('stop-ga-tune').disabled = !isGa;
-        const isPso = method === 'pso-particle'; document.getElementById('pause-pso-tune').disabled = !isPso; document.getElementById('stop-pso-tune').disabled = !isPso;
-
-        // KLUCZOWA POPRAWKA: Zaktualizuj dashboard, aby pokazywał status "W trakcie"
-        updateTuningDashboard('running', method);
-    }
+function handleTuningStartAck(method) {
+    addLogMessage('[UI] Robot potwierdzil rozpoczecie strojenia. Blokuje kontrolki.', 'success');
+    setTuningUiLock(true, method); // Użyj setTuningUiLock do zablokowania
+}
     function buildTuningParams(method) {
         const loop = document.getElementById('common-loop-selector').value;
         const baseParams = {
@@ -1562,7 +1547,7 @@
     function startZnTuning() { startTuningSession('zn-relay'); }
     function startGaTuning() { startTuningSession('ga-genetic'); }
     function startPsoTuning() { startTuningSession('pso-particle'); }
-    function handlePauseResume(e) { const btn = e.target; const isPaused = btn.textContent.includes('Wznow'); if (isPaused) { sendBleMessage({ type: 'resume_tuning_session' }); btn.textContent = '⏸️ Pauza'; updateTuningDashboard('running', AppState.activeTuningMethod); } else { sendBleMessage({ type: 'pause_tuning_session' }); btn.textContent = '▶️ Wznow'; updateTuningDashboard('paused', AppState.activeTuningMethod); } } // NOWE: Reset tekstu przycisku
+    function handlePauseResume(e) { const btn = e.target; const isPaused = btn.textContent.includes('Wznow'); if (isPaused) { sendBleMessage({ type: 'resume_tuning_session' }); btn.textContent = '⏸️ Pauza'; updateTuningDashboard('running', AppState.activeTuningMethod); } else { sendBleMessage({ type: 'pause_tuning_session' }); btn.textContent = '▶️ Wznow'; updateTuningDashboard('paused', AppState.activeTuningMethod); } }
     function handleCancel(sendCmd = true) { if (sendCmd && AppState.isTuningActive && confirm('Czy na pewno chcesz przerwac proces strojenia?')) { sendBleMessage({ type: 'cancel_tuning_session' }); } setTuningUiLock(false, ''); addLogMessage('[UI] Anulowano/zakonczono sesje strojenia.', 'warn'); updateTuningDashboard('idle'); }
     function updateTuningDashboard(status, method = '') {
         const dashboard = document.getElementById('autotune-dashboard');
