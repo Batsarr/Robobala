@@ -777,6 +777,13 @@
     const WIZARD_ACTIVATION_THRESHOLD = 35.0; // W stopniach, prog aktywacji kroku
     const WIZARD_RETURN_THRESHOLD = 5.0;     // W stopniach, prog powrotu do pionu
     
+    function safeToFixed(value, decimals) {
+        if (typeof value === 'number' && !isNaN(value)) {
+            return value.toFixed(decimals);
+        }
+        return '---';
+    }
+
     let axisMapping = {
         x: { source: 'pitch', sign: 1 },
         y: { source: 'yaw', sign: 1 },
