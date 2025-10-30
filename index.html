@@ -119,7 +119,6 @@
         body.tuning-active .main-grid > .card:not(#autotuning-card):not(#log-card) {
             opacity: 0.5;
             pointer-events: none;
-            /* Usunięto globalne blokowanie UI */
         }
         body.tuning-active #allSettings, body.tuning-active #controls-card .accordion-header, body.tuning-active .card:not(#autotuning-card) button:not(#emergencyStopBtn) {
              opacity: 0.5;
@@ -369,13 +368,7 @@
             <div id="robot3d-container"></div>
             <div class="robot3d-controls">
                 <button id="reset3dViewBtn">Resetuj Widok</button>
-                <button id="toggle3dAnimationBtn">Wl./Wyl. Animacje</button>
-                <button id="toggle3dMovementBtn">Start/Stop Ruchu</button>
-            </div>
-            <div class="robot3d-info">
-                <div class="robot3d-metrics">
-                    <strong>Przechyl (Pitch):</strong> <span id="robot3d-pitch">0.0°</span>
-                    <strong>Przechyl (Roll):</strong> <span id="robot3d-roll">0.0°</span>
+                <
                     <strong>Obrot kol:</strong> <span id="robot3d-wheel-speed">0 obr/min</span>
                     <strong>Pozycja X:</strong> <span id="robot3d-position-x">0.0 cm</span>
                     <strong>Pozycja Z:</strong> <span id="robot3d-position-z">0.0 cm</span>
@@ -578,7 +571,7 @@
                             </div>
                             <div class="config-section">
                                 <label style="color: #f7b731;">🛡️ Ograniczenia Bezpieczenstwa (Max. Wartosci):</label>
-                                <div class="setting-container"> <label for="safetyMaxAngle">Max. Kat (°)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="safetyMaxAngle" min="5" max="45" step="1" value="25"><button>+</button></div> </div>
+                                <div class="setting-container"> <label for="safetyMaxAngle">Max. Kat (°)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="safetyMaxAngle" min="5" max="45" step="1" value="20"><button>+</button></div> </div>
                                 <div class="setting-container"> <label for="safetyMaxSpeed">Max. Predkosc (imp/s)</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="safetyMaxSpeed" min="100" max="4000" step="50" value="1500"><button>+</button></div> </div>
                                 <div class="setting-container"> <label for="safetyMaxPwm">Max. PWM</label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="safetyMaxPwm" min="500" max="1023" step="10" value="900"><button>+</button></div> </div>
                             </div>
@@ -765,7 +758,7 @@
     const AppState = {
         isConnected: false, isSynced: false, isApplyingConfig: false, lastKnownRobotState: 'IDLE',
         isSequenceRunning: false, isTuningActive: false, activeTuningMethod: '', syncTimeout: null,
-        isSyncingConfig: false, tempParams: {}, tempTuningParams: {}, tempStates: {}
+        isSyncingConfig: false, tempParams: {}, tempStates: {}
     };
     let currentSequenceStep = 0; const MAX_SEQUENCE_STEPS = 15;
     
@@ -944,7 +937,7 @@
     // === KREATOR MAPOWANIA OSI 3D - KONIEC BLOKU KODU ===
     // ======================================================
 
-    const parameterMapping = { 'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b', 'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 'balanceIntegralLimitInput': 'balance_pid_integral_limit', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s', 'speedFilterAlphaInput': 'speed_pid_filter_alpha', 'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedIntegralLimitInput': 'speed_pid_integral_limit', 'speedDeadbandInput': 'speed_pid_deadband', 'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p', 'positionFilterAlphaInput': 'position_pid_filter_alpha', 'maxTargetSpeedInput': 'max_target_speed_from_pos_pid', 'positionIntegralLimitInput': 'position_pid_integral_limit', 'positionDeadbandInput': 'position_pid_deadband', 'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r', 'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h', 'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'max_turn_power', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd' };
+    const parameterMapping = { 'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b', 'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 'balanceIntegralLimitInput': 'balance_pid_integral_limit', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s', 'speedFilterAlphaInput': 'speed_pid_filter_alpha', 'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedIntegralLimitInput': 'speed_pid_integral_limit', 'speedDeadbandInput': 'speed_pid_deadband', 'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p', 'positionFilterAlphaInput': 'position_pid_filter_alpha', 'maxTargetSpeedInput': 'max_target_speed_from_pos_pid', 'positionIntegralLimitInput': 'position_pid_integral_limit', 'positionDeadbandInput': 'position_pid_deadband', 'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r', 'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h', 'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd' };
     
     let bleDevice, rxCharacteristic, txCharacteristic;
     const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b", RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9", TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
@@ -995,12 +988,10 @@
         setTuningUiLock(false, '');
         initAutotuneTuningChart();
         setupAutotuningTabs();
-        setupTuningParamListeners();
         setupAxisRemappingControls();
     });
 
     const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
-    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     function addLogMessage(message, level = 'info') { const logHistory = document.getElementById('log-history'); if (!logHistory) return; const timestamp = new Date().toLocaleTimeString(); let color = '#fff'; if (level === 'error') color = '#ff6347'; else if (level === 'warn') color = '#f7b731'; else if (level === 'success') color = '#a2f279'; const logEntry = document.createElement('div'); logEntry.style.color = color; logEntry.textContent = `[${timestamp}] ${message}`; logHistory.prepend(logEntry); while (logHistory.children.length > 200) { logHistory.removeChild(logHistory.lastChild); } }
     function clearLogs() { document.getElementById('log-history').innerHTML = ''; }
     function toggleAccordion(header) { const content = header.nextElementSibling; header.classList.toggle('active'); if (content.style.maxHeight && content.style.maxHeight !== '0px') { content.style.maxHeight = '0px'; content.style.padding = '0px 15px'; } else { content.style.maxHeight = content.scrollHeight + 30 + "px"; content.style.padding = '15px'; } }
@@ -1024,7 +1015,6 @@
             document.getElementById('connectBleBtn').textContent = 'Synchronizowanie...';
             AppState.isSynced = false;
             AppState.tempParams = {};
-            AppState.tempTuningParams = {};
             AppState.tempStates = {};
             sendBleMessage({ type: 'request_full_config' });
             clearTimeout(AppState.syncTimeout);
@@ -1073,47 +1063,48 @@
                     applySingleParam(data.key, data.value);
                 }
                 break;
-            case 'set_tuning_config_param':
-                if (!AppState.isSynced) {
-                    AppState.tempTuningParams[data.key] = data.value;
-                } else {
-                    applySingleAutotuneParam(data.key, data.value);
-                }
-                break;
             case 'ack':
-                if (data.command === 'start_tuning_session') {
-                    if (data.success) {
-                        handleTuningStartAck(AppState.activeTuningMethod);
-                    } else {
-                        addLogMessage(`[UI] Robot odrzucil start strojenia: ${data.message || 'Nieznany blad'}`, 'error');
-                        setTuningUiLock(false, '');
+                if (data.operation === 'request_full_config' && data.success && !AppState.isSynced) {
+                    AppState.isApplyingConfig = true;
+                    for (const [key, value] of Object.entries(AppState.tempParams)) {
+                        applySingleParam(key, value);
                     }
-                } else if (data.command === 'request_full_config') { // NOWE: Obsługa ACK dla request_full_config
-                    if (data.success) {
-                        addLogMessage(`[UI] Robot potwierdzil wyslanie konfiguracji: ${data.message}`, 'info');
-                    } else {
-                        addLogMessage(`[UI] Robot odrzucil zadanie konfiguracji: ${data.message || 'Nieznany blad'}`, 'error');
-                    }
-                } else if (data.command === 'save_config') {
+                    if (AppState.tempStates.balancing !== undefined) document.getElementById('balanceSwitch').checked = AppState.tempStates.balancing;
+                    if (AppState.tempStates.holding_pos !== undefined) document.getElementById('holdPositionSwitch').checked = AppState.tempStates.holding_pos;
+                    if (AppState.tempStates.speed_mode !== undefined) document.getElementById('speedModeSwitch').checked = AppState.tempStates.speed_mode;
+                    AppState.isApplyingConfig = false;
+                    clearTimeout(AppState.syncTimeout);
+                    AppState.isSynced = true;
+                    document.getElementById('connectionText').textContent = 'Polaczony';
+                    document.getElementById('connectBleBtn').textContent = 'POLACZ Z ROBOTEM';
+                    setTimeout(() => {
+                        const sys = parseInt(document.getElementById('calibSysVal').textContent) || 0;
+                        if (!isCalibrationModalShown && sys < 3) {
+                            addLogMessage('[UI] Wykryto niska kalibracje systemu (<3). Otwieram asystenta kalibracji.', 'warn');
+                            showCalibrationModal();
+                        }
+                    }, 1000);
+                    addLogMessage('[UI] Konfiguracja zsynchronizowana pomyslnie.', 'success');
+                    AppState.tempParams = {};
+                    AppState.tempStates = {};
+                }
+                // Ogólna obsługa ACK
+                if (data.operation === 'save_config') {
                     const level = data.success ? 'success' : 'error';
                     addLogMessage(`[ROBOT] Zapis do EEPROM: ${data.message || (data.success ? 'OK' : 'Blad')}`, level);
-                } else {
-                    // Ogólna obsługa dla innych poleceń
-                    const level = data.success ? 'info' : 'warn';
-                    const message = `[ROBOT ACK] ${data.command}: ${data.success ? 'OK' : 'FAILED'} ${data.message ? `(${data.message})` : ''}`;
-                    addLogMessage(message, level);
                 }
                 break;
             case 'full_config':
+                // Obsługa starej wiadomości full_config, jeśli się pojawi
+                if (data.states) { AppState.isApplyingConfig = true; document.getElementById('balanceSwitch').checked = data.states.balancing; document.getElementById('holdPositionSwitch').checked = data.states.holding_pos; document.getElementById('speedModeSwitch').checked = data.states.speed_mode; AppState.isApplyingConfig = false; }
+                if (data.params) { AppState.isApplyingConfig = true; applyFullConfig(data.params); AppState.isApplyingConfig = false; }
+                if (!AppState.isSynced) { clearTimeout(AppState.syncTimeout); AppState.isSynced = true; document.getElementById('connectBleBtn').textContent = 'POLACZ Z ROBOTEM'; document.getElementById('connectBleBtn').style.backgroundColor = ''; addLogMessage('[UI] Konfiguracja zsynchronizowana pomyslnie.', 'success'); setTimeout(() => { const sys = parseInt(document.getElementById('calibSysVal').textContent) || 0; if (!isCalibrationModalShown && sys < 3) { addLogMessage('[UI] Wykryto niska kalibracje systemu (<3). Otwieram asystenta kalibracji.', 'warn'); showCalibrationModal(); } }, 1000); }
                 break;
             case 'sync_complete':
                 // Zastosuj wszystkie zebrane parametry i stany
                 AppState.isApplyingConfig = true;
                 for (const [key, value] of Object.entries(AppState.tempParams)) {
                     applySingleParam(key, value);
-                }
-                for (const [key, value] of Object.entries(AppState.tempTuningParams)) {
-                    applySingleAutotuneParam(key, value);
                 }
                 if (AppState.tempStates.balancing !== undefined) document.getElementById('balanceSwitch').checked = AppState.tempStates.balancing;
                 if (AppState.tempStates.holding_pos !== undefined) document.getElementById('holdPositionSwitch').checked = AppState.tempStates.holding_pos;
@@ -1127,43 +1118,14 @@
                 document.getElementById('connectBleBtn').textContent = 'POLACZ Z ROBOTEM';
                 addLogMessage('[UI] Synchronizacja konfiguracji zakonczona pomyslnie.', 'success');
                 AppState.tempParams = {};
-                AppState.tempTuningParams = {};
                 AppState.tempStates = {};
                 break;
-            case 'set_rgb_blink': // NOWE: Obsługa komend RGB
             case 'log': addLogMessage(`[ROBOT] ${data.message}`, data.level); break;
             case 'tuner_live_status': updateTunerStatus(data); break;
             case 'tuner_live_chart_data': updateAutotuneTuningChart(data); break;
             case 'tuning_result': handleTunerResult(data); break;
-            // POPRAWKA: Dodano obsługę wyniku strojenia PWM
-            case 'min_pwm_autotune_result':
-                if (data.motor && data.direction && data.found_pwm !== undefined) {
-                    const { motor, direction, found_pwm } = data;
-                    addLogMessage(`[UI] Auto-strojenie zakończone dla ${motor} ${direction}. Znaleziono PWM: ${found_pwm}`, 'success');
-                    
-                    // Znajdź odpowiedni wiersz i pole input
-                    const row = document.querySelector(`.manual-tune-row[data-motor="${motor}"][data-direction="${direction}"]`);
-                    if (row) {
-                        const input = row.querySelector('.tune-input');
-                        const autoBtn = row.querySelector('.auto-btn');
-                        // Zastosuj znalezioną wartość do pola input
-                        if (input) input.value = found_pwm;
-                        // Odblokuj przycisk "Auto"
-                        if (autoBtn) {
-                            autoBtn.disabled = false;
-                            autoBtn.textContent = 'Auto';
-                        }
-                    }
-                }
-                break;
             case 'test_result': handleDynamicTestResult(data); break;
-            case 'tuner_session_end':
-                // POPRAWKA: Obsługa komunikatu o zakończeniu sesji strojenia.
-                // Odblokowuje UI, gdy strojenie zostanie przerwane na robocie lub zakończy się naturalnie.
-                addLogMessage(`[UI] Sesja strojenia zakonczona: ${data.reason || 'Zdalne zatrzymanie'}`, 'info');
-                // Używamy funkcji handleCancel, która już zawiera logikę czyszczenia stanu UI.
-                handleCancel(false);
-                break;
+            case 'tuner_session_end': addLogMessage(`[UI] Sesja strojenia zakonczona: ${data.reason}`, 'info'); setTuningUiLock(false, ''); break;
         }
     }
     
@@ -1177,42 +1139,6 @@
                     displayValue = (value * 100);
                 }
                 input.value = displayValue;
-            }
-        }
-    }
-
-    function applySingleAutotuneParam(snakeKey, value) {
-        const inputId = Object.keys(tuningParameterMapping).find(key => tuningParameterMapping[key] === snakeKey);
-
-        if (inputId) {
-            const input = document.getElementById(inputId);
-            if (input) {
-                let displayValue = value;
-                if (snakeKey.startsWith('weights_')) {
-                    displayValue = (value * 100);
-                }
-
-                if (input.type === 'checkbox') {
-                    input.checked = displayValue;
-                } else {
-                    input.value = displayValue;
-                }
-
-                // If it's a shared field, update the other tab too
-                const sharedFields = ['kp-min', 'kp-max', 'ki-min', 'ki-max', 'kd-min', 'kd-max', 'weight-itae', 'weight-overshoot', 'weight-control-effort'];
-                const sharedField = sharedFields.find(f => inputId.endsWith(f));
-                if (sharedField) {
-                    const prefix = inputId.startsWith('ga-') ? 'pso-' : 'ga-';
-                    const otherInput = document.getElementById(`${prefix}${sharedField}`);
-                    if (otherInput) {
-                        otherInput.value = input.value;
-                    }
-                }
-
-                // Trigger input event for range sliders to update their text displays
-                if (input.type === 'range') {
-                    input.dispatchEvent(new Event('input'));
-                }
             }
         }
     }
@@ -1273,7 +1199,7 @@
              if (speedHistory.length > 0) {
                 const minSpeed = Math.min(...speedHistory);
                 const maxSpeed = Math.max(...speedHistory);
-                const avgSpeed = speedHistory.reduce((sum, val) => sum + val, 0) / speedHistory.length; // Poprawka: toFixed(0) dla speedAvg
+                const avgSpeed = speedHistory.reduce((sum, val) => sum + val, 0) / speedHistory.length;
                 document.getElementById('speedMin').textContent = minSpeed.toFixed(0) + ' imp/s';
                 document.getElementById('speedMax').textContent = maxSpeed.toFixed(0) + ' imp/s';
                 document.getElementById('speedAvg').textContent = avgSpeed.toFixed(0) + ' imp/s';
@@ -1286,14 +1212,14 @@
             const systemHealthItem = document.getElementById('systemHealthItem');
             const sysCalibVal = parseInt(data.calib_sys);
             if (sysCalibVal < 2) { systemHealthItem.classList.add('error'); systemHealthItem.classList.remove('warn'); document.getElementById('systemHealthVal').textContent = 'KRYTYCZNY'; }
-            else if (sysCalibVal === 2) { systemHealthItem.classList.add('warn'); systemHealthItem.classList.remove('error'); document.getElementById('systemHealthVal').textContent = 'NISKI'; } else { systemHealthItem.classList.remove('warn', 'error'); document.getElementById('systemHealthVal').textContent = 'OK'; }
+            else if (sysCalibVal === 2) { systemHealthItem.classList.add('warn'); systemHealthItem.classList.remove('error'); document.getElementById('systemHealthVal').textContent = 'NISKI'; }
+            else { systemHealthItem.classList.remove('warn', 'error'); document.getElementById('systemHealthVal').textContent = 'OK'; }
         }
         if (data.calib_accel !== undefined) { document.getElementById('calibAccelVal').textContent = data.calib_accel; updateCalibrationProgress('accel', data.calib_accel); }
         if (data.calib_gyro !== undefined) { document.getElementById('calibGyroVal').textContent = data.calib_gyro; updateCalibrationProgress('gyro', data.calib_gyro); }
         if (data.calib_mag !== undefined) { document.getElementById('calibMagVal').textContent = data.calib_mag; updateCalibrationProgress('mag', data.calib_mag); }
         if (data.trim_angle !== undefined) { document.getElementById('trimValueDisplay').textContent = data.trim_angle.toFixed(1) + '°'; }
-        if (data.trim_angle !== undefined) { document.getElementById('trimValueDisplay').textContent = data.trim_angle.toFixed(2) + '°'; } // ZMIANA: Dwa miejsca po przecinku
-        if (data.states && !AppState.isApplyingConfig) { AppState.isApplyingConfig = true; document.getElementById('balanceSwitch').checked = data.states.balancing; document.getElementById('holdPositionSwitch').checked = data.states.holding_pos; document.getElementById('speedModeSwitch').checked = data.states.speed_mode; AppState.isApplyingConfig = false; } // Pozostała logika
+        if (data.states && !AppState.isApplyingConfig) { AppState.isApplyingConfig = true; document.getElementById('balanceSwitch').checked = data.states.balancing; document.getElementById('holdPositionSwitch').checked = data.states.holding_pos; document.getElementById('speedModeSwitch').checked = data.states.speed_mode; AppState.isApplyingConfig = false; }
         const emergencyBanner = document.getElementById('emergency-banner'); if (emergencyBanner) emergencyBanner.style.display = data.states && data.states.emergency_stop ? 'block' : 'none';
     }
 
@@ -1470,29 +1396,6 @@
                 this.classList.add('active');
                 document.querySelector(`.method-content[data-method="${method}"]`).classList.add('active');
                 autotuneChartData.labels = []; autotuneChartData.datasets = []; autotuneTuningChart.update();
-                
-                // --- POPRAWKA v3: Niezawodna aktualizacja wysokości akordeonu ---
-                const accordionContent = document.querySelector('#autotuning-card-content').closest('.accordion-content');
-                if (accordionContent) {
-                    // Ta funkcja próbuje kilkukrotnie zaktualizować wysokość,
-                    // aby dać przeglądarce czas na przeliczenie układu (reflow).
-                    // Jest to konieczne dla złożonych zakładek (GA, PSO).
-                    let attempts = 0;
-                    let lastHeight = 0;
-                    const intervalId = setInterval(() => {
-                        const currentHeight = accordionContent.scrollHeight;
-                        if (currentHeight > lastHeight) {
-                            // Wysokość wciąż rośnie, aktualizujemy i czekamy dalej
-                            accordionContent.style.maxHeight = currentHeight + 30 + "px";
-                            lastHeight = currentHeight;
-                        }
-                        attempts++;
-                        // Zatrzymujemy po 5 próbach lub gdy wysokość się ustabilizuje
-                        if (attempts >= 5) {
-                            clearInterval(intervalId);
-                        }
-                    }, 30); // Sprawdzaj co 30ms
-                }
             });
         });
         document.querySelectorAll('input[type="range"]').forEach(range => {
@@ -1532,140 +1435,9 @@
         });
     }
     function checkTuningPrerequisites() { if (!AppState.isConnected || !AppState.isSynced) { addLogMessage('[UI] Blad: Polacz i zsynchronizuj z robotem.', 'error'); return false; } if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState)) { addLogMessage(`[UI] Blad: Wymagany stan 'BALANSUJE'. Aktualny: '${AppState.lastKnownRobotState}'.`, 'error'); return false; } if (AppState.isTuningActive) { addLogMessage('[UI] Blad: Inna sesja strojenia jest juz w toku.', 'warn'); return false; } return true; }
-    function setTuningUiLock(isLocked, method) {
-        AppState.isTuningActive = isLocked;
-        AppState.activeTuningMethod = isLocked ? method : '';
-    
-        // Usuwamy blokadę całego UI
-        // document.body.classList.toggle('tuning-active', isLocked);
-    
-        // Wyłączamy tylko przyciski rozpoczynające strojenie i przełączanie zakładek
-        document.getElementById('run-zn-test').disabled = isLocked;
-        document.getElementById('run-ga-tune').disabled = isLocked;
-        document.getElementById('run-pso-tune').disabled = isLocked;
-        document.querySelectorAll('.run-test-btn').forEach(btn => btn.disabled = isLocked);
-        document.querySelectorAll('.method-tab').forEach(tab => tab.disabled = isLocked);
-    
-        // Logika przycisków pauzy/stopu pozostaje bez zmian
-        const isGa = method === 'ga-genetic';
-        document.getElementById('pause-ga-tune').disabled = !isLocked || !isGa;
-        document.getElementById('stop-ga-tune').disabled = !isLocked || !isGa;
-        const isPso = method === 'pso-particle';
-        document.getElementById('pause-pso-tune').disabled = !isLocked || !isPso;
-        document.getElementById('stop-pso-tune').disabled = !isLocked || !isPso;
-    
-        updateTuningDashboard(isLocked ? 'running' : 'idle', method);
-    }
-function handleTuningStartAck(method) {
-    addLogMessage('[UI] Robot potwierdzil rozpoczecie strojenia. Blokuje kontrolki.', 'success');
-    setTuningUiLock(true, method); // Użyj setTuningUiLock do zablokowania
-}
-
-    const tuningParameterMapping = {
-        'common-loop-selector': 'loop_to_tune',
-        'safetyMaxAngle': 'safety_max_angle',
-        'safetyMaxSpeed': 'safety_max_speed',
-        'safetyMaxPwm': 'safety_max_pwm',
-        'zn-trial-duration': 'zn_duration_s',
-        'zn-max-amplitude': 'zn_amplitude',
-
-        // Shared Search Space (using GA as canonical)
-        'ga-kp-min': 'space_kp_min',
-        'ga-kp-max': 'space_kp_max',
-        'ga-ki-min': 'space_ki_min',
-        'ga-ki-max': 'space_ki_max',
-        'ga-kd-min': 'space_kd_min',
-        'ga-kd-max': 'space_kd_max',
-
-        // Shared Fitness Weights (using GA as canonical)
-        'ga-weight-itae': 'weights_itae',
-        'ga-weight-overshoot': 'weights_overshoot',
-        'ga-weight-control-effort': 'weights_control_effort',
-
-        // GA specific
-        'ga-generations': 'ga_generations',
-        'ga-population': 'ga_population',
-
-        // PSO specific
-        'pso-iterations': 'pso_iterations',
-        'pso-particles': 'pso_particles'
-    };
-
-    function sendTuningParam(inputId, value) {
-        if (AppState.isApplyingConfig) return;
-        const snakeKey = tuningParameterMapping[inputId];
-        if (snakeKey) {
-            if (snakeKey.startsWith('weights_')) {
-                value /= 100.0;
-            }
-            sendBleMessage({ type: 'set_tuning_config_param', key: snakeKey, value: value });
-        }
-    }
-
-    const debouncedSendTuningParam = debounce(sendTuningParam, 500);
-
-    function setupTuningParamListeners() {
-        for (const [inputId, snakeKey] of Object.entries(tuningParameterMapping)) {
-            const input = document.getElementById(inputId);
-            if (input) {
-                input.addEventListener('change', (e) => {
-                    let value = e.target.type === 'checkbox' ? e.target.checked :
-                        e.target.tagName === 'SELECT' ? e.target.value :
-                            parseFloat(e.target.value);
-                    debouncedSendTuningParam(e.target.id, value);
-                });
-            }
-        }
-
-        const sharedFields = ['kp-min', 'kp-max', 'ki-min', 'ki-max', 'kd-min', 'kd-max', 'weight-itae', 'weight-overshoot', 'weight-control-effort'];
-        sharedFields.forEach(field => {
-            const gaEl = document.getElementById(`ga-${field}`);
-            const psoEl = document.getElementById(`pso-${field}`);
-            if (gaEl && psoEl) {
-                const syncValues = (source, dest) => {
-                    dest.value = source.value;
-                    const sourceValDisplay = document.getElementById(source.id + '-val');
-                    const destValDisplay = document.getElementById(dest.id + '-val');
-                    if (sourceValDisplay && destValDisplay) {
-                        destValDisplay.textContent = sourceValDisplay.textContent;
-                    }
-                };
-
-                gaEl.addEventListener('input', () => syncValues(gaEl, psoEl));
-                psoEl.addEventListener('input', () => syncValues(psoEl, gaEl));
-            }
-        });
-    }
-
-    function startTuningSession(method) {
-        if (!checkTuningPrerequisites()) return;
-
-        addLogMessage(`[UI] Wysylam polecenie rozpoczecia sesji ${method}...`, 'info');
-        sendBleMessage({ type: 'start_tuning_session', method: method });
-
-        AppState.activeTuningMethod = method;
-
-        updateTuningDashboard('starting', method);
-
-        document.getElementById('zn-results-panel').style.display = 'none';
-        autotuneChartData.labels = [];
-        autotuneChartData.datasets = [];
-        autotuneTuningChart.update();
-    }
-    function startZnTuning() { startTuningSession('zn-relay'); }
-    function startGaTuning() { startTuningSession('ga-genetic'); }
-    function startPsoTuning() { startTuningSession('pso-particle'); }
     function handlePauseResume(e) { const btn = e.target; const isPaused = btn.textContent.includes('Wznow'); if (isPaused) { sendBleMessage({ type: 'resume_tuning_session' }); btn.textContent = '⏸️ Pauza'; updateTuningDashboard('running', AppState.activeTuningMethod); } else { sendBleMessage({ type: 'pause_tuning_session' }); btn.textContent = '▶️ Wznow'; updateTuningDashboard('paused', AppState.activeTuningMethod); } }
-    function handleCancel(sendCmd = true) { if (sendCmd && AppState.isTuningActive && confirm('Czy na pewno chcesz przerwac proces strojenia?')) { sendBleMessage({ type: 'cancel_tuning_session' }); } setTuningUiLock(false, ''); addLogMessage('[UI] Anulowano/zakonczono sesje strojenia.', 'warn'); updateTuningDashboard('idle'); }
-    function updateTuningDashboard(status, method = '') {
-        const dashboard = document.getElementById('autotune-dashboard');
-        if (status === 'idle') { dashboard.style.display = 'none'; return; }
-        dashboard.style.display = 'block';
-        const statusEl = document.getElementById('dashboard-status');
-        if (status === 'running') statusEl.textContent = 'W trakcie';
-        else if (status === 'paused') statusEl.textContent = 'Wstrzymano';
-        else if (status === 'starting') statusEl.textContent = 'Uruchamianie...'; // Nowy status
-    }
+    function handleCancel() { if (confirm('Czy na pewno chcesz przerwac proces strojenia?')) { sendBleMessage({ type: 'cancel_tuning_session' }); setTuningUiLock(false, ''); addLogMessage('[UI] Anulowano sesje strojenia.', 'warn'); } }
+    function updateTuningDashboard(status, method = '') { const dashboard = document.getElementById('autotune-dashboard'); if (status === 'idle') { dashboard.style.display = 'none'; return; } dashboard.style.display = 'block'; document.getElementById('dashboard-tuning-method').textContent = method.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' '); const statusEl = document.getElementById('dashboard-status'); if (status === 'running') statusEl.textContent = 'W trakcie'; else if (status === 'paused') statusEl.textContent = 'Wstrzymano'; }
     function updateTunerStatus(data) {
         const method = AppState.activeTuningMethod; let prefix = '';
         if (method === 'ga-genetic') prefix = 'ga'; else if (method === 'pso-particle') prefix = 'pso'; else return;
@@ -1731,13 +1503,8 @@ function handleTuningStartAck(method) {
         document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
         ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { if (AppState.isApplyingConfig) return; const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
 
-        // POPRAWKA: Usunięto stare listenery dla trim+/- i dodano nowe, poprawne dla precyzyjnych przycisków.
-        const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
-        document.getElementById('trimMinus01Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -0.1 }));
-        document.getElementById('trimMinus001Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -0.01 }));
-        document.getElementById('trimPlus001Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 0.01 }));
-        document.getElementById('trimPlus01Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 0.1 }));
-
+        // PRZYWRÓCONE EVENT LISTENERY
+        const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'trimPlusBtn': { type: 'adjust_zero', value: 1 }, 'trimMinusBtn': { type: 'adjust_zero', value: -1 }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
         for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); }
 
         document.getElementById('saveBtn').addEventListener('click', () => {
@@ -1765,8 +1532,8 @@ function handleTuningStartAck(method) {
     function setupCalibrationModal() { document.getElementById('calib-update-btn').addEventListener('click', () => { sendBleMessage({ type: 'request_calibration_status' }); }); document.getElementById('calib-close-btn').addEventListener('click', () => { const sys = parseInt(document.getElementById('calib-sys-text').textContent) || 0; if (sys >= 3) { hideCalibrationModal(); } else if (confirm('Poziom kalibracji systemu jest niski (<3). Czy na pewno chcesz zamknac?')) { hideCalibrationModal(); } }); }
     function showCalibrationModal() { document.getElementById('calibration-modal').style.display = 'flex'; isCalibrationModalShown = true; sendBleMessage({ type: 'set_rgb_blink', colors: ['00FF00', 'FFA500'] }); addLogMessage('[UI] Rozpocznij proces kalibracji IMU - obracaj robota powoli we wszystkich kierunkach.', 'info'); }
     function hideCalibrationModal() { document.getElementById('calibration-modal').style.display = 'none'; isCalibrationModalShown = false; sendBleMessage({ type: 'stop_rgb_blink' }); addLogMessage('[UI] Asystent kalibracji zamkniety.', 'info'); }
-    function updateCalibrationProgress(axis, value) { if (document.getElementById('calibration-modal').style.display === 'none') return; const barId = `calib-${axis}-bar`; const textId = `calib-${axis}-text`; const bar = document.getElementById(barId); const text = document.getElementById(textId); if (bar && text) { bar.value = value; text.textContent = value; const sys = parseInt(document.getElementById('calib-sys-text').textContent) || 0; if (sys >= 3 && document.getElementById('calibration-modal').style.display !== 'none') { hideCalibrationModal(); addLogMessage('[UI] Kalibracja systemu osiagnela poziom 3. Asystent zamkniety.', 'success'); } } } // ZMIANA: Usunięto duplikację funkcji setupCalibrationModal()
-    function init3DVisualization() { const container = document.getElementById('robot3d-container'); scene3D = new THREE.Scene(); camera3D = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 2000); camera3D.position.set(28, 22, 48); camera3D.lookAt(0, 8, 0); renderer3D = new THREE.WebGLRenderer({ antialias: true }); renderer3D.setSize(container.clientWidth, container.clientHeight); container.appendChild(renderer3D.domElement); controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement); controls3D.target.set(0, 8, 0); controls3D.maxPolarAngle = Math.PI / 2; const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); scene3D.add(ambientLight); const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9); directionalLight.position.set(10, 20, 15); scene3D.add(directionalLight); const PLANE_SIZE_CM = 2000; groundTexture = createCheckerTexture(20); const repeats = PLANE_SIZE_CM / 20; groundTexture.repeat.set(repeats, repeats); const groundMaterial = new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1.0, metalness: 0.0 }); const groundGeo = new THREE.PlaneGeometry(PLANE_SIZE_CM, PLANE_SIZE_CM, 1, 1); groundMesh = new THREE.Mesh(groundGeo, groundMaterial); groundMesh.rotation.x = -Math.PI / 2; groundMesh.position.y = 0; scene3D.add(groundMesh); robotPivot = createRobotModel3D(); robotPivot.position.y = 4.1; scene3D.add(robotPivot); skyDome = createSkyDome(); scene3D.add(skyDome); window.addEventListener('resize', () => { const width = container.clientWidth; const height = container.clientHeight; camera3D.aspect = width / height; camera3D.updateProjectionMatrix(); renderer3D.setSize(width, height); }); setupControls3D(); setupCalibrationModal(); } // ZMIANA: Usunięto duplikację funkcji setupCalibrationModal()
+    function updateCalibrationProgress(axis, value) { if (document.getElementById('calibration-modal').style.display === 'none') return; const barId = `calib-${axis}-bar`; const textId = `calib-${axis}-text`; const bar = document.getElementById(barId); const text = document.getElementById(textId); if (bar && text) { bar.value = value; text.textContent = value; const sys = parseInt(document.getElementById('calib-sys-text').textContent) || 0; if (sys >= 3 && document.getElementById('calibration-modal').style.display !== 'none') { hideCalibrationModal(); addLogMessage('[UI] Kalibracja systemu osiagnela poziom 3. Asystent zamkniety.', 'success'); } } }
+    function init3DVisualization() { const container = document.getElementById('robot3d-container'); scene3D = new THREE.Scene(); camera3D = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 2000); camera3D.position.set(28, 22, 48); camera3D.lookAt(0, 8, 0); renderer3D = new THREE.WebGLRenderer({ antialias: true }); renderer3D.setSize(container.clientWidth, container.clientHeight); container.appendChild(renderer3D.domElement); controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement); controls3D.target.set(0, 8, 0); controls3D.maxPolarAngle = Math.PI / 2; const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); scene3D.add(ambientLight); const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9); directionalLight.position.set(10, 20, 15); scene3D.add(directionalLight); const PLANE_SIZE_CM = 2000; groundTexture = createCheckerTexture(20); const repeats = PLANE_SIZE_CM / 20; groundTexture.repeat.set(repeats, repeats); const groundMaterial = new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1.0, metalness: 0.0 }); const groundGeo = new THREE.PlaneGeometry(PLANE_SIZE_CM, PLANE_SIZE_CM, 1, 1); groundMesh = new THREE.Mesh(groundGeo, groundMaterial); groundMesh.rotation.x = -Math.PI / 2; groundMesh.position.y = 0; scene3D.add(groundMesh); robotPivot = createRobotModel3D(); robotPivot.position.y = 4.1; scene3D.add(robotPivot); skyDome = createSkyDome(); scene3D.add(skyDome); window.addEventListener('resize', () => { const width = container.clientWidth; const height = container.clientHeight; camera3D.aspect = width / height; camera3D.updateProjectionMatrix(); renderer3D.setSize(width, height); }); setupControls3D(); setupCalibrationModal(); }
     function createCustomWheel(totalRadius, tireThickness, width) { const wheelGroup = new THREE.Group(); const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 }); const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.4 }); const rimRadius = totalRadius - tireThickness; const tire = new THREE.Mesh(new THREE.TorusGeometry(rimRadius + tireThickness / 2, tireThickness / 2, 16, 100), tireMaterial); wheelGroup.add(tire); const rimShape = new THREE.Shape(); rimShape.absarc(0, 0, rimRadius, 0, Math.PI * 2, false); const holePath = new THREE.Path(); holePath.absarc(0, 0, rimRadius * 0.85, 0, Math.PI * 2, true); rimShape.holes.push(holePath); const extrudeSettings = { depth: width * 0.4, bevelEnabled: false }; const outerRimGeometry = new THREE.ExtrudeGeometry(rimShape, extrudeSettings); outerRimGeometry.center(); const outerRim = new THREE.Mesh(outerRimGeometry, rimMaterial); wheelGroup.add(outerRim); const hubRadius = rimRadius * 0.2; const hub = new THREE.Mesh(new THREE.CylinderGeometry(hubRadius, hubRadius, width * 0.5, 24), rimMaterial); hub.rotateX(Math.PI / 2); wheelGroup.add(hub); const spokeLength = (rimRadius * 0.85) - hubRadius; const spokeGeometry = new THREE.BoxGeometry(spokeLength, rimRadius * 0.15, width * 0.4); spokeGeometry.translate(hubRadius + spokeLength / 2, 0, 0); for (let i = 0; i < 6; i++) { const spoke = new THREE.Mesh(spokeGeometry, rimMaterial); spoke.rotation.z = i * (Math.PI / 3); wheelGroup.add(spoke); } return wheelGroup; }
     function createRobotModel3D() { const BODY_WIDTH = 9.0, BODY_HEIGHT = 6.0, BODY_DEPTH = 3.5, WHEEL_GAP = 1.0; const MAST_HEIGHT = 14.5, MAST_THICKNESS = 1.5; const BATTERY_WIDTH = 6.0, BATTERY_HEIGHT = 1.0, BATTERY_DEPTH = 3.0; const TIRE_THICKNESS = 1.0, WHEEL_WIDTH = 2.0; const WHEEL_RADIUS_3D = 4.1; const pivot = new THREE.Object3D(); const model = new THREE.Group(); const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1C1C1C }); const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0x4169E1 }); const body = new THREE.Mesh(new THREE.BoxGeometry(BODY_WIDTH, BODY_HEIGHT, BODY_DEPTH), bodyMaterial); body.position.y = WHEEL_RADIUS_3D; model.add(body); const mast = new THREE.Mesh(new THREE.BoxGeometry(MAST_THICKNESS, MAST_HEIGHT, MAST_THICKNESS), bodyMaterial); mast.position.y = WHEEL_RADIUS_3D + BODY_HEIGHT / 2 + MAST_HEIGHT / 2; model.add(mast); const battery = new THREE.Mesh(new THREE.BoxGeometry(BATTERY_WIDTH, BATTERY_HEIGHT, BATTERY_DEPTH), batteryMaterial); battery.position.y = mast.position.y + MAST_HEIGHT / 2 + BATTERY_HEIGHT / 2; model.add(battery); leftWheel = createCustomWheel(WHEEL_RADIUS_3D, TIRE_THICKNESS, WHEEL_WIDTH); leftWheel.rotation.y = Math.PI / 2; leftWheel.position.set(-(BODY_WIDTH / 2 + WHEEL_GAP), WHEEL_RADIUS_3D, 0); model.add(leftWheel); rightWheel = createCustomWheel(WHEEL_RADIUS_3D, TIRE_THICKNESS, WHEEL_WIDTH); rightWheel.rotation.y = Math.PI / 2; rightWheel.position.set(BODY_WIDTH / 2 + WHEEL_GAP, WHEEL_RADIUS_3D, 0); model.add(rightWheel); model.position.y = -WHEEL_RADIUS_3D; pivot.add(model); return pivot; }
     function createCheckerTexture(squareSizeCm = 20, colorA = '#C8C8C8', colorB = '#787878') { const size = 256; const squares = 2; const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size; const ctx = canvas.getContext('2d'); const s = size / squares; for (let y = 0; y < squares; y++) { for (let x = 0; x < squares; x++) { ctx.fillStyle = ((x + y) % 2 === 0) ? colorA : colorB; ctx.fillRect(x * s, y * s, s, s); } } const tex = new THREE.CanvasTexture(canvas); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 8; tex.encoding = THREE.sRGBEncoding; return tex; }
@@ -1807,21 +1574,6 @@ function handleTuningStartAck(method) {
                 // Dopiero gdy wszystkie wartosci sa poprawne, zaktualizuj rotacje modelu.
                 robotPivot.rotation.set(finalRotation.x, finalRotation.y, finalRotation.z, 'YXZ');
             }
-
-        // KROK 3: DYNAMICZNA KOREKTA WYSOKOSCI, ABY KOLA NIE ZNIKALY POD PODLOGA
-        if (robotPivot && leftWheel) {
-            // Pobierz aktualny kat przechylu (roll) z modelu. Uzywamy wartosci z modelu, a nie telemetrycznej,
-            // poniewaz jest ona juz przetworzona przez mapowanie osi.
-            const rollAngle = robotPivot.rotation.z; 
-
-            // Oblicz odleglosc kola od srodka robota.
-            const wheelDistance = Math.abs(leftWheel.position.x);
-
-            // Oblicz wymagana korekte wysokosci. Jest to wartosc bezwzgledna, poniewaz
-            // niezaleznie od kierunku przechylu, robot musi byc podniesiony.
-            const heightCorrection = wheelDistance * Math.abs(Math.sin(rollAngle));
-            robotPivot.position.y = 4.1 + heightCorrection;
-        }
             
             // Aktualizacja kamery w trybie "Perspektywa Robota"
             const isRobotPerspective = document.getElementById('robotPerspectiveCheckbox').checked;
