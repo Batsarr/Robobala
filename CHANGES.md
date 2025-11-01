@@ -59,18 +59,20 @@ tex.wrapT = THREE.ClampToEdgeWrapping;
 ### 2. Doubled Floor Square Size
 **Problem**: The floor squares were too small, making the floor look too busy.
 
-**Solution**: Changed the `squares` parameter in `createCheckerTexture()` from `2` to `1`, effectively doubling the size of each square in the pattern.
+**Solution**: Changed the `squareSizeCm` parameter from 20 to 40 when calling `createCheckerTexture()`, and adjusted the texture repeat calculation accordingly.
 
-**Code Changes in `createCheckerTexture()`**:
+**Code Changes in `init3DVisualization()`**:
 ```javascript
-// Before: Creates a 2x2 grid in the base texture (smaller squares)
-const squares = 2;
+// Before: Creates squares that are 20cm each
+groundTexture = createCheckerTexture(20);
+const repeats = PLANE_SIZE_CM / 20;  // 2000 / 20 = 100 repetitions
 
-// After: Creates a 1x1 grid in the base texture (larger squares)
-const squares = 1;
+// After: Creates squares that are 40cm each (doubled)
+groundTexture = createCheckerTexture(40);
+const repeats = PLANE_SIZE_CM / 40;  // 2000 / 40 = 50 repetitions
 ```
 
-This change means that when the texture is repeated across the floor, each repetition now contains larger squares, effectively doubling the visual size of the checkerboard pattern.
+This approach maintains the proper checkerboard pattern while doubling the visual size of each square.
 
 ## Expected Visual Results
 
@@ -79,8 +81,8 @@ This change means that when the texture is repeated across the floor, each repet
 - **After**: Seamless sky texture with no visible seam, clouds wrap naturally around the sphere
 
 ### Floor
-- **Before**: Small checkerboard squares (2x2 pattern in base texture)
-- **After**: Larger checkerboard squares (1x1 pattern in base texture), twice the size
+- **Before**: Small checkerboard squares (100 repetitions across 2000cm floor)
+- **After**: Larger checkerboard squares (50 repetitions across 2000cm floor), twice the size
 
 ## Testing
 Due to browser security restrictions in the test environment, the changes cannot be visually demonstrated with screenshots. However, the code changes are minimal, surgical, and focused on exactly the two issues described in the problem statement.

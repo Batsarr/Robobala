@@ -55,12 +55,14 @@ tex.wrapT = THREE.ClampToEdgeWrapping;
 #### Floor Square Size Change
 **Before:**
 ```javascript
-const squares = 2; // Creates 2x2 pattern in base texture
+groundTexture = createCheckerTexture(20);
+const repeats = PLANE_SIZE_CM / 20; // 100 repetitions
 ```
 
 **After:**
 ```javascript
-const squares = 1; // Creates 1x1 pattern (2x larger squares)
+groundTexture = createCheckerTexture(40);
+const repeats = PLANE_SIZE_CM / 40; // 50 repetitions (2x larger squares)
 ```
 
 ### Verification

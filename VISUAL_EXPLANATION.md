@@ -51,36 +51,38 @@ if (x < radius * 2) {
 
 ## 2. Floor Square Size Change
 
-### Before (squares = 2):
+### Before (squareSizeCm = 20):
 ```
-Base Texture (256x256):        Repeated on Floor:
-┌──────┬──────┐                ┌──┬──┬──┬──┬──┬──┐
-│      │▓▓▓▓▓▓│                │  │▓▓│  │▓▓│  │▓▓│
-│      │▓▓▓▓▓▓│                ├──┼──┼──┼──┼──┼──┤
-├──────┼──────┤      ═══>      │▓▓│  │▓▓│  │▓▓│  │
-│▓▓▓▓▓▓│      │                ├──┼──┼──┼──┼──┼──┤
-│▓▓▓▓▓▓│      │                │  │▓▓│  │▓▓│  │▓▓│
-└──────┴──────┘                └──┴──┴──┴──┴──┴──┘
-   2x2 grid                    Many small squares
+createCheckerTexture(20)           Floor Plane (2000cm):
+Base Texture (2x2 pattern):        Repeats: 2000/20 = 100
+┌──────┬──────┐                   ┌──┬──┬──┬──┬──┬──┬──┬──┐
+│      │▓▓▓▓▓▓│                   │  │▓▓│  │▓▓│  │▓▓│  │▓▓│
+│      │▓▓▓▓▓▓│       ═══>        ├──┼──┼──┼──┼──┼──┼──┼──┤
+├──────┼──────┤                   │▓▓│  │▓▓│  │▓▓│  │▓▓│  │
+│▓▓▓▓▓▓│      │                   ├──┼──┼──┼──┼──┼──┼──┼──┤
+│▓▓▓▓▓▓│      │                   │  │▓▓│  │▓▓│  │▓▓│  │▓▓│
+└──────┴──────┘                   └──┴──┴──┴──┴──┴──┴──┴──┘
+                                  Many small squares (20cm each)
 ```
 
-### After (squares = 1):
+### After (squareSizeCm = 40):
 ```
-Base Texture (256x256):        Repeated on Floor:
-┌──────────────┐               ┌──────┬──────┬──────┐
-│              │               │      │▓▓▓▓▓▓│      │
-│              │               │      │▓▓▓▓▓▓│      │
-│              │     ═══>      ├──────┼──────┼──────┤
-│              │               │▓▓▓▓▓▓│      │▓▓▓▓▓▓│
-│              │               │▓▓▓▓▓▓│      │▓▓▓▓▓▓│
-└──────────────┘               └──────┴──────┴──────┘
-   1x1 grid                    Larger squares (2x bigger)
+createCheckerTexture(40)           Floor Plane (2000cm):
+Base Texture (2x2 pattern):        Repeats: 2000/40 = 50
+┌──────┬──────┐                   ┌────┬────┬────┬────┐
+│      │▓▓▓▓▓▓│                   │    │▓▓▓▓│    │▓▓▓▓│
+│      │▓▓▓▓▓▓│       ═══>        │    │▓▓▓▓│    │▓▓▓▓│
+├──────┼──────┤                   ├────┼────┼────┼────┤
+│▓▓▓▓▓▓│      │                   │▓▓▓▓│    │▓▓▓▓│    │
+│▓▓▓▓▓▓│      │                   │▓▓▓▓│    │▓▓▓▓│    │
+└──────┴──────┘                   └────┴────┴────┴────┘
+                                  Larger squares (40cm each - 2x bigger)
 ```
 
 **Explanation:**
-- With `squares = 2`, the base texture has a 2x2 checkerboard pattern
-- With `squares = 1`, the base texture is a single solid color
-- When repeated with the same repeat count, the 1x1 pattern creates squares that are 2x larger
+- The base texture always has a 2x2 checkerboard pattern
+- By changing `squareSizeCm` from 20 to 40, the texture repeats half as many times (50 instead of 100)
+- This makes each square appear twice as large (40cm instead of 20cm)
 
 ## Summary
 
