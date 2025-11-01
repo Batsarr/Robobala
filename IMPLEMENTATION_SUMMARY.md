@@ -11,8 +11,9 @@ Improve the sky graphics in the 3D model in the interface to make it more realis
    - Implemented cloud mirroring at texture edges
    - Configured proper texture wrapping modes
 
-2. **Doubled Floor Square Size** (index.html, line 1839)
-   - Changed `squares` parameter from 2 to 1 in `createCheckerTexture()` function
+2. **Doubled Floor Square Size** (index.html, line 1836)
+   - Changed `squareSizeCm` parameter from 20 to 40 when calling `createCheckerTexture()` in `init3DVisualization()`
+   - Adjusted texture repeat calculation from `PLANE_SIZE_CM / 20` to `PLANE_SIZE_CM / 40`
 
 ### Technical Details
 
