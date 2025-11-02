@@ -1126,7 +1126,7 @@
         setTuningUiLock(false, '');
         initAutotuneTuningChart();
         setupAutotuningTabs();
-        // REFACTORED: Removed setupTuningParamListeners() - autotune params now handled by setupParameterListeners()
+        setupParameterListeners(); // RE-ADDED: This is crucial for parameter handling
         setupAxisRemappingControls();
     });
 
@@ -1833,34 +1833,6 @@ function handleTuningStartAck(method) {
     setTuningUiLock(true, method); // Użyj setTuningUiLock do zablokowania
 }
 
-    // REFACTORED: Removed separate tuningParameterMapping
-    // All autotune parameters are now in the unified parameterMapping above
-    // and use the same 'set_param' command type
-
-    // DEPRECATED: Removed tuningParameterMapping - merged into parameterMapping
-    // DEPRECATED: Removed sendTuningParam - using sendSingleParam instead
-    // DEPRECATED: Removed setupTuningParamListeners - using setupParameterListeners instead
-
-    const sharedFields = ['kp-min', 'kp-max', 'ki-min', 'ki-max', 'kd-min', 'kd-max', 'weight-itae', 'weight-overshoot', 'weight-control-effort'];
-        sharedFields.forEach(field => {
-            const gaEl = document.getElementById(`ga-${field}`);
-            const psoEl = document.getElementById(`pso-${field}`);
-            if (gaEl && psoEl) {
-                const syncValues = (source, dest) => {
-                    dest.value = source.value;
-                    const sourceValDisplay = document.getElementById(source.id + '-val');
-                    const destValDisplay = document.getElementById(dest.id + '-val');
-                    if (sourceValDisplay && destValDisplay) {
-                        destValDisplay.textContent = sourceValDisplay.textContent;
-                    }
-                };
-
-                gaEl.addEventListener('input', () => syncValues(gaEl, psoEl));
-                psoEl.addEventListener('input', () => syncValues(psoEl, gaEl));
-            }
-        });
-    }
-
     function startTuningSession(method) {
         if (!checkTuningPrerequisites()) return;
 
@@ -1873,7 +1845,7 @@ function handleTuningStartAck(method) {
 
         document.getElementById('zn-results-panel').style.display = 'none';
         
-        // REFACTORED: Czyść tabelę wyników przed rozpoczęciem nowej sesji
+        // Clear results before starting a new session
         if (method.startsWith('ga')) {
             const gaTableBody = document.getElementById('ga-results-table-body');
             if (gaTableBody) gaTableBody.innerHTML = '';
@@ -1923,7 +1895,7 @@ function handleTuningStartAck(method) {
     }
     function handleTuningIterationResult(data) {
         // REFACTORED: Handler dla wyniku pojedynczej iteracji strojenia
-        const method = AppState.activeTuningMethod;
+        const method = data.method || AppState.activeTuningMethod;
         if (!method) return;
         
         let tableBody, blockContainer;
@@ -2179,7 +2151,21 @@ function handleTuningStartAck(method) {
     }
     function sendFullConfigToRobot() { const params = {}; for (const [inputId, snakeKey] of Object.entries(parameterMapping)) { const input = document.getElementById(inputId); if (input) { let value = parseFloat(input.value); if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha'].includes(snakeKey)) { value /= 100.0; } params[snakeKey] = value; } } addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info'); sendBleMessage({ type: 'full_config', params }); }
     function setupEventListeners() {
-        const sendSingleParam = (inputId, value) => { if (AppState.isApplyingConfig) return; const snakeKey = parameterMapping[inputId]; if (snakeKey) { if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha', 'weights_itae', 'weights_overshoot', 'weights_control_effort'].includes(snakeKey)) { value /= 100.0; } sendBleMessage({ type: 'set_param', key: snakeKey, value: value }); } }; 
+        // This function is now deprecated and replaced by setupParameterListeners
+        // Keeping the structure for reference, but the new function is the one being called.
+    }
+
+    function setupParameterListeners() {
+        const sendSingleParam = (inputId, value) => { 
+            if (AppState.isApplyingConfig) return; 
+            const snakeKey = parameterMapping[inputId]; 
+            if (snakeKey) { 
+                if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha', 'weights_itae', 'weights_overshoot', 'weights_control_effort'].includes(snakeKey)) { 
+                    value /= 100.0; 
+                } 
+                sendBleMessage({ type: 'set_param', key: snakeKey, value: value }); 
+            } 
+        }; 
         const debouncedSendSingleParam = debounce(sendSingleParam, 400); 
         document.querySelectorAll('.config-value').forEach(input => { input.addEventListener('change', (e) => { debouncedSendSingleParam(e.target.id, parseFloat(e.target.value)); }); }); 
         document.getElementById('joystickCanvas').addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); document.getElementById('joystickCanvas').addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd); 
