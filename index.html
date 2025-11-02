@@ -1225,7 +1225,7 @@
                     } else {
                         addLogMessage(`[UI] Robot odrzucil zadanie konfiguracji: ${data.message || 'Nieznany blad'}`, 'error');
                     }
-                } else if (data.command === 'save_config') {
+                } else if (data.command === 'save_tunings') {
                     const level = data.success ? 'success' : 'error';
                     addLogMessage(`[ROBOT] Zapis do EEPROM: ${data.message || (data.success ? 'OK' : 'Blad')}`, level);
                 } else {
@@ -2184,7 +2184,7 @@ function handleTuningStartAck(method) {
         document.getElementById('saveBtn').addEventListener('click', () => {
             if (AppState.isConnected && confirm("Czy na pewno chcesz trwale zapisać bieżącą konfigurację z panelu do pamięci EEPROM robota?")) {
                 addLogMessage('[UI] Wyslano polecenie zapisu konfiguracji do EEPROM...', 'info');
-                sendBleMessage({ type: 'save_config' });
+                sendBleMessage({ type: 'save_tunings' });
             } else if (!AppState.isConnected) { addLogMessage('[UI] Połącz z robotem przed zapisem konfiguracji.', 'warn'); }
         });
         document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { AppState.isSynced = false; AppState.tempParams = {}; AppState.tempStates = {}; sendBleMessage({ type: 'request_full_config' }); } });
@@ -2376,6 +2376,46 @@ function handleTuningStartAck(method) {
             renderer3D.render(scene3D, camera3D);
         }
     }
+</script>
+
+<!-- PANEL TESTÓW I TUNINGU -->
+<div id="test-panel" style="position:fixed;bottom:10px;right:10px;z-index:999;background:#fff;border:1px solid #aaa;padding:12px 16px;border-radius:8px;box-shadow:0 2px 8px #0002;max-width:340px;">
+    <h4 style="margin-top:0">Testy i tuning</h4>
+    <div style="margin-bottom:8px">
+        <button onclick="sendBleMessage({type:'execute_position_test_impulse',impulse_power:getTestInput('impulsePower')})">Test impulsu pozycji</button>
+        <input id="test-impulsePower" type="number" value="40" min="1" max="255" style="width:60px" placeholder="impuls"/>
+    </div>
+    <div style="margin-bottom:8px">
+        <button onclick="sendBleMessage({type:'execute_speed_test_run',distance_cm:getTestInput('distanceCm'),speed_cmps:getTestInput('speedCmps')})">Test prędkości</button>
+        <input id="test-distanceCm" type="number" value="50" style="width:50px" placeholder="dystans"/>
+        <input id="test-speedCmps" type="number" value="20" style="width:50px" placeholder="cm/s"/>
+    </div>
+    <div style="margin-bottom:8px">
+        <button onclick="sendBleMessage({type:'execute_balance_step_response',angle:getTestInput('stepAngle')})">Step response (balans)</button>
+        <input id="test-stepAngle" type="number" value="5" style="width:50px" placeholder="stopnie"/>
+    </div>
+    <div style="margin-bottom:8px">
+        <button onclick="sendBleMessage({type:'start_ga_session'})">Start GA</button>
+        <button onclick="sendBleMessage({type:'cancel_ga_session'})">Stop GA</button>
+        <button onclick="sendBleMessage({type:'run_ga_trial',kp:getTestInput('gaKp'),kd:getTestInput('gaKd')})">GA trial</button>
+        <input id="test-gaKp" type="number" value="100" style="width:50px" placeholder="Kp"/>
+        <input id="test-gaKd" type="number" value="2" style="width:50px" placeholder="Kd"/>
+    </div>
+    <div style="margin-bottom:8px">
+        <button onclick="sendBleMessage({type:'start_zn_tuning',filter:true})">Start ZN</button>
+        <button onclick="sendBleMessage({type:'cancel_zn_tuning'})">Stop ZN</button>
+    </div>
+    <div style="margin-bottom:8px">
+        <button onclick="sendBleMessage({type:'start_pso_session'})">Start PSO</button>
+    </div>
+</div>
+<script>
+function getTestInput(id) {
+    const el = document.getElementById('test-' + id);
+    if (!el) return 0;
+    const v = parseFloat(el.value);
+    return isNaN(v) ? 0 : v;
+}
 </script>
 </body>
 </html>
