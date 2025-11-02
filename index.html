@@ -822,7 +822,21 @@
                             <div class="config-panel">
                                 <h3>🧪 Testy Dynamiczne</h3>
                                 <p style="text-align: left; font-size: 0.9em; line-height: 1.4;">Uruchom pojedynczy test, aby zmierzyc metryki wydajnosci obecnej konfiguracji PID. Wyniki pojawia sie ponizej.</p>
-                                <button class="run-test-btn" data-test-type="step_response" style="width: 100%;">🚀 Uruchom test odpowiedzi na skok</button>
+                                                                <div style="display:flex;flex-direction:column;gap:8px;">
+                                                                    <button id="run-impulse-test" style="width:100%;">🚀 Test impulsu pozycji</button>
+                                                                    <div style="display:flex;gap:8px;align-items:center;">
+                                                                        <label for="impulsePowerInput" style="min-width:90px;font-size:0.95em;">Impuls (PWM):</label>
+                                                                        <input id="impulsePowerInput" type="number" min="1" max="255" value="40" style="width:60px;">
+                                                                    </div>
+                                                                    <button id="run-speed-test" style="width:100%;">🚀 Test prędkości</button>
+                                                                    <div style="display:flex;gap:8px;align-items:center;">
+                                                                        <label for="distanceCmInput" style="min-width:90px;font-size:0.95em;">Dystans (cm):</label>
+                                                                        <input id="distanceCmInput" type="number" value="50" style="width:60px;">
+                                                                        <label for="speedCmpsInput" style="min-width:70px;font-size:0.95em;">Prędkość (cm/s):</label>
+                                                                        <input id="speedCmpsInput" type="number" value="20" style="width:60px;">
+                                                                    </div>
+                                                                    <button class="run-test-btn" data-test-type="step_response" style="width: 100%;">🚀 Uruchom test odpowiedzi na skok</button>
+                                                                </div>
                                 <div id="test-results-panel" class="results-panel">
                                     <h4>Wyniki ostatniego testu</h4>
                                     <div id="test-metrics" class="results-grid">
@@ -1784,6 +1798,20 @@
         document.getElementById('run-ga-tune').addEventListener('click', startGaTuning);
         document.getElementById('run-pso-tune').addEventListener('click', startPsoTuning);
         ['ga', 'pso'].forEach(prefix => { document.getElementById(`pause-${prefix}-tune`).addEventListener('click', handlePauseResume); document.getElementById(`stop-${prefix}-tune`).addEventListener('click', handleCancel); });
+        // Obsługa testów dynamicznych (impuls, prędkość)
+        const impulseBtn = document.getElementById('run-impulse-test');
+        if (impulseBtn) impulseBtn.addEventListener('click', function() {
+            const power = parseInt(document.getElementById('impulsePowerInput').value) || 40;
+            sendBleMessage({ type: 'execute_position_test_impulse', impulse_power: power });
+            addLogMessage('[UI] Wysłano test impulsu pozycji.', 'info');
+        });
+        const speedBtn = document.getElementById('run-speed-test');
+        if (speedBtn) speedBtn.addEventListener('click', function() {
+            const dist = parseFloat(document.getElementById('distanceCmInput').value) || 50;
+            const speed = parseFloat(document.getElementById('speedCmpsInput').value) || 20;
+            sendBleMessage({ type: 'execute_speed_test_run', distance_cm: dist, speed_cmps: speed });
+            addLogMessage('[UI] Wysłano test prędkości.', 'info');
+        });
         document.querySelectorAll('.run-test-btn').forEach(btn => btn.addEventListener('click', function() { runDynamicTest(this.dataset.testType); }));
         document.getElementById('apply-zn-results').addEventListener('click', () => {
              const kp = parseFloat(document.getElementById('zn-kp-suggest').textContent), kd = parseFloat(document.getElementById('zn-kd-suggest').textContent);
@@ -2378,44 +2406,5 @@ function handleTuningStartAck(method) {
     }
 </script>
 
-<!-- PANEL TESTÓW I TUNINGU -->
-<div id="test-panel" style="position:fixed;bottom:10px;right:10px;z-index:999;background:#fff;border:1px solid #aaa;padding:12px 16px;border-radius:8px;box-shadow:0 2px 8px #0002;max-width:340px;">
-    <h4 style="margin-top:0">Testy i tuning</h4>
-    <div style="margin-bottom:8px">
-        <button onclick="sendBleMessage({type:'execute_position_test_impulse',impulse_power:getTestInput('impulsePower')})">Test impulsu pozycji</button>
-        <input id="test-impulsePower" type="number" value="40" min="1" max="255" style="width:60px" placeholder="impuls"/>
-    </div>
-    <div style="margin-bottom:8px">
-        <button onclick="sendBleMessage({type:'execute_speed_test_run',distance_cm:getTestInput('distanceCm'),speed_cmps:getTestInput('speedCmps')})">Test prędkości</button>
-        <input id="test-distanceCm" type="number" value="50" style="width:50px" placeholder="dystans"/>
-        <input id="test-speedCmps" type="number" value="20" style="width:50px" placeholder="cm/s"/>
-    </div>
-    <div style="margin-bottom:8px">
-        <button onclick="sendBleMessage({type:'execute_balance_step_response',angle:getTestInput('stepAngle')})">Step response (balans)</button>
-        <input id="test-stepAngle" type="number" value="5" style="width:50px" placeholder="stopnie"/>
-    </div>
-    <div style="margin-bottom:8px">
-        <button onclick="sendBleMessage({type:'start_ga_session'})">Start GA</button>
-        <button onclick="sendBleMessage({type:'cancel_ga_session'})">Stop GA</button>
-        <button onclick="sendBleMessage({type:'run_ga_trial',kp:getTestInput('gaKp'),kd:getTestInput('gaKd')})">GA trial</button>
-        <input id="test-gaKp" type="number" value="100" style="width:50px" placeholder="Kp"/>
-        <input id="test-gaKd" type="number" value="2" style="width:50px" placeholder="Kd"/>
-    </div>
-    <div style="margin-bottom:8px">
-        <button onclick="sendBleMessage({type:'start_zn_tuning',filter:true})">Start ZN</button>
-        <button onclick="sendBleMessage({type:'cancel_zn_tuning'})">Stop ZN</button>
-    </div>
-    <div style="margin-bottom:8px">
-        <button onclick="sendBleMessage({type:'start_pso_session'})">Start PSO</button>
-    </div>
-</div>
-<script>
-function getTestInput(id) {
-    const el = document.getElementById('test-' + id);
-    if (!el) return 0;
-    const v = parseFloat(el.value);
-    return isNaN(v) ? 0 : v;
-}
-</script>
 </body>
 </html>
