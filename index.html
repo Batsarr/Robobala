@@ -381,6 +381,14 @@
                 <button id="trimPlus001Btn">+0.01</button>
                 <button id="trimPlus01Btn">+0.1</button>
             </div>
+            <button id="resetRollZeroBtn" style="margin-top:10px; width:100%;">Resetuj Korekte Roll</button>
+            <div class="trim-controls">
+                <button id="rollTrimMinus01Btn">-0.1</button>
+                <button id="rollTrimMinus001Btn">-0.01</button>
+                <span>Korekta Roll: <span id="rollTrimValueDisplay">0.00°</span></span>
+                <button id="rollTrimPlus001Btn">+0.01</button>
+                <button id="rollTrimPlus01Btn">+0.1</button>
+            </div>
             <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
             <button id="emergencyStopBtn">STOP AWARYJNY</button>
             <button class="accordion-header" onclick="toggleAccordion(this)" style="margin-top: 15px;">Strojenie Joysticka</button>
@@ -1454,8 +1462,11 @@
         if (data.calib_accel !== undefined) { document.getElementById('calibAccelVal').textContent = data.calib_accel; updateCalibrationProgress('accel', data.calib_accel); }
         if (data.calib_gyro !== undefined) { document.getElementById('calibGyroVal').textContent = data.calib_gyro; updateCalibrationProgress('gyro', data.calib_gyro); }
         if (data.calib_mag !== undefined) { document.getElementById('calibMagVal').textContent = data.calib_mag; updateCalibrationProgress('mag', data.calib_mag); }
-        if (data.trim_angle !== undefined) { document.getElementById('trimValueDisplay').textContent = data.trim_angle.toFixed(1) + '°'; }
-        if (data.trim_angle !== undefined) { document.getElementById('trimValueDisplay').textContent = data.trim_angle.toFixed(2) + '°'; } // ZMIANA: Dwa miejsca po przecinku
+        if (data.trim_angle !== undefined) { document.getElementById('trimValueDisplay').textContent = data.trim_angle.toFixed(2) + '°'; }
+        if (data.roll_trim !== undefined) {
+            const rollDisp = document.getElementById('rollTrimValueDisplay');
+            if (rollDisp && typeof data.roll_trim === 'number') rollDisp.textContent = data.roll_trim.toFixed(2) + '°';
+        }
         if (data.states && !AppState.isApplyingConfig) { AppState.isApplyingConfig = true; document.getElementById('balanceSwitch').checked = data.states.balancing; document.getElementById('holdPositionSwitch').checked = data.states.holding_pos; document.getElementById('speedModeSwitch').checked = data.states.speed_mode; AppState.isApplyingConfig = false; } // Pozostała logika
         const emergencyBanner = document.getElementById('emergency-banner'); if (emergencyBanner) emergencyBanner.style.display = data.states && data.states.emergency_stop ? 'block' : 'none';
     }
@@ -2309,13 +2320,19 @@ function handleTuningStartAck(method) {
         ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { if (AppState.isApplyingConfig) return; const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
 
         // POPRAWKA: Usunięto stare listenery dla trim+/- i dodano nowe, poprawne dla precyzyjnych przycisków.
-        const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
+    const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
         document.getElementById('trimMinus01Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -0.1 }));
         document.getElementById('trimMinus001Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -0.01 }));
         document.getElementById('trimPlus001Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 0.01 }));
         document.getElementById('trimPlus01Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 0.1 }));
 
-        for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); }
+    for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); }
+    // Korekta roll (nowe przyciski)
+    document.getElementById('resetRollZeroBtn')?.addEventListener('click', () => sendBleMessage({ type: 'reset_roll' }));
+    document.getElementById('rollTrimMinus01Btn')?.addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -0.1 }));
+    document.getElementById('rollTrimMinus001Btn')?.addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -0.01 }));
+    document.getElementById('rollTrimPlus001Btn')?.addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: 0.01 }));
+    document.getElementById('rollTrimPlus01Btn')?.addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: 0.1 }));
 
         document.getElementById('saveBtn').addEventListener('click', () => {
             if (AppState.isConnected && confirm("Czy na pewno chcesz trwale zapisać bieżącą konfigurację z panelu do pamięci EEPROM robota?")) {
