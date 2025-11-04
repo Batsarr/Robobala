@@ -746,7 +746,7 @@
                                     <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="ga-adaptive"> Adaptacyjne operatory</label>
                                     <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="ga-convergence-check"> Sprawdzanie zbieznosci</label>
                                 </div>
-                                <div class="tuning-controls"><button id="run-ga-tune">🚀 Uruchom</button><button id="pause-ga-tune" disabled>⏸️ Pauza</button><button id="stop-ga-tune" disabled>⏹️ Stop</button></div>
+                                <div class="tuning-controls"><button id="run-ga-tune">🚀 Uruchom</button><button id="pause-ga-tune" disabled>⏸️ Pauza</button><button id="step-ga-tune" disabled>➡️ Krok</button><button id="stop-ga-tune" disabled>⏹️ Stop</button></div>
                                 <div class="status-panel autotune-live-status" id="ga-status-panel">
                                     <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
                                     <div class="status-info">
@@ -795,7 +795,7 @@
                                     <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="pso-velocity-clamp"> Ograniczenie predkosci</label>
                                     <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="pso-neighborhood"> Sasiedztwo lokalne</label>
                                 </div>
-                                <div class="tuning-controls"><button id="run-pso-tune">🚀 Uruchom</button><button id="pause-pso-tune" disabled>⏸️ Pauza</button><button id="stop-pso-tune" disabled>⏹️ Stop</button></div>
+                                <div class="tuning-controls"><button id="run-pso-tune">🚀 Uruchom</button><button id="pause-pso-tune" disabled>⏸️ Pauza</button><button id="step-pso-tune" disabled>➡️ Krok</button><button id="stop-pso-tune" disabled>⏹️ Stop</button></div>
                                 <div class="status-panel autotune-live-status" id="pso-status-panel">
                                     <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
                                     <div class="status-info">
@@ -1081,14 +1081,14 @@
         // PID parameters
         'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b', 'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 'balanceIntegralLimitInput': 'balance_pid_integral_limit', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s', 'speedFilterAlphaInput': 'speed_pid_filter_alpha', 'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedIntegralLimitInput': 'speed_pid_integral_limit', 'speedDeadbandInput': 'speed_pid_deadband', 'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p', 'positionFilterAlphaInput': 'position_pid_filter_alpha', 'maxTargetSpeedInput': 'max_target_speed_from_pos_pid', 'positionIntegralLimitInput': 'position_pid_integral_limit', 'positionDeadbandInput': 'position_pid_deadband', 'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r', 'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h', 
         // Joystick and mechanical parameters
-        'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'max_turn_power', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd',
+        'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd',
         // Auto-tuning parameters (safety, space, weights, GA, PSO, ZN)
         'safetyMaxAngle': 'safety_max_angle', 'safetyMaxSpeed': 'safety_max_speed', 'safetyMaxPwm': 'safety_max_pwm',
         'ga-kp-min': 'space_kp_min', 'ga-kp-max': 'space_kp_max', 'ga-ki-min': 'space_ki_min', 'ga-ki-max': 'space_ki_max', 'ga-kd-min': 'space_kd_min', 'ga-kd-max': 'space_kd_max',
         'ga-weight-itae': 'weights_itae', 'ga-weight-overshoot': 'weights_overshoot', 'ga-weight-control-effort': 'weights_control_effort',
-        'ga-generations': 'ga_generations', 'ga-population': 'ga_population',
-        'pso-iterations': 'pso_iterations', 'pso-particles': 'pso_particles',
-        'zn-trial-duration': 'zn_duration_s', 'zn-max-amplitude': 'zn_amplitude'
+        'ga-generations': 'ga_generations', 'ga-population': 'ga_population', 'ga-mutation-rate': 'ga_mutation_rate', 'ga-elitism': 'ga_elitism', 'ga-adaptive': 'ga_adaptive', 'ga-convergence-check': 'ga_convergence_check',
+        'pso-iterations': 'pso_iterations', 'pso-particles': 'pso_particles', 'pso-inertia': 'pso_inertia', 'pso-adaptive-inertia': 'pso_adaptive_inertia', 'pso-velocity-clamp': 'pso_velocity_clamp', 'pso-neighborhood': 'pso_neighborhood',
+        'zn-trial-duration': 'tuning_trial_duration_ms', 'zn-max-amplitude': 'zn_amplitude'
     };
     
     let bleDevice, rxCharacteristic, txCharacteristic;
@@ -1226,7 +1226,7 @@
                 }
                 break;
             case 'ack':
-                if (data.command === 'start_tuning_session') {
+                if (data.command === 'start_tuning_session' || data.command === 'start_ga_session' || data.command === 'start_pso_session' || data.command === 'start_zn_tuning') {
                     if (data.success) {
                         handleTuningStartAck(AppState.activeTuningMethod);
                     } else {
@@ -1336,6 +1336,12 @@
                 let displayValue = value;
                 if (snakeKey.startsWith('weights_')) {
                     displayValue = (value * 100);
+                }
+                if (snakeKey === 'ga_mutation_rate') {
+                    displayValue = (value * 100);
+                }
+                if (snakeKey === 'tuning_trial_duration_ms') {
+                    displayValue = (value / 1000.0);
                 }
 
                 if (input.type === 'checkbox') {
@@ -1797,7 +1803,15 @@
         document.getElementById('run-zn-test').addEventListener('click', startZnTuning);
         document.getElementById('run-ga-tune').addEventListener('click', startGaTuning);
         document.getElementById('run-pso-tune').addEventListener('click', startPsoTuning);
-        ['ga', 'pso'].forEach(prefix => { document.getElementById(`pause-${prefix}-tune`).addEventListener('click', handlePauseResume); document.getElementById(`stop-${prefix}-tune`).addEventListener('click', handleCancel); });
+        ['ga', 'pso'].forEach(prefix => {
+            document.getElementById(`pause-${prefix}-tune`).addEventListener('click', handlePauseResume);
+            document.getElementById(`stop-${prefix}-tune`).addEventListener('click', handleCancel);
+            const stepBtn = document.getElementById(`step-${prefix}-tune`);
+            if (stepBtn) stepBtn.addEventListener('click', () => {
+                sendBleMessage({ type: prefix === 'ga' ? 'ga_step' : 'pso_step' });
+                addLogMessage(`[UI] ${prefix.toUpperCase()}: Krok pojedynczy.`, 'info');
+            });
+        });
         // Obsługa testów dynamicznych (impuls, prędkość)
         const impulseBtn = document.getElementById('run-impulse-test');
         if (impulseBtn) impulseBtn.addEventListener('click', function() {
@@ -1847,12 +1861,16 @@
         document.querySelectorAll('.method-tab').forEach(tab => tab.disabled = isLocked);
     
         // Logika przycisków pauzy/stopu pozostaje bez zmian
-        const isGa = method === 'ga-genetic';
-        document.getElementById('pause-ga-tune').disabled = !isLocked || !isGa;
-        document.getElementById('stop-ga-tune').disabled = !isLocked || !isGa;
+    const isGa = method === 'ga-genetic';
+    document.getElementById('pause-ga-tune').disabled = !isLocked || !isGa;
+    document.getElementById('stop-ga-tune').disabled = !isLocked || !isGa;
+    const stepGaBtnCtl = document.getElementById('step-ga-tune');
+    if (stepGaBtnCtl) stepGaBtnCtl.disabled = !isLocked || !isGa;
         const isPso = method === 'pso-particle';
-        document.getElementById('pause-pso-tune').disabled = !isLocked || !isPso;
-        document.getElementById('stop-pso-tune').disabled = !isLocked || !isPso;
+    document.getElementById('pause-pso-tune').disabled = !isLocked || !isPso;
+    document.getElementById('stop-pso-tune').disabled = !isLocked || !isPso;
+    const stepPsoBtnCtl = document.getElementById('step-pso-tune');
+    if (stepPsoBtnCtl) stepPsoBtnCtl.disabled = !isLocked || !isPso;
     
         updateTuningDashboard(isLocked ? 'running' : 'idle', method);
     }
@@ -1865,7 +1883,17 @@ function handleTuningStartAck(method) {
         if (!checkTuningPrerequisites()) return;
 
         addLogMessage(`[UI] Wysylam polecenie rozpoczecia sesji ${method}...`, 'info');
-        sendBleMessage({ type: 'start_tuning_session', method: method });
+        // Metod-specyficzne polecenia startu
+        if (method === 'zn-relay') {
+            sendBleMessage({ type: 'start_zn_tuning' });
+        } else if (method === 'ga-genetic') {
+            sendBleMessage({ type: 'start_ga_session' });
+        } else if (method === 'pso-particle') {
+            sendBleMessage({ type: 'start_pso_session' });
+        } else {
+            // Fallback
+            sendBleMessage({ type: 'start_tuning_session', method: method });
+        }
 
         AppState.activeTuningMethod = method;
 
@@ -1895,7 +1923,21 @@ function handleTuningStartAck(method) {
     function startZnTuning() { startTuningSession('zn-relay'); }
     function startGaTuning() { startTuningSession('ga-genetic'); }
     function startPsoTuning() { startTuningSession('pso-particle'); }
-    function handlePauseResume(e) { const btn = e.target; const isPaused = btn.textContent.includes('Wznow'); if (isPaused) { sendBleMessage({ type: 'resume_tuning_session' }); btn.textContent = '⏸️ Pauza'; updateTuningDashboard('running', AppState.activeTuningMethod); } else { sendBleMessage({ type: 'pause_tuning_session' }); btn.textContent = '▶️ Wznow'; updateTuningDashboard('paused', AppState.activeTuningMethod); } }
+    function handlePauseResume(e) {
+        const btn = e.target; const isPaused = btn.textContent.includes('Wznow');
+        const method = AppState.activeTuningMethod;
+        if (isPaused) {
+            if (method === 'ga-genetic') sendBleMessage({ type: 'ga_resume' });
+            else if (method === 'pso-particle') sendBleMessage({ type: 'pso_resume' });
+            else sendBleMessage({ type: 'resume_tuning_session' });
+            btn.textContent = '⏸️ Pauza'; updateTuningDashboard('running', method);
+        } else {
+            if (method === 'ga-genetic') sendBleMessage({ type: 'ga_pause' });
+            else if (method === 'pso-particle') sendBleMessage({ type: 'pso_pause' });
+            else sendBleMessage({ type: 'pause_tuning_session' });
+            btn.textContent = '▶️ Wznow'; updateTuningDashboard('paused', method);
+        }
+    }
     function handleCancel(sendCmd = true) { if (sendCmd && AppState.isTuningActive && confirm('Czy na pewno chcesz przerwac proces strojenia?')) { sendBleMessage({ type: 'cancel_tuning_session' }); } setTuningUiLock(false, ''); addLogMessage('[UI] Anulowano/zakonczono sesje strojenia.', 'warn'); updateTuningDashboard('idle'); }
     function updateTuningDashboard(status, method = '') {
         const dashboard = document.getElementById('autotune-dashboard');
@@ -2177,7 +2219,30 @@ function handleTuningStartAck(method) {
             plusBtn.addEventListener('click', () => updateValue(step)); 
         }); 
     }
-    function sendFullConfigToRobot() { const params = {}; for (const [inputId, snakeKey] of Object.entries(parameterMapping)) { const input = document.getElementById(inputId); if (input) { let value = parseFloat(input.value); if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha'].includes(snakeKey)) { value /= 100.0; } params[snakeKey] = value; } } addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info'); sendBleMessage({ type: 'full_config', params }); }
+    function sendFullConfigToRobot() {
+        const params = {};
+        for (const [inputId, snakeKey] of Object.entries(parameterMapping)) {
+            const input = document.getElementById(inputId);
+            if (!input) continue;
+            let value;
+            if (input.type === 'checkbox') value = input.checked;
+            else value = parseFloat(input.value);
+
+            // Konwersje jednostek i procentów
+            if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha', 'weights_itae', 'weights_overshoot', 'weights_control_effort'].includes(snakeKey)) {
+                value /= 100.0;
+            }
+            if (snakeKey === 'ga_mutation_rate') {
+                value /= 100.0; // % -> frakcja
+            }
+            if (snakeKey === 'tuning_trial_duration_ms') {
+                value = (value * 1000.0); // s -> ms
+            }
+            params[snakeKey] = value;
+        }
+        addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info');
+        sendBleMessage({ type: 'full_config', params });
+    }
     function setupEventListeners() {
         // This function is now deprecated and replaced by setupParameterListeners
         // Keeping the structure for reference, but the new function is the one being called.
@@ -2196,6 +2261,49 @@ function handleTuningStartAck(method) {
         }; 
         const debouncedSendSingleParam = debounce(sendSingleParam, 400); 
         document.querySelectorAll('.config-value').forEach(input => { input.addEventListener('change', (e) => { debouncedSendSingleParam(e.target.id, parseFloat(e.target.value)); }); }); 
+        // AUTOTUNING: wysyłanie parametrów metod (GA/PSO/ZN) jako set_tuning_config_param z odpowiednimi konwersjami
+        const sendTuningParam = (snakeKey, rawValue) => {
+            if (AppState.isApplyingConfig) return;
+            let value = rawValue;
+            if (typeof value === 'number' && isNaN(value)) return;
+            if (snakeKey && snakeKey.startsWith('weights_')) {
+                value = (parseFloat(value) / 100.0);
+            }
+            if (snakeKey === 'ga_mutation_rate') {
+                value = (parseFloat(value) / 100.0);
+            }
+            if (snakeKey === 'tuning_trial_duration_ms') {
+                value = Math.round(parseFloat(value) * 1000.0); // s -> ms
+            }
+            sendBleMessage({ type: 'set_tuning_config_param', key: snakeKey, value });
+        };
+        const debouncedSendTuningParam = debounce((inputId, val) => {
+            const snakeKey = parameterMapping[inputId];
+            if (!snakeKey) return;
+            sendTuningParam(snakeKey, val);
+        }, 300);
+        // Zarejestruj listenery dla wszystkich pól autotuningu, które nie mają klasy .config-value
+        for (const [inputId, snakeKey] of Object.entries(parameterMapping)) {
+            const input = document.getElementById(inputId);
+            if (!input) continue;
+            if (input.classList.contains('config-value')) continue; // te obsługuje blok wyżej
+            // Ogranicz do kluczy strojenia/poszukiwania/prób
+            const isTuningKey = (
+                snakeKey.startsWith('ga_') || snakeKey.startsWith('pso_') || snakeKey.startsWith('space_') ||
+                snakeKey.startsWith('weights_') || snakeKey === 'tuning_trial_duration_ms' || snakeKey === 'zn_amplitude'
+            );
+            if (!isTuningKey) continue;
+            if (input.type === 'checkbox') {
+                input.addEventListener('change', (e) => {
+                    sendBleMessage({ type: 'set_tuning_config_param', key: snakeKey, value: e.target.checked });
+                });
+            } else {
+                input.addEventListener('change', (e) => {
+                    const v = parseFloat(e.target.value);
+                    debouncedSendTuningParam(inputId, v);
+                });
+            }
+        }
         document.getElementById('joystickCanvas').addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); document.getElementById('joystickCanvas').addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd); 
         document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
         ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { if (AppState.isApplyingConfig) return; const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
