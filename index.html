@@ -682,12 +682,18 @@
                             <div class="config-section">
                                 <label>🎯 Petla PID do strojenia:</label>
                                 <select id="common-loop-selector">
-                                    <option value="balance">Petla Balansu (Kp, Kd)</option>
-                                    <option value="speed">Petla Predkosci (Kp, Ki, Kd)</option>
-                                    <option value="position">Petla Pozycji (Kp, Ki, Kd)</option>
-                                    <option value="rotation">Petla Obrotu (Kp, Kd)</option>
-                                    <option value="heading">Petla Kursu (Kp, Ki, Kd)</option>
+                                    <option value="balance">Petla Balansu</option>
+                                    <option value="speed">Petla Predkosci</option>
+                                    <option value="position">Petla Pozycji</option>
+                                    <option value="rotation">Petla Obrotu</option>
+                                    <option value="heading">Petla Kursu</option>
                                 </select>
+                                <div style="margin-top:10px; text-align:left;">
+                                    <label style="color:#fff; font-weight: normal;">
+                                        <input type="checkbox" id="include-ki-checkbox">
+                                        🔎 Szukanie Ki (opcjonalnie)
+                                    </label>
+                                </div>
                             </div>
                             <div class="config-section">
                                 <label style="color: #f7b731;">🛡️ Ograniczenia Bezpieczenstwa (Max. Wartosci):</label>
@@ -1092,7 +1098,8 @@
         'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd',
         // Auto-tuning parameters (safety, space, weights, GA, PSO, ZN)
         'safetyMaxAngle': 'safety_max_angle', 'safetyMaxSpeed': 'safety_max_speed', 'safetyMaxPwm': 'safety_max_pwm',
-        'ga-kp-min': 'space_kp_min', 'ga-kp-max': 'space_kp_max', 'ga-ki-min': 'space_ki_min', 'ga-ki-max': 'space_ki_max', 'ga-kd-min': 'space_kd_min', 'ga-kd-max': 'space_kd_max',
+    'ga-kp-min': 'space_kp_min', 'ga-kp-max': 'space_kp_max', 'ga-ki-min': 'space_ki_min', 'ga-ki-max': 'space_ki_max', 'ga-kd-min': 'space_kd_min', 'ga-kd-max': 'space_kd_max',
+    'include-ki-checkbox': 'search_ki',
         'ga-weight-itae': 'weights_itae', 'ga-weight-overshoot': 'weights_overshoot', 'ga-weight-control-effort': 'weights_control_effort',
         'ga-generations': 'ga_generations', 'ga-population': 'ga_population', 'ga-mutation-rate': 'ga_mutation_rate', 'ga-elitism': 'ga_elitism', 'ga-adaptive': 'ga_adaptive', 'ga-convergence-check': 'ga_convergence_check',
         'pso-iterations': 'pso_iterations', 'pso-particles': 'pso_particles', 'pso-inertia': 'pso_inertia', 'pso-adaptive-inertia': 'pso_adaptive_inertia', 'pso-velocity-clamp': 'pso_velocity_clamp', 'pso-neighborhood': 'pso_neighborhood',
@@ -1150,6 +1157,16 @@
         setupAutotuningTabs();
         setupParameterListeners(); // RE-ADDED: This is crucial for parameter handling
         setupAxisRemappingControls();
+        // Domyślnie nie szukamy Ki
+        const kiChk = document.getElementById('include-ki-checkbox');
+        if (kiChk) {
+            kiChk.checked = false;
+            kiChk.addEventListener('change', () => {
+                updateSearchSpaceInputs();
+                // Wyślij do robota preferencję szukania Ki
+                sendBleMessage({ type: 'set_tuning_config_param', key: 'search_ki', value: kiChk.checked });
+            });
+        }
     });
 
     const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
@@ -1227,12 +1244,15 @@
                 }
                 break;
             case 'set_tuning_config_param':
+                // Umożliw obsługę runtime dla search_ki również z firmware (na wypadek zmian po stronie robota)
                 if (!AppState.isSynced) {
                     AppState.tempTuningParams[data.key] = data.value;
                 } else {
                     applySingleAutotuneParam(data.key, data.value);
+                    if (data.key === 'search_ki') updateSearchSpaceInputs();
                 }
                 break;
+            
             case 'ack':
                 if (data.command === 'start_tuning_session' || data.command === 'start_ga_session' || data.command === 'start_pso_session' || data.command === 'start_zn_tuning') {
                     if (data.success) {
@@ -1330,7 +1350,15 @@
                 if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha'].includes(snakeKey)) {
                     displayValue = (value * 100);
                 }
-                input.value = displayValue;
+                if (input.type === 'checkbox') {
+                    input.checked = !!displayValue;
+                    if (inputId === 'include-ki-checkbox') {
+                        // Odśwież widoczność pól Ki po synchronizacji
+                        updateSearchSpaceInputs();
+                    }
+                } else {
+                    input.value = displayValue;
+                }
             }
         }
     }
@@ -1356,6 +1384,11 @@
                     input.checked = displayValue;
                 } else {
                     input.value = displayValue;
+                }
+
+                if (snakeKey === 'search_ki') {
+                    // Odśwież układ pól przestrzeni wyszukiwania
+                    updateSearchSpaceInputs();
                 }
 
                 // If it's a shared field, update the other tab too
@@ -1851,9 +1884,11 @@
     }
     function updateSearchSpaceInputs() {
         const selectedLoop = document.getElementById('common-loop-selector').value;
-        const isFullPid = ['speed', 'position', 'heading'].includes(selectedLoop);
+        const includeKi = document.getElementById('include-ki-checkbox').checked;
+        const showKi = includeKi && ['speed', 'position', 'heading', 'balance', 'rotation'].includes(selectedLoop);
         ['ga', 'pso'].forEach(prefix => {
-            document.getElementById(`${prefix}-ki-min`).closest('.search-space-param').style.display = isFullPid ? 'block' : 'none';
+            const kiMinWrap = document.getElementById(`${prefix}-ki-min`).closest('.search-space-param');
+            if (kiMinWrap) kiMinWrap.style.display = showKi ? 'block' : 'none';
         });
     }
     function checkTuningPrerequisites() { if (!AppState.isConnected || !AppState.isSynced) { addLogMessage('[UI] Blad: Polacz i zsynchronizuj z robotem.', 'error'); return false; } if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState)) { addLogMessage(`[UI] Blad: Wymagany stan 'BALANSUJE'. Aktualny: '${AppState.lastKnownRobotState}'.`, 'error'); return false; } if (AppState.isTuningActive) { addLogMessage('[UI] Blad: Inna sesja strojenia jest juz w toku.', 'warn'); return false; } return true; }
