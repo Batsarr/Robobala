@@ -2464,8 +2464,6 @@ function handleTuningStartAck(method) {
                 roll: window.telemetryData?.roll || 0,
                 yaw: window.telemetryData?.yaw || 0
             };
-            const trimAngle = parseFloat(document.getElementById('trimValueDisplay').textContent) || 0.0;
-            telemetry.pitch += trimAngle;
 
             const finalRotation = { x: 0, y: 0, z: 0 };
             
