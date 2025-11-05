@@ -2465,7 +2465,63 @@ function handleTuningStartAck(method) {
         document.getElementById('startMappingWizardBtn').addEventListener('click', startMappingWizard);
         document.getElementById('cancel-wizard-btn').addEventListener('click', cancelMappingWizard);
     }
-    function setupManualTuneButtons() { document.querySelectorAll('.manual-tune-row').forEach(row => { const motor = row.dataset.motor; const direction = row.dataset.direction; const input = row.querySelector('.tune-input'); const testBtn = row.querySelector('.test-btn'); const stopBtn = row.querySelector('.stop-btn'); const autoBtn = row.querySelector('.auto-btn'); testBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: parseInt(input.value) }); }); stopBtn.addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 }); }); autoBtn.addEventListener('click', (e) => { if (confirm("UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?")) { const startValue = parseInt(document.getElementById('pwmTuneStartInput').value); sendBleMessage({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue }); e.target.disabled = true; e.target.textContent = 'Szukanie...'; addLogMessage(`[UI] Rozpoczynam auto-strojenie dla ${motor} ${direction}...`, 'info'); } }); }); document.getElementById('manualTuneStopAll').addEventListener('click', () => { sendBleMessage({ type: 'manual_tune_stop_all' }); }); }
+    function setupManualTuneButtons() {
+        // Przechowuj timery auto-stop dla testów 5s
+        const activeTestTimers = new Map(); // key: `${motor}-${direction}` -> timeoutId
+
+        document.querySelectorAll('.manual-tune-row').forEach(row => {
+            const motor = row.dataset.motor;
+            const direction = row.dataset.direction;
+            const rowKey = `${motor}-${direction}`;
+            const input = row.querySelector('.tune-input');
+            const testBtn = row.querySelector('.test-btn');
+            const stopBtn = row.querySelector('.stop-btn');
+            const autoBtn = row.querySelector('.auto-btn');
+
+            testBtn.addEventListener('click', () => {
+                const pwm = parseInt(input.value) || 0;
+                if (pwm <= 0) { addLogMessage('[UI] Wpisz dodatni PWM do testu.', 'warn'); return; }
+                // Wyślij start testu ręcznego
+                sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm });
+                addLogMessage(`[UI] Test ${motor} ${direction} rozpoczęty na 5s (PWM=${pwm}).`, 'info');
+                // Skasuj poprzedni timer (jeśli był)
+                if (activeTestTimers.has(rowKey)) {
+                    clearTimeout(activeTestTimers.get(rowKey));
+                }
+                // Ustaw auto-stop po 5 sekundach
+                const timeoutId = setTimeout(() => {
+                    sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 });
+                    addLogMessage(`[UI] Test ${motor} ${direction} zakończony automatycznie po 5s.`, 'info');
+                    activeTestTimers.delete(rowKey);
+                }, 5000);
+                activeTestTimers.set(rowKey, timeoutId);
+            });
+
+            stopBtn.addEventListener('click', () => {
+                // Ręczne zatrzymanie – przerwij timer i wyślij stop
+                if (activeTestTimers.has(rowKey)) {
+                    clearTimeout(activeTestTimers.get(rowKey));
+                    activeTestTimers.delete(rowKey);
+                }
+                sendBleMessage({ type: 'manual_tune_motor', motor, direction, pwm: 0 });
+                addLogMessage(`[UI] Test ${motor} ${direction} zatrzymany.`, 'warn');
+            });
+
+            autoBtn.addEventListener('click', (e) => {
+                if (confirm("UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?")) {
+                    const startValue = parseInt(document.getElementById('pwmTuneStartInput').value);
+                    sendBleMessage({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue });
+                    e.target.disabled = true; e.target.textContent = 'Szukanie...';
+                    addLogMessage(`[UI] Rozpoczynam auto-strojenie dla ${motor} ${direction}...`, 'info');
+                }
+            });
+        });
+
+        document.getElementById('manualTuneStopAll').addEventListener('click', () => {
+            sendBleMessage({ type: 'manual_tune_stop_all' });
+            addLogMessage('[UI] Zatrzymano wszystkie silniki.', 'warn');
+        });
+    }
     function setupGamepadMappingModal() { document.getElementById('open-gamepad-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; }); document.getElementById('close-modal-btn').addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; }); }
     function flashElement(element) { if (!element) return; const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element; target.classList.add('gamepad-flash'); setTimeout(() => target.classList.remove('gamepad-flash'), 300); }
     function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
