@@ -493,50 +493,6 @@
                     <span class="control-label">Perspektywa Robota</span>
                     <label class="switch"><input type="checkbox" id="robotPerspectiveCheckbox"><span class="slider round"></span></label>
                 </div>
-
-                <legend>Mapowanie Osi Modelu 3D</legend>
-                <div class="axis-mapping-row">
-                    <label>Obrot modelu X (Pitch):</label>
-                    <select class="axis-source" id="map-rot-x-source">
-                        <option value="none">Brak</option>
-                        <option value="pitch" selected>Pitch (Pochylenie)</option>
-                        <option value="roll">Roll (Przechyl)</option>
-                        <option value="yaw">Yaw (Obrot)</option>
-                    </select>
-                    <select class="axis-sign" id="map-rot-x-sign">
-                        <option value="1">Znak (+1)</option>
-                        <option value="-1">Znak (-1)</option>
-                    </select>
-                </div>
-                <div class="axis-mapping-row">
-                    <label>Obrot modelu Y (Yaw):</label>
-                    <select class="axis-source" id="map-rot-y-source">
-                        <option value="none">Brak</option>
-                        <option value="pitch">Pitch (Pochylenie)</option>
-                        <option value="roll">Roll (Przechyl)</option>
-                        <option value="yaw" selected>Yaw (Obrot)</option>
-                    </select>
-                    <select class="axis-sign" id="map-rot-y-sign">
-                        <option value="1">Znak (+1)</option>
-                        <option value="-1">Znak (-1)</option>
-                    </select>
-                </div>
-                <div class="axis-mapping-row">
-                    <label>Obrot modelu Z (Roll):</label>
-                    <select class="axis-source" id="map-rot-z-source">
-                        <option value="none">Brak</option>
-                        <option value="pitch">Pitch (Pochylenie)</option>
-                        <option value="roll" selected>Roll (Przechyl)</option>
-                        <option value="yaw">Yaw (Obrot)</option>
-                    </select>
-                    <select class="axis-sign" id="map-rot-z-sign">
-                        <option value="1">Znak (+1)</option>
-                        <option value="-1" selected>Znak (-1)</option>
-                    </select>
-                </div>
-                <button id="startMappingWizardBtn" style="width: 100%; margin-top: 10px; background-color: #f7b731;">
-                    Uruchom Kreator Mapowania Krok-po-Kroku
-                </button>
             </fieldset>
         </div>
         <div class="card">
@@ -656,9 +612,9 @@
                                 <option value="-1">-1</option>
                             </select>
                         </div>
-                        <div style="display:flex; gap:8px; margin-top:8px;">
+                        <div style="display:flex; gap:8px; margin-top:8px; flex-wrap: wrap;">
                             <button id="imu-mapping-apply" class="primary">Zastosuj</button>
-                            <button id="imu-mapping-reset">Domyślne</button>
+                            <button id="imu-mapping-wizard" style="background-color: #f7b731;">Kreator mapowania</button>
                         </div>
                         <div class="help-text">Ustaw, jak odczyty IMU mają być interpretowane w aplikacji. Zmiana działa globalnie (dashboard, 3D, wykresy).</div>
                     </div>
@@ -935,7 +891,7 @@
     </div>
     <div id="mapping-wizard-modal" class="modal-backdrop">
         <div class="modal-content">
-            <h2>Kreator Mapowania Osi 3D</h2>
+            <h2>Kreator Mapowania Osi IMU</h2>
             <p id="wizard-instruction-text" style="font-size: 1.2em; font-weight: bold; color: #a2f279;">Przygotuj sie...</p>
             <div id="wizard-progress" style="display: flex; justify-content: center; gap: 10px; margin: 20px 0;">
             </div>
@@ -953,7 +909,7 @@
     let currentSequenceStep = 0; const MAX_SEQUENCE_STEPS = 15;
     
     // ======================================================
-    // === KREATOR MAPOWANIA OSI 3D - POCZATEK BLOKU KODU ===
+    // === KREATOR MAPOWANIA OSI IMU - POCZATEK BLOKU KODU ===
     // ======================================================
     
     // --- Konfiguracja i Stan Kreatora ---
@@ -967,12 +923,6 @@
         return '---';
     }
 
-    let axisMapping = {
-        x: { source: 'pitch', sign: 1 },
-        y: { source: 'yaw', sign: 1 },
-        z: { source: 'roll', sign: -1 }
-    };
-    
     const mappingWizard = {
         isActive: false,
         currentStep: 0,
@@ -988,23 +938,6 @@
     };
     
     // --- Funkcje Sterujace Kreatorem i UI ---
-    
-    function setupAxisRemappingControls() {
-        const controls = document.querySelectorAll('.axis-source, .axis-sign');
-        
-        function updateMappingFromUI() {
-            axisMapping.x.source = document.getElementById('map-rot-x-source').value;
-            axisMapping.x.sign = parseInt(document.getElementById('map-rot-x-sign').value);
-            axisMapping.y.source = document.getElementById('map-rot-y-source').value;
-            axisMapping.y.sign = parseInt(document.getElementById('map-rot-y-sign').value);
-            axisMapping.z.source = document.getElementById('map-rot-z-source').value;
-            axisMapping.z.sign = parseInt(document.getElementById('map-rot-z-sign').value);
-            addLogMessage('[UI] Recznie zaktualizowano mapowanie osi modelu 3D.', 'info');
-        }
-    
-        controls.forEach(control => control.addEventListener('change', updateMappingFromUI));
-        updateMappingFromUI(); // Inicjalizacja na starcie
-    }
     
     function startMappingWizard() {
         if (!AppState.isConnected) {
@@ -1037,10 +970,12 @@
         const step = mappingWizard.steps[mappingWizard.currentStep];
         document.getElementById('wizard-instruction-text').textContent = step.instruction;
         
+        // Użyj SUROWYCH kątów (przed globalnym mapowaniem) – z kwaternionu
+        const raw = getRawEuler();
         mappingWizard.startOrientation = { 
-            pitch: window.telemetryData.pitch || 0,
-            roll: window.telemetryData.roll || 0,
-            yaw: window.telemetryData.yaw || 0,
+            pitch: raw.pitch || 0,
+            roll: raw.roll || 0,
+            yaw: raw.yaw || 0,
          };
         mappingWizard.waitingForReturn = false;
     
@@ -1067,10 +1002,12 @@
     
         const start = mappingWizard.startOrientation;
         if (!start) return;
-    
-        const deltaPitch = Math.abs(data.pitch - start.pitch);
-        const deltaRoll = Math.abs(data.roll - start.roll);
-        const deltaYaw = Math.abs(calculateAngleDiff(data.yaw, start.yaw));
+
+        // Pracuj zawsze na SUROWYCH kątach od IMU
+        const rawNow = getRawEuler();
+        const deltaPitch = Math.abs(rawNow.pitch - start.pitch);
+        const deltaRoll = Math.abs(rawNow.roll - start.roll);
+        const deltaYaw = Math.abs(calculateAngleDiff(rawNow.yaw, start.yaw));
     
         if (mappingWizard.waitingForReturn) {
             if (deltaPitch < WIZARD_RETURN_THRESHOLD && deltaRoll < WIZARD_RETURN_THRESHOLD && deltaYaw < WIZARD_RETURN_THRESHOLD) {
@@ -1079,7 +1016,7 @@
                 runWizardStep();
             }
         } else {
-            const values = { pitch: data.pitch - start.pitch, roll: data.roll - start.roll, yaw: calculateAngleDiff(data.yaw, start.yaw) };
+            const values = { pitch: rawNow.pitch - start.pitch, roll: rawNow.roll - start.roll, yaw: calculateAngleDiff(rawNow.yaw, start.yaw) };
             const deltas = { pitch: deltaPitch, roll: deltaRoll, yaw: deltaYaw };
     
             if (Math.max(deltaPitch, deltaRoll, deltaYaw) > WIZARD_ACTIVATION_THRESHOLD) {
@@ -1111,27 +1048,49 @@
                 addLogMessage('[Wizard] Blad walidacji! Sprawdz, czy ruchy zostaly wykonane poprawnie.', 'error');
                 return; // Przerwij, jesli walidacja sie nie powiodla
             }
-    
-            // Ustaw mapowanie dla osi modelu 3D (X=pitch, Y=yaw, Z=roll)
-            document.getElementById('map-rot-x-source').value = detected.forward.axis;
-            document.getElementById('map-rot-x-sign').value = detected.forward.sign;
-    
-            document.getElementById('map-rot-y-source').value = detected.cw.axis;
-            document.getElementById('map-rot-y-sign').value = detected.cw.sign;
-    
-            document.getElementById('map-rot-z-source').value = detected.right.axis;
-            document.getElementById('map-rot-z-sign').value = detected.right.sign;
-            
-            document.querySelectorAll('.axis-source, .axis-sign').forEach(el => el.dispatchEvent(new Event('change')));
-    
-            addLogMessage('[UI] Kreator mapowania zakonczony! Osie modelu 3D zostaly skonfigurowane.', 'success');
+
+            // Zapisz bezposrednio do GLOBALNEGO mapowania IMU
+            // Przyjmujemy: pochyl do przodu -> Pitch, obrot zgodnie z zegarem -> Yaw, przechył w prawo -> Roll
+            imuMapping.pitch = { source: detected.forward.axis, sign: detected.forward.sign };
+            imuMapping.yaw   = { source: detected.cw.axis,     sign: detected.cw.sign };
+            imuMapping.roll  = { source: detected.right.axis,  sign: detected.right.sign };
+            saveImuMapping();
+
+            // Zaktualizuj kontrolki w Akordeonie 1
+            const pitchSrcSel = document.getElementById('imu-map-pitch-source');
+            const pitchSignSel= document.getElementById('imu-map-pitch-sign');
+            const yawSrcSel   = document.getElementById('imu-map-yaw-source');
+            const yawSignSel  = document.getElementById('imu-map-yaw-sign');
+            const rollSrcSel  = document.getElementById('imu-map-roll-source');
+            const rollSignSel = document.getElementById('imu-map-roll-sign');
+            if (pitchSrcSel && yawSrcSel && rollSrcSel) {
+                pitchSrcSel.value = imuMapping.pitch.source; pitchSignSel.value = String(imuMapping.pitch.sign);
+                yawSrcSel.value   = imuMapping.yaw.source;   yawSignSel.value   = String(imuMapping.yaw.sign);
+                rollSrcSel.value  = imuMapping.roll.source;  rollSignSel.value  = String(imuMapping.roll.sign);
+            }
+
+            addLogMessage('[UI] Kreator mapowania zakonczony! Zaktualizowano globalne mapowanie IMU.', 'success');
+            // Wyślij nowe mapowanie do robota i zapisz trwale
+            const nameToIdx = (n) => (n === 'pitch' ? 0 : (n === 'yaw' ? 1 : 2));
+            const mappingPayload = {
+                type: 'set_imu_mapping',
+                mapping: {
+                    pitch: { source: nameToIdx(imuMapping.pitch.source), sign: imuMapping.pitch.sign },
+                    yaw:   { source: nameToIdx(imuMapping.yaw.source),   sign: imuMapping.yaw.sign },
+                    roll:  { source: nameToIdx(imuMapping.roll.source),  sign: imuMapping.roll.sign }
+                }
+            };
+            if (AppState.isConnected) {
+                sendBleMessage(mappingPayload);
+                sendBleMessage({ type: 'save_tunings' });
+            }
         } catch (e) {
             addLogMessage('[UI] Blad podczas finalizacji mapowania. Upewnij sie, ze wszystkie kroki zostaly wykonane.', 'error');
         }
     }
     
     // ======================================================
-    // === KREATOR MAPOWANIA OSI 3D - KONIEC BLOKU KODU ===
+    // === KREATOR MAPOWANIA OSI IMU - KONIEC BLOKU KODU ===
     // ======================================================
 
     // REFACTORED: Consolidated parameter mapping - includes ALL configurable parameters
@@ -1203,13 +1162,37 @@
                 imuMapping.yaw.source   = yawSrcSel.value;   imuMapping.yaw.sign   = parseInt(yawSignSel.value)   || 1;
                 imuMapping.roll.source  = rollSrcSel.value;  imuMapping.roll.sign  = parseInt(rollSignSel.value)  || 1;
                 saveImuMapping(); addLogMessage('[UI] Zastosowano mapowanie IMU.', 'success');
+                // Wyślij do robota aby zapisac trwale
+                const nameToIdx = (n) => (n === 'pitch' ? 0 : (n === 'yaw' ? 1 : 2));
+                const mappingPayload = {
+                    type: 'set_imu_mapping',
+                    mapping: {
+                        pitch: { source: nameToIdx(imuMapping.pitch.source), sign: imuMapping.pitch.sign },
+                        yaw:   { source: nameToIdx(imuMapping.yaw.source),   sign: imuMapping.yaw.sign },
+                        roll:  { source: nameToIdx(imuMapping.roll.source),  sign: imuMapping.roll.sign }
+                    }
+                };
+                if (AppState.isConnected) {
+                    sendBleMessage(mappingPayload);
+                    // poproś o zapis do EEPROM (wspólny mechanizm)
+                    sendBleMessage({ type: 'save_tunings' });
+                }
+                // Natychmiast odśwież UI na podstawie bieżącej telemetrii
+                if (window.telemetryData) {
+                    const t = { ...window.telemetryData };
+                    if (typeof t.qw === 'number') {
+                        const eul = computeEulerFromQuaternion(t.qw, t.qx, t.qy, t.qz);
+                        if (eul) {
+                            const mapped = applyImuMapping(eul);
+                            t.pitch = mapped.pitch; t.yaw = mapped.yaw; t.roll = mapped.roll;
+                        }
+                    }
+                    try { updateTelemetryUI(t); } catch(_) {}
+                    try { update3DAnimation(); } catch(_) {}
+                }
             });
-            document.getElementById('imu-mapping-reset').addEventListener('click', () => {
-                imuMapping = { pitch: {source:'pitch',sign:1}, yaw:{source:'yaw',sign:1}, roll:{source:'roll',sign:1} };
-                pitchSrcSel.value='pitch'; yawSrcSel.value='yaw'; rollSrcSel.value='roll';
-                pitchSignSel.value='1'; yawSignSel.value='1'; rollSignSel.value='1';
-                saveImuMapping(); addLogMessage('[UI] Przywrócono domyślne mapowanie IMU.', 'info');
-            });
+            const wizardBtn = document.getElementById('imu-mapping-wizard');
+            if (wizardBtn) wizardBtn.addEventListener('click', startMappingWizard);
         }
         setupGamepadMappingModal(); 
         setupDpadControls(); 
@@ -1224,8 +1207,7 @@
         setTuningUiLock(false, '');
         initAutotuneTuningChart();
         setupAutotuningTabs();
-        setupParameterListeners(); // RE-ADDED: This is crucial for parameter handling
-        setupAxisRemappingControls();
+    setupParameterListeners(); // RE-ADDED: This is crucial for parameter handling
         // Domyślnie nie szukamy Ki
         const kiChk = document.getElementById('include-ki-checkbox');
         if (kiChk) {
@@ -1277,6 +1259,19 @@
     function saveImuMapping() {
         try { localStorage.setItem(IMU_MAPPING_KEY, JSON.stringify(imuMapping)); } catch (_) { /* no-op */ }
     }
+    function updateImuMappingControlsFromState() {
+        const pitchSrcSel = document.getElementById('imu-map-pitch-source');
+        const pitchSignSel= document.getElementById('imu-map-pitch-sign');
+        const yawSrcSel   = document.getElementById('imu-map-yaw-source');
+        const yawSignSel  = document.getElementById('imu-map-yaw-sign');
+        const rollSrcSel  = document.getElementById('imu-map-roll-source');
+        const rollSignSel = document.getElementById('imu-map-roll-sign');
+        if (pitchSrcSel && pitchSignSel && yawSrcSel && yawSignSel && rollSrcSel && rollSignSel) {
+            pitchSrcSel.value = imuMapping.pitch.source; pitchSignSel.value = String(imuMapping.pitch.sign);
+            yawSrcSel.value   = imuMapping.yaw.source;   yawSignSel.value   = String(imuMapping.yaw.sign);
+            rollSrcSel.value  = imuMapping.roll.source;  rollSignSel.value  = String(imuMapping.roll.sign);
+        }
+    }
     function applyImuMapping(eul) {
         const src = { pitch: eul.pitch, yaw: eul.yaw, roll: eul.roll };
         return {
@@ -1284,6 +1279,14 @@
             yaw:   (src[imuMapping.yaw.source]   ?? 0) * (imuMapping.yaw.sign   || 1),
             roll:  (src[imuMapping.roll.source]  ?? 0) * (imuMapping.roll.sign  || 1)
         };
+    }
+
+    // Zwraca SUROWE kąty Euler'a z aktualnej telemetrii kwaternionu (bez mapowania IMU)
+    function getRawEuler() {
+        if (!window.telemetryData) return { pitch: 0, yaw: 0, roll: 0 };
+        const { qw, qx, qy, qz } = window.telemetryData;
+        const eul = (typeof qw === 'number') ? computeEulerFromQuaternion(qw, qx, qy, qz) : null;
+        return eul || { pitch: 0, yaw: 0, roll: 0 };
     }
 
     const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
@@ -1314,6 +1317,8 @@
             AppState.tempTuningParams = {};
             AppState.tempStates = {};
             sendBleMessage({ type: 'request_full_config' });
+            // Dodatkowo pobierz mapowanie IMU (wysyłamy też w sync_begin, ale to jest idempotentne)
+            sendBleMessage({ type: 'get_imu_mapping' });
             clearTimeout(AppState.syncTimeout);
             AppState.syncTimeout = setTimeout(() => {
                 if (!AppState.isSynced && AppState.isConnected) {
@@ -1360,6 +1365,18 @@
                 if (mappingWizard.isActive) {
                     processWizardTelemetry(data);
                 }
+                break;
+            case 'imu_mapping':
+                // Aktualizuj lokalny mapping (UI używa nazw źródeł jako stringów, tu przychodzą indeksy 0/1/2)
+                const idxToName = (i) => (i === 0 ? 'pitch' : (i === 1 ? 'yaw' : 'roll'));
+                try {
+                    imuMapping.pitch = { source: idxToName(data.pitch?.source), sign: parseInt(data.pitch?.sign) || 1 };
+                    imuMapping.yaw   = { source: idxToName(data.yaw?.source),   sign: parseInt(data.yaw?.sign)   || 1 };
+                    imuMapping.roll  = { source: idxToName(data.roll?.source),  sign: parseInt(data.roll?.sign)  || 1 };
+                    saveImuMapping();
+                    updateImuMappingControlsFromState();
+                    addLogMessage('[ROBOT] Otrzymano mapowanie IMU z robota i zastosowano w UI.', 'info');
+                } catch (_) {}
                 break;
             case 'sync_begin':
                 clearTimeout(AppState.syncTimeout);
@@ -2589,7 +2606,7 @@ function handleTuningStartAck(method) {
 
         document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset); 
         document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container') || icon.closest('.control-row'); if(!container) return; const helpText = container.nextElementSibling.classList.contains('help-text') ? container.nextElementSibling : container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); }); 
-        document.getElementById('startMappingWizardBtn').addEventListener('click', startMappingWizard);
+    document.getElementById('imu-mapping-wizard')?.addEventListener('click', startMappingWizard);
         document.getElementById('cancel-wizard-btn').addEventListener('click', cancelMappingWizard);
     }
     function setupManualTuneButtons() {
