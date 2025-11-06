@@ -1104,37 +1104,16 @@
         setupNumericInputs(); 
         setupEventListeners();
         setupManualTuneButtons(); 
-        loadImuMapping();
-        // Inicjalizacja kontrolek IMU mapping w UI
-        const pitchSrcSel = document.getElementById('imu-map-pitch-source');
-        const yawSrcSel   = document.getElementById('imu-map-yaw-source');
-        const rollSrcSel  = document.getElementById('imu-map-roll-source');
-        const pitchSignSel= document.getElementById('imu-map-pitch-sign');
-        const yawSignSel  = document.getElementById('imu-map-yaw-sign');
-        const rollSignSel = document.getElementById('imu-map-roll-sign');
-        if (pitchSrcSel && yawSrcSel && rollSrcSel && pitchSignSel && yawSignSel && rollSignSel) {
-            pitchSrcSel.value = imuMapping.pitch.source; pitchSignSel.value = String(imuMapping.pitch.sign);
-            yawSrcSel.value   = imuMapping.yaw.source;   yawSignSel.value   = String(imuMapping.yaw.sign);
-            rollSrcSel.value  = imuMapping.roll.source;  rollSignSel.value  = String(imuMapping.roll.sign);
-            document.getElementById('imu-mapping-apply').addEventListener('click', () => {
-                imuMapping.pitch.source = pitchSrcSel.value; imuMapping.pitch.sign = parseInt(pitchSignSel.value) || 1;
-                imuMapping.yaw.source   = yawSrcSel.value;   imuMapping.yaw.sign   = parseInt(yawSignSel.value)   || 1;
-                imuMapping.roll.source  = rollSrcSel.value;  imuMapping.roll.sign  = parseInt(rollSignSel.value)  || 1;
-                saveImuMapping(); addLogMessage('[UI] Zastosowano mapowanie IMU.', 'success');
-                // Quaternion-First: brak wysyłania/zmiany mapowania IMU. UI bazuje na kwaternionie.
-                try { update3DAnimation(); } catch(_) {}
-            });
-            // Mount calibration modal open
-            document.getElementById('open-mount-calib')?.addEventListener('click', () => {
-                openMountCalibModal();
-            });
-            // Mount calibration buttons
-            document.getElementById('mountCalibStartBtn')?.addEventListener('click', ()=> sendBleMessage({type: 'mount_calib_start'}));
-            document.getElementById('mountCalibCaptureBackBtn')?.addEventListener('click', ()=> sendBleMessage({type: 'mount_calib_capture_back'}));
-            document.getElementById('mountCalibCaptureWheelsBtn')?.addEventListener('click', ()=> sendBleMessage({type: 'mount_calib_capture_wheels'}));
-            document.getElementById('mountCalibCommitBtn')?.addEventListener('click', ()=> { sendBleMessage({type: 'mount_calib_commit'}); closeMountCalibModal(); });
-            document.getElementById('mountCalibCancelBtn')?.addEventListener('click', ()=> { sendBleMessage({type: 'mount_calib_cancel'}); closeMountCalibModal(); });
-        }
+        // Mount calibration modal open
+        document.getElementById('open-mount-calib')?.addEventListener('click', () => {
+            openMountCalibModal();
+        });
+        // Mount calibration buttons
+        document.getElementById('mountCalibStartBtn')?.addEventListener('click', ()=> sendBleMessage({type: 'mount_calib_start'}));
+        document.getElementById('mountCalibCaptureBackBtn')?.addEventListener('click', ()=> sendBleMessage({type: 'mount_calib_capture_back'}));
+        document.getElementById('mountCalibCaptureWheelsBtn')?.addEventListener('click', ()=> sendBleMessage({type: 'mount_calib_capture_wheels'}));
+        document.getElementById('mountCalibCommitBtn')?.addEventListener('click', ()=> { sendBleMessage({type: 'mount_calib_commit'}); closeMountCalibModal(); });
+        document.getElementById('mountCalibCancelBtn')?.addEventListener('click', ()=> { sendBleMessage({type: 'mount_calib_cancel'}); closeMountCalibModal(); });
         setupGamepadMappingModal(); 
         setupDpadControls(); 
         setupSequenceControls();
