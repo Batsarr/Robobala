@@ -920,137 +920,8 @@
     // === Montaż: proste przyciski wysyłające komendy do firmware ===
     function openMountCalibModal(){ document.getElementById('mount-calib-modal').style.display='flex'; }
     function closeMountCalibModal(){ document.getElementById('mount-calib-modal').style.display='none'; }
-    function runWizardStep() {
-        if (!mappingWizard.isActive || mappingWizard.currentStep >= mappingWizard.steps.length) {
-            finalizeMapping();
-            return;
-        }
-    
-        const step = mappingWizard.steps[mappingWizard.currentStep];
-        document.getElementById('wizard-instruction-text').textContent = step.instruction;
-        
-        // Użyj SUROWYCH kątów (przed globalnym mapowaniem) – z kwaternionu
-        const raw = getRawEuler();
-        mappingWizard.startOrientation = { 
-            pitch: raw.pitch || 0,
-            roll: raw.roll || 0,
-            yaw: raw.yaw || 0,
-         };
-        mappingWizard.waitingForReturn = false;
-    
-        const progressDiv = document.getElementById('wizard-progress');
-        progressDiv.innerHTML = '';
-        mappingWizard.steps.forEach((s, index) => {
-            const dot = document.createElement('span');
-            dot.style.cssText = `display:block; width:15px; height:15px; border-radius:50%; background-color:${index < mappingWizard.currentStep ? '#a2f279' : (index === mappingWizard.currentStep ? '#f7b731' : '#4a4f58')};`;
-            progressDiv.appendChild(dot);
-        });
-    }
-    
-    // --- Glowna Logika Detekcji i Finalizacji ---
-    
-    function calculateAngleDiff(a, b) {
-        let diff = a - b;
-        while (diff <= -180) diff += 360;
-        while (diff > 180) diff -= 360;
-        return diff;
-    }
-    
-    function processWizardTelemetry(data) {
-        if (!mappingWizard.isActive) return;
-    
-        const start = mappingWizard.startOrientation;
-        if (!start) return;
-
-        // Pracuj zawsze na SUROWYCH kątach od IMU
-        const rawNow = getRawEuler();
-        const deltaPitch = Math.abs(rawNow.pitch - start.pitch);
-        const deltaRoll = Math.abs(rawNow.roll - start.roll);
-        const deltaYaw = Math.abs(calculateAngleDiff(rawNow.yaw, start.yaw));
-    
-        if (mappingWizard.waitingForReturn) {
-            if (deltaPitch < WIZARD_RETURN_THRESHOLD && deltaRoll < WIZARD_RETURN_THRESHOLD && deltaYaw < WIZARD_RETURN_THRESHOLD) {
-                addLogMessage(`[Wizard] Krok ${mappingWizard.currentStep + 1} zakonczony.`, 'success');
-                mappingWizard.currentStep++;
-                runWizardStep();
-            }
-        } else {
-            const values = { pitch: rawNow.pitch - start.pitch, roll: rawNow.roll - start.roll, yaw: calculateAngleDiff(rawNow.yaw, start.yaw) };
-            const deltas = { pitch: deltaPitch, roll: deltaRoll, yaw: deltaYaw };
-    
-            if (Math.max(deltaPitch, deltaRoll, deltaYaw) > WIZARD_ACTIVATION_THRESHOLD) {
-                let dominantAxis = Object.keys(deltas).reduce((a, b) => deltas[a] > deltas[b] ? a : b);
-                let sign = Math.sign(values[dominantAxis]) || 1;
-                
-                const step = mappingWizard.steps[mappingWizard.currentStep];
-                mappingWizard.detectedAxes[step.id] = { axis: dominantAxis, sign: sign };
-                
-                addLogMessage(`[Wizard] Wykryto ruch: ${step.id} -> Os: ${dominantAxis}, Znak: ${sign}`, 'info');
-                
-                mappingWizard.waitingForReturn = true;
-                document.getElementById('wizard-instruction-text').textContent = "Swietnie! Teraz wroc do pozycji wyjsciowej.";
-            }
-        }
-    }
-    
-    function finalizeMapping() {
-        mappingWizard.isActive = false;
-        document.getElementById('mapping-wizard-modal').style.display = 'none';
-    
-        try {
-            const detected = mappingWizard.detectedAxes;
-            
-            // Sprawdzenie, czy krok walidacyjny jest zgodny z krokiem 'forward'
-            if (detected.validate.axis === detected.forward.axis && detected.validate.sign !== detected.forward.sign) {
-                addLogMessage('[Wizard] Walidacja pomyslna!', 'success');
-            } else {
-                addLogMessage('[Wizard] Blad walidacji! Sprawdz, czy ruchy zostaly wykonane poprawnie.', 'error');
-                return; // Przerwij, jesli walidacja sie nie powiodla
-            }
-
-            // Zapisz bezposrednio do GLOBALNEGO mapowania IMU
-            // Przyjmujemy: pochyl do przodu -> Pitch, obrot zgodnie z zegarem -> Yaw, przechył w prawo -> Roll
-            imuMapping.pitch = { source: detected.forward.axis, sign: detected.forward.sign };
-            imuMapping.yaw   = { source: detected.cw.axis,     sign: detected.cw.sign };
-            imuMapping.roll  = { source: detected.right.axis,  sign: detected.right.sign };
-            saveImuMapping();
-
-            // Zaktualizuj kontrolki w Akordeonie 1
-            const pitchSrcSel = document.getElementById('imu-map-pitch-source');
-            const pitchSignSel= document.getElementById('imu-map-pitch-sign');
-            const yawSrcSel   = document.getElementById('imu-map-yaw-source');
-            const yawSignSel  = document.getElementById('imu-map-yaw-sign');
-            const rollSrcSel  = document.getElementById('imu-map-roll-source');
-            const rollSignSel = document.getElementById('imu-map-roll-sign');
-            if (pitchSrcSel && yawSrcSel && rollSrcSel) {
-                pitchSrcSel.value = imuMapping.pitch.source; pitchSignSel.value = String(imuMapping.pitch.sign);
-                yawSrcSel.value   = imuMapping.yaw.source;   yawSignSel.value   = String(imuMapping.yaw.sign);
-                rollSrcSel.value  = imuMapping.roll.source;  rollSignSel.value  = String(imuMapping.roll.sign);
-            }
-
-            addLogMessage('[UI] Kreator mapowania zakonczony! Zaktualizowano globalne mapowanie IMU.', 'success');
-            // Wyślij nowe mapowanie do robota i zapisz trwale
-            const nameToIdx = (n) => (n === 'pitch' ? 0 : (n === 'yaw' ? 1 : 2));
-            const mappingPayload = {
-                type: 'set_imu_mapping',
-                mapping: {
-                    pitch: { source: nameToIdx(imuMapping.pitch.source), sign: imuMapping.pitch.sign },
-                    yaw:   { source: nameToIdx(imuMapping.yaw.source),   sign: imuMapping.yaw.sign },
-                    roll:  { source: nameToIdx(imuMapping.roll.source),  sign: imuMapping.roll.sign }
-                }
-            };
-            if (AppState.isConnected) {
-                sendBleMessage(mappingPayload);
-                sendBleMessage({ type: 'save_tunings' });
-            }
-        } catch (e) {
-            addLogMessage('[UI] Blad podczas finalizacji mapowania. Upewnij sie, ze wszystkie kroki zostaly wykonane.', 'error');
-        }
-    }
-    
-    // ======================================================
-    // === KREATOR MAPOWANIA OSI IMU - KONIEC BLOKU KODU ===
-    // ======================================================
+    // Legacy IMU axis mapping wizard – completely removed in Quaternion-First UI
+    // (previous functions runWizardStep/processWizardTelemetry/finalizeMapping deleted)
 
     // REFACTORED: Consolidated parameter mapping - includes ALL configurable parameters
     const parameterMapping = { 
@@ -1237,7 +1108,8 @@
                 updateTelemetryUI(data);
                 updateChart(data);
                 updateActualPath(data);
-                if (mappingWizard.isActive) {
+                // Legacy guard: mappingWizard removed; keep defensive check
+                if (typeof mappingWizard !== 'undefined' && mappingWizard && mappingWizard.isActive && typeof processWizardTelemetry === 'function') {
                     processWizardTelemetry(data);
                 }
                 break;
