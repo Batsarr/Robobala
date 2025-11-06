@@ -468,6 +468,7 @@
                 <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
                     <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Asystent Kalibracji IMU</button>
                     <button id="calibrateZeroPointBtn" style="width:100%; background-color:#f7b731;">Znajdz Pion Automatycznie</button>
+                    <button id="sensorMappingBtn" style="width:100%; background-color:#f7b731;">Mapowanie czujnika</button>
                 </div>
             </fieldset>
         </div>
@@ -574,50 +575,7 @@
             <div id="allSettings">
                 <button class="accordion-header" onclick="toggleAccordion(this)">1. Parametry Sprzetowe i Mechaniczne</button>
                 <div class="accordion-content">
-                    <div class="setting-container">
-                        <label>Mapowanie osi IMU (pitch/yaw/roll)</label>
-                        <div class="axis-mapping-row">
-                            <span class="mapping-label">Pitch =&nbsp;</span>
-                            <select id="imu-map-pitch-source" style="display:none;">
-                                <option value="pitch">pitch</option>
-                                <option value="yaw">yaw</option>
-                                <option value="roll">roll</option>
-                            </select>
-                            <select id="imu-map-pitch-sign" style="display:none;">
-                                <option value="1">+1</option>
-                                <option value="-1">-1</option>
-                            </select>
-                        </div>
-                        <div class="axis-mapping-row">
-                            <span class="mapping-label">Yaw =&nbsp;</span>
-                            <select id="imu-map-yaw-source" style="display:none;">
-                                <option value="pitch">pitch</option>
-                                <option value="yaw">yaw</option>
-                                <option value="roll">roll</option>
-                            </select>
-                            <select id="imu-map-yaw-sign" style="display:none;">
-                                <option value="1">+1</option>
-                                <option value="-1">-1</option>
-                            </select>
-                        </div>
-                        <div class="axis-mapping-row">
-                            <span class="mapping-label">Roll =&nbsp;</span>
-                            <select id="imu-map-roll-source" style="display:none;">
-                                <option value="pitch">pitch</option>
-                                <option value="yaw">yaw</option>
-                                <option value="roll">roll</option>
-                            </select>
-                            <select id="imu-map-roll-sign" style="display:none;">
-                                <option value="1">+1</option>
-                                <option value="-1">-1</option>
-                            </select>
-                        </div>
-                        <div style="display:flex; gap:8px; margin-top:8px; flex-wrap: wrap;">
-                            <button id="imu-mapping-apply" class="primary">Zastosuj</button>
-                            <button id="open-mount-calib" style="background-color: #f7b731;">Kreator kalibracji montażu</button>
-                        </div>
-                        <div class="help-text">Ustaw, jak odczyty IMU mają być interpretowane w aplikacji. Zmiana działa globalnie (dashboard, 3D, wykresy).</div>
-                    </div>
+                    <!-- Usunięto legacy mapowanie osi IMU – zastąpione nowym kreatorem 'Mapowanie czujnika' w Dashboard -->
                     <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" min="1" max="30" step="0.1" value="8.2"><button>+</button></div> <div class="help-text">Średnica koła robota w centymetrach. Parametr kluczowy dla obliczania prędkości i pokonanego dystansu. Zmierz dokładnie średnicę od krawędzi do krawędzi przez środek koła. Większe koła = większa prędkość przy tych samych obrotach silnika. Typowy zakres: 6-12 cm.</div> </div>
                     <div class="setting-container"> <label for="trackWidthInput">Rozstaw kol (cm)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="trackWidthInput" min="5" max="50" step="0.1" value="12.5"><button>+</button></div> <div class="help-text">Odległość między środkami obu kół (szerokość toru). Wpływa na obliczenia obrotu - szerszy rozstaw wymaga większej różnicy prędkości kół do wykonania tego samego skrętu. Zmierz odległość między środkami osi kół. Typowy zakres: 10-20 cm.</div> </div>
                     <div class="setting-container"> <label for="encoderPprInput">Impulsy na obrot (PPR)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="encoderPprInput" min="100" max="5000" step="10" value="820"><button>+</button></div> <div class="help-text">Liczba impulsów enkodera na jeden pełny obrót koła. Zależy od rozdzielczości enkodera i przekładni (jeśli jest). Wartość ta wpływa na dokładność pomiaru prędkości i pozycji. Wyższa wartość = większa precyzja. Sprawdź specyfikację swojego enkodera i przekładni. Typowy zakres: 300-2000 PPR.</div> </div>
@@ -889,42 +847,30 @@
             </div>
         </div>
     </div>
-    <div id="mount-calib-modal" class="modal-backdrop">
+    <!-- Nowy modal: Mapowanie czujnika (oparte na istniejącej kalibracji montażu v2) -->
+    <div id="sensor-mapping-modal" class="modal-backdrop" style="display:none;">
         <div class="modal-content">
-            <h2>Kreator Kalibracji Montażu IMU</h2>
-            <p style="text-align:left;">Kroki:
-            <ol style="text-align:left;">
-                <li>Połóż robota na plecach. Kliknij "Zarejestruj: Plecy".</li>
-                <li>Postaw robota kołami w dół (pion). Kliknij "Zarejestruj: Koła w dół".</li>
-                <li>Kliknij "Zastosuj i Zapisz".</li>
-            </ol>
+            <h2>Mapowanie Czujnika (Orientacja)</h2>
+            <p style="text-align:left; font-size:0.9em; line-height:1.4;">
+                Kreator prowadzi przez rejestrację pozycji aby wyznaczyć trwałą korekcję orientacji bez użycia kątów Euler'a (eliminuje gimbal lock).
             </p>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button id="mountCalibStartBtn">Start</button>
-                <button id="mountCalibCaptureBackBtn">Zarejestruj: Plecy</button>
-                <button id="mountCalibCaptureWheelsBtn">Zarejestruj: Koła w dół</button>
-                <button id="mountCalibCommitBtn" style="background-color:#a2f279;">Zastosuj i Zapisz</button>
-                <button id="mountCalibCancelBtn" style="background-color:#ff6347;">Anuluj</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="mount-calib2-modal" class="modal-backdrop" style="display:none;">
-        <div class="modal-content">
-            <h2>Kreator Kalibracji Montażu IMU v2</h2>
-            <ol style="text-align:left;">
-                <li>Postaw robota pionowo (koła w dół) na stabilnym podłożu i nie poruszaj. Kliknij „Zarejestruj: Pion”.</li>
-                <li>Opcjonalnie: rozpocznij powolny obrót robota wokół osi pionowej (np. 90–360°), kliknij „Poczatek Obrotu”, następnie „Koniec Obrotu”.</li>
-                <li>Kliknij „Zastosuj i Zapisz”.</li>
+            <ol style="text-align:left; font-size:0.9em;">
+                <li><strong>Start</strong> – rozpocznij sesję (czyści poprzednie próbki).</li>
+                <li><strong>Pion</strong> – postaw robota kołami w dół i zatrzymaj, kliknij „Zarejestruj: Pion”.</li>
+                <li><strong>Obrót (opcjonalnie)</strong> – wykonaj powolny obrót wokół osi pionowej (90–360°); kliknij „Początek Obrotu”, potem „Koniec Obrotu”.</li>
+                <li><strong>Zapisz</strong> – wylicza i zapisuje kwaternion korekcji w EEPROM.</li>
             </ol>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-                <span id="mount2-progress" style="flex:1; color:#ccc;">Krok: [ ] Pion [ ] RotStart [ ] RotEnd</span>
-                <button id="mount2StartBtn">Start v2</button>
-                <button id="mount2CaptureUprightBtn">Zarejestruj: Pion</button>
-                <button id="mount2CaptureRotStartBtn">Poczatek Obrotu</button>
-                <button id="mount2CaptureRotEndBtn">Koniec Obrotu</button>
-                <button id="mount2CommitBtn" style="background-color:#a2f279;">Zastosuj i Zapisz</button>
-                <button id="mount2CancelBtn" style="background-color:#ff6347;">Anuluj</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap; margin-top:10px;">
+                <button id="sensorMapStartBtn">Start</button>
+                <button id="sensorMapCaptureUprightBtn">Zarejestruj: Pion</button>
+                <button id="sensorMapCaptureRotStartBtn">Początek Obrotu</button>
+                <button id="sensorMapCaptureRotEndBtn">Koniec Obrotu</button>
+                <button id="sensorMapCommitBtn" style="background-color:#a2f279;">Zapisz Korekcję</button>
+                <button id="sensorMapCancelBtn" style="background-color:#ff6347;">Anuluj</button>
+            </div>
+            <div style="margin-top:12px; text-align:left;">
+                <div style="font-size:13px; color:#aaa;">Postęp:</div>
+                <div id="sensorMapProgress" style="font-family:monospace; background:#111; border:1px solid #333; border-radius:6px; padding:8px;">Krok: [ ] Pion [ ] RotStart [ ] RotEnd</div>
             </div>
         </div>
     </div>
@@ -995,35 +941,21 @@
         setupNumericInputs(); 
         setupEventListeners();
         setupManualTuneButtons(); 
-    // Mount calibration modal open
-        document.getElementById('open-mount-calib')?.addEventListener('click', () => {
-            openMountCalibModal();
-        });
-        // Mount calibration buttons
-        document.getElementById('mountCalibStartBtn')?.addEventListener('click', ()=> sendBleMessage({type: 'mount_calib_start'}));
-        document.getElementById('mountCalibCaptureBackBtn')?.addEventListener('click', ()=> sendBleMessage({type: 'mount_calib_capture_back'}));
-        document.getElementById('mountCalibCaptureWheelsBtn')?.addEventListener('click', ()=> sendBleMessage({type: 'mount_calib_capture_wheels'}));
-        document.getElementById('mountCalibCommitBtn')?.addEventListener('click', ()=> { sendBleMessage({type: 'mount_calib_commit'}); closeMountCalibModal(); });
-        document.getElementById('mountCalibCancelBtn')?.addEventListener('click', ()=> { sendBleMessage({type: 'mount_calib_cancel'}); closeMountCalibModal(); });
-
-        // Mount calibration v2 modal helpers
-        function openMountCalib2Modal(){ document.getElementById('mount-calib2-modal').style.display='flex'; }
-        function closeMountCalib2Modal(){ document.getElementById('mount-calib2-modal').style.display='none'; }
-        // Optional: open with Shift+click on the same button for now
-        document.getElementById('open-mount-calib')?.addEventListener('click', (e) => {
-            if (e.shiftKey) { openMountCalib2Modal(); e.preventDefault(); }
-        });
-        const setMount2Progress = (u=false, rs=false, re=false) => {
-            const el = document.getElementById('mount2-progress'); if (!el) return;
+        // Nowy modal Mapowanie Czujnika – korzysta z istniejących komend mount_calib2_* (backend już implementuje kwaternion-first)
+        function openSensorMappingModal(){ const m=document.getElementById('sensor-mapping-modal'); if(m) m.style.display='flex'; }
+        function closeSensorMappingModal(){ const m=document.getElementById('sensor-mapping-modal'); if(m) m.style.display='none'; }
+        const sensorProgress = (u=false, rs=false, re=false) => {
+            const el = document.getElementById('sensorMapProgress'); if (!el) return;
             el.textContent = `Krok: [${u?'x':' '}] Pion [${rs?'x':' '}] RotStart [${re?'x':' '}] RotEnd`;
         };
-        let mount2State = { u:false, rs:false, re:false };
-        document.getElementById('mount2StartBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'mount_calib2_start'}); mount2State={u:false,rs:false,re:false}; setMount2Progress(); });
-        document.getElementById('mount2CaptureUprightBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'mount_calib2_capture_upright'}); mount2State.u=true; setMount2Progress(true, mount2State.rs, mount2State.re); });
-        document.getElementById('mount2CaptureRotStartBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'mount_calib2_capture_rot_start'}); mount2State.rs=true; setMount2Progress(mount2State.u, true, mount2State.re); });
-        document.getElementById('mount2CaptureRotEndBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'mount_calib2_capture_rot_end'}); mount2State.re=true; setMount2Progress(mount2State.u, mount2State.rs, true); });
-        document.getElementById('mount2CommitBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'mount_calib2_commit'}); closeMountCalib2Modal(); });
-        document.getElementById('mount2CancelBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'mount_calib2_cancel'}); closeMountCalib2Modal(); });
+        let sensorMapState = { u:false, rs:false, re:false };
+        document.getElementById('sensorMappingBtn')?.addEventListener('click', ()=> { openSensorMappingModal(); });
+    document.getElementById('sensorMapStartBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'sensor_map_start'}); sensorMapState={u:false,rs:false,re:false}; sensorProgress(); });
+    document.getElementById('sensorMapCaptureUprightBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'sensor_map_capture_upright'}); sensorMapState.u=true; sensorProgress(true, sensorMapState.rs, sensorMapState.re); });
+    document.getElementById('sensorMapCaptureRotStartBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'sensor_map_capture_rot_start'}); sensorMapState.rs=true; sensorProgress(sensorMapState.u, true, sensorMapState.re); });
+    document.getElementById('sensorMapCaptureRotEndBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'sensor_map_capture_rot_end'}); sensorMapState.re=true; sensorProgress(sensorMapState.u, sensorMapState.rs, true); });
+    document.getElementById('sensorMapCommitBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'sensor_map_commit'}); closeSensorMappingModal(); });
+    document.getElementById('sensorMapCancelBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'sensor_map_cancel'}); closeSensorMappingModal(); });
         setupGamepadMappingModal(); 
         setupDpadControls(); 
         setupSequenceControls();
