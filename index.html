@@ -909,6 +909,26 @@
         </div>
     </div>
 
+    <div id="mount-calib2-modal" class="modal-backdrop" style="display:none;">
+        <div class="modal-content">
+            <h2>Kreator Kalibracji Montażu IMU v2</h2>
+            <ol style="text-align:left;">
+                <li>Postaw robota pionowo (koła w dół) na stabilnym podłożu i nie poruszaj. Kliknij „Zarejestruj: Pion”.</li>
+                <li>Opcjonalnie: rozpocznij powolny obrót robota wokół osi pionowej (np. 90–360°), kliknij „Poczatek Obrotu”, następnie „Koniec Obrotu”.</li>
+                <li>Kliknij „Zastosuj i Zapisz”.</li>
+            </ol>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                <span id="mount2-progress" style="flex:1; color:#ccc;">Krok: [ ] Pion [ ] RotStart [ ] RotEnd</span>
+                <button id="mount2StartBtn">Start v2</button>
+                <button id="mount2CaptureUprightBtn">Zarejestruj: Pion</button>
+                <button id="mount2CaptureRotStartBtn">Poczatek Obrotu</button>
+                <button id="mount2CaptureRotEndBtn">Koniec Obrotu</button>
+                <button id="mount2CommitBtn" style="background-color:#a2f279;">Zastosuj i Zapisz</button>
+                <button id="mount2CancelBtn" style="background-color:#ff6347;">Anuluj</button>
+            </div>
+        </div>
+    </div>
+
 <script>
     const AppState = {
         isConnected: false, isSynced: false, isApplyingConfig: false, lastKnownRobotState: 'IDLE',
@@ -975,7 +995,7 @@
         setupNumericInputs(); 
         setupEventListeners();
         setupManualTuneButtons(); 
-        // Mount calibration modal open
+    // Mount calibration modal open
         document.getElementById('open-mount-calib')?.addEventListener('click', () => {
             openMountCalibModal();
         });
@@ -985,6 +1005,25 @@
         document.getElementById('mountCalibCaptureWheelsBtn')?.addEventListener('click', ()=> sendBleMessage({type: 'mount_calib_capture_wheels'}));
         document.getElementById('mountCalibCommitBtn')?.addEventListener('click', ()=> { sendBleMessage({type: 'mount_calib_commit'}); closeMountCalibModal(); });
         document.getElementById('mountCalibCancelBtn')?.addEventListener('click', ()=> { sendBleMessage({type: 'mount_calib_cancel'}); closeMountCalibModal(); });
+
+        // Mount calibration v2 modal helpers
+        function openMountCalib2Modal(){ document.getElementById('mount-calib2-modal').style.display='flex'; }
+        function closeMountCalib2Modal(){ document.getElementById('mount-calib2-modal').style.display='none'; }
+        // Optional: open with Shift+click on the same button for now
+        document.getElementById('open-mount-calib')?.addEventListener('click', (e) => {
+            if (e.shiftKey) { openMountCalib2Modal(); e.preventDefault(); }
+        });
+        const setMount2Progress = (u=false, rs=false, re=false) => {
+            const el = document.getElementById('mount2-progress'); if (!el) return;
+            el.textContent = `Krok: [${u?'x':' '}] Pion [${rs?'x':' '}] RotStart [${re?'x':' '}] RotEnd`;
+        };
+        let mount2State = { u:false, rs:false, re:false };
+        document.getElementById('mount2StartBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'mount_calib2_start'}); mount2State={u:false,rs:false,re:false}; setMount2Progress(); });
+        document.getElementById('mount2CaptureUprightBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'mount_calib2_capture_upright'}); mount2State.u=true; setMount2Progress(true, mount2State.rs, mount2State.re); });
+        document.getElementById('mount2CaptureRotStartBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'mount_calib2_capture_rot_start'}); mount2State.rs=true; setMount2Progress(mount2State.u, true, mount2State.re); });
+        document.getElementById('mount2CaptureRotEndBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'mount_calib2_capture_rot_end'}); mount2State.re=true; setMount2Progress(mount2State.u, mount2State.rs, true); });
+        document.getElementById('mount2CommitBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'mount_calib2_commit'}); closeMountCalib2Modal(); });
+        document.getElementById('mount2CancelBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'mount_calib2_cancel'}); closeMountCalib2Modal(); });
         setupGamepadMappingModal(); 
         setupDpadControls(); 
         setupSequenceControls();
