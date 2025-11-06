@@ -1245,13 +1245,15 @@
         }
         switch(data.type) {
             case 'telemetry':
-                // Jeśli dostępny jest kwaternion, policz kąty w przeglądarce i nadpisz pitch/roll/yaw
+                // Jeśli dostępny jest kwaternion, policz kąty w przeglądarce
+                // i NADPISZ wartości, zamieniając pitch <-> yaw zgodnie z wymaganiem
                 if (typeof data.qw === 'number' && typeof data.qx === 'number' && typeof data.qy === 'number' && typeof data.qz === 'number') {
                     const eul = computeEulerFromQuaternion(data.qw, data.qx, data.qy, data.qz);
                     if (eul) {
-                        data.pitch = eul.pitch;
+                        // SWAP: pitch <-> yaw
+                        data.pitch = eul.yaw;
+                        data.yaw = eul.pitch;
                         data.roll = eul.roll;
-                        data.yaw = eul.yaw;
                     }
                 }
                 updateTelemetryUI(data);
