@@ -618,6 +618,50 @@
             <div id="allSettings">
                 <button class="accordion-header" onclick="toggleAccordion(this)">1. Parametry Sprzetowe i Mechaniczne</button>
                 <div class="accordion-content">
+                    <div class="setting-container">
+                        <label>Mapowanie osi IMU (pitch/yaw/roll)</label>
+                        <div class="axis-mapping-row">
+                            <span class="mapping-label">Pitch =&nbsp;</span>
+                            <select id="imu-map-pitch-source">
+                                <option value="pitch">pitch</option>
+                                <option value="yaw">yaw</option>
+                                <option value="roll">roll</option>
+                            </select>
+                            <select id="imu-map-pitch-sign">
+                                <option value="1">+1</option>
+                                <option value="-1">-1</option>
+                            </select>
+                        </div>
+                        <div class="axis-mapping-row">
+                            <span class="mapping-label">Yaw =&nbsp;</span>
+                            <select id="imu-map-yaw-source">
+                                <option value="pitch">pitch</option>
+                                <option value="yaw">yaw</option>
+                                <option value="roll">roll</option>
+                            </select>
+                            <select id="imu-map-yaw-sign">
+                                <option value="1">+1</option>
+                                <option value="-1">-1</option>
+                            </select>
+                        </div>
+                        <div class="axis-mapping-row">
+                            <span class="mapping-label">Roll =&nbsp;</span>
+                            <select id="imu-map-roll-source">
+                                <option value="pitch">pitch</option>
+                                <option value="yaw">yaw</option>
+                                <option value="roll">roll</option>
+                            </select>
+                            <select id="imu-map-roll-sign">
+                                <option value="1">+1</option>
+                                <option value="-1">-1</option>
+                            </select>
+                        </div>
+                        <div style="display:flex; gap:8px; margin-top:8px;">
+                            <button id="imu-mapping-apply" class="primary">Zastosuj</button>
+                            <button id="imu-mapping-reset">Domyślne</button>
+                        </div>
+                        <div class="help-text">Ustaw, jak odczyty IMU mają być interpretowane w aplikacji. Zmiana działa globalnie (dashboard, 3D, wykresy).</div>
+                    </div>
                     <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" min="1" max="30" step="0.1" value="8.2"><button>+</button></div> <div class="help-text">Średnica koła robota w centymetrach. Parametr kluczowy dla obliczania prędkości i pokonanego dystansu. Zmierz dokładnie średnicę od krawędzi do krawędzi przez środek koła. Większe koła = większa prędkość przy tych samych obrotach silnika. Typowy zakres: 6-12 cm.</div> </div>
                     <div class="setting-container"> <label for="trackWidthInput">Rozstaw kol (cm)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="trackWidthInput" min="5" max="50" step="0.1" value="12.5"><button>+</button></div> <div class="help-text">Odległość między środkami obu kół (szerokość toru). Wpływa na obliczenia obrotu - szerszy rozstaw wymaga większej różnicy prędkości kół do wykonania tego samego skrętu. Zmierz odległość między środkami osi kół. Typowy zakres: 10-20 cm.</div> </div>
                     <div class="setting-container"> <label for="encoderPprInput">Impulsy na obrot (PPR)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="encoderPprInput" min="100" max="5000" step="10" value="820"><button>+</button></div> <div class="help-text">Liczba impulsów enkodera na jeden pełny obrót koła. Zależy od rozdzielczości enkodera i przekładni (jeśli jest). Wartość ta wpływa na dokładność pomiaru prędkości i pozycji. Wyższa wartość = większa precyzja. Sprawdź specyfikację swojego enkodera i przekładni. Typowy zakres: 300-2000 PPR.</div> </div>
@@ -1142,6 +1186,31 @@
         setupNumericInputs(); 
         setupEventListeners();
         setupManualTuneButtons(); 
+        loadImuMapping();
+        // Inicjalizacja kontrolek IMU mapping w UI
+        const pitchSrcSel = document.getElementById('imu-map-pitch-source');
+        const yawSrcSel   = document.getElementById('imu-map-yaw-source');
+        const rollSrcSel  = document.getElementById('imu-map-roll-source');
+        const pitchSignSel= document.getElementById('imu-map-pitch-sign');
+        const yawSignSel  = document.getElementById('imu-map-yaw-sign');
+        const rollSignSel = document.getElementById('imu-map-roll-sign');
+        if (pitchSrcSel && yawSrcSel && rollSrcSel && pitchSignSel && yawSignSel && rollSignSel) {
+            pitchSrcSel.value = imuMapping.pitch.source; pitchSignSel.value = String(imuMapping.pitch.sign);
+            yawSrcSel.value   = imuMapping.yaw.source;   yawSignSel.value   = String(imuMapping.yaw.sign);
+            rollSrcSel.value  = imuMapping.roll.source;  rollSignSel.value  = String(imuMapping.roll.sign);
+            document.getElementById('imu-mapping-apply').addEventListener('click', () => {
+                imuMapping.pitch.source = pitchSrcSel.value; imuMapping.pitch.sign = parseInt(pitchSignSel.value) || 1;
+                imuMapping.yaw.source   = yawSrcSel.value;   imuMapping.yaw.sign   = parseInt(yawSignSel.value)   || 1;
+                imuMapping.roll.source  = rollSrcSel.value;  imuMapping.roll.sign  = parseInt(rollSignSel.value)  || 1;
+                saveImuMapping(); addLogMessage('[UI] Zastosowano mapowanie IMU.', 'success');
+            });
+            document.getElementById('imu-mapping-reset').addEventListener('click', () => {
+                imuMapping = { pitch: {source:'pitch',sign:1}, yaw:{source:'yaw',sign:1}, roll:{source:'roll',sign:1} };
+                pitchSrcSel.value='pitch'; yawSrcSel.value='yaw'; rollSrcSel.value='roll';
+                pitchSignSel.value='1'; yawSignSel.value='1'; rollSignSel.value='1';
+                saveImuMapping(); addLogMessage('[UI] Przywrócono domyślne mapowanie IMU.', 'info');
+            });
+        }
         setupGamepadMappingModal(); 
         setupDpadControls(); 
         setupSequenceControls();
@@ -1185,6 +1254,36 @@
         } catch (_) {
             return null;
         }
+    }
+
+    // --- Mapowanie osi IMU (dla całej aplikacji: dashboard/wykresy/3D) ---
+    // Format: dla docelowego kanału (pitch/yaw/roll) wskazujemy źródło (pitch/yaw/roll) i znak (+1/-1)
+    const IMU_MAPPING_KEY = 'imu_axis_mapping_v1';
+    let imuMapping = {
+        pitch: { source: 'pitch', sign: 1 },
+        yaw:   { source: 'yaw',   sign: 1 },
+        roll:  { source: 'roll',  sign: 1 }
+    };
+
+    function loadImuMapping() {
+        try {
+            const raw = localStorage.getItem(IMU_MAPPING_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.pitch && parsed.yaw && parsed.roll) imuMapping = parsed;
+            }
+        } catch (_) { /* no-op */ }
+    }
+    function saveImuMapping() {
+        try { localStorage.setItem(IMU_MAPPING_KEY, JSON.stringify(imuMapping)); } catch (_) { /* no-op */ }
+    }
+    function applyImuMapping(eul) {
+        const src = { pitch: eul.pitch, yaw: eul.yaw, roll: eul.roll };
+        return {
+            pitch: (src[imuMapping.pitch.source] ?? 0) * (imuMapping.pitch.sign || 1),
+            yaw:   (src[imuMapping.yaw.source]   ?? 0) * (imuMapping.yaw.sign   || 1),
+            roll:  (src[imuMapping.roll.source]  ?? 0) * (imuMapping.roll.sign  || 1)
+        };
     }
 
     const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
@@ -1245,15 +1344,14 @@
         }
         switch(data.type) {
             case 'telemetry':
-                // Jeśli dostępny jest kwaternion, policz kąty w przeglądarce
-                // i NADPISZ wartości, zamieniając pitch <-> yaw zgodnie z wymaganiem
+        // Jeśli dostępny jest kwaternion, policz kąty i zastosuj globalne mapowanie IMU
                 if (typeof data.qw === 'number' && typeof data.qx === 'number' && typeof data.qy === 'number' && typeof data.qz === 'number') {
                     const eul = computeEulerFromQuaternion(data.qw, data.qx, data.qy, data.qz);
                     if (eul) {
-                        // SWAP: pitch <-> yaw
-                        data.pitch = eul.yaw;
-                        data.yaw = eul.pitch;
-                        data.roll = eul.roll;
+            const mapped = applyImuMapping(eul);
+            data.pitch = mapped.pitch;
+            data.yaw   = mapped.yaw;
+            data.roll  = mapped.roll;
                     }
                 }
                 updateTelemetryUI(data);
@@ -2623,33 +2721,40 @@ function handleTuningStartAck(method) {
     
     function update3DAnimation() {
         if (isAnimation3DEnabled && robotPivot) {
-            // KROK 1: Bezpieczne pobieranie danych telemetrycznych z wartosciami domyslnymi
-            const telemetry = {
-                pitch: window.telemetryData?.pitch || 0,
-                roll: window.telemetryData?.roll || 0,
-                yaw: window.telemetryData?.yaw || 0
-            };
-
-            const finalRotation = { x: 0, y: 0, z: 0 };
-            
-            if (axisMapping.x.source !== 'none') {
-                finalRotation.x = (telemetry[axisMapping.x.source] * axisMapping.x.sign) * Math.PI / 180;
-            }
-            if (axisMapping.y.source !== 'none') {
-                finalRotation.y = (telemetry[axisMapping.y.source] * axisMapping.y.sign) * Math.PI / 180;
-            }
-            if (axisMapping.z.source !== 'none') {
-                finalRotation.z = (telemetry[axisMapping.z.source] * axisMapping.z.sign) * Math.PI / 180;
-            }
-            
-            // KROK 2: KLUCZOWE ZABEZPIECZENIE - Sprawdzenie, czy obliczone wartosci sa prawidlowymi liczbami
-            if (isNaN(finalRotation.x) || isNaN(finalRotation.y) || isNaN(finalRotation.z)) {
-                // Jesli ktorakolwiek wartosc jest nieprawidlowa (NaN), nie aktualizuj rotacji modelu.
-                // Zamiast tego, zaloguj blad, aby ulatwic diagnoze.
-                console.error("Wykryto nieprawidlowa wartosc rotacji (NaN). Aktualizacja modelu 3D wstrzymana.", finalRotation);
+            // Użyj bezpośrednio kwaternionu z telemetrii, jeśli dostępny
+            if (typeof window.telemetryData?.qw === 'number' && typeof window.telemetryData?.qx === 'number' && typeof window.telemetryData?.qy === 'number' && typeof window.telemetryData?.qz === 'number') {
+                try {
+                    // Kwaternion z telemetrii jest już po stronie firmware w układzie WXYZ.
+                    // Najpierw przelicz na Euler (YXZ), zastosuj globalne mapowanie IMU,
+                    // a następnie z powrotem ustaw quaternion dla robota (eliminuje dryf mapowania 3D).
+                    const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
+                    if (eul) {
+                        const mapped = applyImuMapping(eul);
+                        const e = new THREE.Euler(
+                            THREE.MathUtils.degToRad(mapped.pitch),
+                            THREE.MathUtils.degToRad(mapped.yaw),
+                            THREE.MathUtils.degToRad(mapped.roll),
+                            'YXZ'
+                        );
+                        robotPivot.quaternion.setFromEuler(e);
+                    }
+                } catch (err) {
+                    console.error('3D quaternion apply error:', err);
+                }
             } else {
-                // Dopiero gdy wszystkie wartosci sa poprawne, zaktualizuj rotacje modelu.
-                robotPivot.rotation.set(finalRotation.x, finalRotation.y, finalRotation.z, 'YXZ');
+                // Fallback: użyj kątów (po mapowaniu), jeśli kwaternion nie jest dostępny
+                const telemetry = {
+                    pitch: window.telemetryData?.pitch || 0,
+                    roll: window.telemetryData?.roll || 0,
+                    yaw: window.telemetryData?.yaw || 0
+                };
+                const e = new THREE.Euler(
+                    THREE.MathUtils.degToRad(telemetry.pitch),
+                    THREE.MathUtils.degToRad(telemetry.yaw),
+                    THREE.MathUtils.degToRad(telemetry.roll),
+                    'YXZ'
+                );
+                robotPivot.quaternion.setFromEuler(e);
             }
 
         // KROK 3: DYNAMICZNA KOREKTA WYSOKOSCI, ABY KOLA NIE ZNIKALY POD PODLOGA
