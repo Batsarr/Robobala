@@ -847,30 +847,24 @@
             </div>
         </div>
     </div>
-    <!-- Nowy modal: Mapowanie czujnika (oparte na istniejącej kalibracji montażu v2) -->
+    <!-- Nowy modal: Mapowanie czujnika – sekwencyjny kreator z auto-wykryciem obrotu > 90° -->
     <div id="sensor-mapping-modal" class="modal-backdrop" style="display:none;">
         <div class="modal-content">
             <h2>Mapowanie Czujnika (Orientacja)</h2>
-            <p style="text-align:left; font-size:0.9em; line-height:1.4;">
-                Kreator prowadzi przez rejestrację pozycji aby wyznaczyć trwałą korekcję orientacji bez użycia kątów Euler'a (eliminuje gimbal lock).
-            </p>
-            <ol style="text-align:left; font-size:0.9em;">
-                <li><strong>Start</strong> – rozpocznij sesję (czyści poprzednie próbki).</li>
-                <li><strong>Pion</strong> – postaw robota kołami w dół i zatrzymaj, kliknij „Zarejestruj: Pion”.</li>
-                <li><strong>Obrót (opcjonalnie)</strong> – wykonaj powolny obrót wokół osi pionowej (90–360°); kliknij „Początek Obrotu”, potem „Koniec Obrotu”.</li>
-                <li><strong>Zapisz</strong> – wylicza i zapisuje kwaternion korekcji w EEPROM.</li>
-            </ol>
-            <div style="display:flex;gap:8px;flex-wrap:wrap; margin-top:10px;">
-                <button id="sensorMapStartBtn">Start</button>
-                <button id="sensorMapCaptureUprightBtn">Zarejestruj: Pion</button>
-                <button id="sensorMapCaptureRotStartBtn">Początek Obrotu</button>
-                <button id="sensorMapCaptureRotEndBtn">Koniec Obrotu</button>
-                <button id="sensorMapCommitBtn" style="background-color:#a2f279;">Zapisz Korekcję</button>
-                <button id="sensorMapCancelBtn" style="background-color:#ff6347;">Anuluj</button>
+            <div id="sensorWizardStepInfo" style="margin:6px 0; font-size:12px; color:#aaa;">Krok <span id="sensorWizardStepNo">1</span>/3</div>
+            <div id="sensorWizardText" style="text-align:left; font-size:0.95em; line-height:1.5; background:#101014; border:1px solid #2a2a35; padding:12px; border-radius:8px;">
+                <!-- dynamiczna instrukcja -->
             </div>
-            <div style="margin-top:12px; text-align:left;">
-                <div style="font-size:13px; color:#aaa;">Postęp:</div>
-                <div id="sensorMapProgress" style="font-family:monospace; background:#111; border:1px solid #333; border-radius:6px; padding:8px;">Krok: [ ] Pion [ ] RotStart [ ] RotEnd</div>
+            <div id="sensorWizardHint" style="margin-top:8px; font-size:0.85em; color:#bbb;">
+                <!-- dynamiczne podpowiedzi -->
+            </div>
+            <div id="sensorWizardProgress" style="margin-top:12px; font-family:monospace; background:#111; border:1px solid #333; border-radius:6px; padding:8px; text-align:left;">
+                [ ] Pion | [ ] Rotacja ≥ 90° | [ ] Zapis
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
+                <button id="sensorWizardCancelBtn" style="background:#ff6347;">Anuluj</button>
+                <button id="sensorWizardBackBtn" disabled>Wstecz</button>
+                <button id="sensorWizardNextBtn" style="background:#61dafb;">Dalej</button>
             </div>
         </div>
     </div>
@@ -942,20 +936,85 @@
         setupEventListeners();
         setupManualTuneButtons(); 
         // Nowy modal Mapowanie Czujnika – korzysta z istniejących komend mount_calib2_* (backend już implementuje kwaternion-first)
-        function openSensorMappingModal(){ const m=document.getElementById('sensor-mapping-modal'); if(m) m.style.display='flex'; }
-        function closeSensorMappingModal(){ const m=document.getElementById('sensor-mapping-modal'); if(m) m.style.display='none'; }
-        const sensorProgress = (u=false, rs=false, re=false) => {
-            const el = document.getElementById('sensorMapProgress'); if (!el) return;
-            el.textContent = `Krok: [${u?'x':' '}] Pion [${rs?'x':' '}] RotStart [${re?'x':' '}] RotEnd`;
-        };
-        let sensorMapState = { u:false, rs:false, re:false };
+        // Sekwencyjny kreator mapowania czujnika (auto-wykrycie rotacji ≥ 90°)
+        let sensorWizard = { step: 0, rotStartYaw: null, monitorId: null, progress: {upright:false, rotation:false, saved:false} };
+        function openSensorMappingModal(){
+            const m=document.getElementById('sensor-mapping-modal'); if(!m) return; m.style.display='flex';
+            sensorWizard = { step:0, rotStartYaw:null, monitorId:null, progress:{upright:false, rotation:false, saved:false} };
+            updateSensorWizardUI();
+        }
+        function closeSensorMappingModal(){ const m=document.getElementById('sensor-mapping-modal'); if(!m) return; if(sensorWizard.monitorId){ clearInterval(sensorWizard.monitorId); sensorWizard.monitorId=null; } m.style.display='none'; }
+        function setWizardProgress(){
+            const el = document.getElementById('sensorWizardProgress');
+            if(!el) return;
+            const p = sensorWizard.progress;
+            el.textContent = `[${p.upright?'x':' '}] Pion | [${p.rotation?'x':' '}] Rotacja ≥ 90° | [${p.saved?'x':' '}] Zapis`;
+        }
+        function setWizardStepNo(){ const n=document.getElementById('sensorWizardStepNo'); if(n) n.textContent = (sensorWizard.step+1).toString(); }
+        function getCurrentYawDeg(){
+            const td = window.telemetryData || {}; const { qw, qx, qy, qz } = td; if (typeof qw !== 'number') return null;
+            const eul = computeEulerFromQuaternion(qw, qx, qy, qz); return eul ? eul.yaw : null;
+        }
+        function angleDeltaDeg(a,b){ if (a===null||b===null) return null; let d = ((a - b + 540) % 360) - 180; return Math.abs(d); }
+        function updateSensorWizardUI(){
+            setWizardStepNo(); setWizardProgress();
+            const t = document.getElementById('sensorWizardText'); const hint = document.getElementById('sensorWizardHint');
+            const back = document.getElementById('sensorWizardBackBtn'); const next = document.getElementById('sensorWizardNextBtn');
+            if(!t||!hint||!back||!next) return;
+            if (sensorWizard.step === 0){
+                back.disabled = true; next.disabled = false; next.textContent = 'Dalej';
+                t.innerHTML = '1) Postaw robota pionowo (koła w dół, prosto) na stabilnej powierzchni i poczekaj aż się uspokoi.<br>Po kliknięciu Dalej zarejestrujemy bazową orientację.';
+                hint.textContent = 'Warunek: kalibracja IMU (Sys=3). Jeśli nie, wykonaj kalibrację przed kontynuacją.';
+            } else if (sensorWizard.step === 1){
+                back.disabled = false; next.disabled = true; next.textContent = 'Czekam na ≥ 90°';
+                t.innerHTML = '2) Obracaj robota powoli zgodnie z ruchem wskazówek zegara (poziomo).<br>Krok zakończy się automatycznie po wykryciu obrotu ≥ 90°.';
+                hint.textContent = 'Nie podnoś robota – trzymaj koła w dół. Możesz obracać więcej (180–360°) – wystarczy przekroczyć 90°.';
+            } else {
+                back.disabled = false; next.disabled = false; next.textContent = 'Zapisz';
+                t.innerHTML = '3) Zapisz ustawienia mapowania. Zmiany zostaną utrwalone w pamięci i będą stosowane po restarcie.';
+                hint.textContent = 'Po zapisie osie w Dashboard i w modelu 3D będą już skorygowane.';
+            }
+        }
+        function startRotationMonitor(){
+            // zapamiętaj yaw startowy i rozpocznij monitoring co 100ms
+            sensorWizard.rotStartYaw = getCurrentYawDeg();
+            if (sensorWizard.monitorId) { clearInterval(sensorWizard.monitorId); sensorWizard.monitorId = null; }
+            sensorWizard.monitorId = setInterval(()=>{
+                const cy = getCurrentYawDeg(); const d = angleDeltaDeg(cy, sensorWizard.rotStartYaw);
+                if (d!==null && d >= 90){
+                    clearInterval(sensorWizard.monitorId); sensorWizard.monitorId = null;
+                    // auto-zamknięcie kroku rotacji
+                    sendBleMessage({type:'sensor_map_capture_rot_end'});
+                    sensorWizard.progress.rotation = true;
+                    sensorWizard.step = 2; updateSensorWizardUI(); setWizardProgress();
+                    addLogMessage('[UI] Wykryto rotację ≥ 90°. Przechodzę do kroku Zapis.', 'success');
+                }
+            }, 100);
+        }
         document.getElementById('sensorMappingBtn')?.addEventListener('click', ()=> { openSensorMappingModal(); });
-    document.getElementById('sensorMapStartBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'sensor_map_start'}); sensorMapState={u:false,rs:false,re:false}; sensorProgress(); });
-    document.getElementById('sensorMapCaptureUprightBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'sensor_map_capture_upright'}); sensorMapState.u=true; sensorProgress(true, sensorMapState.rs, sensorMapState.re); });
-    document.getElementById('sensorMapCaptureRotStartBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'sensor_map_capture_rot_start'}); sensorMapState.rs=true; sensorProgress(sensorMapState.u, true, sensorMapState.re); });
-    document.getElementById('sensorMapCaptureRotEndBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'sensor_map_capture_rot_end'}); sensorMapState.re=true; sensorProgress(sensorMapState.u, sensorMapState.rs, true); });
-    document.getElementById('sensorMapCommitBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'sensor_map_commit'}); closeSensorMappingModal(); });
-    document.getElementById('sensorMapCancelBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'sensor_map_cancel'}); closeSensorMappingModal(); });
+        document.getElementById('sensorWizardCancelBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'sensor_map_cancel'}); closeSensorMappingModal(); });
+        document.getElementById('sensorWizardBackBtn')?.addEventListener('click', ()=> {
+            if (sensorWizard.step === 0) return; // nic
+            if (sensorWizard.step === 1){ if (sensorWizard.monitorId){ clearInterval(sensorWizard.monitorId); sensorWizard.monitorId=null; } }
+            sensorWizard.step -= 1; updateSensorWizardUI();
+        });
+        document.getElementById('sensorWizardNextBtn')?.addEventListener('click', async ()=>{
+            if (sensorWizard.step === 0){
+                // Start i rejestracja pozycji pionowej
+                sendBleMessage({type:'sensor_map_start'});
+                await sleep(80);
+                sendBleMessage({type:'sensor_map_capture_upright'});
+                sensorWizard.progress.upright = true; setWizardProgress();
+                // Rozpocznij krok rotacji i monitoring
+                sendBleMessage({type:'sensor_map_capture_rot_start'});
+                sensorWizard.step = 1; updateSensorWizardUI(); startRotationMonitor();
+            } else if (sensorWizard.step === 2){
+                // Zapis
+                sendBleMessage({type:'sensor_map_commit'});
+                sensorWizard.progress.saved = true; setWizardProgress();
+                closeSensorMappingModal();
+            }
+        });
         setupGamepadMappingModal(); 
         setupDpadControls(); 
         setupSequenceControls();
@@ -986,18 +1045,23 @@
     function computeEulerFromQuaternion(qw, qx, qy, qz) {
         try {
             if ([qw, qx, qy, qz].some(v => typeof v !== 'number' || Number.isNaN(v))) return null;
-            const q = new THREE.Quaternion(qx, qy, qz, qw);
-            q.normalize();
-            const e = new THREE.Euler(0, 0, 0, 'YXZ');
-            e.setFromQuaternion(q, 'YXZ');
+            // ZYX (yaw-pitch-roll) zgodnie z firmware (imu_math.h)
+            const n = Math.hypot(qw, qx, qy, qz) || 1;
+            qw /= n; qx /= n; qy /= n; qz /= n;
+            const siny_cosp = 2 * (qw * qz + qx * qy);
+            const cosy_cosp = 1 - 2 * (qy * qy + qz * qz);
+            const yaw = Math.atan2(siny_cosp, cosy_cosp);
+            const sinp = 2 * (qw * qy - qz * qx);
+            const pitch = Math.abs(sinp) >= 1 ? Math.sign(sinp) * (Math.PI / 2) : Math.asin(sinp);
+            const sinr_cosp = 2 * (qw * qx + qy * qz);
+            const cosr_cosp = 1 - 2 * (qx * qx + qy * qy);
+            const roll = Math.atan2(sinr_cosp, cosr_cosp);
             return {
-                pitch: THREE.MathUtils.radToDeg(e.x),
-                yaw: THREE.MathUtils.radToDeg(e.y),
-                roll: THREE.MathUtils.radToDeg(e.z)
+                yaw: THREE.MathUtils.radToDeg(yaw),
+                pitch: THREE.MathUtils.radToDeg(pitch),
+                roll: THREE.MathUtils.radToDeg(roll)
             };
-        } catch (_) {
-            return null;
-        }
+        } catch (_) { return null; }
     }
 
     // Usunięto legacy mapowanie IMU (Quaternion-First). Euler liczony bezpośrednio z kwaternionu.
