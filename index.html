@@ -1169,6 +1169,24 @@
         }
     });
 
+    // --- Przeliczanie kątów Euler’a z kwaternionu (telemetria: qw,qx,qy,qz) ---
+    function computeEulerFromQuaternion(qw, qx, qy, qz) {
+        try {
+            if ([qw, qx, qy, qz].some(v => typeof v !== 'number' || Number.isNaN(v))) return null;
+            const q = new THREE.Quaternion(qx, qy, qz, qw);
+            q.normalize();
+            const e = new THREE.Euler(0, 0, 0, 'YXZ');
+            e.setFromQuaternion(q, 'YXZ');
+            return {
+                pitch: THREE.MathUtils.radToDeg(e.x),
+                yaw: THREE.MathUtils.radToDeg(e.y),
+                roll: THREE.MathUtils.radToDeg(e.z)
+            };
+        } catch (_) {
+            return null;
+        }
+    }
+
     const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     function addLogMessage(message, level = 'info') { const logHistory = document.getElementById('log-history'); if (!logHistory) return; const timestamp = new Date().toLocaleTimeString(); let color = '#fff'; if (level === 'error') color = '#ff6347'; else if (level === 'warn') color = '#f7b731'; else if (level === 'success') color = '#a2f279'; const logEntry = document.createElement('div'); logEntry.style.color = color; logEntry.textContent = `[${timestamp}] ${message}`; logHistory.prepend(logEntry); while (logHistory.children.length > 200) { logHistory.removeChild(logHistory.lastChild); } }
@@ -1227,6 +1245,15 @@
         }
         switch(data.type) {
             case 'telemetry':
+                // Jeśli dostępny jest kwaternion, policz kąty w przeglądarce i nadpisz pitch/roll/yaw
+                if (typeof data.qw === 'number' && typeof data.qx === 'number' && typeof data.qy === 'number' && typeof data.qz === 'number') {
+                    const eul = computeEulerFromQuaternion(data.qw, data.qx, data.qy, data.qz);
+                    if (eul) {
+                        data.pitch = eul.pitch;
+                        data.roll = eul.roll;
+                        data.yaw = eul.yaw;
+                    }
+                }
                 updateTelemetryUI(data);
                 updateChart(data);
                 updateActualPath(data);
