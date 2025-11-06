@@ -949,6 +949,12 @@
             if(!el) return;
             const p = sensorWizard.progress;
             el.textContent = `[${p.upright?'x':' '}] Pion | [${p.rotation?'x':' '}] Rotacja ≥ 90° | [${p.saved?'x':' '}] Zapis`;
+            // Jeśli mamy zapisaną korekcję, pokaż skrócony kwaternion
+            if(p.saved && window.lastMountCorr){
+                const {qw,qx,qy,qz}=window.lastMountCorr;
+                const preview = `\nqcorr: w=${qw.toFixed(3)} x=${qx.toFixed(3)} y=${qy.toFixed(3)} z=${qz.toFixed(3)}`;
+                el.textContent += preview;
+            }
         }
         function setWizardStepNo(){ const n=document.getElementById('sensorWizardStepNo'); if(n) n.textContent = (sensorWizard.step+1).toString(); }
         function getCurrentYawDeg(){
@@ -971,7 +977,9 @@
                 hint.textContent = 'Nie podnoś robota – trzymaj koła w dół. Możesz obracać więcej (180–360°) – wystarczy przekroczyć 90°.';
             } else {
                 back.disabled = false; next.disabled = false; next.textContent = 'Zapisz';
-                t.innerHTML = '3) Zapisz ustawienia mapowania. Zmiany zostaną utrwalone w pamięci i będą stosowane po restarcie.';
+                let extra = '';
+                if(window.lastMountCorr){ const {qw,qx,qy,qz}=window.lastMountCorr; extra = `<div style="margin-top:8px; font-size:0.8em; color:#9fa;">Aktualne (ostatnie) qcorr:<br>w=${qw.toFixed(4)} x=${qx.toFixed(4)} y=${qy.toFixed(4)} z=${qz.toFixed(4)}</div>`; }
+                t.innerHTML = '3) Zapisz ustawienia mapowania. Zmiany zostaną utrwalone w pamięci i zaczną działać natychmiast.' + extra;
                 hint.textContent = 'Po zapisie osie w Dashboard i w modelu 3D będą już skorygowane.';
             }
         }
@@ -1146,6 +1154,17 @@
                 // Legacy guard: mappingWizard removed; keep defensive check
                 if (typeof mappingWizard !== 'undefined' && mappingWizard && mappingWizard.isActive && typeof processWizardTelemetry === 'function') {
                     processWizardTelemetry(data);
+                }
+                break;
+            case 'status_update':
+                // Specjalna obsługa mount_corr_set (echo po sensor_map_commit)
+                if(data.message === 'mount_corr_set' && typeof data.qw === 'number'){
+                    window.lastMountCorr = {qw:data.qw,qx:data.qx,qy:data.qy,qz:data.qz};
+                    addLogMessage(`[UI] Korekcja montażu zastosowana: w=${data.qw.toFixed(3)} x=${data.qx.toFixed(3)} y=${data.qy.toFixed(3)} z=${data.qz.toFixed(3)}`, 'success');
+                    // Jeśli modal nadal otwarty a zapis jeszcze nie zaznaczony, odśwież postęp
+                    if(document.getElementById('sensor-mapping-modal')?.style.display === 'flex'){
+                        sensorWizard.progress.saved = true; setWizardProgress(); updateSensorWizardUI();
+                    }
                 }
                 break;
             // case 'imu_mapping': // legacy: nieużywane w Quaternion-First
