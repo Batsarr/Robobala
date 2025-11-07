@@ -723,8 +723,8 @@
                                 <div class="config-section">
                                     <label style="color: #f7b731;">Zaawansowane opcje:</label>
                                     <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="ga-elitism" checked> Elityzm</label>
-                                    <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="ga-adaptive"> Adaptacyjne operatory</label>
-                                    <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="ga-convergence-check"> Sprawdzanie zbieznosci</label>
+                                    <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="ga-adaptive" checked> Adaptacyjne operatory</label>
+                                    <label style="color: #fff; font-weight: normal;"><input type="checkbox" id="ga-convergence-check" checked> Sprawdzanie zbieznosci</label>
                                 </div>
                                 <div class="tuning-controls"><button id="run-ga-tune">🚀 Uruchom</button><button id="pause-ga-tune" disabled>⏸️ Pauza</button><button id="step-ga-tune" disabled>➡️ Krok</button><button id="stop-ga-tune" disabled>⏹️ Stop</button></div>
                                 <div class="status-panel autotune-live-status" id="ga-status-panel">
@@ -2682,12 +2682,22 @@ function handleTuningStartAck(method) {
     
     function update3DAnimation() {
         if (isAnimation3DEnabled && robotPivot) {
-            // Użyj bezpośrednio kwaternionu z telemetrii, jeśli dostępny
+            // Zawsze oblicz Euler'a z kwaternionu (jeśli dostępny) i zastosuj mapowanie modelu
             if (typeof window.telemetryData?.qw === 'number' && typeof window.telemetryData?.qx === 'number' && typeof window.telemetryData?.qy === 'number' && typeof window.telemetryData?.qz === 'number') {
                 try {
-                    const q = new THREE.Quaternion(window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz, window.telemetryData.qw);
-                    q.normalize();
-                    robotPivot.quaternion.copy(q);
+                    const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
+                    if (eul) {
+                        // ZASTOSUJ MAPOWANIE MODELU: przekształć Euler'a zgodnie z ustawieniami użytkownika
+                        const mapped = applyModelMappingToEuler(eul);
+                        // Utwórz Euler z mapowanymi wartościami i ustaw quaternion
+                        const e = new THREE.Euler(
+                            THREE.MathUtils.degToRad(mapped.pitch),
+                            THREE.MathUtils.degToRad(mapped.yaw),
+                            THREE.MathUtils.degToRad(mapped.roll),
+                            'YXZ'  // Zachowaj kolejność osi jak w oryginalnym kodzie
+                        );
+                        robotPivot.quaternion.setFromEuler(e);
+                    }
                 } catch (err) {
                     console.error('3D quaternion apply error:', err);
                 }
