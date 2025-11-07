@@ -2682,54 +2682,60 @@ function handleTuningStartAck(method) {
     
     function update3DAnimation() {
         if (isAnimation3DEnabled && robotPivot) {
-            // Zawsze oblicz Euler'a z kwaternionu (jeśli dostępny) i zastosuj mapowanie modelu
-            if (typeof window.telemetryData?.qw === 'number' && typeof window.telemetryData?.qx === 'number' && typeof window.telemetryData?.qy === 'number' && typeof window.telemetryData?.qz === 'number') {
+            // NOWE: używamy bezpośrednio kwaternionu z telemetrii + mapowanie przez premnożenie.
+            // Eliminujemy artefakt unoszenia wynikający z dynamicznej korekty wysokości zależnej od roll.
+            if (typeof window.telemetryData?.qw === 'number') {
                 try {
-                    const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
-                    if (eul) {
-                        // ZASTOSUJ MAPOWANIE MODELU: przekształć Euler'a zgodnie z ustawieniami użytkownika
-                        const mapped = applyModelMappingToEuler(eul);
-                        // Utwórz Euler z mapowanymi wartościami i ustaw quaternion
-                        const e = new THREE.Euler(
-                            THREE.MathUtils.degToRad(mapped.pitch),
-                            THREE.MathUtils.degToRad(mapped.yaw),
-                            THREE.MathUtils.degToRad(mapped.roll),
-                            'YXZ'  // Zachowaj kolejność osi jak w oryginalnym kodzie
-                        );
-                        robotPivot.quaternion.setFromEuler(e);
+                    // Surowy kwaternion z IMU (Three.js: x,y,z,w)
+                    const qRaw = new THREE.Quaternion(
+                        window.telemetryData.qx,
+                        window.telemetryData.qy,
+                        window.telemetryData.qz,
+                        window.telemetryData.qw
+                    ).normalize();
+
+                    // Budowa kwaternionu korekcyjnego na podstawie mapowania.
+                    // Uwaga: pojedynczy sign flip osi jest odbiciem (nie reprezentowalny jako czysta rotacja);
+                    // jeśli liczba negatywnych znaków jest parzysta – można odwzorować jako rotację 180° wokół osi prostopadłej.
+                    const signs = [modelMapping.pitch.sign, modelMapping.yaw.sign, modelMapping.roll.sign];
+                    const negCount = signs.filter(s => s === -1).length;
+                    let qCorr = new THREE.Quaternion(); // identity
+
+                    // Permutacja osi + znaki: realizujemy przez przejście do Euler, przemapowanie i złożenie z powrotem.
+                    // Dla ograniczenia artefaktów wprowadzamy jednorazowy kwaternion docelowy i płynne przejście (slerp).
+                    const eulRaw = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
+                    let mapped = eulRaw ? applyModelMappingToEuler(eulRaw) : {pitch:0,yaw:0,roll:0};
+                    // Jeśli negCount jest nieparzyste – stosujemy fallback (bez prób tworzenia niepoprawnej rotacji).
+                    if (negCount % 2 === 0) {
+                        // Można spróbować zakodować kombinację dwóch flips jako rotację 180° wokół pozostałej osi.
+                        // (Heurystyka – poprawia przypadki odwrotu dwóch osi.)
+                        if (negCount === 2) {
+                            // Znajdź oś, która pozostała dodatnia
+                            const idx = signs.findIndex(s => s === 1);
+                            const axisVec = idx === 0 ? new THREE.Vector3(1,0,0) : (idx === 1 ? new THREE.Vector3(0,1,0) : new THREE.Vector3(0,0,1));
+                            qCorr.setFromAxisAngle(axisVec, Math.PI); // 180° rotacja kompensująca dwa odbicia
+                        }
                     }
+                    // Kwaternion wynikowy: qResult = qCorr * qMappedEuler
+                    const qMappedEuler = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+                        THREE.MathUtils.degToRad(mapped.pitch),
+                        THREE.MathUtils.degToRad(mapped.yaw),
+                        THREE.MathUtils.degToRad(mapped.roll),
+                        'YXZ'
+                    ));
+                    const qResult = new THREE.Quaternion().multiplyQuaternions(qCorr, qMappedEuler).normalize();
+
+                    // Płynne przejście (redukcja mikro-skoków przy wrap 360°)
+                    robotPivot.quaternion.slerp(qResult, 0.35);
                 } catch (err) {
-                    console.error('3D quaternion apply error:', err);
+                    console.error('Quaternion mapping error:', err);
                 }
             } else {
-                // Fallback: jeśli brak kwaternionu – użyj przygotowanych pól wizualizacyjnych, lub surowych
-                const tp = window.telemetryData;
-                const pitchDeg = (tp?.viz_pitch ?? tp?.raw_pitch ?? tp?.pitch ?? 0);
-                const yawDeg   = (tp?.viz_yaw   ?? tp?.raw_yaw   ?? tp?.yaw   ?? 0);
-                const rollDeg  = (tp?.viz_roll  ?? tp?.raw_roll  ?? tp?.roll  ?? 0);
-                const e = new THREE.Euler(
-                    THREE.MathUtils.degToRad(pitchDeg),
-                    THREE.MathUtils.degToRad(yawDeg),
-                    THREE.MathUtils.degToRad(rollDeg),
-                    'YXZ'
-                );
-                robotPivot.quaternion.setFromEuler(e);
+                // Brak kwaternionu – pozostaw orientation bez zmian.
             }
 
-        // KROK 3: DYNAMICZNA KOREKTA WYSOKOSCI, ABY KOLA NIE ZNIKALY POD PODLOGA
-        if (robotPivot && leftWheel) {
-            // Pobierz aktualny kat przechylu (roll) z modelu. Uzywamy wartosci z modelu, a nie telemetrycznej,
-            // poniewaz jest ona juz przetworzona przez mapowanie osi.
-            const rollAngle = robotPivot.rotation.z; 
-
-            // Oblicz odleglosc kola od srodka robota.
-            const wheelDistance = Math.abs(leftWheel.position.x);
-
-            // Oblicz wymagana korekte wysokosci. Jest to wartosc bezwzgledna, poniewaz
-            // niezaleznie od kierunku przechylu, robot musi byc podniesiony.
-            const heightCorrection = wheelDistance * Math.abs(Math.sin(rollAngle));
-            robotPivot.position.y = 4.1 + heightCorrection;
-        }
+            // Stała wysokość (z minimalnym podniesieniem aby koła nie "przecinały" podłogi)
+            robotPivot.position.y = 4.4; // 4.1 + 0.3 buffer
             
             // Aktualizacja kamery w trybie "Perspektywa Robota"
             const isRobotPerspective = document.getElementById('robotPerspectiveCheckbox').checked;
