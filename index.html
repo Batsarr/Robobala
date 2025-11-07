@@ -1274,9 +1274,19 @@
                 if (typeof data.qw === 'number' && typeof data.qx === 'number' && typeof data.qy === 'number' && typeof data.qz === 'number') {
                     const eul = computeEulerFromQuaternion(data.qw, data.qx, data.qy, data.qz);
                     if (eul) {
-                        // Najpierw surowe Euler
-                        let mapped = applyModelMappingToEuler(eul);
-                        data.pitch = mapped.pitch; data.yaw = mapped.yaw; data.roll = mapped.roll;
+                        // Zachowaj SUROWE kąty z kwaternionu (dla logiki, wykresów, ścieżki)
+                        data.raw_pitch = eul.pitch;
+                        data.raw_yaw   = eul.yaw;
+                        data.raw_roll  = eul.roll;
+                        // Oblicz tylko dla wizualizacji (model 3D) – nie wpływa na logikę
+                        const mapped = applyModelMappingToEuler(eul);
+                        data.viz_pitch = mapped.pitch;
+                        data.viz_yaw   = mapped.yaw;
+                        data.viz_roll  = mapped.roll;
+                        // Pola kompatybilności: pitch/yaw/roll = surowe (dla istniejących funkcji)
+                        data.pitch = data.raw_pitch;
+                        data.yaw   = data.raw_yaw;
+                        data.roll  = data.raw_roll;
                     }
                 }
                 updateTelemetryUI(data);
@@ -2682,17 +2692,15 @@ function handleTuningStartAck(method) {
                     console.error('3D quaternion apply error:', err);
                 }
             } else {
-                // Fallback: użyj kątów (po mapowaniu), jeśli kwaternion nie jest dostępny
-                const raw = {
-                    pitch: window.telemetryData?.pitch || 0,
-                    yaw: window.telemetryData?.yaw || 0,
-                    roll: window.telemetryData?.roll || 0
-                };
-                const telemetry = applyModelMappingToEuler(raw);
+                // Fallback: jeśli brak kwaternionu – użyj przygotowanych pól wizualizacyjnych, lub surowych
+                const tp = window.telemetryData;
+                const pitchDeg = (tp?.viz_pitch ?? tp?.raw_pitch ?? tp?.pitch ?? 0);
+                const yawDeg   = (tp?.viz_yaw   ?? tp?.raw_yaw   ?? tp?.yaw   ?? 0);
+                const rollDeg  = (tp?.viz_roll  ?? tp?.raw_roll  ?? tp?.roll  ?? 0);
                 const e = new THREE.Euler(
-                    THREE.MathUtils.degToRad(telemetry.pitch),
-                    THREE.MathUtils.degToRad(telemetry.yaw),
-                    THREE.MathUtils.degToRad(telemetry.roll),
+                    THREE.MathUtils.degToRad(pitchDeg),
+                    THREE.MathUtils.degToRad(yawDeg),
+                    THREE.MathUtils.degToRad(rollDeg),
                     'YXZ'
                 );
                 robotPivot.quaternion.setFromEuler(e);
