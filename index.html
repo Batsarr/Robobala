@@ -1064,7 +1064,26 @@
     let isMappingButton = false, actionToMap = null;
     
     const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v4_';
-    const availableActions = { 'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' }, 'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' }, 'toggle_speed_mode': { label: 'Wlacz/Wylacz Tryb Predkosci', elementId: 'speedModeSwitch' }, 'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyStopBtn' }, 'reset_zero': { label: 'Resetuj Osie', elementId: 'resetZeroBtn' }, 'trim_plus': { label: 'Korekta Pionu (+)', elementId: 'trimPlusBtn' }, 'trim_minus': { label: 'Korekta Pionu (-)', elementId: 'trimMinusBtn' } };
+    // Pitch trim: działa jak korekta zera tylko dla prezentacji. Ustawienie trim = -surowy_pitch (raw_pitch) spowoduje że robot w idealnym pionie pokaże 0.0°
+    // Logika w firmware anuluje wpływ tryma w obliczeniu błędu balansu (dodaje tryma do setpointu), więc robot nie odjeżdża przy kompensacji.
+    // Podstawowe przełączniki
+    const availableActions = { 
+        'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' },
+        'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' },
+        'toggle_speed_mode': { label: 'Wlacz/Wylacz Tryb Predkosci', elementId: 'speedModeSwitch' },
+        'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyStopBtn' },
+        'reset_zero': { label: 'Resetuj Osie', elementId: 'resetZeroBtn' },
+        // Pitch coarse (0.1°) i fine (0.01°)
+        'trim_plus': { label: 'Korekta Pionu +0.1°', elementId: 'trimPlus01Btn' },
+        'trim_minus': { label: 'Korekta Pionu -0.1°', elementId: 'trimMinus01Btn' },
+        'trim_plus_fine': { label: 'Korekta Pionu +0.01°', elementId: 'trimPlus001Btn' },
+        'trim_minus_fine': { label: 'Korekta Pionu -0.01°', elementId: 'trimMinus001Btn' },
+        // Roll coarse/fine
+        'roll_trim_plus': { label: 'Korekta Roll +0.1°', elementId: 'rollTrimPlus01Btn' },
+        'roll_trim_minus': { label: 'Korekta Roll -0.1°', elementId: 'rollTrimMinus01Btn' },
+        'roll_trim_plus_fine': { label: 'Korekta Roll +0.01°', elementId: 'rollTrimPlus001Btn' },
+        'roll_trim_minus_fine': { label: 'Korekta Roll -0.01°', elementId: 'rollTrimMinus001Btn' }
+    };
     const availableTelemetry = { 'pitch': { label: 'Pitch (Kat)', color: '#61dafb' }, 'roll': { label: 'Roll (Przechyl)', color: '#a2f279' }, 'speed': { label: 'Predkosc', color: '#f7b731'}, 'target_speed': { label: 'Predkosc Zadana', color: '#ff9f43' }, 'output': { label: 'Wyjscie PID', color: '#ff6347'}, 'encoder_left': { label: 'Enkoder L', color: '#9966ff' } };
     const builtInPresetsData = { '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 95.0, balanceKiInput: 0.0, balanceKdInput: 3.23 }}, '2': { name: "2. PID Mieciutki (Plynny)", params: { balanceKpInput: 80.0, balanceKiInput: 0.0, balanceKdInput: 2.8 }}, '3': { name: "3. PID Agresywny (Sztywny)", params: { balanceKpInput: 110.0, balanceKiInput: 0.0, balanceKdInput: 4.0 }} };
     let skyDome;
@@ -2820,13 +2839,11 @@ function handleTuningStartAck(method) {
 
         // POPRAWKA: Usunięto stare listenery dla trim+/- i dodano nowe, poprawne dla precyzyjnych przycisków.
     const toolButtons = { 'resetZeroBtn': { type: 'reset_zero' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
-        document.getElementById('trimMinus01Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -0.1 }));
-        document.getElementById('trimMinus001Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -0.01 }));
-        document.getElementById('trimPlus001Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 0.01 }));
-        document.getElementById('trimPlus01Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 0.1 }));
-
-    for (const [id, msg] of Object.entries(toolButtons)) { document.getElementById(id)?.addEventListener('click', () => sendBleMessage(msg)); }
-    // Korekta roll (nowe przyciski)
+    document.getElementById('trimMinus01Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -0.1 }));
+    document.getElementById('trimMinus001Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: -0.01 }));
+    document.getElementById('trimPlus001Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 0.01 }));
+    document.getElementById('trimPlus01Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 0.1 }));
+    // Roll trim eventy – działają identycznie (offset prezentacji) i NIE zmieniają stabilności balansu
     document.getElementById('resetRollZeroBtn')?.addEventListener('click', () => sendBleMessage({ type: 'reset_roll' }));
     document.getElementById('rollTrimMinus01Btn')?.addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -0.1 }));
     document.getElementById('rollTrimMinus001Btn')?.addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -0.01 }));
