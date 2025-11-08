@@ -70,8 +70,10 @@
         .accordion-header.active { background-color: #61dafb; color: #282c34; border-bottom-left-radius: 0; border-bottom-right-radius: 0;}
         .accordion-header::after { content: '+'; position: absolute; right: 15px; font-size: 1.4em; transition: transform 0.3s; }
         .accordion-header.active::after { content: '-'; }
-        .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out, padding 0.2s ease-out; background-color: #3a3f47; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; padding: 0 15px; }
-        .accordion-content.active { padding: 15px; }
+    .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out, padding 0.2s ease-out; background-color: #3a3f47; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; padding: 0 15px; }
+    .accordion-content.active { padding: 15px; }
+    /* Ulepszenie: po zakończeniu animacji ustaw max-height na auto, by nie ucinać treści */
+    .accordion-content.auto-height { max-height: none !important; overflow: visible; }
         .pwm-info { background-color: #20232a; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #61dafb; }
         .pwm-info strong { color: #a2f279; }
         .parameter-group { background-color: transparent; padding: 8px 0; border-radius: 0; margin-bottom: 8px; border-left: 2px solid #61dafb; padding-left: 10px; }
@@ -331,6 +333,11 @@
             font-size: 0.85em; 
             border-left: 3px solid #61dafb; 
         }
+    /* Sekcje teorii metod autostrojenia */
+    .method-theory { background:#20232a; border:1px solid #4a4f58; border-radius:6px; padding:12px; text-align:left; margin-bottom:12px; }
+    .method-theory h4 { color:#a2f279; margin:0 0 8px 0; }
+    .method-theory ul { margin:6px 0 0 18px; padding:0; }
+    .method-theory li { margin:4px 0; }
     /* Modal mapowania modelu 3D */
     .model-mapping-row { display:grid; grid-template-columns: 100px 1fr 1fr; gap:8px; align-items:center; margin-bottom:8px; }
     .model-mapping-row select { width:100%; background:#20232a; color:#fff; border:1px solid #61dafb; border-radius:4px; padding:4px; }
@@ -679,6 +686,15 @@
                         <div class="method-content active" data-method="zn-relay">
                             <div class="config-panel">
                                 <h3>🔬 Metoda Ziegler-Nichols z Relay</h3>
+                                <div class="method-theory">
+                                    <h4>Teoria: Ziegler–Nichols (Relay)</h4>
+                                    <p>Metoda polega na wymuszeniu oscylacji układu poprzez zastąpienie fragmentu regulatora elementem przekaźnikowym (relay). Z uzyskanej oscylacji wyznacza się <strong>Ku</strong> (ultimate gain) oraz <strong>Tu</strong> (okres oscylacji). Na bazie tych wartości dobiera się wstępne parametry PID wg tabel Z-N (tu używamy wariantu z mniejszym przeregulowaniem: Kp≈0.6Ku, Kd≈Kp*Tu/8). Metoda szybka i prosta, ale może dawać agresywne nastawy – traktuj wynik jako punkt startowy do dalszego dopracowania.</p>
+                                    <ul>
+                                        <li><strong>Zalety:</strong> szybka, nie wymaga modelu.</li>
+                                        <li><strong>Wady:</strong> może wzbudzić układ; ustawienia często wymagają łagodzenia.</li>
+                                        <li><strong>Kiedy użyć:</strong> pierwszy szkic nastaw balansu, gdy brak wcześniejszych danych.</li>
+                                    </ul>
+                                </div>
                                 <div class="config-grid">
                                     <div class="param-group"><label>⏱️ Czas trwania proby:</label><input type="range" id="zn-trial-duration" min="10" max="120" value="30"><span id="zn-trial-duration-val" data-unit="s">30s</span></div>
                                     <div class="param-group"><label>📐 Maks. amplituda:</label><input type="range" id="zn-max-amplitude" min="5" max="30" step="1" value="15"><span id="zn-max-amplitude-val" data-unit="°">15°</span></div>
@@ -703,6 +719,15 @@
                         <div class="method-content" data-method="ga-genetic">
                             <div class="config-panel">
                                 <h3>🧬 Algorytm Genetyczny</h3>
+                                <div class="method-theory">
+                                    <h4>Teoria: Algorytm Genetyczny (GA)</h4>
+                                    <p>GA optymalizuje parametry PID traktując je jako chromosomy populacji osobników. Każde pokolenie powstaje poprzez selekcję najlepszych (wg funkcji celu), krzyżowanie oraz mutację. Z czasem populacja zbiega do zestawu parametrów zapewniających kompromis między stabilnością a szybkością odpowiedzi.</p>
+                                    <ul>
+                                        <li><strong>Zalety:</strong> globalne przeszukiwanie, radzi sobie z nieliniowościami.</li>
+                                        <li><strong>Wady:</strong> czasochłonne, wymaga wielu prób.</li>
+                                        <li><strong>Kiedy użyć:</strong> gdy proste metody dają słabe wyniki lub zależy Ci na wielokryterialnej optymalizacji.</li>
+                                    </ul>
+                                </div>
                                 <h5 style="color: #61dafb; margin-bottom: 10px; text-align: left;">🔍 Przestrzen Przeszukiwania (Min/Max dla parametrow)</h5>
                                 <div class="search-space-grid">
                                     <div class="search-space-param"><label>Kp Min</label><input type="number" id="ga-kp-min" value="0.0" step="0.1"><label>Kp Max</label><input type="number" id="ga-kp-max" value="200.0" step="0.1"></div>
@@ -711,9 +736,12 @@
                                 </div>
                                 <h5 style="color: #f7b731; margin-bottom: 10px; text-align: left;">⚖️ Funkcja Celu (Wagi)</h5>
                                 <div class="fitness-function-config">
-                                    <div class="fitness-weight-item"><label>Minimalizuj Blad (ITAE)</label><input type="range" id="ga-weight-itae" min="0" max="100" value="50"><span id="ga-weight-itae-val">50%</span></div>
-                                    <div class="fitness-weight-item"><label>Minimalizuj Przeregulowanie</label><input type="range" id="ga-weight-overshoot" min="0" max="100" value="30"><span id="ga-weight-overshoot-val">30%</span></div>
-                                    <div class="fitness-weight-item"><label>Minimalizuj Energie Sterowania</label><input type="range" id="ga-weight-control-effort" min="0" max="100" value="20"><span id="ga-weight-control-effort-val">20%</span></div>
+                                    <div class="fitness-weight-item"><label>Minimalizuj Blad (ITAE) <span class="help-icon" title="Waga błędu całkowanego w czasie (Integral of Time-weighted Absolute Error)">?</span></label><input type="range" id="ga-weight-itae" min="0" max="100" value="50"><span id="ga-weight-itae-val">50%</span></div>
+                                    <div class="help-text">Wyższa waga ITAE = priorytet szybkiego wygaszania błędu w całym przebiegu. Zwiększ gdy zależy Ci na płynnej stabilizacji bez długiego ogona.</div>
+                                    <div class="fitness-weight-item"><label>Minimalizuj Przeregulowanie <span class="help-icon" title="Waga ograniczania wychylenia ponad wartość docelową">?</span></label><input type="range" id="ga-weight-overshoot" min="0" max="100" value="30"><span id="ga-weight-overshoot-val">30%</span></div>
+                                    <div class="help-text">Większa waga = algorytm preferuje konfiguracje z mniejszym szczytowym przekroczeniem. Podbij gdy robot zbyt agresywnie reaguje.</div>
+                                    <div class="fitness-weight-item"><label>Minimalizuj Energie Sterowania <span class="help-icon" title="Waga ograniczania energii / wielkości sygnału sterującego">?</span></label><input type="range" id="ga-weight-control-effort" min="0" max="100" value="20"><span id="ga-weight-control-effort-val">20%</span></div>
+                                    <div class="help-text">Wyższa waga = preferowane łagodniejsze sterowanie (mniejsze zużycie energii, mniej grzania). Zmniejsz jeśli sterowanie robi się zbyt ospałe.</div>
                                 </div>
                                 <div class="config-grid" style="margin-top: 20px;">
                                     <div class="param-group"><label>🏃 Liczba pokolen:</label><input type="range" id="ga-generations" min="5" max="100" value="20"><span id="ga-generations-val">20</span></div>
@@ -752,6 +780,15 @@
                         <div class="method-content" data-method="pso-particle">
                             <div class="config-panel">
                                 <h3>🌀 Optymalizacja Roju Czastek (PSO)</h3>
+                                <div class="method-theory">
+                                    <h4>Teoria: PSO (Particle Swarm Optimization)</h4>
+                                    <p>PSO modeluje populację cząstek poruszających się w przestrzeni parametrów. Każda cząstka aktualizuje prędkość na podstawie własnego najlepszego położenia oraz globalnego (lub lokalnego) najlepszego rozwiązania. W ten sposób stado zbiega do optimum.</p>
+                                    <ul>
+                                        <li><strong>Zalety:</strong> mniej parametrów niż GA, szybka zbieżność.</li>
+                                        <li><strong>Wady:</strong> może utknąć w optimum lokalnym przy złych ustawieniach inercji.</li>
+                                        <li><strong>Kiedy użyć:</strong> gdy chcesz szybciej znaleźć dobre nastawy po wstępnym oszacowaniu zakresów.</li>
+                                    </ul>
+                                </div>
                                 <h5 style="color: #61dafb; margin-bottom: 10px; text-align: left;">🔍 Przestrzen Przeszukiwania (Min/Max dla parametrow)</h5>
                                 <div class="search-space-grid">
                                     <div class="search-space-param"><label>Kp Min</label><input type="number" id="pso-kp-min" value="0.0" step="0.1"><label>Kp Max</label><input type="number" id="pso-kp-max" value="200.0" step="0.1"></div>
@@ -760,9 +797,12 @@
                                 </div>
                                 <h5 style="color: #f7b731; margin-bottom: 10px; text-align: left;">⚖️ Funkcja Celu (Wagi)</h5>
                                 <div class="fitness-function-config">
-                                    <div class="fitness-weight-item"><label>Minimalizuj Blad (ITAE)</label><input type="range" id="pso-weight-itae" min="0" max="100" value="50"><span id="pso-weight-itae-val">50%</span></div>
-                                    <div class="fitness-weight-item"><label>Minimalizuj Przeregulowanie</label><input type="range" id="pso-weight-overshoot" min="0" max="100" value="30"><span id="pso-weight-overshoot-val">30%</span></div>
-                                    <div class="fitness-weight-item"><label>Minimalizuj Energie Sterowania</label><input type="range" id="pso-weight-control-effort" min="0" max="100" value="20"><span id="pso-weight-control-effort-val">20%</span></div>
+                                    <div class="fitness-weight-item"><label>Minimalizuj Blad (ITAE) <span class="help-icon" title="Priorytet szybkiego zmniejszania całkowanego błędu w czasie">?</span></label><input type="range" id="pso-weight-itae" min="0" max="100" value="50"><span id="pso-weight-itae-val">50%</span></div>
+                                    <div class="help-text">Zwiększ w systemach gdzie ważna jest minimalizacja długotrwałego odchylenia (stabilizacja pozycji).</div>
+                                    <div class="fitness-weight-item"><label>Minimalizuj Przeregulowanie <span class="help-icon" title="Redukcja szczytowego przekroczenia wartości zadanej">?</span></label><input type="range" id="pso-weight-overshoot" min="0" max="100" value="30"><span id="pso-weight-overshoot-val">30%</span></div>
+                                    <div class="help-text">Podbij jeśli po testach występuje ryzyko utraty balansu przy gwałtownym impulsie.</div>
+                                    <div class="fitness-weight-item"><label>Minimalizuj Energie Sterowania <span class="help-icon" title="Ogranicza agresywne sterowanie pomniejszając zużycie energii">?</span></label><input type="range" id="pso-weight-control-effort" min="0" max="100" value="20"><span id="pso-weight-control-effort-val">20%</span></div>
+                                    <div class="help-text">Zwiększ dla oszczędności energii lub gdy silniki się grzeją; zmniejsz jeśli reakcja staje się zbyt wolna.</div>
                                 </div>
                                 <div class="config-grid" style="margin-top: 20px;">
                                     <div class="param-group"><label>🔄 Liczba iteracji:</label><input type="range" id="pso-iterations" min="20" max="200" value="50"><span id="pso-iterations-val">50</span></div>
@@ -801,6 +841,14 @@
                         <div class="method-content" data-method="single-tests">
                             <div class="config-panel">
                                 <h3>🧪 Testy Dynamiczne</h3>
+                                <div class="method-theory">
+                                    <h4>Teoria: Testy Dynamiczne</h4>
+                                    <p>Pojedyncze testy (impuls, odpowiedź na skok, przejazd na prędkość) pozwalają zmierzyć metryki: <strong>Overshoot</strong>, <strong>Rise Time</strong>, <strong>Settling Time</strong>, <strong>ITA Error</strong>. Służą do oceny jakości bieżących parametrów, bez ich automatycznej zmiany.</p>
+                                    <ul>
+                                        <li><strong>Zastosowanie:</strong> walidacja rezultatów Z-N / GA / PSO.</li>
+                                        <li><strong>Strategia:</strong> po każdej zmianie nastaw sprawdź czy metryki poprawiły się.</li>
+                                    </ul>
+                                </div>
                                 <p style="text-align: left; font-size: 0.9em; line-height: 1.4;">Uruchom pojedynczy test, aby zmierzyc metryki wydajnosci obecnej konfiguracji PID. Wyniki pojawia sie ponizej.</p>
                                                                 <div style="display:flex;flex-direction:column;gap:8px;">
                                                                     <button id="run-impulse-test" style="width:100%;">🚀 Test impulsu pozycji</button>
@@ -1215,8 +1263,72 @@
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
     function addLogMessage(message, level = 'info') { const logHistory = document.getElementById('log-history'); if (!logHistory) return; const timestamp = new Date().toLocaleTimeString(); let color = '#fff'; if (level === 'error') color = '#ff6347'; else if (level === 'warn') color = '#f7b731'; else if (level === 'success') color = '#a2f279'; const logEntry = document.createElement('div'); logEntry.style.color = color; logEntry.textContent = `[${timestamp}] ${message}`; logHistory.prepend(logEntry); while (logHistory.children.length > 200) { logHistory.removeChild(logHistory.lastChild); } }
     function clearLogs() { document.getElementById('log-history').innerHTML = ''; }
-    function toggleAccordion(header) { const content = header.nextElementSibling; header.classList.toggle('active'); if (content.style.maxHeight && content.style.maxHeight !== '0px') { content.style.maxHeight = '0px'; content.style.padding = '0px 15px'; } else { content.style.maxHeight = content.scrollHeight + 30 + "px"; content.style.padding = '15px'; } }
-    function updateAccordionHeight(content) { if (content && content.classList.contains('active')) { content.style.maxHeight = content.scrollHeight + 30 + 'px'; } }
+    function toggleAccordion(header) {
+        const content = header.nextElementSibling;
+        header.classList.toggle('active');
+        const isOpening = header.classList.contains('active');
+        if (!isOpening) {
+            content.classList.remove('auto-height');
+            content.style.maxHeight = '0px';
+            content.style.padding = '0px 15px';
+        } else {
+            content.style.maxHeight = content.scrollHeight + 40 + 'px';
+            content.style.padding = '15px';
+            // Po krótkim czasie pozwól rosnąć dynamicznie
+            setTimeout(() => {
+                if (header.classList.contains('active')) {
+                    content.classList.add('auto-height');
+                }
+            }, 450);
+        }
+    }
+    function updateAccordionHeight(content) {
+        if (content && content.classList.contains('active')) {
+            content.classList.remove('auto-height');
+            content.style.maxHeight = content.scrollHeight + 40 + 'px';
+            // Ustaw auto po chwili by nie ucinać późniejszych elementów (np. pojawiające się help-texty)
+            clearTimeout(content._autoTimer);
+            content._autoTimer = setTimeout(() => {
+                if (content.classList.contains('active')) content.classList.add('auto-height');
+            }, 300);
+        }
+    }
+    // Obserwator zmian dla dynamicznego dopasowania wysokości (np. rozwinięcie wielu help-text)
+    const accordionObserver = new MutationObserver(mutations => {
+        mutations.forEach(m => {
+            const content = m.target.closest && m.target.closest('.accordion-content');
+            if (content && content.classList.contains('active')) {
+                updateAccordionHeight(content);
+            }
+        });
+    });
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.accordion-content').forEach(ac => {
+            accordionObserver.observe(ac, { childList: true, subtree: true });
+        });
+    });
+    // Relokacja wykresu procesu strojenia pod aktywny przycisk URUCHOM
+    function relocateAutotuneChart(method) {
+        const chartWrapper = document.querySelector('.autotune-tuning-chart-wrapper');
+        if (!chartWrapper) return;
+        let targetBtn = null;
+        if (method === 'zn-relay') targetBtn = document.getElementById('run-zn-test');
+        else if (method === 'ga-genetic') targetBtn = document.getElementById('run-ga-tune');
+        else if (method === 'pso-particle') targetBtn = document.getElementById('run-pso-tune');
+        else if (method === 'single-tests') targetBtn = document.querySelector('.run-test-btn[data-test-type="step_response"]');
+        if (!targetBtn) return;
+        // Wstaw chart tuż za przyciskiem
+        if (targetBtn.parentElement && targetBtn.parentElement.contains(targetBtn)) {
+            // Unikaj wielokrotnego przenoszenia jeśli już jest poniżej
+            if (chartWrapper._lastMethod !== method) {
+                targetBtn.insertAdjacentElement('afterend', chartWrapper);
+                chartWrapper._lastMethod = method;
+                // Aktualizacja wysokości akordeonu
+                const accordionContent = chartWrapper.closest('.accordion-content');
+                updateAccordionHeight(accordionContent);
+            }
+        }
+    }
 
     async function connectBLE() {
         addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info');
@@ -2045,11 +2157,13 @@
                         }
                         attempts++;
                         // Zatrzymujemy po 5 próbach lub gdy wysokość się ustabilizuje
-                        if (attempts >= 5) {
+            if (attempts >= 5) {
                             clearInterval(intervalId);
                         }
                     }, 30); // Sprawdzaj co 30ms
                 }
+        // Przenieś wykres pod odpowiedni przycisk dla wybranej metody
+        relocateAutotuneChart(method);
             });
         });
         document.querySelectorAll('input[type="range"]').forEach(range => {
@@ -2165,6 +2279,9 @@ function handleTuningStartAck(method) {
         AppState.activeTuningMethod = method;
 
         updateTuningDashboard('starting', method);
+
+    // Upewnij się że wykres znajduje się pod przyciskiem aktywnej metody gdy rozpoczynamy
+    relocateAutotuneChart(method);
 
         document.getElementById('zn-results-panel').style.display = 'none';
         
@@ -2602,7 +2719,7 @@ function handleTuningStartAck(method) {
         document.getElementById('calibrateZeroPointBtn')?.addEventListener('click', () => { if (confirm("Upewnij sie, ze robot stoi na idealnie plaskiej powierzchni. Robot bedzie balansowal przez 10 sekund w celu znalezienia dokladnego punktu rownowagi. Kontynuowac?")) { sendBleMessage({ type: 'calibrate_zero_point' }); } });
 
         document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset); 
-        document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container') || icon.closest('.control-row'); if(!container) return; const helpText = container.nextElementSibling.classList.contains('help-text') ? container.nextElementSibling : container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); }); 
+    document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container') || icon.closest('.control-row') || icon.closest('.fitness-weight-item'); if(!container) return; const next = container.nextElementSibling; const helpText = (next && next.classList && next.classList.contains('help-text')) ? next : container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); }); 
     // Legacy IMU mapping wizard: usunięty
     }
     function setupManualTuneButtons() {
