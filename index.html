@@ -1064,8 +1064,8 @@
     let isMappingButton = false, actionToMap = null;
     
     const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v4_';
-    // Pitch trim: działa jak korekta zera tylko dla prezentacji. Ustawienie trim = -surowy_pitch (raw_pitch) spowoduje że robot w idealnym pionie pokaże 0.0°
-    // Logika w firmware anuluje wpływ tryma w obliczeniu błędu balansu (dodaje tryma do setpointu), więc robot nie odjeżdża przy kompensacji.
+    // Pitch trim: UI pokazuje wartości w stopniach. Firmware stosuje TRIM w kwaternionie (Quaternion-First),
+    // więc ustawienie trim = -raw_pitch zeruje wskazanie pitch i wpływa na balans zgodnie z oczekiwaniem.
     // Podstawowe przełączniki
     const availableActions = { 
         'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' },
