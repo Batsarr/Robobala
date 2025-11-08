@@ -437,9 +437,13 @@
                     <span class="label">Czas Petli</span>
                     <span class="value" id="loopTimeVal">0 &micro;s</span>
                 </div>
-                <div class="dashboard-item" id="loopLoadItem">
-                    <span class="label">Obciazenie Petli</span>
-                    <span class="value" id="loopLoadVal">0%</span>
+                <div class="dashboard-item">
+                    <span class="label">Logi Systemowe</span>
+                    <button id="openSystemLogsBtn" style="width:100%; background-color:#f7b731; margin-top:6px;">Pokaż logi</button>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Logi Wydajności (Loop Time)</span>
+                    <button id="openPerfLogsBtn" style="width:100%; background-color:#f7b731; margin-top:6px;">Pokaż</button>
                 </div>
                 <div class="dashboard-item" id="systemHealthItem">
                     <span class="label">System Health</span>
@@ -905,6 +909,34 @@
         </div>
     </div>
     <!-- Nowy modal: Mapowanie czujnika – sekwencyjny kreator z auto-wykryciem obrotu > 90° -->
+    <!-- Modal: Logi Systemowe (osobny kanał) -->
+    <div id="system-logs-modal" class="modal-backdrop" style="display:none;">
+        <div class="modal-content" style="max-width:900px;">
+            <h2>Logi Systemowe (osobny kanał)</h2>
+            <div style="display:flex; gap:8px; margin-bottom:8px;">
+                <button id="closeSystemLogsBtn" style="background:#ff6347;">Zamknij</button>
+                <button id="clearSystemLogsBtn" style="background:#f7b731;">Wyczyść</button>
+                <label style="margin-left:auto; display:flex; align-items:center; gap:6px;">
+                    Autoscroll <input type="checkbox" id="systemLogsAutoscroll" checked>
+                </label>
+            </div>
+            <div id="system-logs-content" style="height:420px; overflow:auto; background:#111; border:1px solid #333; border-radius:6px; padding:8px; text-align:left; font-family:monospace; white-space:pre-wrap;"></div>
+        </div>
+    </div>
+    <!-- Modal: Logi wydajności (tylko [Perf]) -->
+    <div id="perf-logs-modal" class="modal-backdrop" style="display:none;">
+        <div class="modal-content" style="max-width:900px;">
+            <h2>Logi Wydajności (Loop Time)</h2>
+            <div style="display:flex; gap:8px; margin-bottom:8px;">
+                <button id="closePerfLogsBtn" style="background:#ff6347;">Zamknij</button>
+                <button id="clearPerfLogsBtn" style="background:#f7b731;">Wyczyść</button>
+                <label style="margin-left:auto; display:flex; align-items:center; gap:6px;">
+                    Autoscroll <input type="checkbox" id="perfLogsAutoscroll" checked>
+                </label>
+            </div>
+            <div id="perf-logs-content" style="height:420px; overflow:auto; background:#111; border:1px solid #333; border-radius:6px; padding:8px; text-align:left; font-family:monospace; white-space:pre-wrap;"></div>
+        </div>
+    </div>
     <div id="sensor-mapping-modal" class="modal-backdrop" style="display:none;">
         <div class="modal-content">
             <h2>Mapowanie Czujnika (Orientacja) <span class="help-icon" id="sensorMappingHelp" title="Pokaż/ukryj szczegółową pomoc">?</span></h2>
@@ -1166,6 +1198,34 @@
         setTuningUiLock(false, '');
         initAutotuneTuningChart();
         setupAutotuningTabs();
+        // System Logs modal wiring
+        const openSysLogsBtn = document.getElementById('openSystemLogsBtn');
+        const sysLogsModal = document.getElementById('system-logs-modal');
+        const closeSysLogsBtn = document.getElementById('closeSystemLogsBtn');
+        const clearSysLogsBtn = document.getElementById('clearSystemLogsBtn');
+        // Perf Logs modal wiring
+        const openPerfLogsBtn = document.getElementById('openPerfLogsBtn');
+        const perfLogsModal = document.getElementById('perf-logs-modal');
+        const closePerfLogsBtn = document.getElementById('closePerfLogsBtn');
+        const clearPerfLogsBtn = document.getElementById('clearPerfLogsBtn');
+        if (openSysLogsBtn && sysLogsModal) {
+            openSysLogsBtn.addEventListener('click', ()=>{ sysLogsModal.style.display='flex'; renderSystemLogs(); });
+        }
+        if (closeSysLogsBtn && sysLogsModal) {
+            closeSysLogsBtn.addEventListener('click', ()=>{ sysLogsModal.style.display='none'; });
+        }
+        if (clearSysLogsBtn) {
+            clearSysLogsBtn.addEventListener('click', ()=>{ systemLogsBuffer.length = 0; renderSystemLogs(); });
+        }
+        if (openPerfLogsBtn && perfLogsModal) {
+            openPerfLogsBtn.addEventListener('click', ()=>{ perfLogsModal.style.display='flex'; renderPerfLogs(); });
+        }
+        if (closePerfLogsBtn && perfLogsModal) {
+            closePerfLogsBtn.addEventListener('click', ()=>{ perfLogsModal.style.display='none'; });
+        }
+        if (clearPerfLogsBtn) {
+            clearPerfLogsBtn.addEventListener('click', ()=>{ perfLogsBuffer.length = 0; renderPerfLogs(); });
+        }
     setupParameterListeners(); // RE-ADDED: This is crucial for parameter handling
         // Domyślnie nie szukamy Ki
         const kiChk = document.getElementById('include-ki-checkbox');
@@ -1178,6 +1238,60 @@
             });
         }
     });
+    // Osobny bufor logów systemowych (kanał 'log' z robota i ważne wpisy UI)
+    const systemLogsBuffer = [];
+    const SYSTEM_LOGS_MAX = 1000;
+    function pushSystemLog(message, level='info'){
+        const ts = new Date().toLocaleTimeString();
+        systemLogsBuffer.push({ts, level, message});
+        if (systemLogsBuffer.length > SYSTEM_LOGS_MAX) systemLogsBuffer.shift();
+        // Autoscroll jeśli modal otwarty i włączony autoscroll
+        const modal = document.getElementById('system-logs-modal');
+        if (modal && modal.style.display === 'flex' && document.getElementById('systemLogsAutoscroll')?.checked){
+            renderSystemLogs(true);
+        }
+    }
+    function renderSystemLogs(keepScrollBottom=false){
+        const box = document.getElementById('system-logs-content'); if(!box) return;
+        const wasBottom = (box.scrollTop + box.clientHeight + 8) >= box.scrollHeight;
+        box.innerHTML = '';
+        for (const row of systemLogsBuffer){
+            const div = document.createElement('div');
+            let color = '#ccc';
+            if (row.level === 'error') color = '#ff6347';
+            else if (row.level === 'warn') color = '#f7b731';
+            else if (row.level === 'success') color = '#a2f279';
+            div.style.color = color;
+            div.textContent = `[${row.ts}] ${row.message}`;
+            box.appendChild(div);
+        }
+        if (keepScrollBottom || wasBottom){ box.scrollTop = box.scrollHeight; }
+    }
+
+    // Bufor logów wydajności ([Perf])
+    const perfLogsBuffer = [];
+    const PERF_LOGS_MAX = 1000;
+    function pushPerfLog(message){
+        const ts = new Date().toLocaleTimeString();
+        perfLogsBuffer.push({ts, message});
+        if (perfLogsBuffer.length > PERF_LOGS_MAX) perfLogsBuffer.shift();
+        const modal = document.getElementById('perf-logs-modal');
+        if (modal && modal.style.display === 'flex' && document.getElementById('perfLogsAutoscroll')?.checked){
+            renderPerfLogs(true);
+        }
+    }
+    function renderPerfLogs(keepScrollBottom=false){
+        const box = document.getElementById('perf-logs-content'); if(!box) return;
+        const wasBottom = (box.scrollTop + box.clientHeight + 8) >= box.scrollHeight;
+        box.innerHTML = '';
+        for (const row of perfLogsBuffer){
+            const div = document.createElement('div');
+            div.style.color = '#f7b731';
+            div.textContent = `[${row.ts}] ${row.message}`;
+            box.appendChild(div);
+        }
+        if (keepScrollBottom || wasBottom){ box.scrollTop = box.scrollHeight; }
+    }
 
     // --- Model Mapping (wizualizacja 3D) ---
     let modelMapping = { pitch:{source:0,sign:1}, yaw:{source:1,sign:1}, roll:{source:2,sign:1} }; // domyślne: identity
@@ -1514,7 +1628,15 @@
                 AppState.tempStates = {};
                 break;
             case 'set_rgb_blink': // NOWE: Obsługa komend RGB
-            case 'log': addLogMessage(`[ROBOT] ${data.message}`, data.level); break;
+            case 'log':
+                addLogMessage(`[ROBOT] ${data.message}`, data.level);
+                // Routing: [Perf] tylko do perf-logs, reszta do system-logs
+                if (typeof data.message === 'string' && data.message.includes('[Perf]')) {
+                    pushPerfLog(`[ROBOT] ${data.message}`);
+                } else {
+                    pushSystemLog(`[ROBOT] ${data.message}`, data.level);
+                }
+                break;
             case 'tuner_live_status': updateTunerStatus(data); break;
             case 'tuner_live_chart_data': updateAutotuneTuningChart(data); break;
             case 'tuning_result': handleTunerResult(data); break;
@@ -1665,11 +1787,14 @@
     const loopTimeVal = (data.loop_time !== undefined) ? data.loop_time : data.lt;
     if (loopTimeVal !== undefined) document.getElementById('loopTimeVal').textContent = loopTimeVal + ' \u00B5s';
         if (data.loop_load !== undefined) {
+            const loopLoadValEl = document.getElementById('loopLoadVal');
+            const loopLoadItemEl = document.getElementById('loopLoadItem');
             const loadVal = parseFloat(data.loop_load).toFixed(0);
-            document.getElementById('loopLoadVal').textContent = loadVal + '%';
-            const loopLoadItem = document.getElementById('loopLoadItem');
-            loopLoadItem.classList.toggle('warn', loadVal > 70);
-            loopLoadItem.classList.toggle('error', loadVal > 90);
+            if (loopLoadValEl) loopLoadValEl.textContent = loadVal + '%';
+            if (loopLoadItemEl) {
+                loopLoadItemEl.classList.toggle('warn', loadVal > 70);
+                loopLoadItemEl.classList.toggle('error', loadVal > 90);
+            }
         }
         if (data.pitch !== undefined) {
             document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0';
