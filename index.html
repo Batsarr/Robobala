@@ -1520,10 +1520,37 @@
         } 
     }
     
+    function normalizeTelemetryData(d) {
+        if (!d || typeof d !== 'object') return d;
+        if (d.sp !== undefined && d.speed === undefined) d.speed = d.sp;
+        if (d.ts !== undefined && d.target_speed === undefined) d.target_speed = d.ts;
+        if (d.el !== undefined && d.encoder_left === undefined) d.encoder_left = d.el;
+        if (d.er !== undefined && d.encoder_right === undefined) d.encoder_right = d.er;
+        if (d.o !== undefined && d.output === undefined) d.output = d.o;
+        if (d.cs !== undefined && d.calib_sys === undefined) d.calib_sys = d.cs;
+        if (d.cg !== undefined && d.calib_gyro === undefined) d.calib_gyro = d.cg;
+        if (d.ca !== undefined && d.calib_accel === undefined) d.calib_accel = d.ca;
+        if (d.cm !== undefined && d.calib_mag === undefined) d.calib_mag = d.cm;
+        if (d.lt !== undefined && d.loop_time === undefined) d.loop_time = d.lt;
+        if (d.ta !== undefined && d.trim_angle === undefined) d.trim_angle = d.ta;
+        if (d.rt !== undefined && d.roll_trim === undefined) d.roll_trim = d.rt;
+        if (d.states && typeof d.states === 'object') {
+            const s = d.states;
+            if (s.b !== undefined && s.balancing === undefined) s.balancing = s.b;
+            if (s.hp !== undefined && s.holding_pos === undefined) s.holding_pos = s.hp;
+            if (s.sm !== undefined && s.speed_mode === undefined) s.speed_mode = s.sm;
+            if (s.es !== undefined && s.emergency_stop === undefined) s.emergency_stop = s.es;
+        }
+        return d;
+    }
+
     function updateTelemetryUI(data) {
+        data = normalizeTelemetryData(data);
         window.telemetryData = data; // Zapisz ostatnie dane telemetryczne globalnie
-        if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
-        if (data.loop_time !== undefined) document.getElementById('loopTimeVal').textContent = data.loop_time + ' \u00B5s';
+    if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
+    // loop time: support long 'loop_time' or short 'lt'
+    const loopTimeVal = (data.loop_time !== undefined) ? data.loop_time : data.lt;
+    if (loopTimeVal !== undefined) document.getElementById('loopTimeVal').textContent = loopTimeVal + ' \u00B5s';
         if (data.loop_load !== undefined) {
             const loadVal = parseFloat(data.loop_load).toFixed(0);
             document.getElementById('loopLoadVal').textContent = loadVal + '%';
@@ -1545,8 +1572,10 @@
             document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' °';
             document.getElementById('compassNeedle').style.transform = `rotate(${data.yaw}deg)`;
         }
-        if (data.speed !== undefined) {
-            const speed = parseFloat(data.speed);
+        // speed actual (sp) and target (ts) short keys
+        const speedActual = (data.speed !== undefined) ? data.speed : data.sp;
+        if (speedActual !== undefined) {
+            const speed = parseFloat(speedActual);
             document.getElementById('speedVal').textContent = speed.toFixed(0) + ' imp/s';
             const ppr = parseFloat(document.getElementById('encoderPprInput').value) || 820;
             const wheelRpm = (speed / ppr) * 60;
@@ -1554,13 +1583,15 @@
             speedHistory.push(speed);
             if (speedHistory.length > HISTORY_LENGTH) speedHistory.shift();
         }
-        if (data.encoder_left !== undefined) {
-            currentEncoderLeft = data.encoder_left;
-            document.getElementById('encoderLeftVal').textContent = data.encoder_left;
+        const encLeft = (data.encoder_left !== undefined) ? data.encoder_left : data.el;
+        if (encLeft !== undefined) {
+            currentEncoderLeft = encLeft;
+            document.getElementById('encoderLeftVal').textContent = encLeft;
         }
-        if (data.encoder_right !== undefined) {
-            currentEncoderRight = data.encoder_right;
-            document.getElementById('encoderRightVal').textContent = data.encoder_right;
+        const encRight = (data.encoder_right !== undefined) ? data.encoder_right : data.er;
+        if (encRight !== undefined) {
+            currentEncoderRight = encRight;
+            document.getElementById('encoderRightVal').textContent = encRight;
         }
         if (Date.now() - lastTelemetryUpdateTime > TELEMETRY_UPDATE_INTERVAL) {
             if (pitchHistory.length > 0) {
@@ -1581,24 +1612,45 @@
             }
             lastTelemetryUpdateTime = Date.now();
         }
-        if (data.calib_sys !== undefined) {
-            document.getElementById('calibSysVal').textContent = data.calib_sys;
-            updateCalibrationProgress('sys', data.calib_sys);
+        const calibSys = (data.calib_sys !== undefined) ? data.calib_sys : data.cs;
+        if (calibSys !== undefined) {
+            document.getElementById('calibSysVal').textContent = calibSys;
+            updateCalibrationProgress('sys', calibSys);
             const systemHealthItem = document.getElementById('systemHealthItem');
-            const sysCalibVal = parseInt(data.calib_sys);
+            const sysCalibVal = parseInt(calibSys);
             if (sysCalibVal < 2) { systemHealthItem.classList.add('error'); systemHealthItem.classList.remove('warn'); document.getElementById('systemHealthVal').textContent = 'KRYTYCZNY'; }
             else if (sysCalibVal === 2) { systemHealthItem.classList.add('warn'); systemHealthItem.classList.remove('error'); document.getElementById('systemHealthVal').textContent = 'NISKI'; } else { systemHealthItem.classList.remove('warn', 'error'); document.getElementById('systemHealthVal').textContent = 'OK'; }
         }
-        if (data.calib_accel !== undefined) { document.getElementById('calibAccelVal').textContent = data.calib_accel; updateCalibrationProgress('accel', data.calib_accel); }
-        if (data.calib_gyro !== undefined) { document.getElementById('calibGyroVal').textContent = data.calib_gyro; updateCalibrationProgress('gyro', data.calib_gyro); }
-        if (data.calib_mag !== undefined) { document.getElementById('calibMagVal').textContent = data.calib_mag; updateCalibrationProgress('mag', data.calib_mag); }
-        if (data.trim_angle !== undefined) { document.getElementById('trimValueDisplay').textContent = data.trim_angle.toFixed(2) + '°'; }
-        if (data.roll_trim !== undefined) {
+        const calibAccel = (data.calib_accel !== undefined) ? data.calib_accel : data.ca;
+        if (calibAccel !== undefined) { document.getElementById('calibAccelVal').textContent = calibAccel; updateCalibrationProgress('accel', calibAccel); }
+        const calibGyro = (data.calib_gyro !== undefined) ? data.calib_gyro : data.cg;
+        if (calibGyro !== undefined) { document.getElementById('calibGyroVal').textContent = calibGyro; updateCalibrationProgress('gyro', calibGyro); }
+        const calibMag = (data.calib_mag !== undefined) ? data.calib_mag : data.cm;
+        if (calibMag !== undefined) { document.getElementById('calibMagVal').textContent = calibMag; updateCalibrationProgress('mag', calibMag); }
+        const trimAngle = (data.trim_angle !== undefined) ? data.trim_angle : data.ta;
+        if (trimAngle !== undefined) { document.getElementById('trimValueDisplay').textContent = parseFloat(trimAngle).toFixed(2) + '°'; }
+        const rollTrim = (data.roll_trim !== undefined) ? data.roll_trim : data.rt;
+        if (rollTrim !== undefined) {
             const rollDisp = document.getElementById('rollTrimValueDisplay');
-            if (rollDisp && typeof data.roll_trim === 'number') rollDisp.textContent = data.roll_trim.toFixed(2) + '°';
+            const v = parseFloat(rollTrim);
+            if (rollDisp && !Number.isNaN(v)) rollDisp.textContent = v.toFixed(2) + '°';
         }
-        if (data.states && !AppState.isApplyingConfig) { AppState.isApplyingConfig = true; document.getElementById('balanceSwitch').checked = data.states.balancing; document.getElementById('holdPositionSwitch').checked = data.states.holding_pos; document.getElementById('speedModeSwitch').checked = data.states.speed_mode; AppState.isApplyingConfig = false; } // Pozostała logika
-        const emergencyBanner = document.getElementById('emergency-banner'); if (emergencyBanner) emergencyBanner.style.display = data.states && data.states.emergency_stop ? 'block' : 'none';
+        if (data.states && !AppState.isApplyingConfig) {
+            AppState.isApplyingConfig = true;
+            // states short keys fallback
+            const s = data.states;
+            const stBal = (s.balancing !== undefined) ? s.balancing : s.b;
+            const stHold = (s.holding_pos !== undefined) ? s.holding_pos : s.hp;
+            const stSpeed = (s.speed_mode !== undefined) ? s.speed_mode : s.sm;
+            const stEstop = (s.emergency_stop !== undefined) ? s.emergency_stop : s.es;
+            if (stBal !== undefined) document.getElementById('balanceSwitch').checked = !!stBal;
+            if (stHold !== undefined) document.getElementById('holdPositionSwitch').checked = !!stHold;
+            if (stSpeed !== undefined) document.getElementById('speedModeSwitch').checked = !!stSpeed;
+            AppState.isApplyingConfig = false;
+            const emergencyBanner = document.getElementById('emergency-banner'); if (emergencyBanner) emergencyBanner.style.display = stEstop ? 'block' : 'none';
+        } else {
+            const emergencyBanner = document.getElementById('emergency-banner'); if (emergencyBanner) emergencyBanner.style.display = data.states && (data.states.emergency_stop || data.states.es) ? 'block' : 'none';
+        }
     }
 
     let signalAnalyzerChart; let isChartPaused = false; let cursorA = null, cursorB = null;
