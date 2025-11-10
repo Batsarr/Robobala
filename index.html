@@ -395,6 +395,7 @@
                 <button id="trimPlus001Btn">+0.01</button>
                 <button id="trimPlus01Btn">+0.1</button>
             </div>
+            <button id="resetPitchTrimBtn" style="margin-top:10px; width:100%;">Resetuj Korekte Pitch</button>
             <button id="resetRollZeroBtn" style="margin-top:10px; width:100%;">Resetuj Korekte Roll</button>
             <div class="trim-controls">
                 <button id="rollTrimMinus01Btn">-0.1</button>
@@ -2844,6 +2845,7 @@ function handleTuningStartAck(method) {
     document.getElementById('trimPlus001Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 0.01 }));
     document.getElementById('trimPlus01Btn').addEventListener('click', () => sendBleMessage({ type: 'adjust_zero', value: 0.1 }));
     // Roll trim eventy – działają identycznie (offset prezentacji) i NIE zmieniają stabilności balansu
+    document.getElementById('resetPitchTrimBtn')?.addEventListener('click', () => sendBleMessage({ type: 'reset_pitch' }));
     document.getElementById('resetRollZeroBtn')?.addEventListener('click', () => sendBleMessage({ type: 'reset_roll' }));
     document.getElementById('rollTrimMinus01Btn')?.addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -0.1 }));
     document.getElementById('rollTrimMinus001Btn')?.addEventListener('click', () => sendBleMessage({ type: 'adjust_roll', value: -0.01 }));
