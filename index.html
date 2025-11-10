@@ -391,7 +391,7 @@
             <div class="trim-controls">
                 <button id="trimMinus01Btn">-0.1</button>
                 <button id="trimMinus001Btn">-0.01</button>
-                <span>Korekta Pionu: <input type="number" id="trimValueInput" value="0.00" step="0.01" style="width:60px;">°</span>
+                <span>Korekta Pionu: <span id="trimValueDisplay">0.00</span>°</span>
                 <button id="trimPlus001Btn">+0.01</button>
                 <button id="trimPlus01Btn">+0.1</button>
             </div>
@@ -399,7 +399,7 @@
             <div class="trim-controls">
                 <button id="rollTrimMinus01Btn">-0.1</button>
                 <button id="rollTrimMinus001Btn">-0.01</button>
-                <span>Korekta Roll: <input type="number" id="rollTrimValueInput" value="0.00" step="0.01" style="width:60px;">°</span>
+                <span>Korekta Roll: <span id="rollTrimValueDisplay">0.00</span>°</span>
                 <button id="rollTrimPlus001Btn">+0.01</button>
                 <button id="rollTrimPlus01Btn">+0.1</button>
             </div>
@@ -1043,7 +1043,7 @@
         // Joystick and mechanical parameters
         'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd',
         // Trim parameters
-        'trimValueInput': 'trim_angle', 'rollTrimValueInput': 'roll_trim',
+        // 'trimValueInput': 'trim_angle', 'rollTrimValueInput': 'roll_trim',
         // Auto-tuning parameters (safety, space, weights, GA, PSO, ZN)
         'safetyMaxAngle': 'safety_max_angle', 'safetyMaxSpeed': 'safety_max_speed', 'safetyMaxPwm': 'safety_max_pwm',
     'ga-kp-min': 'space_kp_min', 'ga-kp-max': 'space_kp_max', 'ga-ki-min': 'space_ki_min', 'ga-ki-max': 'space_ki_max', 'ga-kd-min': 'space_kd_min', 'ga-kd-max': 'space_kd_max',
@@ -1886,12 +1886,12 @@
         const calibMag = (data.calib_mag !== undefined) ? data.calib_mag : data.cm;
         if (calibMag !== undefined) { document.getElementById('calibMagVal').textContent = calibMag; updateCalibrationProgress('mag', calibMag); }
         const trimAngle = (data.trim_angle !== undefined) ? data.trim_angle : data.ta;
-        if (trimAngle !== undefined) { document.getElementById('trimValueInput').value = parseFloat(trimAngle).toFixed(2); }
+        if (trimAngle !== undefined) { document.getElementById('trimValueDisplay').textContent = parseFloat(trimAngle).toFixed(2); }
         const rollTrim = (data.roll_trim !== undefined) ? data.roll_trim : data.rt;
         if (rollTrim !== undefined) {
-            const rollInput = document.getElementById('rollTrimValueInput');
+            const rollSpan = document.getElementById('rollTrimValueDisplay');
             const v = parseFloat(rollTrim);
-            if (rollInput && !Number.isNaN(v)) rollInput.value = v.toFixed(2);
+            if (rollSpan && !Number.isNaN(v)) rollSpan.textContent = v.toFixed(2);
         }
         if (data.states && !AppState.isApplyingConfig) {
             AppState.isApplyingConfig = true;
@@ -2770,6 +2770,9 @@ function handleTuningStartAck(method) {
             }
             params[snakeKey] = value;
         }
+        // Add trim parameters from displays
+        params['trim_angle'] = parseFloat(document.getElementById('trimValueDisplay').textContent) || 0;
+        params['roll_trim'] = parseFloat(document.getElementById('rollTrimValueDisplay').textContent) || 0;
         addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info');
         sendBleMessage({ type: 'full_config', params });
     }
@@ -2840,48 +2843,48 @@ function handleTuningStartAck(method) {
 
         // POPRAWKA: Usunięto stare listenery dla trim+/- i dodano nowe, poprawne dla precyzyjnych przycisków.
     const toolButtons = { 'resetZeroBtn': { type: 'reset_pitch' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
-    // Trim buttons now update inputs instead of sending BLE
+    // Trim buttons now update displays instead of sending BLE
     document.getElementById('trimMinus01Btn').addEventListener('click', () => {
-        const input = document.getElementById('trimValueInput');
-        const current = parseFloat(input.value) || 0;
-        input.value = (current - 0.1).toFixed(2);
+        const span = document.getElementById('trimValueDisplay');
+        const current = parseFloat(span.textContent) || 0;
+        span.textContent = (current - 0.1).toFixed(2);
     });
     document.getElementById('trimMinus001Btn').addEventListener('click', () => {
-        const input = document.getElementById('trimValueInput');
-        const current = parseFloat(input.value) || 0;
-        input.value = (current - 0.01).toFixed(2);
+        const span = document.getElementById('trimValueDisplay');
+        const current = parseFloat(span.textContent) || 0;
+        span.textContent = (current - 0.01).toFixed(2);
     });
     document.getElementById('trimPlus001Btn').addEventListener('click', () => {
-        const input = document.getElementById('trimValueInput');
-        const current = parseFloat(input.value) || 0;
-        input.value = (current + 0.01).toFixed(2);
+        const span = document.getElementById('trimValueDisplay');
+        const current = parseFloat(span.textContent) || 0;
+        span.textContent = (current + 0.01).toFixed(2);
     });
     document.getElementById('trimPlus01Btn').addEventListener('click', () => {
-        const input = document.getElementById('trimValueInput');
-        const current = parseFloat(input.value) || 0;
-        input.value = (current + 0.1).toFixed(2);
+        const span = document.getElementById('trimValueDisplay');
+        const current = parseFloat(span.textContent) || 0;
+        span.textContent = (current + 0.1).toFixed(2);
     });
-    // Roll trim eventy – działają identycznie (offset prezentacji) i NIE zmieniają stabilności balansu
+    // Roll trim buttons – update displays
     document.getElementById('resetRollZeroBtn')?.addEventListener('click', () => sendBleMessage({ type: 'reset_roll' }));
     document.getElementById('rollTrimMinus01Btn')?.addEventListener('click', () => {
-        const input = document.getElementById('rollTrimValueInput');
-        const current = parseFloat(input.value) || 0;
-        input.value = (current - 0.1).toFixed(2);
+        const span = document.getElementById('rollTrimValueDisplay');
+        const current = parseFloat(span.textContent) || 0;
+        span.textContent = (current - 0.1).toFixed(2);
     });
     document.getElementById('rollTrimMinus001Btn')?.addEventListener('click', () => {
-        const input = document.getElementById('rollTrimValueInput');
-        const current = parseFloat(input.value) || 0;
-        input.value = (current - 0.01).toFixed(2);
+        const span = document.getElementById('rollTrimValueDisplay');
+        const current = parseFloat(span.textContent) || 0;
+        span.textContent = (current - 0.01).toFixed(2);
     });
     document.getElementById('rollTrimPlus001Btn')?.addEventListener('click', () => {
-        const input = document.getElementById('rollTrimValueInput');
-        const current = parseFloat(input.value) || 0;
-        input.value = (current + 0.01).toFixed(2);
+        const span = document.getElementById('rollTrimValueDisplay');
+        const current = parseFloat(span.textContent) || 0;
+        span.textContent = (current + 0.01).toFixed(2);
     });
     document.getElementById('rollTrimPlus01Btn')?.addEventListener('click', () => {
-        const input = document.getElementById('rollTrimValueInput');
-        const current = parseFloat(input.value) || 0;
-        input.value = (current + 0.1).toFixed(2);
+        const span = document.getElementById('rollTrimValueDisplay');
+        const current = parseFloat(span.textContent) || 0;
+        span.textContent = (current + 0.1).toFixed(2);
     });
 
         document.getElementById('saveBtn').addEventListener('click', () => {
