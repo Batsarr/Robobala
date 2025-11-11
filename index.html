@@ -1139,6 +1139,54 @@
                     <button id="ml-open-bayesian" class="btn-primary">Przejdź do zakładki Bayesian</button>
                     <button id="ml-start-bayesian" class="btn-secondary">Start (Bayesian)</button>
                 </div>
+                <hr style="border-color:#4a4f58; margin:12px 0;">
+                <div class="parameter-group">
+                    <h5>Zbieranie danych (dataset)</h5>
+                    <div class="setting-container"><label>Źródło pomiaru</label>
+                        <div class="numeric-input-wrapper" style="gap:8px;">
+                            <select id="ml-dataset-source">
+                                <option value="metrics">Wyniki testów (metrics_result)</option>
+                                <option value="telemetry">Strumień telemetrii (pitch/speed)</option>
+                            </select>
+                            <button id="ml-ds-start" class="btn-small">Start</button>
+                            <button id="ml-ds-stop" class="btn-small" disabled>Stop</button>
+                            <button id="ml-ds-clear" class="btn-small" style="background:#ff6b6b; color:#fff;">Wyczyść</button>
+                        </div>
+                    </div>
+                    <div class="setting-container"><label>Eksport</label>
+                        <div class="numeric-input-wrapper" style="gap:8px;">
+                            <button id="ml-ds-export-csv" class="btn-small">Eksport CSV</button>
+                            <button id="ml-ds-export-json" class="btn-small">Eksport JSON</button>
+                            <span id="ml-ds-count" style="margin-left:8px; color:#a2f279;">0 rekordów</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter-group">
+                    <h5>Model zastępczy i akwizycja</h5>
+                    <div class="setting-container"><label>Funkcja akwizycji</label>
+                        <div class="numeric-input-wrapper" style="gap:8px;">
+                            <select id="ml-acq-func">
+                                <option value="ei">Expected Improvement (EI)</option>
+                                <option value="ucb">Upper Confidence Bound (UCB)</option>
+                                <option value="pi">Probability of Improvement (PI)</option>
+                            </select>
+                            <label style="margin-left:10px;">ξ:</label>
+                            <input id="ml-acq-xi" type="number" step="0.01" value="0.01" style="width:90px;">
+                        </div>
+                    </div>
+                    <div class="setting-container"><label>Parametry modelu</label>
+                        <div class="numeric-input-wrapper" style="gap:8px;">
+                            <label>Noise:</label>
+                            <input id="ml-gp-noise" type="number" step="0.0001" value="0.001" style="width:100px;">
+                            <label>Max iteracji:</label>
+                            <input id="ml-max-iters" type="number" min="5" max="200" value="50" style="width:90px;">
+                            <button id="ml-train" class="btn-small">Trenuj</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="ml-preview" class="pwm-info" style="display:none;">
+                    <strong>Preview:</strong> <span id="ml-preview-text">---</span>
+                </div>
             </div>
         </div>
 
@@ -1339,7 +1387,10 @@
         setupSignalAnalyzerControls();
         populatePresetSelect();
         setupNumericInputs(); 
-        setupEventListeners();
+        // Zamiana legacy: wywołujemy nowy zestaw listenerów parametrów zamiast usuniętej funkcji.
+        if (typeof setupParameterListeners === 'function') {
+            setupParameterListeners();
+        }
         setupManualTuneButtons(); 
         // Nowy modal Mapowanie Czujnika – korzysta z istniejących komend mount_calib2_* (backend już implementuje kwaternion-first)
         // Sekwencyjny kreator mapowania czujnika (auto-wykrycie rotacji ≥ 90°)
@@ -1479,7 +1530,7 @@
         if (clearPerfLogsBtn) {
             clearPerfLogsBtn.addEventListener('click', ()=>{ perfLogsBuffer.length = 0; renderPerfLogs(); });
         }
-    setupParameterListeners(); // RE-ADDED: This is crucial for parameter handling
+    // Drugi wywołanie setupParameterListeners usunięte (pierwsze już wykonane wyżej) aby uniknąć podwójnych listenerów.
         // Domyślnie nie szukamy Ki
         const kiChk = document.getElementById('include-ki-checkbox');
         if (kiChk) {
@@ -1490,6 +1541,26 @@
                 sendBleMessage({ type: 'set_tuning_config_param', key: 'search_ki', value: kiChk.checked });
             });
         }
+
+        // ML dataset listeners
+        const openBayesianBtn = document.getElementById('ml-open-bayesian');
+        const startBayesianBtn = document.getElementById('ml-start-bayesian');
+        if(openBayesianBtn) openBayesianBtn.addEventListener('click', ()=> activateMethodTab('bayesian'));
+        if(startBayesianBtn) startBayesianBtn.addEventListener('click', ()=> activateMethodTab('bayesian'));
+        const dsStart = document.getElementById('ml-ds-start');
+        const dsStop = document.getElementById('ml-ds-stop');
+        const dsClear = document.getElementById('ml-ds-clear');
+        const dsSrc = document.getElementById('ml-dataset-source');
+        const expCsv = document.getElementById('ml-ds-export-csv');
+        const expJson = document.getElementById('ml-ds-export-json');
+        if(dsStart && dsStop && dsClear && dsSrc){
+            dsStart.addEventListener('click', ()=>{ mlCaptureSource = dsSrc.value; mlCaptureActive = true; dsStart.disabled = true; dsStop.disabled = false; addLogMessage(`[ML] Start zbierania datasetu (${mlCaptureSource}).`, 'info'); });
+            dsStop.addEventListener('click', ()=>{ mlCaptureActive = false; dsStart.disabled = false; dsStop.disabled = true; mlUpdateCount(); addLogMessage('[ML] Zatrzymano zbieranie datasetu.', 'info'); });
+            dsClear.addEventListener('click', ()=>{ mlDataset.length = 0; mlUpdateCount(); addLogMessage('[ML] Wyczyść dataset.', 'warn'); });
+        }
+        if(expCsv) expCsv.addEventListener('click', ()=>{ if(!mlDataset.length) { addLogMessage('[ML] Brak danych do eksportu CSV.', 'warn'); return; } mlExportCSV(); addLogMessage('[ML] Eksport CSV zapisany.', 'success'); });
+        if(expJson) expJson.addEventListener('click', ()=>{ if(!mlDataset.length) { addLogMessage('[ML] Brak danych do eksportu JSON.', 'warn'); return; } mlExportJSON(); addLogMessage('[ML] Eksport JSON zapisany.', 'success'); });
+        mlUpdateCount();
     });
     // Osobny bufor logów systemowych (kanał 'log' z robota i ważne wpisy UI)
     const systemLogsBuffer = [];
@@ -1909,6 +1980,7 @@
                 }
                 break;
             case 'test_result': handleDynamicTestResult(data); break;
+            case 'metrics_result': handleDynamicTestResult(data); break;
             case 'tuner_session_end':
                 // POPRAWKA: Obsługa komunikatu o zakończeniu sesji strojenia.
                 // Odblokowuje UI, gdy strojenie zostanie przerwane na robocie lub zakończy się naturalnie.
@@ -1920,6 +1992,35 @@
     // Broadcast BLE message for client-side autotuning algorithms (Simple Test API)
     try { window.dispatchEvent(new CustomEvent('ble_message', { detail: data })); } catch(e) {}
     }
+
+    // --- ML: dataset capture and export ---
+    const mlDataset = [];
+    let mlCaptureActive = false;
+    let mlCaptureSource = 'metrics';
+
+    function mlUpdateCount(){ const el=document.getElementById('ml-ds-count'); if(el) el.textContent = `${mlDataset.length} rekordów`; }
+    function mlToCSV(rows){ if(!rows.length) return ''; const headers = Object.keys(rows[0]); const esc = v => (v==null?'':String(v)).replace(/"/g,'""'); const lines=[headers.join(',')]; for(const r of rows){ lines.push(headers.map(h=>`"${esc(r[h])}"`).join(',')); } return lines.join('\n'); }
+    function mlExportCSV(){ const csv = mlToCSV(mlDataset); const blob = new Blob([csv], {type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='dataset.csv'; a.click(); URL.revokeObjectURL(url); }
+    function mlExportJSON(){ const blob=new Blob([JSON.stringify(mlDataset,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='dataset.json'; a.click(); URL.revokeObjectURL(url); }
+
+    // Hook: zbieraj metrics_result do datasetu
+    window.addEventListener('ble_message', (evt)=>{
+        const d = evt.detail; if(!d) return;
+        if(mlCaptureActive && mlCaptureSource === 'metrics' && d.type === 'metrics_result'){
+            mlDataset.push({
+                ts: Date.now(),
+                testId: d.testId,
+                kp: d.kp, ki: d.ki, kd: d.kd,
+                itae: d.itae, overshoot: d.overshoot, settling_time: d.settling_time, steady_state_error: d.steady_state_error
+            });
+            mlUpdateCount();
+        }
+        if(mlCaptureActive && mlCaptureSource === 'telemetry' && d.type === 'telemetry'){
+            mlDataset.push({ ts: Date.now(), pitch: d.pitch, speed: d.speed, output: d.output });
+            // Nie spamuj licznika co próbkę – lekko odświeżaj
+            if(mlDataset.length % 25 === 0) mlUpdateCount();
+        }
+    });
     
     function applySingleParam(snakeKey, value) {
         const inputId = Object.keys(parameterMapping).find(key => parameterMapping[key] === snakeKey);
@@ -2521,41 +2622,46 @@
         if(data.target_pitch !== undefined) mapDataToDataset('Target Pitch', data.target_pitch, '#a2f279');
         autotuneTuningChart.update('none');
     }
+    // Ujednolicony przełącznik zakładek metod (zapobiega dublowaniu listenerów)
+    function activateMethodTab(method) {
+        if (!method) return;
+        if (AppState.isTuningActive) return; // blokada podczas strojenia
+
+        const btn = document.querySelector(`.method-tab[data-method="${method}"]`);
+        const content = document.querySelector(`.method-content[data-method="${method}"]`);
+        if (!btn || !content) return;
+
+        document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.method-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        content.classList.add('active');
+
+        // Reset danych wykresu dla nowej karty
+        try { autotuneChartData.labels = []; autotuneChartData.datasets = []; autotuneTuningChart.update(); } catch(e) {}
+
+        // Stabilizacja wysokości akordeonu (kilkukrotne wymuszenie)
+        const accordionContent = document.querySelector('#autotuning-card-content')?.closest('.accordion-content');
+        if (accordionContent) {
+            let attempts = 0; let lastHeight = 0;
+            const intervalId = setInterval(() => {
+                const currentHeight = accordionContent.scrollHeight;
+                if (currentHeight >= lastHeight) {
+                    accordionContent.style.maxHeight = (currentHeight + 30) + 'px';
+                    lastHeight = currentHeight;
+                }
+                attempts++;
+                if (attempts >= 5) clearInterval(intervalId);
+            }, 30);
+        }
+
+        // Ustaw pozycję wykresu względem wybranej metody
+        relocateAutotuneChart(method);
+    }
+
     function setupAutotuningTabs() {
         document.querySelectorAll('.method-tab').forEach(tab => {
             tab.addEventListener('click', function() {
-                if (AppState.isTuningActive) return;
-                const method = this.dataset.method;
-                document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.method-content').forEach(c => c.classList.remove('active'));
-                this.classList.add('active');
-                document.querySelector(`.method-content[data-method="${method}"]`).classList.add('active');
-                autotuneChartData.labels = []; autotuneChartData.datasets = []; autotuneTuningChart.update();
-                
-                // --- POPRAWKA v3: Niezawodna aktualizacja wysokości akordeonu ---
-                const accordionContent = document.querySelector('#autotuning-card-content').closest('.accordion-content');
-                if (accordionContent) {
-                    // Ta funkcja próbuje kilkukrotnie zaktualizować wysokość,
-                    // aby dać przeglądarce czas na przeliczenie układu (reflow).
-                    // Jest to konieczne dla złożonych zakładek (GA, PSO).
-                    let attempts = 0;
-                    let lastHeight = 0;
-                    const intervalId = setInterval(() => {
-                        const currentHeight = accordionContent.scrollHeight;
-                        if (currentHeight > lastHeight) {
-                            // Wysokość wciąż rośnie, aktualizujemy i czekamy dalej
-                            accordionContent.style.maxHeight = currentHeight + 30 + "px";
-                            lastHeight = currentHeight;
-                        }
-                        attempts++;
-                        // Zatrzymujemy po 5 próbach lub gdy wysokość się ustabilizuje
-            if (attempts >= 5) {
-                            clearInterval(intervalId);
-                        }
-                    }, 30); // Sprawdzaj co 30ms
-                }
-        // Przenieś wykres pod odpowiedni przycisk dla wybranej metody
-        relocateAutotuneChart(method);
+                activateMethodTab(this.dataset.method);
             });
         });
         document.querySelectorAll('input[type="range"]').forEach(range => {
@@ -2586,15 +2692,16 @@
             sendBleMessage({ type: 'execute_speed_test_run', distance_cm: dist, speed_cmps: speed });
             addLogMessage('[UI] Wysłano test prędkości.', 'info');
         });
-        document.querySelectorAll('.run-test-btn').forEach(btn => btn.addEventListener('click', function() { runDynamicTest(this.dataset.testType); }));
-        document.getElementById('apply-zn-results').addEventListener('click', () => {
+    document.querySelectorAll('.run-test-btn').forEach(btn => btn.addEventListener('click', function() { runDynamicTest(this.dataset.testType); }));
+    const applyZnBtn = document.getElementById('apply-zn-results');
+    if (applyZnBtn) applyZnBtn.addEventListener('click', () => {
              const kp = parseFloat(document.getElementById('zn-kp-suggest').textContent), kd = parseFloat(document.getElementById('zn-kd-suggest').textContent);
              if(!isNaN(kp) && !isNaN(kd)) {
                 document.getElementById('balanceKpInput').value = kp.toFixed(4); document.getElementById('balanceKdInput').value = kd.toFixed(4);
                 document.getElementById('balanceKpInput').dispatchEvent(new Event('change')); document.getElementById('balanceKdInput').dispatchEvent(new Event('change'));
                 addLogMessage('[UI] Zastosowano wartosci z Z-N.', 'info');
             }
-        });
+    });
     const __loopSel = document.getElementById('tuning-loop-selector');
     if (__loopSel) __loopSel.addEventListener('change', updateSearchSpaceInputs);
     updateSearchSpaceInputs();
@@ -2605,7 +2712,9 @@
     const includeKi = !!document.getElementById('include-ki-checkbox')?.checked;
         const showKi = includeKi && ['speed', 'position', 'heading', 'balance', 'rotation'].includes(selectedLoop);
         ['ga', 'pso'].forEach(prefix => {
-            const kiMinWrap = document.getElementById(`${prefix}-ki-min`).closest('.search-space-param');
+            const kiMinEl = document.getElementById(`${prefix}-ki-min`);
+            if (!kiMinEl) return; // element nie istnieje w tej wersji UI
+            const kiMinWrap = kiMinEl.closest('.search-space-param');
             if (kiMinWrap) kiMinWrap.style.display = showKi ? 'block' : 'none';
         });
     }
@@ -2622,17 +2731,8 @@
         document.querySelectorAll('.method-tab').forEach(tab => tab.disabled = isLocked);
         // Dashboard legacy usunięty
     }
-    // Legacy handlerzy wyniku strojenia robota – usunięte
-        const method = data.method || AppState.activeTuningMethod;
-        if (method.startsWith('zn')) {
-            const panel = document.getElementById('zn-results-panel'); panel.style.display = 'block';
-            document.getElementById('zn-ku-result').textContent = data.ku.toFixed(3); document.getElementById('zn-tu-result').textContent = data.tu.toFixed(3) + 's';
-            document.getElementById('zn-kp-suggest').textContent = data.kp.toFixed(4); document.getElementById('zn-kd-suggest').textContent = data.kd.toFixed(4);
-            document.getElementById('zn-overshoot').textContent = (data.overshoot !== undefined ? data.overshoot.toFixed(2) + '%' : '---');
-            document.getElementById('zn-rise-time').textContent = (data.rise_time !== undefined ? data.rise_time.toFixed(2) + 'ms' : '---');
-        } else if (method.startsWith('ga')) { document.getElementById('ga-results-history-panel').style.display = 'block'; addResultToTable(document.getElementById('ga-results-table-body'), data); } 
-        else if (method.startsWith('pso')) { document.getElementById('pso-results-history-panel').style.display = 'block'; addResultToTable(document.getElementById('pso-results-table-body'), data); }
-        setTuningUiLock(false, ''); addLogMessage(`[UI] Otrzymano wyniki strojenia dla ${method}.`, 'success');
+    // Legacy handler wyników strojenia (serwerowych) został usunięty.
+    // Wyniki algorytmów (GA/PSO/ZN/Bayesian) są obsługiwane wyłącznie po stronie klienta.
     
     function addResultToTable(tableBody, data) {
         // Add table row (for desktop)
@@ -2738,14 +2838,37 @@
     sendBleCommand('run_metrics_test', { kp, ki, kd, testId });
     setTuningUiLock(true, 'single-tests');
 }
-    function handleDynamicTestResult(data) {
+    function handleDynamicTestResult(raw) {
+        // Ujednolicenie: obsłuż zarówno legacy 'test_result' jak i nowoczesne 'metrics_result'
+        const data = {
+            kp: raw.kp ?? raw.params?.kp,
+            ki: raw.ki ?? raw.params?.ki,
+            kd: raw.kd ?? raw.params?.kd,
+            itae: raw.itae ?? raw.metrics?.itae,
+            overshoot: raw.overshoot ?? raw.metrics?.overshoot,
+            rise_time: raw.rise_time ?? raw.metrics?.rise_time,
+            settling_time: raw.settling_time ?? raw.metrics?.settling_time,
+            steady_state_error: raw.steady_state_error ?? raw.metrics?.steady_state_error,
+            testId: raw.testId
+        };
+
         setTuningUiLock(false, '');
-        document.getElementById('test-results-panel').style.display = 'block';
-        document.getElementById('test-overshoot').textContent = (data.overshoot !== undefined ? data.overshoot.toFixed(2) + '%' : '---');
-        document.getElementById('test-rise-time').textContent = (data.rise_time !== undefined ? data.rise_time.toFixed(2) + 'ms' : '---');
-        document.getElementById('test-settling-time').textContent = (data.settling_time !== undefined ? data.settling_time.toFixed(2) + 'ms' : '---');
-        document.getElementById('test-itae').textContent = (data.itae !== undefined ? data.itae.toFixed(4) : '---');
-    }    function initJoystick() {
+
+        // Aktualizacja historii wyników jeżeli tabela istnieje
+        try {
+            if (typeof addTestToResultsTable === 'function' && data.kp !== undefined && data.kd !== undefined) {
+                const nextIdx = (document.getElementById('results-table-body')?.children.length || 0) + 1;
+                addTestToResultsTable(nextIdx, { kp: data.kp, ki: data.ki ?? 0, kd: data.kd }, data.itae ?? Infinity, data.itae ?? NaN, data.overshoot ?? NaN);
+                // pokaż kontener wyników
+                const cont = document.getElementById('results-container');
+                if (cont) cont.style.display = 'block';
+            }
+        } catch(_) {}
+
+        // Lekka notyfikacja do logów
+        addLogMessage(`[Test] Wyniki: ITAE=${data.itae?.toFixed?.(4) ?? '---'}, Overshoot=${data.overshoot?.toFixed?.(2) ?? '---'}%`, 'info');
+    }
+    function initJoystick() {
         const wrapper = document.getElementById('joystickWrapper');
         const size = wrapper.clientWidth;
         const joystickCanvas = document.getElementById('joystickCanvas');
@@ -2871,10 +2994,8 @@
         addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info');
         sendBleMessage({ type: 'full_config', params });
     }
-    function setupEventListeners() {
-        // This function is now deprecated and replaced by setupParameterListeners
-        // Keeping the structure for reference, but the new function is the one being called.
-    }
+    // LEGACY REMOVED: setupEventListeners() nieużywane po refaktorze – zachowane tylko jako komentarz dla historii.
+    // (Jeśli potrzebne w przyszłości: przenieść potrzebne listenery do setupParameterListeners.)
 
     function setupParameterListeners() {
         const sendSingleParam = (inputId, value) => { 
@@ -2932,9 +3053,14 @@
                 });
             }
         }
-        document.getElementById('joystickCanvas').addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd); document.getElementById('joystickCanvas').addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd); 
-        document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
-        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { document.getElementById(id).addEventListener('change', (e) => { if (AppState.isApplyingConfig) return; const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
+        const joystickCanvasEl = document.getElementById('joystickCanvas');
+        if (joystickCanvasEl) {
+            joystickCanvasEl.addEventListener('mousedown', handleJoystickStart); document.addEventListener('mousemove', handleJoystickMove); document.addEventListener('mouseup', handleJoystickEnd);
+            joystickCanvasEl.addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd);
+        }
+        const connectBleBtnEl = document.getElementById('connectBleBtn');
+        connectBleBtnEl?.addEventListener('click', connectBLE);
+        ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if(!el) return; el.addEventListener('change', (e) => { if (AppState.isApplyingConfig) return; const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
 
         // POPRAWKA: Usunięto stare listenery dla trim+/- i dodano nowe, poprawne dla precyzyjnych przycisków.
     const toolButtons = { 'resetZeroBtn': { type: 'reset_pitch' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
@@ -2944,10 +3070,10 @@
         if (!span) return; const current = parseFloat(span.textContent) || 0; const v = current + delta; span.textContent = v.toFixed(2);
         sendBleMessage({ type: 'set_param', key: 'trim_angle', value: v });
     }
-    document.getElementById('trimMinus01Btn').addEventListener('click', () => updateAndSendTrim(-0.1));
-    document.getElementById('trimMinus001Btn').addEventListener('click', () => updateAndSendTrim(-0.01));
-    document.getElementById('trimPlus001Btn').addEventListener('click', () => updateAndSendTrim(0.01));
-    document.getElementById('trimPlus01Btn').addEventListener('click', () => updateAndSendTrim(0.1));
+    document.getElementById('trimMinus01Btn')?.addEventListener('click', () => updateAndSendTrim(-0.1));
+    document.getElementById('trimMinus001Btn')?.addEventListener('click', () => updateAndSendTrim(-0.01));
+    document.getElementById('trimPlus001Btn')?.addEventListener('click', () => updateAndSendTrim(0.01));
+    document.getElementById('trimPlus01Btn')?.addEventListener('click', () => updateAndSendTrim(0.1));
     // Roll trim: aktualizacja + wysyłka set_param
     document.getElementById('resetRollZeroBtn')?.addEventListener('click', () => sendBleMessage({ type: 'reset_roll' }));
     function updateAndSendRollTrim(delta) {
@@ -2960,18 +3086,18 @@
     document.getElementById('rollTrimPlus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.01));
     document.getElementById('rollTrimPlus01Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.1));
 
-        document.getElementById('saveBtn').addEventListener('click', () => {
+    document.getElementById('saveBtn')?.addEventListener('click', () => {
             if (AppState.isConnected && confirm("Czy na pewno chcesz trwale zapisać bieżącą konfigurację z panelu do pamięci EEPROM robota?")) {
                 addLogMessage('[UI] Wyslano polecenie zapisu konfiguracji do EEPROM...', 'info');
                 sendBleMessage({ type: 'save_tunings' });
             } else if (!AppState.isConnected) { addLogMessage('[UI] Połącz z robotem przed zapisem konfiguracji.', 'warn'); }
         });
-        document.getElementById('loadBtn').addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { AppState.isSynced = false; AppState.tempParams = {}; AppState.tempStates = {}; sendBleMessage({ type: 'request_full_config' }); } });
+    document.getElementById('loadBtn')?.addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { AppState.isSynced = false; AppState.tempParams = {}; AppState.tempStates = {}; sendBleMessage({ type: 'request_full_config' }); } });
 
         document.getElementById('calibrateMpuBtn')?.addEventListener('click', showCalibrationModal);
         document.getElementById('calibrateZeroPointBtn')?.addEventListener('click', () => { if (confirm("Upewnij sie, ze robot stoi na idealnie plaskiej powierzchni. Robot bedzie balansowal przez 10 sekund w celu znalezienia dokladnego punktu rownowagi. Kontynuowac?")) { sendBleMessage({ type: 'calibrate_zero_point' }); } });
 
-        document.getElementById('applySelectedPresetBtn').addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn').addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn').addEventListener('click', deleteSelectedPreset); 
+    document.getElementById('applySelectedPresetBtn')?.addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn')?.addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn')?.addEventListener('click', deleteSelectedPreset); 
     document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container') || icon.closest('.control-row') || icon.closest('.fitness-weight-item'); if(!container) return; const next = container.nextElementSibling; const helpText = (next && next.classList && next.classList.contains('help-text')) ? next : container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); }); 
     // Legacy IMU mapping wizard: usunięty
     }
@@ -3037,7 +3163,28 @@
     function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
     function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
     function setupDpadControls() { document.querySelectorAll('.dpad-btn').forEach(btn => { btn.addEventListener('click', (e) => { const action = e.currentTarget.dataset.dpad; if (action === 'up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'stop') sendBleMessage({ type: 'command_stop' }); }); }); }
-    function setupCalibrationModal() { document.getElementById('calib-update-btn').addEventListener('click', () => { sendBleMessage({ type: 'request_calibration_status' }); }); document.getElementById('calib-close-btn').addEventListener('click', () => { const sys = parseInt(document.getElementById('calib-sys-text').textContent) || 0; if (sys >= 3) { hideCalibrationModal(); } else if (confirm('Poziom kalibracji systemu jest niski (<3). Czy na pewno chcesz zamknac?')) { hideCalibrationModal(); } }); }
+    function refreshCalibrationFromTelemetry(){
+        // Odczytaj ostatnią telemetrię i zaktualizuj paski w modalu
+        const td = window.telemetryData || {};
+        const sys = Number.isFinite(td.calib_sys) ? td.calib_sys : (Number.isFinite(td.calibSystem) ? td.calibSystem : 0);
+        const accel = Number.isFinite(td.calib_accel) ? td.calib_accel : (Number.isFinite(td.calibAccel) ? td.calibAccel : 0);
+        const gyro = Number.isFinite(td.calib_gyro) ? td.calib_gyro : (Number.isFinite(td.calibGyro) ? td.calibGyro : 0);
+        const mag = Number.isFinite(td.calib_mag) ? td.calib_mag : (Number.isFinite(td.calibMag) ? td.calibMag : 0);
+        const sysBar = document.getElementById('calib-sys-bar'); const sysTxt = document.getElementById('calib-sys-text');
+        const accBar = document.getElementById('calib-accel-bar'); const accTxt = document.getElementById('calib-accel-text');
+        const gyrBar = document.getElementById('calib-gyro-bar'); const gyrTxt = document.getElementById('calib-gyro-text');
+        const magBar = document.getElementById('calib-mag-bar'); const magTxt = document.getElementById('calib-mag-text');
+        if(sysBar) sysBar.value = sys; if(sysTxt) sysTxt.textContent = sys;
+        if(accBar) accBar.value = accel; if(accTxt) accTxt.textContent = accel;
+        if(gyrBar) gyrBar.value = gyro; if(gyrTxt) gyrTxt.textContent = gyro;
+        if(magBar) magBar.value = mag; if(magTxt) magTxt.textContent = mag;
+    }
+    function setupCalibrationModal() {
+        const upd = document.getElementById('calib-update-btn');
+        if (upd) upd.addEventListener('click', refreshCalibrationFromTelemetry);
+        const close = document.getElementById('calib-close-btn');
+        if (close) close.addEventListener('click', () => { const sys = parseInt(document.getElementById('calib-sys-text').textContent) || 0; if (sys >= 3) { hideCalibrationModal(); } else if (confirm('Poziom kalibracji systemu jest niski (<3). Czy na pewno chcesz zamknac?')) { hideCalibrationModal(); } });
+    }
     function showCalibrationModal() { document.getElementById('calibration-modal').style.display = 'flex'; isCalibrationModalShown = true; sendBleMessage({ type: 'set_rgb_blink', colors: ['00FF00', 'FFA500'] }); addLogMessage('[UI] Rozpocznij proces kalibracji IMU - obracaj robota powoli we wszystkich kierunkach.', 'info'); }
     function hideCalibrationModal() { document.getElementById('calibration-modal').style.display = 'none'; isCalibrationModalShown = false; sendBleMessage({ type: 'stop_rgb_blink' }); addLogMessage('[UI] Asystent kalibracji zamkniety.', 'info'); }
     function updateCalibrationProgress(axis, value) { if (document.getElementById('calibration-modal').style.display === 'none') return; const barId = `calib-${axis}-bar`; const textId = `calib-${axis}-text`; const bar = document.getElementById(barId); const text = document.getElementById(textId); if (bar && text) { bar.value = value; text.textContent = value; const sys = parseInt(document.getElementById('calib-sys-text').textContent) || 0; if (sys >= 3 && document.getElementById('calibration-modal').style.display !== 'none') { hideCalibrationModal(); addLogMessage('[UI] Kalibracja systemu osiagnela poziom 3. Asystent zamkniety.', 'success'); } } }; // ZMIANA: Usunięto duplikację funkcji setupCalibrationModal()
@@ -4251,21 +4398,11 @@ class BayesianOptimization {
 // ========================================================================
 
 function initAutoTuningUI() {
-    // Method tab switching
-    document.querySelectorAll('.method-tab').forEach(tab => {
-        tab.addEventListener('click', function() {
-            const method = this.getAttribute('data-method');
-            
-            // Update active tab
-            document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
-            this.classList.add('active');
-            
-            // Update active content
-            document.querySelectorAll('.method-content').forEach(c => c.classList.remove('active'));
-            document.querySelector(`.method-content[data-method="${method}"]`).classList.add('active');
-        });
-    });
-    
+    // Zakładki już obsługiwane przez setupAutotuningTabs()+activateMethodTab
+    // Upewnij się że domyślnie aktywna karta jest poprawnie ustawiona
+    const initial = document.querySelector('.method-tab.active')?.dataset.method || 'ga';
+    activateMethodTab(initial);
+
     // Start tuning button
     document.getElementById('start-tuning-btn').addEventListener('click', async function() {
         const method = document.querySelector('.method-tab.active').getAttribute('data-method');
@@ -4399,16 +4536,12 @@ window.addEventListener('message', function(event) {
 document.addEventListener('DOMContentLoaded', () => {
     const openBtn = document.getElementById('ml-open-bayesian');
     if (openBtn) openBtn.addEventListener('click', () => {
-        const tab = document.querySelector('.method-tab[data-method="bayesian"]');
-        if (tab) {
-            tab.click();
-            document.querySelector('#autotuning-card-content')?.scrollIntoView({behavior:'smooth'});
-        }
+        activateMethodTab('bayesian');
+        document.querySelector('#autotuning-card-content')?.scrollIntoView({behavior:'smooth'});
     });
     const startBtn = document.getElementById('ml-start-bayesian');
     if (startBtn) startBtn.addEventListener('click', () => {
-        const tab = document.querySelector('.method-tab[data-method="bayesian"]');
-        if (tab) tab.click();
+        activateMethodTab('bayesian');
         document.getElementById('start-tuning-btn')?.click();
     });
 });
