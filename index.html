@@ -75,20 +75,31 @@
     .accordion-content.active { padding: 15px; }
     /* Ulepszenie: po zakończeniu animacji ustaw max-height na auto, by nie ucinać treści */
     .accordion-content.auto-height { max-height: none !important; overflow: visible; }
-    /* Responsive fix for wide content in accordion 6 and 7 (autotuning & ML) */
-    @media (max-width: 640px) {
-        .accordion-content { padding: 12px 10px !important; }
-        .tuning-grid, .ml-config-grid { display: block !important; }
-        .tuning-grid > div, .ml-config-grid > div { width: 100% !important; margin-bottom: 10px; }
-        .method-tab { flex: 1 1 100%; }
-        .method-tabs { flex-wrap: wrap; }
-        .results-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        table { width: 600px; } /* allow horizontal scroll for wide tables */
-        .ml-row-buttons button { width: 48%; margin: 4px 1%; }
-        #autotuning-card, #ml-card { width: 100% !important; }
-        .param-row, .search-space-param { display: flex; flex-direction: column; align-items: flex-start; }
-        .param-row > label, .search-space-param > label { width: 100%; }
-        .param-row input[type="number"], .param-row input[type="range"], .search-space-param input { width: 100%; }
+    /* Responsive refinements for autotuning (accordion 6) & ML (accordion 7) */
+    @media (max-width: 680px) {
+        .accordion-content { padding: 14px 12px !important; }
+        .method-tabs, .main-method-tabs { flex-wrap: wrap; gap: 6px; }
+        .method-tab { flex: 1 1 calc(50% - 6px); font-size: 0.85em; padding: 10px 6px; }
+        .method-tab.long-label { font-size: 0.75em; }
+        .search-space-grid { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+        .fitness-weight-item { flex-wrap: wrap; }
+        .fitness-weight-item input[type=range] { width: 100px; }
+        .autotune-results-table { min-width: 560px; }
+        .autotune-results-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        /* ML section */
+        .ml-config-grid { display: grid !important; grid-template-columns: 1fr; gap: 10px; }
+        .ml-config-grid .row { display: flex; flex-direction: column; gap: 6px; }
+        .ml-inline { display: flex; flex-direction: column; }
+        .ml-inline > * { width: 100% !important; margin: 4px 0 !important; }
+        .ml-row-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+        .ml-row-buttons button { flex: 1 1 48%; font-size: 0.8em; padding: 8px 4px; }
+        .ml-secondary-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+        .ml-secondary-buttons button { flex: 1 1 48%; font-size: 0.75em; }
+        .ml-table-wrapper { overflow-x: auto; }
+        .ml-table-wrapper table { min-width: 520px; }
+        /* General controls spacing */
+        .setting-container { grid-template-columns: 1fr; }
+        .numeric-input-wrapper { margin-top: 4px; }
     }
         .pwm-info { background-color: #20232a; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #61dafb; }
         .pwm-info strong { color: #a2f279; }
