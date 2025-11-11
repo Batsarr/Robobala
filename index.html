@@ -75,6 +75,21 @@
     .accordion-content.active { padding: 15px; }
     /* Ulepszenie: po zakończeniu animacji ustaw max-height na auto, by nie ucinać treści */
     .accordion-content.auto-height { max-height: none !important; overflow: visible; }
+    /* Responsive fix for wide content in accordion 6 and 7 (autotuning & ML) */
+    @media (max-width: 640px) {
+        .accordion-content { padding: 12px 10px !important; }
+        .tuning-grid, .ml-config-grid { display: block !important; }
+        .tuning-grid > div, .ml-config-grid > div { width: 100% !important; margin-bottom: 10px; }
+        .method-tab { flex: 1 1 100%; }
+        .method-tabs { flex-wrap: wrap; }
+        .results-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        table { width: 600px; } /* allow horizontal scroll for wide tables */
+        .ml-row-buttons button { width: 48%; margin: 4px 1%; }
+        #autotuning-card, #ml-card { width: 100% !important; }
+        .param-row, .search-space-param { display: flex; flex-direction: column; align-items: flex-start; }
+        .param-row > label, .search-space-param > label { width: 100%; }
+        .param-row input[type="number"], .param-row input[type="range"], .search-space-param input { width: 100%; }
+    }
         .pwm-info { background-color: #20232a; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #61dafb; }
         .pwm-info strong { color: #a2f279; }
         .parameter-group { background-color: transparent; padding: 8px 0; border-radius: 0; margin-bottom: 8px; border-left: 2px solid #61dafb; padding-left: 10px; }
