@@ -4298,7 +4298,7 @@ function startTuning() {
     }
     
     const searchSpace = {
-        kp_min: parseFloat(document.getElementById('search-kp-min').?.value || 0),
+        kp_min: parseFloat(document.getElementById('search-kp-min')?.value || 0),
         kp_max: parseFloat(document.getElementById('search-kp-max')?.value || 50),
         ki_min: parseFloat(document.getElementById('search-ki-min')?.value || 0),
         ki_max: parseFloat(document.getElementById('search-ki-max')?.value || 1),
