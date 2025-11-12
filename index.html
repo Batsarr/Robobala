@@ -600,6 +600,10 @@
                     <button id="saveCurrentAsPresetBtn">Zapisz jako Nowy</button>
                 </div>
                 <button id="deleteSelectedPresetBtn" style="width:100%; margin-top: 10px; background-color: #ff6347;">Usun Wybrany</button>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:15px;">
+                    <button id="loadEepromBtn" title="Pobierz pełną konfigurację z EEPROM (request_full_config)">Wczytaj z EEPROM</button>
+                    <button id="saveEepromBtn" title="Zapis bieżących wartości do EEPROM (save_tunings)" style="background:#a2f279;">Zapisz do EEPROM</button>
+                </div>
             </fieldset>
             <div id="allSettings">
                 <button class="accordion-header" onclick="toggleAccordion(this)">1. Parametry Sprzetowe i Mechaniczne</button>
@@ -663,7 +667,7 @@
                 </div>
                 
                 <button class="accordion-header" onclick="toggleAccordion(this)">6. Autostrojenie</button>
-                <div class="accordion-content">
+                <div class="accordion-content autotune-pane">
                     <div id="autotuning-card-content">
                         <!-- Common Configuration -->
                         <div class="autotune-config-common">
@@ -831,8 +835,9 @@
         <!-- 7. Uczenie Maszynowe -->
         <div class="card">
             <button class="accordion-header" onclick="toggleAccordion(this)">7. Uczenie Maszynowe</button>
-            <div class="accordion-content">
-                <div class="method-theory">
+                        <div class="accordion-content ml-pane">
+                                <button class="btn-small" id="ml-theory-toggle" style="float:right; margin:6px 0 0 0;">📘 Teoria</button>
+                                <div class="method-theory" id="ml-theory-block" style="display:none;">
                     <h4>Bayesian Optimization (ML)</h4>
                     <ul>
                         <li>Modeluje funkcję fitness i proponuje kolejne próby minimalizując liczbę testów.</li>
@@ -840,12 +845,17 @@
                         <li>Używa ustawień z karty Autostrojenie → zakładka Bayesian.</li>
                     </ul>
                 </div>
-                <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                    <button id="ml-open-bayesian" class="btn-primary">Przejdź do zakładki Bayesian</button>
-                    <button id="ml-start-bayesian" class="btn-secondary">Start (Bayesian)</button>
-                </div>
-                <hr style="border-color:#4a4f58; margin:12px 0;">
-                <div class="parameter-group">
+                                <div class="ml-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:15px;">
+                                    <div class="parameter-group">
+                                        <h5>Nawigacja</h5>
+                                        <div class="setting-container"><label style="color:#61dafb;">Przejście</label>
+                                            <div class="numeric-input-wrapper" style="gap:8px; flex-wrap:wrap;">
+                                                <button id="ml-open-bayesian" class="btn-small" style="background:#61dafb; color:#282c34;">Zakładka Bayesian</button>
+                                                <button id="ml-start-bayesian" class="btn-small" style="background:#a2f279; color:#282c34;">Start Bayesian</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="parameter-group">
                     <h5>Zbieranie danych (dataset)</h5>
                     <div class="setting-container"><label>Źródło pomiaru</label>
                         <div class="numeric-input-wrapper" style="gap:8px;">
@@ -865,8 +875,8 @@
                             <span id="ml-ds-count" style="margin-left:8px; color:#a2f279;">0 rekordów</span>
                         </div>
                     </div>
-                </div>
-                <div class="parameter-group">
+                                    </div>
+                                    <div class="parameter-group">
                     <h5>Model zastępczy i akwizycja</h5>
                     <div class="setting-container"><label>Funkcja akwizycji</label>
                         <div class="numeric-input-wrapper" style="gap:8px;">
@@ -888,7 +898,8 @@
                             <button id="ml-train" class="btn-small">Trenuj</button>
                         </div>
                     </div>
-                </div>
+                                    </div>
+                                </div>
                 <div id="ml-preview" class="pwm-info" style="display:none;">
                     <strong>Preview:</strong> <span id="ml-preview-text">---</span>
                 </div>
@@ -1235,6 +1246,28 @@
         if (clearPerfLogsBtn) {
             clearPerfLogsBtn.addEventListener('click', ()=>{ perfLogsBuffer.length = 0; renderPerfLogs(); });
         }
+        // EEPROM load/save
+        const loadEepromBtn = document.getElementById('loadEepromBtn');
+        const saveEepromBtn = document.getElementById('saveEepromBtn');
+        if (loadEepromBtn) {
+            loadEepromBtn.addEventListener('click', ()=>{
+                if (!AppState.isConnected) { addLogMessage('[UI] Brak połączenia. Połącz z robotem, aby wczytać konfigurację z EEPROM.', 'warn'); return; }
+                if (confirm('UWAGA: Wczytanie z EEPROM nadpisze niezapisane zmiany w panelu. Kontynuować?')) {
+                    AppState.isSynced = false; AppState.tempParams = {}; AppState.tempStates = {};
+                    addLogMessage('[UI] Żądanie pełnej konfiguracji (EEPROM)...', 'info');
+                    sendBleMessage({ type: 'request_full_config' });
+                }
+            });
+        }
+        if (saveEepromBtn) {
+            saveEepromBtn.addEventListener('click', ()=>{
+                if (!AppState.isConnected) { addLogMessage('[UI] Brak połączenia. Połącz z robotem, aby zapisać do EEPROM.', 'warn'); return; }
+                if (confirm('Zapisać bieżącą konfigurację do EEPROM?')) {
+                    addLogMessage('[UI] Wysłano polecenie zapisu konfiguracji do EEPROM...', 'info');
+                    sendBleMessage({ type: 'save_tunings' });
+                }
+            });
+        }
     // Drugi wywołanie setupParameterListeners usunięte (pierwsze już wykonane wyżej) aby uniknąć podwójnych listenerów.
         // Domyślnie nie szukamy Ki
         const kiChk = document.getElementById('include-ki-checkbox');
@@ -1266,6 +1299,17 @@
         if(expCsv) expCsv.addEventListener('click', ()=>{ if(!mlDataset.length) { addLogMessage('[ML] Brak danych do eksportu CSV.', 'warn'); return; } mlExportCSV(); addLogMessage('[ML] Eksport CSV zapisany.', 'success'); });
         if(expJson) expJson.addEventListener('click', ()=>{ if(!mlDataset.length) { addLogMessage('[ML] Brak danych do eksportu JSON.', 'warn'); return; } mlExportJSON(); addLogMessage('[ML] Eksport JSON zapisany.', 'success'); });
         mlUpdateCount();
+        const mlTheoryToggle = document.getElementById('ml-theory-toggle');
+        const mlTheoryBlock = document.getElementById('ml-theory-block');
+        if (mlTheoryToggle && mlTheoryBlock) {
+            mlTheoryToggle.addEventListener('click', ()=>{
+                const show = mlTheoryBlock.style.display === 'none';
+                mlTheoryBlock.style.display = show ? 'block' : 'none';
+                mlTheoryToggle.textContent = show ? '✖ Ukryj Teorię' : '📘 Teoria';
+                const pane = mlTheoryBlock.closest('.accordion-content');
+                updateAccordionHeight(pane);
+            });
+        }
     });
     // Osobny bufor logów systemowych (kanał 'log' z robota i ważne wpisy UI)
     const systemLogsBuffer = [];
@@ -1416,13 +1460,15 @@
             content.style.maxHeight = '0px';
             content.style.padding = '0px 15px';
         } else {
-            content.style.maxHeight = content.scrollHeight + 40 + 'px';
+            if (content.classList.contains('autotune-pane') || content.classList.contains('ml-pane')) {
+                content.classList.add('auto-height');
+                content.style.maxHeight = 'none';
+            } else {
+                content.style.maxHeight = content.scrollHeight + 40 + 'px';
+            }
             content.style.padding = '15px';
-            // Po krótkim czasie pozwól rosnąć dynamicznie
             setTimeout(() => {
-                if (header.classList.contains('active')) {
-                    content.classList.add('auto-height');
-                }
+                if (header.classList.contains('active')) content.classList.add('auto-height');
             }, 450);
         }
     }
