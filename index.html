@@ -820,79 +820,6 @@
                 </div>
             </div>
         </div>
-        <div class="card">
-            <button class="accordion-header" onclick="toggleAccordion(this)">7. Uczenie Maszynowe</button>
-                        <div class="accordion-content ml-pane">
-                                <button class="btn-small" id="ml-theory-toggle" style="float:right; margin:6px 0 0 0;">📘 Teoria</button>
-                                <div class="method-theory" id="ml-theory-block" style="display:none;">
-                    <h4>Bayesian Optimization (ML)</h4>
-                    <ul>
-                        <li>Modeluje funkcję fitness i proponuje kolejne próby minimalizując liczbę testów.</li>
-                        <li>Wykorzystuje ml5.js jako lekki model zastępczy.</li>
-                        <li>Używa ustawień z karty Autostrojenie → zakładka Bayesian.</li>
-                    </ul>
-                </div>
-                                <div class="ml-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:15px;">
-                                    <div class="parameter-group">
-                                        <h5>Nawigacja</h5>
-                                        <div class="setting-container"><label style="color:#61dafb;">Przejście</label>
-                                            <div class="numeric-input-wrapper" style="gap:8px; flex-wrap:wrap;">
-                                                <button id="ml-open-bayesian" class="btn-small" style="background:#61dafb; color:#282c34;">Zakładka Bayesian</button>
-                                                <button id="ml-start-bayesian" class="btn-small" style="background:#a2f279; color:#282c34;">Start Bayesian</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="parameter-group">
-                    <h5>Zbieranie danych (dataset)</h5>
-                    <div class="setting-container"><label>Źródło pomiaru</label>
-                        <div class="numeric-input-wrapper" style="gap:8px;">
-                            <select id="ml-dataset-source">
-                                <option value="metrics">Wyniki testów (metrics_result)</option>
-                                <option value="telemetry">Strumień telemetrii (pitch/speed)</option>
-                            </select>
-                            <button id="ml-ds-start" class="btn-small">Start</button>
-                            <button id="ml-ds-stop" class="btn-small" disabled>Stop</button>
-                            <button id="ml-ds-clear" class="btn-small" style="background:#ff6b6b; color:#fff;">Wyczyść</button>
-                        </div>
-                    </div>
-                    <div class="setting-container"><label>Eksport</label>
-                        <div class="numeric-input-wrapper" style="gap:8px;">
-                            <button id="ml-ds-export-csv" class="btn-small">Eksport CSV</button>
-                            <button id="ml-ds-export-json" class="btn-small">Eksport JSON</button>
-                            <span id="ml-ds-count" style="margin-left:8px; color:#a2f279;">0 rekordów</span>
-                        </div>
-                    </div>
-                                    </div>
-                                    <div class="parameter-group">
-                    <h5>Model zastępczy i akwizycja</h5>
-                    <div class="setting-container"><label>Funkcja akwizycji</label>
-                        <div class="numeric-input-wrapper" style="gap:8px;">
-                            <select id="ml-acq-func">
-                                <option value="ei">Expected Improvement (EI)</option>
-                                <option value="ucb">Upper Confidence Bound (UCB)</option>
-                                <option value="pi">Probability of Improvement (PI)</option>
-                            </select>
-                            <label style="margin-left:10px;">ξ:</label>
-                            <input id="ml-acq-xi" type="number" step="0.01" value="0.01" style="width:90px;">
-                        </div>
-                    </div>
-                    <div class="setting-container"><label>Parametry modelu</label>
-                        <div class="numeric-input-wrapper" style="gap:8px;">
-                            <label>Noise:</label>
-                            <input id="ml-gp-noise" type="number" step="0.0001" value="0.001" style="width:100px;">
-                            <label>Max iteracji:</label>
-                            <input id="ml-max-iters" type="number" min="5" max="200" value="50" style="width:90px;">
-                            <button id="ml-train" class="btn-small">Trenuj</button>
-                        </div>
-                    </div>
-                                    </div>
-                                </div>
-                <div id="ml-preview" class="pwm-info" style="display:none;">
-                    <strong>Preview:</strong> <span id="ml-preview-text">---</span>
-                </div>
-            </div>
-        </div>
-
         <div class="card" id="log-card" style="grid-column: 1 / -1;">
             <h2>Logi Systemowe</h2>
             <div id="log-history"></div>
@@ -1556,6 +1483,10 @@
             if (changed) {
                 try { checkAndExecuteNextSequenceStep(prevState); } catch (e) { /* no-op */ }
             }
+        }
+        // Automatically pause tuning on emergency stop
+        if (data.robot_state === 'EMERGENCY_STOP' && AppState.isTuningActive) {
+            pauseTuning();
         }
         switch(data.type) {
             case 'telemetry':
