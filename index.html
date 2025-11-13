@@ -2484,7 +2484,7 @@
         const onMsg = (evt) => {
             const data = evt.detail || evt;
             if (!data || !data.type) return;
-            if ((data.type === 'test_complete' && data.testId === testId) || (data.type === 'metrics_result' && data.testId === testId)) {
+            if ((data.type === 'test_complete' && data.testId === testId) || (data.type === 'test_result' && data.testId === testId)) {
                 // Gdy dostaniemy komplet lub zakończenie, odblokuj UI
                 setTuningUiLock(false, '');
                 window.removeEventListener('ble_message', onMsg);
@@ -2498,7 +2498,7 @@
         const kp = parseFloat(document.getElementById('balanceKpInput')?.value) || 0;
         const ki = parseFloat(document.getElementById('balanceKiInput')?.value) || 0;
         const kd = parseFloat(document.getElementById('balanceKdInput')?.value) || 0;
-    sendBleCommand('run_metrics_test', { kp, ki, kd, testId });
+    sendBleCommand('run_dynamic_test', { kp, ki, kd, testId });
     setTuningUiLock(true, 'single-tests');
 }
     function handleDynamicTestResult(raw) {
@@ -3224,7 +3224,7 @@ class GeneticAlgorithm {
             }, 10000); // 10 second timeout
             
             const handler = (data) => {
-                if (data.type === 'metrics_result' && data.testId === testId) {
+                if (data.type === 'test_result' && data.testId === testId) {
                     clearTimeout(timeout);
                     const fitness = data.itae + data.overshoot * 10 + data.steady_state_error * 5;
                     individual.fitness = fitness;
@@ -3239,7 +3239,7 @@ class GeneticAlgorithm {
             
             window.addEventListener('ble_message', handler);
             
-            sendBleCommand('run_metrics_test', {
+            sendBleCommand('run_dynamic_test', {
                 kp: individual.kp,
                 ki: individual.ki,
                 kd: individual.kd,
@@ -3435,7 +3435,7 @@ class ParticleSwarmOptimization {
             }, 10000);
             
             const handler = (data) => {
-                if (data.type === 'metrics_result' && data.testId === testId) {
+                if (data.type === 'test_result' && data.testId === testId) {
                     clearTimeout(timeout);
                     const fitness = data.itae + data.overshoot * 10 + data.steady_state_error * 5;
                     particle.fitness = fitness;
@@ -3462,7 +3462,7 @@ class ParticleSwarmOptimization {
             
             window.addEventListener('ble_message', handler);
             
-            sendBleCommand('run_metrics_test', {
+            sendBleCommand('run_dynamic_test', {
                 kp: particle.position.kp,
                 ki: particle.position.ki,
                 kd: particle.position.kd,
@@ -3907,7 +3907,7 @@ class BayesianOptimization {
             }, 10000);
             
             const handler = (data) => {
-                if (data.type === 'metrics_result' && data.testId === testId) {
+                if (data.type === 'test_result' && data.testId === testId) {
                     clearTimeout(timeout);
                     const fitness = data.itae + data.overshoot * 10 + data.steady_state_error * 5;
                     
@@ -3920,7 +3920,7 @@ class BayesianOptimization {
             
             window.addEventListener('ble_message', handler);
             
-            sendBleCommand('run_metrics_test', {
+            sendBleCommand('run_dynamic_test', {
                 kp: sample.kp,
                 ki: sample.ki,
                 kd: sample.kd,
@@ -4249,7 +4249,7 @@ function startTuning() {
         addLogMessage('[UI] Zapisano Ustawienia Bazowe PID.', 'info');
     } catch (_) {}
 
-    setTuningUiLock(true, method);
+    // setTuningUiLock(true, method); // Usunięto blokowanie UI podczas autotuningu
     AppState.activeTuningMethod = method;
     
     // Pokaż panel postępu
@@ -4329,7 +4329,7 @@ function stopTuning() {
     if (currentTuningSession && typeof currentTuningSession.stop === 'function') {
         currentTuningSession.stop();
     }
-    setTuningUiLock(false, '');
+    // setTuningUiLock(false, ''); // Usunięto odblokowywanie UI
     AppState.activeTuningMethod = '';
     addLogMessage('[UI] Strojenie zatrzymane.', 'warn');
 }
@@ -4370,7 +4370,7 @@ function handleTunerResult(data) {
         addLogMessage(`[UI] Znaleziono najlepsze parametry: Kp=${data.best_params.kp?.toFixed(3)}, Ki=${data.best_params.ki?.toFixed(3)}, Kd=${data.best_params.kd?.toFixed(3)}`, 'success');
     }
     
-    setTuningUiLock(false, '');
+    // setTuningUiLock(false, ''); // Usunięto odblokowywanie UI
     AppState.activeTuningMethod = '';
 }
 
@@ -4391,7 +4391,7 @@ function handleTuningIterationResult(data) {
 
 function handleCancel() {
     // Anulowanie strojenia
-    setTuningUiLock(false, '');
+    // setTuningUiLock(false, ''); // Usunięto odblokowywanie UI
     AppState.activeTuningMethod = '';
     AppState.isTuningActive = false;
     
