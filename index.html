@@ -38,6 +38,16 @@
         #joystickCanvas { width: 100%; height: 100%; display: block; }
         #chart-wrapper { position: relative; height: 420px; border-radius: 8px; overflow: hidden; background-color: #20232a; }
     #log-history { text-align: left; overflow-y: auto; background-color: #20232a; padding: 10px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; }
+        /* Stała wysokość otwartego panelu logów + odsunięcie treści, aby nie zasłaniać przycisków na dole (także na telefonie) */
+        #log-card { --log-card-total: 0px; }
+        #log-card.open #log-history { display:block !important; }
+        /* Domyślna wysokość zawartości logów (mobile-first) */
+        #log-card.open #log-history { height: 28vh; max-height: 28vh; }
+        @media (min-width: 769px) {
+            #log-card.open #log-history { height: 22vh; max-height: 22vh; }
+        }
+        /* Odsunięcie całej strony, gdy logi są rozwinięte */
+        body.logs-open { padding-bottom: calc(var(--log-card-total, 0px) + 8px); }
         .status-indicator { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
         .status-ok { background-color: #a2f279; }
         .status-warn { background-color: #f7b731; }
@@ -204,8 +214,21 @@
         .method-tab:disabled { cursor: not-allowed; opacity: 0.5; }
         .method-content { display: none; }
         .method-content.active { display: block; }
-    .autotune-main-content { display: none; }
+        .autotune-main-content { display: none; }
     .autotune-main-content.active { display: block; }
+        /* Stała wysokość obszaru zakładek (Konfiguracja/Metody) z przewijaniem, aby wysokość akordeonu była stabilna */
+        #autotuning-config-panel { /* kontener sekcji tabs */ }
+        #autotuning-config-panel .autotune-main-content { 
+            height: 360px; 
+            overflow: auto; 
+            -webkit-overflow-scrolling: touch;
+        }
+        @media (max-width: 768px) {
+            #autotuning-config-panel .autotune-main-content { height: 52vh; }
+        }
+        /* Drobne wyrównanie stylu akordeonu 6 do pozostałych */
+        #autotuning-card .accordion-header { width: 100%; display: block; }
+        #autotuning-card .accordion-content { box-sizing: border-box; }
         .config-panel { background-color: #2a2f35; border-radius: 6px; padding: 15px; }
         .config-panel h3 { color: #61dafb; margin-top: 0; margin-bottom: 15px; font-size: 1.2em; }
         .config-section { margin-bottom: 20px; }
@@ -676,7 +699,7 @@
         <!-- NOWY, ZINTEGROWANY PANEL OPTYMALIZACJI - PROSZĘ WSTAW TUTAJ -->
         <div class="card" id="autotuning-card">
             <button class="accordion-header" onclick="toggleAccordion(this)">6. Zaawansowana Optymalizacja PID</button>
-            <div class="accordion-content autotune-pane">
+            <div class="accordion-content autotune-pane" id="autotuning-card-content">
                 <div id="autotuning-config-panel">
                     <!-- Główne zakładki panelu -->
                     <div class="autotune-main-tabs">
@@ -791,8 +814,8 @@
                     </div>
                 </div>
 
-                <!-- Główne Przyciski Sterujące -->
-                <div class="tuning-controls">
+                <!-- Główne Przyciski Sterujące (widoczne tylko w zakładce 'Metody Optymalizacji') -->
+                <div class="tuning-controls" id="tuning-controls-bar">
                     <button id="start-tuning-btn">🚀 Rozpocznij Strojenie</button>
                     <button id="pause-tuning-btn" disabled>⏸️ Pauza</button>
                     <button id="resume-tuning-btn" style="display:none;" disabled>▶️ Wznów</button>
@@ -1120,12 +1143,27 @@
         const logsAutoscroll = document.getElementById('logsAutoscroll');
         document.getElementById('clearLogsBtn')?.addEventListener('click', ()=>{ allLogsBuffer.length = 0; renderAllLogs(true); });
         if (logToggleBar && logHistoryBox) {
+            const logCard = document.getElementById('log-card');
+            const updateBodyPadding = () => {
+                // Ustal łączną wysokość paska tytułu i zawartości logów, aby nie zasłaniać elementów na dole (np. Wczytaj/Zapisz)
+                const barH = logToggleBar.getBoundingClientRect().height;
+                const listH = logCard.classList.contains('open') ? logHistoryBox.getBoundingClientRect().height : 0;
+                const total = Math.ceil(barH + listH);
+                // Ustaw zmienną CSS na body (zmienne dziedziczą w dół, nie do góry)
+                document.body.style.setProperty('--log-card-total', total + 'px');
+                document.body.classList.toggle('logs-open', logCard.classList.contains('open'));
+            };
             logToggleBar.addEventListener('click', (e)=>{
                 if (e.target && (e.target.id === 'logsAutoscroll' || e.target.id === 'clearLogsBtn' || e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON')) return;
-                const show = logHistoryBox.style.display !== 'block';
-                logHistoryBox.style.display = show ? 'block' : 'none';
-                if (show) renderAllLogs(true);
+                logCard.classList.toggle('open');
+                if (logCard.classList.contains('open')) {
+                    renderAllLogs(true);
+                }
+                // Po przełączeniu zaktualizuj padding
+                setTimeout(updateBodyPadding, 0);
             });
+            // Reaguj na resize aby trzymać poprawny padding
+            window.addEventListener('resize', updateBodyPadding);
         }
     // Przyciski robotowe (loadBtn/saveBtn) mają własne listenery dalej w kodzie (setupParameterListeners)
     // Drugi wywołanie setupParameterListeners usunięte (pierwsze już wykonane wyżej) aby uniknąć podwójnych listenerów.
@@ -1274,15 +1312,23 @@
             content.style.maxHeight = '0px';
             content.style.padding = '0px 15px';
         } else {
-            if (content.classList.contains('autotune-pane') || content.classList.contains('ml-pane')) {
-                content.classList.add('auto-height');
-                content.style.maxHeight = 'none';
+            // Specjalne traktowanie panelu strojenia: stała wysokość po otwarciu
+            if (content.classList.contains('autotune-pane')) {
+                const desktopH = 600; // px
+                const mobileVH = 70; // vh
+                const isMobile = window.matchMedia('(max-width: 768px)').matches;
+                if (isMobile) {
+                    content.style.maxHeight = mobileVH + 'vh';
+                } else {
+                    content.style.maxHeight = desktopH + 'px';
+                }
+                content.style.overflow = 'hidden';
             } else {
                 content.style.maxHeight = content.scrollHeight + 40 + 'px';
             }
             content.style.padding = '15px';
             setTimeout(() => {
-                if (header.classList.contains('active')) content.classList.add('auto-height');
+                if (header.classList.contains('active') && !content.classList.contains('autotune-pane')) content.classList.add('auto-height');
             }, 450);
         }
     }
@@ -1302,7 +1348,10 @@
         mutations.forEach(m => {
             const content = m.target.closest && m.target.closest('.accordion-content');
             if (content && content.classList.contains('active')) {
-                updateAccordionHeight(content);
+                // Nie zmieniaj wysokości stałego panelu strojenia
+                if (!content.classList.contains('autotune-pane')) {
+                    updateAccordionHeight(content);
+                }
             }
         });
     });
@@ -2223,7 +2272,7 @@
 
         // Stabilizacja wysokości akordeonu (kilkukrotne wymuszenie)
         const accordionContent = document.querySelector('#autotuning-card-content')?.closest('.accordion-content');
-        if (accordionContent) {
+        if (accordionContent && !accordionContent.classList.contains('autotune-pane')) {
             let attempts = 0; let lastHeight = 0;
             const intervalId = setInterval(() => {
                 const currentHeight = accordionContent.scrollHeight;
@@ -2304,8 +2353,15 @@
                 panes.forEach(p=>p.classList.remove('active'));
                 tab.classList.add('active');
                 document.querySelector(`.autotune-main-content[data-tab="${target}"]`)?.classList.add('active');
+        // Pokazuj przyciski sterujące tylko na zakładce 'methods'
+        const controlsBar = document.getElementById('tuning-controls-bar');
+        if (controlsBar) controlsBar.style.display = (target === 'methods') ? 'flex' : 'none';
             });
         });
+    // Ustaw widoczność kontrolek zgodnie z aktywną zakładką na starcie
+    const activeMain = document.querySelector('.autotune-main-tab.active')?.dataset.tab || 'config';
+    const controlsBar = document.getElementById('tuning-controls-bar');
+    if (controlsBar) controlsBar.style.display = (activeMain === 'methods') ? 'flex' : 'none';
     }
     function updateSearchSpaceInputs() {
     const __loopEl = document.getElementById('tuning-loop-selector');
