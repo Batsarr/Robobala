@@ -136,18 +136,20 @@
         .robot3d-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; text-align: left; }
         .robot3d-metrics strong { color: #a2f279; }
 
+        /* WYŁĄCZENIE WYSZARZANIA/ BLOKOWANIA PODCZAS TESTÓW
+           Zachowujemy tylko przełączanie widoków panelu optymalizacji (poniżej).
+           UI pozostaje w pełni aktywny podczas trwania testów/tuningu. */
         body.tuning-active .main-grid > .card:not(#autotuning-card):not(#log-card):not(#controls-card) {
-            opacity: 0.5;
-            pointer-events: none;
-            /* Usunięto globalne blokowanie UI */
+            opacity: 1.0;
+            pointer-events: auto;
         }
         body.tuning-active #allSettings .accordion-header,
         body.tuning-active #allSettings .accordion-content,
         body.tuning-active .card:not(#autotuning-card):not(#controls-card):not(#log-card) button:not(#emergencyStopBtn) {
-            opacity: 0.5;
-            pointer-events: none;
+            opacity: 1.0;
+            pointer-events: auto;
         }
-        /* elementy jawnie dozwolone w trybie strojenia */
+        /* elementy pozostają aktywne – reguły poniżej nie są już potrzebne, ale pozostają neutralne */
         body.tuning-active #controls-card,
         body.tuning-active #autotuning-card,
         body.tuning-active #log-card {
@@ -2727,6 +2729,14 @@
 
         // POPRAWKA: Usunięto stare listenery dla trim+/- i dodano nowe, poprawne dla precyzyjnych przycisków.
     const toolButtons = { 'resetZeroBtn': { type: 'reset_pitch' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
+    // Podłącz brakujące listenery dla przycisków narzędziowych (reset pitch/encoders/STOP)
+    Object.entries(toolButtons).forEach(([id, cmd]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('click', () => {
+            sendBleMessage({ type: cmd.type });
+        });
+    });
     // Trim: aktualizacja + wysyłka set_param (jednolite traktowanie)
     function updateAndSendTrim(delta) {
         const span = document.getElementById('trimValueDisplay');
