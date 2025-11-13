@@ -136,20 +136,18 @@
         .robot3d-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; text-align: left; }
         .robot3d-metrics strong { color: #a2f279; }
 
-        /* WYŁĄCZENIE WYSZARZANIA/ BLOKOWANIA PODCZAS TESTÓW
-           Zachowujemy tylko przełączanie widoków panelu optymalizacji (poniżej).
-           UI pozostaje w pełni aktywny podczas trwania testów/tuningu. */
         body.tuning-active .main-grid > .card:not(#autotuning-card):not(#log-card):not(#controls-card) {
-            opacity: 1.0;
-            pointer-events: auto;
+            opacity: 0.5;
+            pointer-events: none;
+            /* Usunięto globalne blokowanie UI */
         }
         body.tuning-active #allSettings .accordion-header,
         body.tuning-active #allSettings .accordion-content,
         body.tuning-active .card:not(#autotuning-card):not(#controls-card):not(#log-card) button:not(#emergencyStopBtn) {
-            opacity: 1.0;
-            pointer-events: auto;
+            opacity: 0.5;
+            pointer-events: none;
         }
-        /* elementy pozostają aktywne – reguły poniżej nie są już potrzebne, ale pozostają neutralne */
+        /* elementy jawnie dozwolone w trybie strojenia */
         body.tuning-active #controls-card,
         body.tuning-active #autotuning-card,
         body.tuning-active #log-card {
@@ -2729,14 +2727,6 @@
 
         // POPRAWKA: Usunięto stare listenery dla trim+/- i dodano nowe, poprawne dla precyzyjnych przycisków.
     const toolButtons = { 'resetZeroBtn': { type: 'reset_pitch' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
-    // Podłącz brakujące listenery dla przycisków narzędziowych (reset pitch/encoders/STOP)
-    Object.entries(toolButtons).forEach(([id, cmd]) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('click', () => {
-            sendBleMessage({ type: cmd.type });
-        });
-    });
     // Trim: aktualizacja + wysyłka set_param (jednolite traktowanie)
     function updateAndSendTrim(delta) {
         const span = document.getElementById('trimValueDisplay');
@@ -4267,8 +4257,52 @@ function startTuning() {
     
     addLogMessage(`[UI] Rozpoczęto strojenie metodą: ${method.toUpperCase()}`, 'info');
     
-    // Tutaj można dodać wywołania konkretnych algorytmów
-    // Na razie tylko symulacja - w pełnej implementacji należy wywołać odpowiednie klasy
+    // Uruchom algorytm optymalizacji
+    try {
+        if (method === 'ga') {
+            const config = {
+                populationSize: parseInt(document.getElementById('ga-population').value),
+                generations: parseInt(document.getElementById('ga-generations').value),
+                mutationRate: parseFloat(document.getElementById('ga-mutation').value),
+                crossoverRate: parseFloat(document.getElementById('ga-crossover').value),
+                elitism: document.getElementById('ga-elitism').checked,
+                searchSpace: searchSpace
+            };
+            currentTuningSession = new GeneticAlgorithm(config);
+            currentTuningSession.run();
+        } else if (method === 'pso') {
+            const config = {
+                numParticles: parseInt(document.getElementById('pso-particles').value),
+                iterations: parseInt(document.getElementById('pso-iterations').value),
+                inertiaWeight: parseFloat(document.getElementById('pso-inertia').value),
+                cognitiveWeight: parseFloat(document.getElementById('pso-cognitive').value),
+                socialWeight: parseFloat(document.getElementById('pso-social').value),
+                searchSpace: searchSpace
+            };
+            currentTuningSession = new ParticleSwarmOptimization(config);
+            currentTuningSession.run();
+        } else if (method === 'zn') {
+            const config = {
+                amplitude: parseFloat(document.getElementById('zn-amplitude').value),
+                minCycles: parseInt(document.getElementById('zn-min-cycles').value)
+            };
+            currentTuningSession = new ZieglerNicholsRelay(config);
+            currentTuningSession.run();
+        } else if (method === 'bayesian') {
+            const config = {
+                iterations: parseInt(document.getElementById('bayesian-iterations').value),
+                initialSamples: parseInt(document.getElementById('bayesian-initial').value),
+                acquisitionFunction: document.getElementById('bayesian-acquisition').value,
+                xi: parseFloat(document.getElementById('bayesian-xi').value),
+                searchSpace: searchSpace
+            };
+            currentTuningSession = new BayesianOptimization(config);
+            currentTuningSession.run();
+        }
+    } catch (error) {
+        console.error('Tuning error:', error);
+        addLogMessage('Błąd podczas strojenia: ' + error.message, 'error');
+    }
 }
 
 function pauseTuning() {
