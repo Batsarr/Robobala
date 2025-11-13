@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Robot PID - Panel Sterowania v21.2</title>
+    <title>RoboBala</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -126,15 +126,27 @@
         .robot3d-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; text-align: left; }
         .robot3d-metrics strong { color: #a2f279; }
 
-        body.tuning-active .main-grid > .card:not(#autotuning-card):not(#log-card) {
+        body.tuning-active .main-grid > .card:not(#autotuning-card):not(#log-card):not(#controls-card) {
             opacity: 0.5;
             pointer-events: none;
             /* Usunięto globalne blokowanie UI */
         }
-        body.tuning-active #allSettings, body.tuning-active #controls-card .accordion-header, body.tuning-active .card:not(#autotuning-card) button:not(#emergencyStopBtn) {
-             opacity: 0.5;
+        body.tuning-active #allSettings .accordion-header,
+        body.tuning-active #allSettings .accordion-content,
+        body.tuning-active .card:not(#autotuning-card):not(#controls-card):not(#log-card) button:not(#emergencyStopBtn) {
+            opacity: 0.5;
             pointer-events: none;
         }
+        /* elementy jawnie dozwolone w trybie strojenia */
+        body.tuning-active #controls-card,
+        body.tuning-active #autotuning-card,
+        body.tuning-active #log-card {
+            opacity: 1.0;
+            pointer-events: auto;
+        }
+        /* ukrywanie konfiguracji w panelu optymalizacji podczas trwania strojenia */
+        body.tuning-active .autotune-config-hide { display: none !important; }
+        body.tuning-active #tuning-progress-panel { display: block !important; }
         body.ui-locked #connectBleBtn, body.ui-locked #emergencyStopBtn {
             opacity: 1.0;
             pointer-events: auto;
@@ -192,6 +204,8 @@
         .method-tab:disabled { cursor: not-allowed; opacity: 0.5; }
         .method-content { display: none; }
         .method-content.active { display: block; }
+    .autotune-main-content { display: none; }
+    .autotune-main-content.active { display: block; }
         .config-panel { background-color: #2a2f35; border-radius: 6px; padding: 15px; }
         .config-panel h3 { color: #61dafb; margin-top: 0; margin-bottom: 15px; font-size: 1.2em; }
         .config-section { margin-bottom: 20px; }
@@ -600,10 +614,7 @@
                     <button id="saveCurrentAsPresetBtn">Zapisz jako Nowy</button>
                 </div>
                 <button id="deleteSelectedPresetBtn" style="width:100%; margin-top: 10px; background-color: #ff6347;">Usun Wybrany</button>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:15px;">
-                    <button id="loadEepromBtn" title="Pobierz pełną konfigurację z EEPROM (request_full_config)">Wczytaj z EEPROM</button>
-                    <button id="saveEepromBtn" title="Zapis bieżących wartości do EEPROM (save_tunings)" style="background:#a2f279;">Zapisz do EEPROM</button>
-                </div>
+                <!-- Przyciski przeniesione na dół, pod wszystkimi akordeonami -->
             </fieldset>
             <div id="allSettings">
                 <button class="accordion-header" onclick="toggleAccordion(this)">1. Parametry Sprzetowe i Mechaniczne</button>
@@ -675,7 +686,6 @@
                     <div class="autotune-main-tabs">
                         <button class="autotune-main-tab active" data-tab="config">Konfiguracja Testu</button>
                         <button class="autotune-main-tab" data-tab="methods">Metody Optymalizacji</button>
-                        <button class="autotune-main-tab" data-tab="dataset">Zbiór Danych (Dataset)</button>
                     </div>
 
                     <!-- Zakładka 1: Konfiguracja -->
@@ -755,31 +765,7 @@
                     </div>
                     
                     <!-- Zakładka 3: Zbiór Danych -->
-                    <div class="autotune-main-content" data-tab="dataset" id="dataset-collection-panel">
-                        <div class="setting-container">
-                            <label for="ml-dataset-source">Źródło pomiaru:</label>
-                            <select id="ml-dataset-source" style="padding: 8px; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 4px;">
-                                <option value="metrics">Wyniki testów (metrics_result)</option>
-                                <option value="telemetry">Strumień telemetrii (pitch/speed)</option>
-                            </select>
-                        </div>
-                        <div class="setting-container">
-                            <label>Sterowanie:</label>
-                            <div class="button-group">
-                                <button id="ml-ds-start" class="btn-small">Start</button>
-                                <button id="ml-ds-stop" class="btn-small" disabled>Stop</button>
-                                <button id="ml-ds-clear" class="btn-small" style="background:#ff6b6b; color:#fff;">Wyczyść</button>
-                            </div>
-                        </div>
-                        <div class="setting-container">
-                            <label>Eksport:</label>
-                            <div class="button-group">
-                                <button id="ml-ds-export-csv" class="btn-small">Eksport CSV</button>
-                                <button id="ml-ds-export-json" class="btn-small">Eksport JSON</button>
-                            </div>
-                            <span id="ml-ds-count">0 rekordów</span>
-                        </div>
-                    </div>
+                    
                 </div>
 
                 <!-- Panel Postępu Strojenia (domyślnie ukryty) -->
@@ -800,14 +786,12 @@
                         </div>
                         <button id="apply-best-btn" style="width:100%; margin-top:10px; background-color: #a2f279;" disabled>✅ Zastosuj Najlepsze</button>
                     </div>
-                    <div class="autotune-results-container" style="margin-top: 20px;">
-                        <h4>📋 Historia Testów</h4>
-                        <table class="autotune-results-table">
-                            <thead>
-                                <tr><th>#</th><th>Kp</th><th>Ki</th><th>Kd</th><th>Fitness</th><th>ITAE</th><th>Przeregul.</th><th>Akcja</th></tr>
-                            </thead>
-                            <tbody id="results-table-body"></tbody>
-                        </table>
+                    <div class="recent-results" style="margin-top: 15px; text-align: left;">
+                        <h4>🕒 Ostatnie 5 prób</h4>
+                        <div id="recent-results-list" style="background:#20232a; border:1px solid #4a4f58; border-radius:6px; padding:8px; font-family: monospace; white-space: pre-wrap; min-height: 40px;">
+                            Brak danych.
+                        </div>
+                        <button id="open-tuning-history-btn" class="btn-small" style="margin-top:10px;">📜 Historia i Eksport</button>
                     </div>
                 </div>
 
@@ -819,6 +803,10 @@
                     <button id="stop-tuning-btn" disabled>⏹️ Zatrzymaj</button>
                 </div>
             </div>
+        </div>
+        <div class="button-group" style="display:flex; gap:10px; justify-content:center; margin-top:20px; grid-column: 1 / -1;">
+            <button id="loadBtn">Wczytaj z Robota</button>
+            <button id="saveBtn">Zapisz na Robocie</button>
         </div>
         <div class="card" id="log-card" style="grid-column: 1 / -1;">
             <h2>Logi Systemowe</h2>
@@ -855,6 +843,25 @@
                 </label>
             </div>
             <div id="perf-logs-content" style="height:420px; overflow:auto; background:#111; border:1px solid #333; border-radius:6px; padding:8px; text-align:left; font-family:monospace; white-space:pre-wrap;"></div>
+        </div>
+    </div>
+    <!-- Modal: Historia prób strojenia -->
+    <div id="tuning-history-modal" class="modal-backdrop" style="display:none;">
+        <div class="modal-content" style="max-width:1000px;">
+            <h2>Historia wszystkich prób</h2>
+            <div style="display:flex; gap:8px; margin-bottom:8px;">
+                <button id="closeHistoryBtn" style="background:#ff6347;">Zamknij</button>
+                <button id="exportHistoryCsvBtn" style="background:#61dafb;">Eksport CSV</button>
+                <span id="historyCount" style="margin-left:auto; color:#aaa;"></span>
+            </div>
+            <div class="autotune-results-container">
+                <table class="autotune-results-table" style="display:table;">
+                    <thead>
+                        <tr><th>#</th><th>Kp</th><th>Ki</th><th>Kd</th><th>Fitness</th><th>ITAE</th><th>Przeregul.</th><th>Akcja</th></tr>
+                    </thead>
+                    <tbody id="results-table-body"></tbody>
+                </table>
+            </div>
         </div>
     </div>
     <div id="sensor-mapping-modal" class="modal-backdrop" style="display:none;">
@@ -1160,28 +1167,7 @@
         if (clearPerfLogsBtn) {
             clearPerfLogsBtn.addEventListener('click', ()=>{ perfLogsBuffer.length = 0; renderPerfLogs(); });
         }
-        // EEPROM load/save
-        const loadEepromBtn = document.getElementById('loadEepromBtn');
-        const saveEepromBtn = document.getElementById('saveEepromBtn');
-        if (loadEepromBtn) {
-            loadEepromBtn.addEventListener('click', ()=>{
-                if (!AppState.isConnected) { addLogMessage('[UI] Brak połączenia. Połącz z robotem, aby wczytać konfigurację z EEPROM.', 'warn'); return; }
-                if (confirm('UWAGA: Wczytanie z EEPROM nadpisze niezapisane zmiany w panelu. Kontynuować?')) {
-                    AppState.isSynced = false; AppState.tempParams = {}; AppState.tempStates = {};
-                    addLogMessage('[UI] Żądanie pełnej konfiguracji (EEPROM)...', 'info');
-                    sendBleMessage({ type: 'request_full_config' });
-                }
-            });
-        }
-        if (saveEepromBtn) {
-            saveEepromBtn.addEventListener('click', ()=>{
-                if (!AppState.isConnected) { addLogMessage('[UI] Brak połączenia. Połącz z robotem, aby zapisać do EEPROM.', 'warn'); return; }
-                if (confirm('Zapisać bieżącą konfigurację do EEPROM?')) {
-                    addLogMessage('[UI] Wysłano polecenie zapisu konfiguracji do EEPROM...', 'info');
-                    sendBleMessage({ type: 'save_tunings' });
-                }
-            });
-        }
+    // Przyciski robotowe (loadBtn/saveBtn) mają własne listenery dalej w kodzie (setupParameterListeners)
     // Drugi wywołanie setupParameterListeners usunięte (pierwsze już wykonane wyżej) aby uniknąć podwójnych listenerów.
         // Domyślnie nie szukamy Ki
         const kiChk = document.getElementById('include-ki-checkbox');
@@ -1194,36 +1180,14 @@
             });
         }
 
-        // ML dataset listeners
-        const openBayesianBtn = document.getElementById('ml-open-bayesian');
-        const startBayesianBtn = document.getElementById('ml-start-bayesian');
-        if(openBayesianBtn) openBayesianBtn.addEventListener('click', ()=> activateMethodTab('bayesian'));
-        if(startBayesianBtn) startBayesianBtn.addEventListener('click', ()=> activateMethodTab('bayesian'));
-        const dsStart = document.getElementById('ml-ds-start');
-        const dsStop = document.getElementById('ml-ds-stop');
-        const dsClear = document.getElementById('ml-ds-clear');
-        const dsSrc = document.getElementById('ml-dataset-source');
-        const expCsv = document.getElementById('ml-ds-export-csv');
-        const expJson = document.getElementById('ml-ds-export-json');
-        if(dsStart && dsStop && dsClear && dsSrc){
-            dsStart.addEventListener('click', ()=>{ mlCaptureSource = dsSrc.value; mlCaptureActive = true; dsStart.disabled = true; dsStop.disabled = false; addLogMessage(`[ML] Start zbierania datasetu (${mlCaptureSource}).`, 'info'); });
-            dsStop.addEventListener('click', ()=>{ mlCaptureActive = false; dsStart.disabled = false; dsStop.disabled = true; mlUpdateCount(); addLogMessage('[ML] Zatrzymano zbieranie datasetu.', 'info'); });
-            dsClear.addEventListener('click', ()=>{ mlDataset.length = 0; mlUpdateCount(); addLogMessage('[ML] Wyczyść dataset.', 'warn'); });
+        // Obsługa modala historii prób
+        const openHistBtn = document.getElementById('open-tuning-history-btn');
+        const histModal = document.getElementById('tuning-history-modal');
+        if (openHistBtn && histModal) {
+            openHistBtn.addEventListener('click', ()=>{ histModal.style.display='flex'; refreshHistoryTable(); });
         }
-        if(expCsv) expCsv.addEventListener('click', ()=>{ if(!mlDataset.length) { addLogMessage('[ML] Brak danych do eksportu CSV.', 'warn'); return; } mlExportCSV(); addLogMessage('[ML] Eksport CSV zapisany.', 'success'); });
-        if(expJson) expJson.addEventListener('click', ()=>{ if(!mlDataset.length) { addLogMessage('[ML] Brak danych do eksportu JSON.', 'warn'); return; } mlExportJSON(); addLogMessage('[ML] Eksport JSON zapisany.', 'success'); });
-        mlUpdateCount();
-        const mlTheoryToggle = document.getElementById('ml-theory-toggle');
-        const mlTheoryBlock = document.getElementById('ml-theory-block');
-        if (mlTheoryToggle && mlTheoryBlock) {
-            mlTheoryToggle.addEventListener('click', ()=>{
-                const show = mlTheoryBlock.style.display === 'none';
-                mlTheoryBlock.style.display = show ? 'block' : 'none';
-                mlTheoryToggle.textContent = show ? '✖ Ukryj Teorię' : '📘 Teoria';
-                const pane = mlTheoryBlock.closest('.accordion-content');
-                updateAccordionHeight(pane);
-            });
-        }
+        document.getElementById('closeHistoryBtn')?.addEventListener('click', ()=>{ histModal.style.display='none'; });
+        document.getElementById('exportHistoryCsvBtn')?.addEventListener('click', exportHistoryCsv);
     });
     // Osobny bufor logów systemowych (kanał 'log' z robota i ważne wpisy UI)
     const systemLogsBuffer = [];
@@ -1487,6 +1451,7 @@
         // Automatically pause tuning on emergency stop
         if (data.robot_state === 'EMERGENCY_STOP' && AppState.isTuningActive) {
             pauseTuning();
+            addLogMessage('[UI] WYKRYTO ZATRZYMANIE AWARYJNE! Proces wstrzymany. Postaw robota, włącz balansowanie i wznów test.', 'error');
         }
         switch(data.type) {
             case 'telemetry':
@@ -1662,34 +1627,49 @@
     try { window.dispatchEvent(new CustomEvent('ble_message', { detail: data })); } catch(e) {}
     }
 
-    // --- ML: dataset capture and export ---
-    const mlDataset = [];
-    let mlCaptureActive = false;
-    let mlCaptureSource = 'metrics';
-
-    function mlUpdateCount(){ const el=document.getElementById('ml-ds-count'); if(el) el.textContent = `${mlDataset.length} rekordów`; }
-    function mlToCSV(rows){ if(!rows.length) return ''; const headers = Object.keys(rows[0]); const esc = v => (v==null?'':String(v)).replace(/"/g,'""'); const lines=[headers.join(',')]; for(const r of rows){ lines.push(headers.map(h=>`"${esc(r[h])}"`).join(',')); } return lines.join('\n'); }
-    function mlExportCSV(){ const csv = mlToCSV(mlDataset); const blob = new Blob([csv], {type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='dataset.csv'; a.click(); URL.revokeObjectURL(url); }
-    function mlExportJSON(){ const blob=new Blob([JSON.stringify(mlDataset,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='dataset.json'; a.click(); URL.revokeObjectURL(url); }
-
-    // Hook: zbieraj metrics_result do datasetu
-    window.addEventListener('ble_message', (evt)=>{
-        const d = evt.detail; if(!d) return;
-        if(mlCaptureActive && mlCaptureSource === 'metrics' && d.type === 'metrics_result'){
-            mlDataset.push({
-                ts: Date.now(),
-                testId: d.testId,
-                kp: d.kp, ki: d.ki, kd: d.kd,
-                itae: d.itae, overshoot: d.overshoot, settling_time: d.settling_time, steady_state_error: d.steady_state_error
+    // Historia prób strojenia + lista ostatnich 5
+    const tuningHistory = [];
+    function refreshRecentList() {
+        const box = document.getElementById('recent-results-list');
+        if (!box) return;
+        const last5 = tuningHistory.slice(-5).reverse();
+        if (!last5.length) { box.textContent = 'Brak danych.'; return; }
+        box.innerHTML = last5.map((r, idx)=> `#${r.idx} | Kp=${r.kp.toFixed(3)} Ki=${r.ki.toFixed(3)} Kd=${r.kd.toFixed(3)} | fitness=${r.fitness.toFixed(4)} | ITAE=${(r.itae??NaN).toFixed?.(2)??'---'} | ov=${(r.overshoot??NaN).toFixed?.(2)??'---'}%`).join('\n');
+    }
+    function refreshHistoryTable(){
+        const tbody = document.getElementById('results-table-body');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        for (let i=tuningHistory.length-1; i>=0; i--) {
+            const r = tuningHistory[i];
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${r.idx}</td><td>${r.kp.toFixed(3)}</td><td>${r.ki.toFixed(3)}</td><td>${r.kd.toFixed(3)}</td><td>${r.fitness.toFixed(4)}</td><td>${(r.itae??0).toFixed(2)}</td><td>${(r.overshoot??0).toFixed(2)}%</td><td><button class="btn-small" data-apply="${i}">Zastosuj</button></td>`;
+            tbody.appendChild(tr);
+        }
+        document.getElementById('historyCount')?.textContent = `${tuningHistory.length} prób`;
+        // Delegacja dla przycisków Zastosuj
+        tbody.querySelectorAll('button[data-apply]').forEach(btn=>{
+            btn.addEventListener('click', ()=>{
+                const i = parseInt(btn.getAttribute('data-apply'));
+                const r = tuningHistory[i];
+                if (!r) return;
+                applyParameters(r.kp, r.ki, r.kd);
             });
-            mlUpdateCount();
-        }
-        if(mlCaptureActive && mlCaptureSource === 'telemetry' && d.type === 'telemetry'){
-            mlDataset.push({ ts: Date.now(), pitch: d.pitch, speed: d.speed, output: d.output });
-            // Nie spamuj licznika co próbkę – lekko odświeżaj
-            if(mlDataset.length % 25 === 0) mlUpdateCount();
-        }
-    });
+        });
+    }
+    function exportHistoryCsv(){
+        if (!tuningHistory.length) { showNotification('Brak danych historii'); return; }
+        const headers = ['#','Kp','Ki','Kd','Fitness','ITAE','Overshoot'];
+        const lines = [headers.join(',')];
+        tuningHistory.forEach(r=>{
+            lines.push([r.idx, r.kp.toFixed(3), r.ki.toFixed(3), r.kd.toFixed(3), r.fitness.toFixed(4), (r.itae??0).toFixed(2), (r.overshoot??0).toFixed(2)].join(','));
+        });
+        const csv = lines.join('\n');
+        const blob = new Blob([csv], {type:'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'tuning_history.csv'; a.click(); URL.revokeObjectURL(url);
+    }
     
     function applySingleParam(snakeKey, value) {
         const inputId = Object.keys(parameterMapping).find(key => parameterMapping[key] === snakeKey);
@@ -2375,6 +2355,21 @@
     if (__loopSel) __loopSel.addEventListener('change', updateSearchSpaceInputs);
     updateSearchSpaceInputs();
     }
+
+    // Główne zakładki w panelu optymalizacji (Konfiguracja/Metody)
+    function setupMainAutotuneTabs(){
+        const tabs = document.querySelectorAll('.autotune-main-tab');
+        const panes = document.querySelectorAll('.autotune-main-content');
+        tabs.forEach(tab=>{
+            tab.addEventListener('click', ()=>{
+                const target = tab.dataset.tab;
+                tabs.forEach(t=>t.classList.remove('active'));
+                panes.forEach(p=>p.classList.remove('active'));
+                tab.classList.add('active');
+                document.querySelector(`.autotune-main-content[data-tab="${target}"]`)?.classList.add('active');
+            });
+        });
+    }
     function updateSearchSpaceInputs() {
     const __loopEl = document.getElementById('tuning-loop-selector');
     const selectedLoop = __loopEl ? __loopEl.value : 'balance';
@@ -2392,13 +2387,19 @@
         AppState.isTuningActive = isLocked;
         AppState.activeTuningMethod = isLocked ? method : '';
     
-        // Usuwamy blokadę całego UI
-        // document.body.classList.toggle('tuning-active', isLocked);
+    // Globalny tryb strojenia (odblokowane: Sterowanie, Optymalizacja, Logi)
+    document.body.classList.toggle('tuning-active', isLocked);
     
-        // Wyłączamy przełączanie zakładek i testy UI
+    // Wyłączamy przełączanie zakładek i testy UI
         document.querySelectorAll('.run-test-btn').forEach(btn => btn.disabled = isLocked);
         document.querySelectorAll('.method-tab').forEach(tab => tab.disabled = isLocked);
         // Dashboard legacy usunięty
+
+    // Przełącz widoki w panelu optymalizacji
+    const cfgPanel = document.getElementById('autotuning-config-panel');
+    const progress = document.getElementById('tuning-progress-panel');
+    if (cfgPanel) cfgPanel.classList.toggle('autotune-config-hide', isLocked);
+    if (progress) progress.style.display = isLocked ? 'block' : 'none';
     }
     // Legacy handler wyników strojenia (serwerowych) został usunięty.
     // Wyniki algorytmów (GA/PSO/ZN/Bayesian) są obsługiwane wyłącznie po stronie klienta.
@@ -3142,6 +3143,13 @@ function updateFitnessChart() {
 
 function addTestToResultsTable(testNum, params, fitness, itae, overshoot) {
     const tbody = document.getElementById('results-table-body');
+    // Zapis do historii globalnej
+    try {
+        if (Array.isArray(tuningHistory)) {
+            tuningHistory.push({ idx: testNum, kp: params.kp, ki: params.ki, kd: params.kd, fitness, itae, overshoot });
+            refreshRecentList();
+        }
+    } catch(_) {}
     const row = tbody.insertRow(0); // Insert at top
     
     row.innerHTML = `
@@ -3155,7 +3163,7 @@ function addTestToResultsTable(testNum, params, fitness, itae, overshoot) {
         <td><button onclick="applyParameters(${params.kp}, ${params.ki}, ${params.kd})" class="btn-small">Zastosuj</button></td>
     `;
     
-    document.getElementById('results-container').style.display = 'block';
+    // Tabela jest widoczna w modalu historii – brak odwołania do nieistniejącego #results-container
 }
 
 function applyParameters(kp, ki, kd) {
@@ -4187,9 +4195,10 @@ function initAutoTuningUI() {
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initAutoTuningUI);
+    document.addEventListener('DOMContentLoaded', ()=>{ initAutoTuningUI(); setupMainAutotuneTabs(); });
 } else {
     initAutoTuningUI();
+    setupMainAutotuneTabs();
 }
 
 // Listen for BLE messages
@@ -4237,6 +4246,16 @@ function startTuning() {
         kd_max: parseFloat(document.getElementById('search-kd-max')?.value || 5)
     };
     
+    // Zapisz Ustawienia Bazowe PID (sekcja balansu)
+    try {
+        AppState.baselinePid = {
+            kp: parseFloat(document.getElementById('balanceKpInput')?.value) || 0,
+            ki: parseFloat(document.getElementById('balanceKiInput')?.value) || 0,
+            kd: parseFloat(document.getElementById('balanceKdInput')?.value) || 0,
+        };
+        addLogMessage('[UI] Zapisano Ustawienia Bazowe PID.', 'info');
+    } catch (_) {}
+
     setTuningUiLock(true, method);
     AppState.activeTuningMethod = method;
     
@@ -4253,6 +4272,12 @@ function pauseTuning() {
     if (currentTuningSession && typeof currentTuningSession.pause === 'function') {
         currentTuningSession.pause();
         addLogMessage('[UI] Strojenie wstrzymane.', 'info');
+    }
+    if (AppState?.baselinePid) {
+        sendBleMessage({ type: 'set_param', key: 'kp_b', value: AppState.baselinePid.kp });
+        sendBleMessage({ type: 'set_param', key: 'ki_b', value: AppState.baselinePid.ki });
+        sendBleMessage({ type: 'set_param', key: 'kd_b', value: AppState.baselinePid.kd });
+        addLogMessage('[UI] Proces wstrzymany. Przywrócono stabilne ustawienia PID.', 'warn');
     }
 }
 
