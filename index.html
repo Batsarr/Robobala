@@ -37,7 +37,7 @@
         #joystickWrapper { position: relative; width: 180px; height: 180px; border-radius: 50%; background-color: #4a4f58; border: 3px solid #61dafb; margin: 15px auto; touch-action: none; }
         #joystickCanvas { width: 100%; height: 100%; display: block; }
         #chart-wrapper { position: relative; height: 420px; border-radius: 8px; overflow: hidden; background-color: #20232a; }
-        #log-history { text-align: left; height: 350px; overflow-y: auto; background-color: #20232a; padding: 10px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; }
+    #log-history { text-align: left; overflow-y: auto; background-color: #20232a; padding: 10px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; }
         .status-indicator { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
         .status-ok { background-color: #a2f279; }
         .status-warn { background-color: #f7b731; }
@@ -462,12 +462,8 @@
                     <span class="value" id="loopTimeVal">0 &micro;s</span>
                 </div>
                 <div class="dashboard-item">
-                    <span class="label">Logi Systemowe</span>
-                    <button id="openSystemLogsBtn" style="width:100%; background-color:#f7b731; margin-top:6px;">Pokaż logi</button>
-                </div>
-                <div class="dashboard-item">
-                    <span class="label">Logi Wydajności (Loop Time)</span>
-                    <button id="openPerfLogsBtn" style="width:100%; background-color:#f7b731; margin-top:6px;">Pokaż</button>
+                    <span class="label">Czas Petli (średnio)</span>
+                    <span class="value" id="loopLoadVal">-- %</span>
                 </div>
                 <div class="dashboard-item" id="systemHealthItem">
                     <span class="label">System Health</span>
@@ -808,43 +804,19 @@
             <button id="loadBtn">Wczytaj z Robota</button>
             <button id="saveBtn">Zapisz na Robocie</button>
         </div>
-        <div class="card" id="log-card" style="grid-column: 1 / -1;">
-            <h2>Logi Systemowe</h2>
-            <div id="log-history"></div>
-             <div style="margin-top: 10px; display: flex; gap: 10px; justify-content: center; align-items: center;">
-                <button onclick="clearLogs()" style="background-color: #f7b731;">Wyczysc Logi</button>
+    <div class="card" id="log-card" style="position: fixed; left: 0; right: 0; bottom: 0; z-index: 3000; margin: 0; border-radius: 0; padding-bottom: 0; box-shadow: 0 -4px 10px rgba(0,0,0,0.35);">
+            <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" id="log-toggle-bar" title="Rozwiń/Zwiń logi">
+                <h2 style="margin: 0;">Logi</h2>
+                <div style="margin-left:auto; display:flex; align-items:center; gap:10px;">
+                    <label style="font-size:0.9em; color:#ccc; display:flex; align-items:center; gap:6px;">Autoscroll <input type="checkbox" id="logsAutoscroll" checked></label>
+                    <button id="clearLogsBtn" class="btn-small" style="background:#f7b731;">Wyczyść</button>
+                </div>
             </div>
+            <div id="log-history" style="max-height: 40vh; overflow-y: auto; display: none;"></div>
         </div>
     </div>
     <!-- Nowy modal: Mapowanie czujnika – sekwencyjny kreator z auto-wykryciem obrotu > 90° -->
-    <!-- Modal: Logi Systemowe (osobny kanał) -->
-    <div id="system-logs-modal" class="modal-backdrop" style="display:none;">
-        <div class="modal-content" style="max-width:900px;">
-            <h2>Logi Systemowe (osobny kanał)</h2>
-            <div style="display:flex; gap:8px; margin-bottom:8px;">
-                <button id="closeSystemLogsBtn" style="background:#ff6347;">Zamknij</button>
-                <button id="clearSystemLogsBtn" style="background:#f7b731;">Wyczyść</button>
-                <label style="margin-left:auto; display:flex; align-items:center; gap:6px;">
-                    Autoscroll <input type="checkbox" id="systemLogsAutoscroll" checked>
-                </label>
-            </div>
-            <div id="system-logs-content" style="height:420px; overflow:auto; background:#111; border:1px solid #333; border-radius:6px; padding:8px; text-align:left; font-family:monospace; white-space:pre-wrap;"></div>
-        </div>
-    </div>
-    <!-- Modal: Logi wydajności (tylko [Perf]) -->
-    <div id="perf-logs-modal" class="modal-backdrop" style="display:none;">
-        <div class="modal-content" style="max-width:900px;">
-            <h2>Logi Wydajności (Loop Time)</h2>
-            <div style="display:flex; gap:8px; margin-bottom:8px;">
-                <button id="closePerfLogsBtn" style="background:#ff6347;">Zamknij</button>
-                <button id="clearPerfLogsBtn" style="background:#f7b731;">Wyczyść</button>
-                <label style="margin-left:auto; display:flex; align-items:center; gap:6px;">
-                    Autoscroll <input type="checkbox" id="perfLogsAutoscroll" checked>
-                </label>
-            </div>
-            <div id="perf-logs-content" style="height:420px; overflow:auto; background:#111; border:1px solid #333; border-radius:6px; padding:8px; text-align:left; font-family:monospace; white-space:pre-wrap;"></div>
-        </div>
-    </div>
+    
     <!-- Modal: Historia prób strojenia -->
     <div id="tuning-history-modal" class="modal-backdrop" style="display:none;">
         <div class="modal-content" style="max-width:1000px;">
@@ -1137,35 +1109,23 @@
         init3DVisualization(); 
         animate3D(); 
         setTuningUiLock(false, '');
-        initAutotuneTuningChart();
+    initAutotuneTuningChart();
+    // Start strojenia dostępny dopiero po wyborze metody
+    const startBtnInit = document.getElementById('start-tuning-btn');
+    if (startBtnInit) startBtnInit.disabled = true;
         setupAutotuningTabs();
-        // System Logs modal wiring
-        const openSysLogsBtn = document.getElementById('openSystemLogsBtn');
-        const sysLogsModal = document.getElementById('system-logs-modal');
-        const closeSysLogsBtn = document.getElementById('closeSystemLogsBtn');
-        const clearSysLogsBtn = document.getElementById('clearSystemLogsBtn');
-        // Perf Logs modal wiring
-        const openPerfLogsBtn = document.getElementById('openPerfLogsBtn');
-        const perfLogsModal = document.getElementById('perf-logs-modal');
-        const closePerfLogsBtn = document.getElementById('closePerfLogsBtn');
-        const clearPerfLogsBtn = document.getElementById('clearPerfLogsBtn');
-        if (openSysLogsBtn && sysLogsModal) {
-            openSysLogsBtn.addEventListener('click', ()=>{ sysLogsModal.style.display='flex'; renderSystemLogs(); });
-        }
-        if (closeSysLogsBtn && sysLogsModal) {
-            closeSysLogsBtn.addEventListener('click', ()=>{ sysLogsModal.style.display='none'; });
-        }
-        if (clearSysLogsBtn) {
-            clearSysLogsBtn.addEventListener('click', ()=>{ systemLogsBuffer.length = 0; renderSystemLogs(); });
-        }
-        if (openPerfLogsBtn && perfLogsModal) {
-            openPerfLogsBtn.addEventListener('click', ()=>{ perfLogsModal.style.display='flex'; renderPerfLogs(); });
-        }
-        if (closePerfLogsBtn && perfLogsModal) {
-            closePerfLogsBtn.addEventListener('click', ()=>{ perfLogsModal.style.display='none'; });
-        }
-        if (clearPerfLogsBtn) {
-            clearPerfLogsBtn.addEventListener('click', ()=>{ perfLogsBuffer.length = 0; renderPerfLogs(); });
+        // Pinned bottom logs panel wiring (toggle + clear)
+        const logToggleBar = document.getElementById('log-toggle-bar');
+        const logHistoryBox = document.getElementById('log-history');
+        const logsAutoscroll = document.getElementById('logsAutoscroll');
+        document.getElementById('clearLogsBtn')?.addEventListener('click', ()=>{ allLogsBuffer.length = 0; renderAllLogs(true); });
+        if (logToggleBar && logHistoryBox) {
+            logToggleBar.addEventListener('click', (e)=>{
+                if (e.target && (e.target.id === 'logsAutoscroll' || e.target.id === 'clearLogsBtn' || e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON')) return;
+                const show = logHistoryBox.style.display !== 'block';
+                logHistoryBox.style.display = show ? 'block' : 'none';
+                if (show) renderAllLogs(true);
+            });
         }
     // Przyciski robotowe (loadBtn/saveBtn) mają własne listenery dalej w kodzie (setupParameterListeners)
     // Drugi wywołanie setupParameterListeners usunięte (pierwsze już wykonane wyżej) aby uniknąć podwójnych listenerów.
@@ -1190,54 +1150,30 @@
         document.getElementById('exportHistoryCsvBtn')?.addEventListener('click', exportHistoryCsv);
     });
     // Osobny bufor logów systemowych (kanał 'log' z robota i ważne wpisy UI)
-    const systemLogsBuffer = [];
-    const SYSTEM_LOGS_MAX = 1000;
-    function pushSystemLog(message, level='info'){
+    // Pojedynczy, scalony bufor logów
+    const allLogsBuffer = [];
+    const ALL_LOGS_MAX = 2000;
+    function pushLog(message, level='info'){
         const ts = new Date().toLocaleTimeString();
-        systemLogsBuffer.push({ts, level, message});
-        if (systemLogsBuffer.length > SYSTEM_LOGS_MAX) systemLogsBuffer.shift();
-        // Autoscroll jeśli modal otwarty i włączony autoscroll
-        const modal = document.getElementById('system-logs-modal');
-        if (modal && modal.style.display === 'flex' && document.getElementById('systemLogsAutoscroll')?.checked){
-            renderSystemLogs(true);
+        allLogsBuffer.push({ts, level, message});
+        if (allLogsBuffer.length > ALL_LOGS_MAX) allLogsBuffer.shift();
+    const logHistEl = document.getElementById('log-history');
+    const autoEl = document.getElementById('logsAutoscroll');
+    if (logHistEl && logHistEl.style.display === 'block' && autoEl && autoEl.checked) {
+            renderAllLogs(true);
         }
     }
-    function renderSystemLogs(keepScrollBottom=false){
-        const box = document.getElementById('system-logs-content'); if(!box) return;
+    function renderAllLogs(keepScrollBottom=false){
+        const box = document.getElementById('log-history'); if(!box) return;
         const wasBottom = (box.scrollTop + box.clientHeight + 8) >= box.scrollHeight;
         box.innerHTML = '';
-        for (const row of systemLogsBuffer){
+        for (const row of allLogsBuffer){
             const div = document.createElement('div');
             let color = '#ccc';
             if (row.level === 'error') color = '#ff6347';
             else if (row.level === 'warn') color = '#f7b731';
             else if (row.level === 'success') color = '#a2f279';
             div.style.color = color;
-            div.textContent = `[${row.ts}] ${row.message}`;
-            box.appendChild(div);
-        }
-        if (keepScrollBottom || wasBottom){ box.scrollTop = box.scrollHeight; }
-    }
-
-    // Bufor logów wydajności ([Perf])
-    const perfLogsBuffer = [];
-    const PERF_LOGS_MAX = 1000;
-    function pushPerfLog(message){
-        const ts = new Date().toLocaleTimeString();
-        perfLogsBuffer.push({ts, message});
-        if (perfLogsBuffer.length > PERF_LOGS_MAX) perfLogsBuffer.shift();
-        const modal = document.getElementById('perf-logs-modal');
-        if (modal && modal.style.display === 'flex' && document.getElementById('perfLogsAutoscroll')?.checked){
-            renderPerfLogs(true);
-        }
-    }
-    function renderPerfLogs(keepScrollBottom=false){
-        const box = document.getElementById('perf-logs-content'); if(!box) return;
-        const wasBottom = (box.scrollTop + box.clientHeight + 8) >= box.scrollHeight;
-        box.innerHTML = '';
-        for (const row of perfLogsBuffer){
-            const div = document.createElement('div');
-            div.style.color = '#f7b731';
             div.textContent = `[${row.ts}] ${row.message}`;
             box.appendChild(div);
         }
@@ -1327,8 +1263,8 @@
 
     const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-    function addLogMessage(message, level = 'info') { const logHistory = document.getElementById('log-history'); if (!logHistory) return; const timestamp = new Date().toLocaleTimeString(); let color = '#fff'; if (level === 'error') color = '#ff6347'; else if (level === 'warn') color = '#f7b731'; else if (level === 'success') color = '#a2f279'; const logEntry = document.createElement('div'); logEntry.style.color = color; logEntry.textContent = `[${timestamp}] ${message}`; logHistory.prepend(logEntry); while (logHistory.children.length > 200) { logHistory.removeChild(logHistory.lastChild); } }
-    function clearLogs() { document.getElementById('log-history').innerHTML = ''; }
+    function addLogMessage(message, level = 'info') { pushLog(message, level); const el = document.getElementById('log-history'); if (el && el.style.display === 'block') { renderAllLogs(true); } }
+    function clearLogs() { if (typeof allLogsBuffer !== 'undefined') { allLogsBuffer.length = 0; } const box = document.getElementById('log-history'); if (box) box.innerHTML = ''; }
     function toggleAccordion(header) {
         const content = header.nextElementSibling;
         header.classList.toggle('active');
@@ -1581,12 +1517,6 @@
             case 'set_rgb_blink': // NOWE: Obsługa komend RGB
             case 'log':
                 addLogMessage(`[ROBOT] ${data.message}`, data.level);
-                // Routing: [Perf] tylko do perf-logs, reszta do system-logs
-                if (typeof data.message === 'string' && data.message.includes('[Perf]')) {
-                    pushPerfLog(`[ROBOT] ${data.message}`);
-                } else {
-                    pushSystemLog(`[ROBOT] ${data.message}`, data.level);
-                }
                 break;
             case 'tuner_live_status': updateTunerStatus(data); break;
             case 'tuner_live_chart_data': updateAutotuneTuningChart(data); break;
@@ -1646,7 +1576,7 @@
             tr.innerHTML = `<td>${r.idx}</td><td>${r.kp.toFixed(3)}</td><td>${r.ki.toFixed(3)}</td><td>${r.kd.toFixed(3)}</td><td>${r.fitness.toFixed(4)}</td><td>${(r.itae??0).toFixed(2)}</td><td>${(r.overshoot??0).toFixed(2)}%</td><td><button class="btn-small" data-apply="${i}">Zastosuj</button></td>`;
             tbody.appendChild(tr);
         }
-        document.getElementById('historyCount')?.textContent = `${tuningHistory.length} prób`;
+    { const hc = document.getElementById('historyCount'); if (hc) hc.textContent = `${tuningHistory.length} prób`; }
         // Delegacja dla przycisków Zastosuj
         tbody.querySelectorAll('button[data-apply]').forEach(btn=>{
             btn.addEventListener('click', ()=>{
@@ -2256,10 +2186,13 @@
 
     let autotuneTuningChart; let autotuneChartData = { labels: [], datasets: [] };
     function initAutotuneTuningChart() {
-        const ctx = document.getElementById('autotuneTuningChart').getContext('2d');
+        const canvas = document.getElementById('autotuneTuningChart');
+        if (!canvas) { return; }
+        const ctx = canvas.getContext('2d');
         autotuneTuningChart = new Chart(ctx, { type: 'line', data: autotuneChartData, options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { type: 'linear', display: true, position: 'left', ticks: { color: '#61dafb' } } }, plugins: { legend: { labels: { color: '#fff' } } } } });
     }
     function updateAutotuneTuningChart(data) {
+        if (!autotuneTuningChart) return;
         if (autotuneTuningChart.data.labels.length >= 200) { autotuneTuningChart.data.labels.shift(); autotuneTuningChart.data.datasets.forEach(dataset => dataset.data.shift()); }
         autotuneTuningChart.data.labels.push(data.timestamp || '');
         const mapDataToDataset = (label, value, color) => {
@@ -2305,6 +2238,10 @@
 
         // Ustaw pozycję wykresu względem wybranej metody
         relocateAutotuneChart(method);
+
+    // Odblokuj Start po wyborze metody
+    const startBtn = document.getElementById('start-tuning-btn');
+    if (startBtn) startBtn.disabled = false;
     }
 
     function setupAutotuningTabs() {
