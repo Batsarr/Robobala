@@ -650,11 +650,9 @@ function processCompleteMessage(data) {
             try { checkAndExecuteNextSequenceStep(prevState); } catch (e) { /* no-op */ }
         }
     }
-    // Automatically pause tuning on emergency stop
-    if (data.robot_state === 'EMERGENCY_STOP' && AppState.isTuningActive) {
-        pauseTuning();
-        addLogMessage('[UI] WYKRYTO ZATRZYMANIE AWARYJNE! Proces wstrzymany. Postaw robota, włącz balansowanie i wznów test.', 'error');
-    }
+    // Note: Emergency stop during tuning is automatically handled by algorithms
+    // through test_complete message with success=false. No manual pause needed here.
+    // The algorithms will detect the failed test, enter pause state, and restore baseline PID.
     switch(data.type) {
         case 'telemetry':
     // Jeśli dostępny jest kwaternion, policz kąty bez dodatkowego mapowania (Quaternion-First)
@@ -2302,6 +2300,10 @@ if (!method) {
     addLogMessage('[UI] Nie wybrano metody optymalizacji.', 'warn');
     return;
 }
+
+// CRITICAL: Capture baseline PID parameters before starting tuning
+// These will be used to restore safe balancing state during pause or after emergency
+captureBaselinePID();
 
 const searchSpace = {
     kp_min: parseFloat(document.getElementById('search-kp-min')?.value || 0),

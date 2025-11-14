@@ -6,9 +6,29 @@
 let fitnessChart = null;
 let fitnessChartData = [];
 
+// Baseline PID parameters - stored before tuning session starts
+// Used to restore robot to safe state during pause or after emergency stop
+let baselinePID = {
+    kp: 0,
+    ki: 0,
+    kd: 0
+};
+
 // ========================================================================
 // HELPER FUNCTIONS
 // ========================================================================
+
+/**
+ * Show notification to user (fallback to console if not defined elsewhere)
+ */
+function showNotification(message) {
+    // Try to use addLogMessage if available
+    if (typeof addLogMessage === 'function') {
+        addLogMessage(`[Tuning] ${message}`, 'info');
+    } else {
+        console.log(`[Notification] ${message}`);
+    }
+}
 
 function mean(arr) {
     if (arr.length === 0) return 0;
@@ -141,6 +161,64 @@ function applyParameters(kp, ki, kd) {
     showNotification(`Zastosowano parametry: Kp=${kp.toFixed(3)}, Ki=${ki.toFixed(3)}, Kd=${kd.toFixed(3)}`);
 }
 
+/**
+ * Send baseline PID parameters to robot
+ * Called when pausing tuning to restore safe balancing state
+ */
+function sendBaselinePIDToRobot() {
+    const loop = document.getElementById('tuning-loop-selector')?.value || 'balance';
+    let prefix = '';
+    if (loop === 'balance') prefix = 'kp_b';
+    else if (loop === 'speed') prefix = 'kp_s';
+    else if (loop === 'position') prefix = 'kp_p';
+    
+    // Send baseline parameters to robot
+    sendBleCommand('set_param', {key: prefix.replace('kp', 'kp'), value: baselinePID.kp});
+    sendBleCommand('set_param', {key: prefix.replace('kp', 'ki'), value: baselinePID.ki});
+    sendBleCommand('set_param', {key: prefix.replace('kp', 'kd'), value: baselinePID.kd});
+    
+    console.log(`[Tuning] Restored baseline PID: Kp=${baselinePID.kp.toFixed(3)}, Ki=${baselinePID.ki.toFixed(3)}, Kd=${baselinePID.kd.toFixed(3)}`);
+}
+
+/**
+ * Capture current PID parameters as baseline
+ * Called at the start of tuning session
+ */
+function captureBaselinePID() {
+    const loop = document.getElementById('tuning-loop-selector')?.value || 'balance';
+    
+    // Map loop type to input element IDs
+    let kpInputId, kiInputId, kdInputId;
+    if (loop === 'balance') {
+        kpInputId = 'balanceKpInput';
+        kiInputId = 'balanceKiInput';
+        kdInputId = 'balanceKdInput';
+    } else if (loop === 'speed') {
+        kpInputId = 'speedKpInput';
+        kiInputId = 'speedKiInput';
+        kdInputId = 'speedKdInput';
+    } else if (loop === 'position') {
+        kpInputId = 'positionKpInput';
+        kiInputId = 'positionKiInput';
+        kdInputId = 'positionKdInput';
+    }
+    
+    // Read current values from UI
+    const kpElement = document.getElementById(kpInputId);
+    const kiElement = document.getElementById(kiInputId);
+    const kdElement = document.getElementById(kdInputId);
+    
+    if (kpElement && kiElement && kdElement) {
+        baselinePID.kp = parseFloat(kpElement.value) || 0;
+        baselinePID.ki = parseFloat(kiElement.value) || 0;
+        baselinePID.kd = parseFloat(kdElement.value) || 0;
+        
+        console.log(`[Tuning] Captured baseline PID: Kp=${baselinePID.kp.toFixed(3)}, Ki=${baselinePID.ki.toFixed(3)}, Kd=${baselinePID.kd.toFixed(3)}`);
+    } else {
+        console.warn('[Tuning] Could not capture baseline PID - input elements not found');
+    }
+}
+
 // ========================================================================
 // GENETIC ALGORITHM
 // ========================================================================
@@ -190,23 +268,41 @@ class GeneticAlgorithm {
                 reject(new Error('Test timeout'));
             }, 10000); // 10 second timeout
             
-            const handler = (data) => {
-                if (data.type === 'test_result' && data.testId === testId) {
+            // Handler for test completion (success or failure)
+            const completeHandler = (data) => {
+                if (data.type === 'test_complete' && data.testId === testId) {
+                    clearTimeout(timeout);
+                    window.removeEventListener('ble_message', completeHandler);
+                    window.removeEventListener('ble_message', metricsHandler);
+                    
+                    // If test failed (e.g., emergency stop), reject with special reason
+                    if (!data.success) {
+                        reject({ reason: 'interrupted_by_emergency', testId: testId });
+                        return;
+                    }
+                }
+            };
+            
+            // Handler for test metrics
+            const metricsHandler = (data) => {
+                if ((data.type === 'metrics_result' || data.type === 'test_result') && data.testId === testId) {
                     clearTimeout(timeout);
                     const fitness = data.itae + data.overshoot * 10 + data.steady_state_error * 5;
                     individual.fitness = fitness;
                     
                     addTestToResultsTable(this.testCounter, individual, fitness, data.itae, data.overshoot);
                     
-                    // Remove handler
-                    window.removeEventListener('ble_message', handler);
+                    // Remove handlers
+                    window.removeEventListener('ble_message', completeHandler);
+                    window.removeEventListener('ble_message', metricsHandler);
                     resolve(fitness);
                 }
             };
             
-            window.addEventListener('ble_message', handler);
+            window.addEventListener('ble_message', completeHandler);
+            window.addEventListener('ble_message', metricsHandler);
             
-            sendBleCommand('run_dynamic_test', {
+            sendBleCommand('run_metrics_test', {
                 kp: individual.kp,
                 ki: individual.ki,
                 kd: individual.kd,
@@ -231,7 +327,28 @@ class GeneticAlgorithm {
                     await this.evaluateFitness(this.population[i]);
                 } catch (error) {
                     console.error('Test failed:', error);
-                    this.population[i].fitness = Infinity;
+                    
+                    // Handle emergency stop - pause and wait for user to resume
+                    if (error.reason === 'interrupted_by_emergency') {
+                        console.log('[GA] Emergency stop detected, entering pause state');
+                        this.isPaused = true;
+                        sendBaselinePIDToRobot();
+                        
+                        // Wait for resume
+                        while (this.isPaused && this.isRunning) {
+                            await delay(100);
+                        }
+                        
+                        // Retry the same test after resume
+                        if (this.isRunning) {
+                            console.log('[GA] Retrying interrupted test after resume');
+                            i--; // Retry this individual
+                            continue;
+                        }
+                    } else {
+                        // Other errors - mark as failed
+                        this.population[i].fitness = Infinity;
+                    }
                 }
             }
         }
@@ -339,9 +456,26 @@ class GeneticAlgorithm {
         showNotification(`Optymalizacja GA zakończona! Najlepsze fitness: ${this.bestIndividual.fitness.toFixed(4)}`);
     }
     
-    pause() { this.isPaused = true; }
-    resume() { this.isPaused = false; }
-    stop() { this.isRunning = false; }
+    pause() { 
+        this.isPaused = true;
+        // Restore baseline PID to robot when pausing
+        // This happens after current test completes (see runGeneration loop)
+        setTimeout(() => {
+            if (this.isPaused) {
+                sendBaselinePIDToRobot();
+            }
+        }, 100);
+    }
+    
+    resume() { 
+        this.isPaused = false; 
+    }
+    
+    stop() { 
+        this.isRunning = false;
+        // Restore baseline PID when stopping
+        sendBaselinePIDToRobot();
+    }
 }
 
 // ========================================================================
@@ -401,8 +535,24 @@ class ParticleSwarmOptimization {
                 reject(new Error('Test timeout'));
             }, 10000);
             
-            const handler = (data) => {
-                if (data.type === 'test_result' && data.testId === testId) {
+            // Handler for test completion (success or failure)
+            const completeHandler = (data) => {
+                if (data.type === 'test_complete' && data.testId === testId) {
+                    clearTimeout(timeout);
+                    window.removeEventListener('ble_message', completeHandler);
+                    window.removeEventListener('ble_message', metricsHandler);
+                    
+                    // If test failed (e.g., emergency stop), reject with special reason
+                    if (!data.success) {
+                        reject({ reason: 'interrupted_by_emergency', testId: testId });
+                        return;
+                    }
+                }
+            };
+            
+            // Handler for test metrics
+            const metricsHandler = (data) => {
+                if ((data.type === 'metrics_result' || data.type === 'test_result') && data.testId === testId) {
                     clearTimeout(timeout);
                     const fitness = data.itae + data.overshoot * 10 + data.steady_state_error * 5;
                     particle.fitness = fitness;
@@ -422,14 +572,17 @@ class ParticleSwarmOptimization {
                     
                     addTestToResultsTable(this.testCounter, particle.position, fitness, data.itae, data.overshoot);
                     
-                    window.removeEventListener('ble_message', handler);
+                    // Remove handlers
+                    window.removeEventListener('ble_message', completeHandler);
+                    window.removeEventListener('ble_message', metricsHandler);
                     resolve(fitness);
                 }
             };
             
-            window.addEventListener('ble_message', handler);
+            window.addEventListener('ble_message', completeHandler);
+            window.addEventListener('ble_message', metricsHandler);
             
-            sendBleCommand('run_dynamic_test', {
+            sendBleCommand('run_metrics_test', {
                 kp: particle.position.kp,
                 ki: particle.position.ki,
                 kd: particle.position.kd,
@@ -453,7 +606,28 @@ class ParticleSwarmOptimization {
                 await this.evaluateFitness(this.particles[i]);
             } catch (error) {
                 console.error('Test failed:', error);
-                this.particles[i].fitness = Infinity;
+                
+                // Handle emergency stop - pause and wait for user to resume
+                if (error.reason === 'interrupted_by_emergency') {
+                    console.log('[PSO] Emergency stop detected, entering pause state');
+                    this.isPaused = true;
+                    sendBaselinePIDToRobot();
+                    
+                    // Wait for resume
+                    while (this.isPaused && this.isRunning) {
+                        await delay(100);
+                    }
+                    
+                    // Retry the same test after resume
+                    if (this.isRunning) {
+                        console.log('[PSO] Retrying interrupted test after resume');
+                        i--; // Retry this particle
+                        continue;
+                    }
+                } else {
+                    // Other errors - mark as failed
+                    this.particles[i].fitness = Infinity;
+                }
             }
         }
         
@@ -510,9 +684,25 @@ class ParticleSwarmOptimization {
         showNotification(`Optymalizacja PSO zakończona! Najlepsze fitness: ${this.globalBest.fitness.toFixed(4)}`);
     }
     
-    pause() { this.isPaused = true; }
-    resume() { this.isPaused = false; }
-    stop() { this.isRunning = false; }
+    pause() { 
+        this.isPaused = true;
+        // Restore baseline PID to robot when pausing
+        setTimeout(() => {
+            if (this.isPaused) {
+                sendBaselinePIDToRobot();
+            }
+        }, 100);
+    }
+    
+    resume() { 
+        this.isPaused = false; 
+    }
+    
+    stop() { 
+        this.isRunning = false;
+        // Restore baseline PID when stopping
+        sendBaselinePIDToRobot();
+    }
 }
 
 // ========================================================================
@@ -713,6 +903,8 @@ class ZieglerNicholsRelay {
     stop() {
         this.isRunning = false;
         sendBleCommand('cancel_test', {});
+        // Restore baseline PID when stopping
+        sendBaselinePIDToRobot();
     }
 }
 
@@ -873,21 +1065,40 @@ class BayesianOptimization {
                 reject(new Error('Test timeout'));
             }, 10000);
             
-            const handler = (data) => {
-                if (data.type === 'test_result' && data.testId === testId) {
+            // Handler for test completion (success or failure)
+            const completeHandler = (data) => {
+                if (data.type === 'test_complete' && data.testId === testId) {
+                    clearTimeout(timeout);
+                    window.removeEventListener('ble_message', completeHandler);
+                    window.removeEventListener('ble_message', metricsHandler);
+                    
+                    // If test failed (e.g., emergency stop), reject with special reason
+                    if (!data.success) {
+                        reject({ reason: 'interrupted_by_emergency', testId: testId });
+                        return;
+                    }
+                }
+            };
+            
+            // Handler for test metrics
+            const metricsHandler = (data) => {
+                if ((data.type === 'metrics_result' || data.type === 'test_result') && data.testId === testId) {
                     clearTimeout(timeout);
                     const fitness = data.itae + data.overshoot * 10 + data.steady_state_error * 5;
                     
                     addTestToResultsTable(this.testCounter, sample, fitness, data.itae, data.overshoot);
                     
-                    window.removeEventListener('ble_message', handler);
+                    // Remove handlers
+                    window.removeEventListener('ble_message', completeHandler);
+                    window.removeEventListener('ble_message', metricsHandler);
                     resolve(fitness);
                 }
             };
             
-            window.addEventListener('ble_message', handler);
+            window.addEventListener('ble_message', completeHandler);
+            window.addEventListener('ble_message', metricsHandler);
             
-            sendBleCommand('run_dynamic_test', {
+            sendBleCommand('run_metrics_test', {
                 kp: sample.kp,
                 ki: sample.ki,
                 kd: sample.kd,
@@ -1027,6 +1238,8 @@ class BayesianOptimization {
     }
     
     stop() { 
-        this.isRunning = false; 
+        this.isRunning = false;
+        // Restore baseline PID when stopping
+        sendBaselinePIDToRobot();
     }
 }
