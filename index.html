@@ -335,10 +335,10 @@
                         <div class="config-section">
                             <h4>🔍 Przestrzeń Przeszukiwania</h4>
                             <div class="search-space-grid">
-                                <div class="search-space-param"><label for="search-kp-min">Kp Min:</label><input type="number" id="search-kp-min" value="0" step="0.1"></div>
+                                <div class="search-space-param"><label for="search-kp-min">Kp Min:</label><input type="number" id="search-kp-min" value="40" step="0.1"></div>
                                 <div class="search-space-param"><label for="search-kp-max">Kp Max:</label><input type="number" id="search-kp-max" value="50" step="0.1"></div>
                                 <div class="search-space-param"><label for="search-ki-min">Ki Min:</label><input type="number" id="search-ki-min" value="0" step="0.01"></div>
-                                <div class="search-space-param"><label for="search-ki-max">Ki Max:</label><input type="number" id="search-ki-max" value="1" step="0.01"></div>
+                                <div class="search-space-param"><label for="search-ki-max">Ki Max:</label><input type="number" id="search-ki-max" value="0" step="0.01"></div>
                                 <div class="search-space-param"><label for="search-kd-min">Kd Min:</label><input type="number" id="search-kd-min" value="0" step="0.01"></div>
                                 <div class="search-space-param"><label for="search-kd-max">Kd Max:</label><input type="number" id="search-kd-max" value="5" step="0.01"></div>
                             </div>
@@ -360,8 +360,8 @@
                         </div>
                         <div class="method-content active" data-method="ga">
                             <div class="method-config">
-                                <div><label for="ga-population">Rozmiar populacji:</label><input type="number" id="ga-population" value="20" min="10" max="100"></div>
-                                <div><label for="ga-generations">Liczba pokoleń:</label><input type="number" id="ga-generations" value="30" min="10" max="100"></div>
+                                <div><label for="ga-population">Rozmiar populacji:</label><input type="number" id="ga-population" value="10" min="5" max="100"></div>
+                                <div><label for="ga-generations">Liczba pokoleń:</label><input type="number" id="ga-generations" value="10" min="5" max="100"></div>
                                 <div><label for="ga-mutation">Wskaźnik mutacji (%):</label><input type="number" id="ga-mutation" value="10" min="0" max="100" step="1"></div>
                                 <div><label for="ga-crossover">Wskaźnik krzyżowania (%):</label><input type="number" id="ga-crossover" value="70" min="0" max="100" step="1"></div>
                                 <div style="justify-content: center;"><label><input type="checkbox" id="ga-elitism" checked> Elitaryzm</label></div>
@@ -369,8 +369,8 @@
                         </div>
                         <div class="method-content" data-method="pso">
                             <div class="method-config">
-                                <div><label for="pso-particles">Liczba cząstek:</label><input type="number" id="pso-particles" value="20" min="10" max="100"></div>
-                                <div><label for="pso-iterations">Liczba iteracji:</label><input type="number" id="pso-iterations" value="30" min="10" max="100"></div>
+                                <div><label for="pso-particles">Liczba cząstek:</label><input type="number" id="pso-particles" value="10" min="10" max="100"></div>
+                                <div><label for="pso-iterations">Liczba iteracji:</label><input type="number" id="pso-iterations" value="10" min="10" max="100"></div>
                                 <div><label for="pso-inertia">Waga bezwładności:</label><input type="number" id="pso-inertia" value="0.7" min="0" max="1" step="0.01"></div>
                                 <div><label for="pso-cognitive">Waga poznawcza:</label><input type="number" id="pso-cognitive" value="1.5" min="0" max="3" step="0.1"></div>
                                 <div><label for="pso-social">Waga społeczna:</label><input type="number" id="pso-social" value="1.5" min="0" max="3" step="0.1"></div>

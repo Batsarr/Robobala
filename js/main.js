@@ -1713,7 +1713,8 @@ function runDynamicTest(testType) {
     const kp = parseFloat(document.getElementById('balanceKpInput')?.value) || 0;
     const ki = parseFloat(document.getElementById('balanceKiInput')?.value) || 0;
     const kd = parseFloat(document.getElementById('balanceKdInput')?.value) || 0;
-sendBleCommand('run_dynamic_test', { kp, ki, kd, testId });
+// Ujednolicenie: firmware oczekuje komendy 'run_metrics_test'
+sendBleCommand('run_metrics_test', { kp, ki, kd, testId });
 setTuningUiLock(true, 'single-tests');
 }
 function handleDynamicTestResult(raw) {

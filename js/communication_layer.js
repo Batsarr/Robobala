@@ -210,10 +210,15 @@ class BLECommunication extends CommunicationLayer {
             if (line) {
                 try {
                     const data = JSON.parse(line);
-                    
-                    // Handle chunked messages
-                    if (data.type === 'chunk' && data.id !== undefined) {
-                        this.handleChunk(data);
+
+                    // Handle chunked messages (legacy 'chunk') or new firmware 'chunk_stream')
+                    if ((data.type === 'chunk' || data.type === 'chunk_stream') && data.id !== undefined) {
+                        this.handleChunk({
+                            id: data.id,
+                            i: data.i,
+                            total: data.total,
+                            data: data.data
+                        });
                     } else {
                         // Regular message
                         this.notifyHandlers(data.type, data);
