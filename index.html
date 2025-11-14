@@ -720,10 +720,10 @@
                         <div class="config-section">
                             <h4>🔍 Przestrzeń Przeszukiwania</h4>
                             <div class="search-space-grid">
-                                <div class="search-space-param"><label for="search-kp-min">Kp Min:</label><input type="number" id="search-kp-min" value="0" step="0.1"></div>
-                                <div class="search-space-param"><label for="search-kp-max">Kp Max:</label><input type="number" id="search-kp-max" value="50" step="0.1"></div>
+                                <div class="search-space-param"><label for="search-kp-min">Kp Min:</label><input type="number" id="search-kp-min" value="30" step="0.1"></div>
+                                <div class="search-space-param"><label for="search-kp-max">Kp Max:</label><input type="number" id="search-kp-max" value="100" step="0.1"></div>
                                 <div class="search-space-param"><label for="search-ki-min">Ki Min:</label><input type="number" id="search-ki-min" value="0" step="0.01"></div>
-                                <div class="search-space-param"><label for="search-ki-max">Ki Max:</label><input type="number" id="search-ki-max" value="1" step="0.01"></div>
+                                <div class="search-space-param"><label for="search-ki-max">Ki Max:</label><input type="number" id="search-ki-max" value="0" step="0.01"></div>
                                 <div class="search-space-param"><label for="search-kd-min">Kd Min:</label><input type="number" id="search-kd-min" value="0" step="0.01"></div>
                                 <div class="search-space-param"><label for="search-kd-max">Kd Max:</label><input type="number" id="search-kd-max" value="5" step="0.01"></div>
                             </div>
@@ -745,8 +745,8 @@
                         </div>
                         <div class="method-content active" data-method="ga">
                             <div class="method-config">
-                                <div><label for="ga-population">Rozmiar populacji:</label><input type="number" id="ga-population" value="20" min="10" max="100"></div>
-                                <div><label for="ga-generations">Liczba pokoleń:</label><input type="number" id="ga-generations" value="30" min="10" max="100"></div>
+                                <div><label for="ga-population">Rozmiar populacji:</label><input type="number" id="ga-population" value="10" min="5" max="100"></div>
+                                <div><label for="ga-generations">Liczba pokoleń:</label><input type="number" id="ga-generations" value="10" min="5" max="100"></div>
                                 <div><label for="ga-mutation">Wskaźnik mutacji (%):</label><input type="number" id="ga-mutation" value="10" min="0" max="100" step="1"></div>
                                 <div><label for="ga-crossover">Wskaźnik krzyżowania (%):</label><input type="number" id="ga-crossover" value="70" min="0" max="100" step="1"></div>
                                 <div style="justify-content: center;"><label><input type="checkbox" id="ga-elitism" checked> Elitaryzm</label></div>
@@ -4072,118 +4072,6 @@ function initAutoTuningUI() {
     // Upewnij się że domyślnie aktywna karta jest poprawnie ustawiona
     const initial = document.querySelector('.method-tab.active')?.dataset.method || 'ga';
     activateMethodTab(initial);
-
-    // Start tuning button
-    document.getElementById('start-tuning-btn').addEventListener('click', async function() {
-        const method = document.querySelector('.method-tab.active').getAttribute('data-method');
-        const searchSpace = {
-            kp_min: parseFloat(document.getElementById('search-kp-min').value),
-            kp_max: parseFloat(document.getElementById('search-kp-max').value),
-            ki_min: parseFloat(document.getElementById('search-ki-min').value),
-            ki_max: parseFloat(document.getElementById('search-ki-max').value),
-            kd_min: parseFloat(document.getElementById('search-kd-min').value),
-            kd_max: parseFloat(document.getElementById('search-kd-max').value)
-        };
-        
-        // Disable start, enable pause/stop
-        this.disabled = true;
-        document.getElementById('pause-tuning-btn').disabled = false;
-        document.getElementById('stop-tuning-btn').disabled = false;
-        
-        try {
-            if (method === 'ga') {
-                const config = {
-                    populationSize: parseInt(document.getElementById('ga-population').value),
-                    generations: parseInt(document.getElementById('ga-generations').value),
-                    mutationRate: parseFloat(document.getElementById('ga-mutation').value),
-                    crossoverRate: parseFloat(document.getElementById('ga-crossover').value),
-                    elitism: document.getElementById('ga-elitism').checked,
-                    searchSpace: searchSpace
-                };
-                currentTuningSession = new GeneticAlgorithm(config);
-                await currentTuningSession.run();
-            } else if (method === 'pso') {
-                const config = {
-                    numParticles: parseInt(document.getElementById('pso-particles').value),
-                    iterations: parseInt(document.getElementById('pso-iterations').value),
-                    inertiaWeight: parseFloat(document.getElementById('pso-inertia').value),
-                    cognitiveWeight: parseFloat(document.getElementById('pso-cognitive').value),
-                    socialWeight: parseFloat(document.getElementById('pso-social').value),
-                    searchSpace: searchSpace
-                };
-                currentTuningSession = new ParticleSwarmOptimization(config);
-                await currentTuningSession.run();
-            } else if (method === 'zn') {
-                const config = {
-                    amplitude: parseFloat(document.getElementById('zn-amplitude').value),
-                    minCycles: parseInt(document.getElementById('zn-min-cycles').value)
-                };
-                currentTuningSession = new ZieglerNicholsRelay(config);
-                await currentTuningSession.run();
-            } else if (method === 'bayesian') {
-                const config = {
-                    iterations: parseInt(document.getElementById('bayesian-iterations').value),
-                    initialSamples: parseInt(document.getElementById('bayesian-initial').value),
-                    acquisitionFunction: document.getElementById('bayesian-acquisition').value,
-                    xi: parseFloat(document.getElementById('bayesian-xi').value),
-                    searchSpace: searchSpace
-                };
-                currentTuningSession = new BayesianOptimization(config);
-                await currentTuningSession.run();
-            }
-        } catch (error) {
-            console.error('Tuning error:', error);
-            showNotification('Błąd podczas strojenia: ' + error.message);
-        } finally {
-            // Re-enable start, disable pause/stop
-            document.getElementById('start-tuning-btn').disabled = false;
-            document.getElementById('pause-tuning-btn').disabled = true;
-            document.getElementById('resume-tuning-btn').disabled = true;
-            document.getElementById('stop-tuning-btn').disabled = false;
-        }
-    });
-    
-    // Pause button
-    document.getElementById('pause-tuning-btn').addEventListener('click', function() {
-        if (currentTuningSession && currentTuningSession.pause) {
-            currentTuningSession.pause();
-            this.disabled = true;
-            document.getElementById('resume-tuning-btn').disabled = false;
-        }
-    });
-    
-    // Resume button
-    document.getElementById('resume-tuning-btn').addEventListener('click', function() {
-        if (currentTuningSession && currentTuningSession.resume) {
-            currentTuningSession.resume();
-            this.disabled = true;
-            document.getElementById('pause-tuning-btn').disabled = false;
-        }
-    });
-    
-    // Stop button
-    document.getElementById('stop-tuning-btn').addEventListener('click', function() {
-        if (currentTuningSession && currentTuningSession.stop) {
-            currentTuningSession.stop();
-        }
-        currentTuningSession = null;
-        
-        document.getElementById('start-tuning-btn').disabled = false;
-        document.getElementById('pause-tuning-btn').disabled = true;
-        document.getElementById('resume-tuning-btn').disabled = true;
-        this.disabled = true;
-    });
-    
-    // Apply best button
-    document.getElementById('apply-best-btn').addEventListener('click', function() {
-        const kp = parseFloat(document.getElementById('best-kp').textContent);
-        const ki = parseFloat(document.getElementById('best-ki').textContent);
-        const kd = parseFloat(document.getElementById('best-kd').textContent);
-        
-        if (!isNaN(kp) && !isNaN(ki) && !isNaN(kd)) {
-            applyParameters(kp, ki, kd);
-        }
-    });
 }
 
 // Initialize when DOM is ready
@@ -4218,18 +4106,20 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ========================================================================
-// NOWE FUNKCJE Z C.TXT - INTEGRACJA Z NOWYM PANELAM OPTYMALIZACJI
+// UI EVENT HANDLERS & SESSION MANAGEMENT (Client-Side Logic)
 // ========================================================================
+
+let currentTuningSession = null;
 
 function startTuning() {
     if (!checkTuningPrerequisites()) return;
-    
+
     const method = document.querySelector('.method-tab.active')?.dataset.method;
     if (!method) {
         addLogMessage('[UI] Nie wybrano metody optymalizacji.', 'warn');
         return;
     }
-    
+
     const searchSpace = {
         kp_min: parseFloat(document.getElementById('search-kp-min')?.value || 0),
         kp_max: parseFloat(document.getElementById('search-kp-max')?.value || 50),
@@ -4239,39 +4129,31 @@ function startTuning() {
         kd_max: parseFloat(document.getElementById('search-kd-max')?.value || 5)
     };
     
-    // Zapisz Ustawienia Bazowe PID (sekcja balansu)
-    try {
-        AppState.baselinePid = {
-            kp: parseFloat(document.getElementById('balanceKpInput')?.value) || 0,
-            ki: parseFloat(document.getElementById('balanceKiInput')?.value) || 0,
-            kd: parseFloat(document.getElementById('balanceKdInput')?.value) || 0,
-        };
-        addLogMessage('[UI] Zapisano Ustawienia Bazowe PID.', 'info');
-    } catch (_) {}
+    setTuningUiLock(true, method);
+    document.getElementById('tuning-status-text').textContent = 'Uruchamianie...';
+    document.getElementById('current-iteration').textContent = '0';
+    fitnessChartData = [];
+    updateFitnessChart();
+    document.getElementById('start-tuning-btn').disabled = true;
+    document.getElementById('pause-tuning-btn').disabled = false;
+    document.getElementById('stop-tuning-btn').disabled = false;
 
-    // setTuningUiLock(true, method); // Usunięto blokowanie UI podczas autotuningu
-    AppState.activeTuningMethod = method;
-    
-    // Pokaż panel postępu
-    document.getElementById('tuning-progress-panel').style.display = 'block';
-    
-    addLogMessage(`[UI] Rozpoczęto strojenie metodą: ${method.toUpperCase()}`, 'info');
-    
-    // Uruchom algorytm optymalizacji
+    addLogMessage(`[UI] Rozpoczynam strojenie po stronie UI metodą: ${method.toUpperCase()}`, 'info');
+
     try {
+        let config;
         if (method === 'ga') {
-            const config = {
+            config = {
                 populationSize: parseInt(document.getElementById('ga-population').value),
                 generations: parseInt(document.getElementById('ga-generations').value),
-                mutationRate: parseFloat(document.getElementById('ga-mutation').value),
-                crossoverRate: parseFloat(document.getElementById('ga-crossover').value),
+                mutationRate: parseFloat(document.getElementById('ga-mutation').value) / 100.0,
+                crossoverRate: parseFloat(document.getElementById('ga-crossover').value) / 100.0,
                 elitism: document.getElementById('ga-elitism').checked,
                 searchSpace: searchSpace
             };
             currentTuningSession = new GeneticAlgorithm(config);
-            currentTuningSession.run();
         } else if (method === 'pso') {
-            const config = {
+            config = {
                 numParticles: parseInt(document.getElementById('pso-particles').value),
                 iterations: parseInt(document.getElementById('pso-iterations').value),
                 inertiaWeight: parseFloat(document.getElementById('pso-inertia').value),
@@ -4280,16 +4162,14 @@ function startTuning() {
                 searchSpace: searchSpace
             };
             currentTuningSession = new ParticleSwarmOptimization(config);
-            currentTuningSession.run();
         } else if (method === 'zn') {
-            const config = {
+            config = {
                 amplitude: parseFloat(document.getElementById('zn-amplitude').value),
                 minCycles: parseInt(document.getElementById('zn-min-cycles').value)
             };
             currentTuningSession = new ZieglerNicholsRelay(config);
-            currentTuningSession.run();
         } else if (method === 'bayesian') {
-            const config = {
+             config = {
                 iterations: parseInt(document.getElementById('bayesian-iterations').value),
                 initialSamples: parseInt(document.getElementById('bayesian-initial').value),
                 acquisitionFunction: document.getElementById('bayesian-acquisition').value,
@@ -4297,151 +4177,62 @@ function startTuning() {
                 searchSpace: searchSpace
             };
             currentTuningSession = new BayesianOptimization(config);
-            currentTuningSession.run();
+        } else {
+             throw new Error(`Nieznana metoda: ${method}`);
         }
+        
+        currentTuningSession.run().finally(() => {
+            stopTuning(false); 
+        });
+
     } catch (error) {
-        console.error('Tuning error:', error);
-        addLogMessage('Błąd podczas strojenia: ' + error.message, 'error');
+        console.error('Błąd inicjalizacji strojenia:', error);
+        addLogMessage('Błąd inicjalizacji strojenia: ' + error.message, 'error');
+        stopTuning(false);
     }
 }
 
 function pauseTuning() {
     if (currentTuningSession && typeof currentTuningSession.pause === 'function') {
         currentTuningSession.pause();
+        document.getElementById('tuning-status-text').textContent = 'Wstrzymany';
         addLogMessage('[UI] Strojenie wstrzymane.', 'info');
-    }
-    if (AppState?.baselinePid) {
-        sendBleMessage({ type: 'set_param', key: 'kp_b', value: AppState.baselinePid.kp });
-        sendBleMessage({ type: 'set_param', key: 'ki_b', value: AppState.baselinePid.ki });
-        sendBleMessage({ type: 'set_param', key: 'kd_b', value: AppState.baselinePid.kd });
-        addLogMessage('[UI] Proces wstrzymany. Przywrócono stabilne ustawienia PID.', 'warn');
+        document.getElementById('pause-tuning-btn').style.display = 'none';
+        document.getElementById('resume-tuning-btn').style.display = 'inline-block';
+        document.getElementById('resume-tuning-btn').disabled = false;
     }
 }
 
 function resumeTuning() {
     if (currentTuningSession && typeof currentTuningSession.resume === 'function') {
         currentTuningSession.resume();
+        document.getElementById('tuning-status-text').textContent = 'W trakcie';
         addLogMessage('[UI] Strojenie wznowione.', 'info');
+        document.getElementById('resume-tuning-btn').style.display = 'none';
+        document.getElementById('pause-tuning-btn').style.display = 'inline-block';
+        document.getElementById('pause-tuning-btn').disabled = false;
     }
 }
 
-function stopTuning() {
+function stopTuning(showPrompt = true) {
+    if (showPrompt && !confirm('Czy na pewno chcesz zatrzymać proces strojenia?')) {
+        return;
+    }
     if (currentTuningSession && typeof currentTuningSession.stop === 'function') {
         currentTuningSession.stop();
     }
-    // setTuningUiLock(false, ''); // Usunięto odblokowywanie UI
-    AppState.activeTuningMethod = '';
+    currentTuningSession = null;
+    setTuningUiLock(false, '');
+    document.getElementById('tuning-status-text').textContent = 'Zatrzymany';
     addLogMessage('[UI] Strojenie zatrzymane.', 'warn');
-}
-
-function updateTunerStatus(data) {
-    const statusEl = document.getElementById('tuning-status-text');
-    if (statusEl) {
-        let statusText = 'Nieznany';
-        switch(data.status) {
-            case 'running': statusText = 'Uruchomiony'; break;
-            case 'paused': statusText = 'Wstrzymany'; break;
-            case 'completed': statusText = 'Zakończony'; break;
-            case 'error': statusText = 'Błąd'; break;
-        }
-        statusEl.textContent = statusText;
-    }
     
-    if (data.current_iteration !== undefined) {
-        document.getElementById('current-iteration').textContent = data.current_iteration;
-    }
-    if (data.total_iterations !== undefined) {
-        document.getElementById('total-iterations').textContent = data.total_iterations;
-    }
+    document.getElementById('start-tuning-btn').disabled = false;
+    document.getElementById('pause-tuning-btn').disabled = true;
+    document.getElementById('stop-tuning-btn').disabled = true;
+    document.getElementById('resume-tuning-btn').style.display = 'none';
+    document.getElementById('pause-tuning-btn').style.display = 'inline-block';
 }
 
-function updateAutotuneTuningChart(data) {
-    // Aktualizacja wykresu fitness podczas strojenia
-    if (data.fitness !== undefined && data.iteration !== undefined) {
-        fitnessChartData.push({x: data.iteration, y: data.fitness});
-        updateFitnessChart();
-    }
-}
-
-function handleTunerResult(data) {
-    // Obsługa wyniku strojenia
-    if (data.best_params) {
-        updateBestDisplay(data.best_params);
-        addLogMessage(`[UI] Znaleziono najlepsze parametry: Kp=${data.best_params.kp?.toFixed(3)}, Ki=${data.best_params.ki?.toFixed(3)}, Kd=${data.best_params.kd?.toFixed(3)}`, 'success');
-    }
-    
-    // setTuningUiLock(false, ''); // Usunięto odblokowywanie UI
-    AppState.activeTuningMethod = '';
-}
-
-function handleTuningIterationResult(data) {
-    // Obsługa wyniku pojedynczej iteracji
-    if (data.params && data.fitness !== undefined) {
-        addTestToResultsTable(
-            data.iteration || 1,
-            data.params,
-            data.fitness,
-            data.itae || 0,
-            data.overshoot || 0
-        );
-        
-        updateProgressDisplay(data.iteration || 1, data.total_iterations || 1, data.best_fitness || data.fitness);
-    }
-}
-
-function handleCancel() {
-    // Anulowanie strojenia
-    // setTuningUiLock(false, ''); // Usunięto odblokowywanie UI
-    AppState.activeTuningMethod = '';
-    AppState.isTuningActive = false;
-    
-    if (currentTuningSession) {
-        currentTuningSession.stop();
-        currentTuningSession = null;
-    }
-    
-    addLogMessage('[UI] Strojenie anulowane.', 'warn');
-}
-
-// ========================================================================
-// AKTUALIZACJE DO ISTNIEJĄCYCH FUNKCJI
-// ========================================================================
-
-// Aktualizacja AppState z nowymi właściwościami
-Object.assign(AppState, {
-    activeTuningMethod: '',
-    tuningSessionId: null,
-    tuningStartTime: null,
-    tuningConfig: {}
-});
-
-// Aktualizacja processCompleteMessage dla nowych typów wiadomości
-const originalProcessCompleteMessage = processCompleteMessage;
-processCompleteMessage = function(data) {
-    // Najpierw wywołaj oryginalną funkcję
-    originalProcessCompleteMessage(data);
-    
-    // Dodaj obsługę nowych typów wiadomości
-    switch(data.type) {
-        case 'tuner_status':
-            updateTunerStatus(data);
-            break;
-        case 'tuner_chart_update':
-            updateAutotuneTuningChart(data);
-            break;
-        case 'tuner_result':
-            handleTunerResult(data);
-            break;
-        case 'tuning_iteration_result':
-            handleTuningIterationResult(data);
-            break;
-        case 'tuning_cancelled':
-            handleCancel();
-            break;
-    }
-};
-
-// Dodaj event listenery dla nowych przycisków
 document.addEventListener('DOMContentLoaded', () => {
     const startBtn = document.getElementById('start-tuning-btn');
     const pauseBtn = document.getElementById('pause-tuning-btn');
@@ -4451,8 +4242,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (startBtn) startBtn.addEventListener('click', startTuning);
     if (pauseBtn) pauseBtn.addEventListener('click', pauseTuning);
     if (resumeBtn) resumeBtn.addEventListener('click', resumeTuning);
-    if (stopBtn) stopBtn.addEventListener('click', stopTuning);
+    if (stopBtn) stopBtn.addEventListener('click', () => stopTuning(true));
 });
+
+
 </script>
 
 </body>
