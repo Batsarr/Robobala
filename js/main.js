@@ -9,11 +9,66 @@
 // - Główny event listener DOMContentLoaded, który łączy wszystkie moduły
 // ========================================================================
 
-const AppState = {
-    isConnected: false, isSynced: false, isApplyingConfig: false, lastKnownRobotState: 'IDLE',
-    isSequenceRunning: false, isTuningActive: false, activeTuningMethod: '', syncTimeout: null,
-    isSyncingConfig: false, tempParams: {}, tempTuningParams: {}, tempStates: {}
-};
+// ========================================================================
+// NEW: State Management & Communication Layer Integration
+// ========================================================================
+// Initialize communication layer
+const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
+const TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+const commLayer = new BLECommunication(SERVICE_UUID, RX_UUID, TX_UUID);
+
+// Backward compatibility wrapper for AppState
+// This allows existing code to continue using AppState.property syntax
+// while internally using the new state manager
+const AppState = new Proxy({}, {
+    get(target, prop) {
+        // Map old property names to new state paths
+        const stateMap = {
+            'isConnected': 'connection.isConnected',
+            'isSynced': 'connection.isSynced',
+            'isApplyingConfig': 'ui.isApplyingConfig',
+            'lastKnownRobotState': 'robot.state',
+            'isSequenceRunning': 'sequence.isRunning',
+            'isTuningActive': 'tuning.isActive',
+            'activeTuningMethod': 'tuning.activeMethod',
+            'syncTimeout': 'connection.syncTimeout',
+            'isSyncingConfig': 'ui.isSyncingConfig',
+            'tempParams': 'sync.tempParams',
+            'tempTuningParams': 'sync.tempTuningParams',
+            'tempStates': 'sync.tempStates'
+        };
+        
+        if (prop in stateMap) {
+            return appStore.getState(stateMap[prop]);
+        }
+        return undefined;
+    },
+    set(target, prop, value) {
+        // Map old property names to new state paths
+        const stateMap = {
+            'isConnected': 'connection.isConnected',
+            'isSynced': 'connection.isSynced',
+            'isApplyingConfig': 'ui.isApplyingConfig',
+            'lastKnownRobotState': 'robot.state',
+            'isSequenceRunning': 'sequence.isRunning',
+            'isTuningActive': 'tuning.isActive',
+            'activeTuningMethod': 'tuning.activeMethod',
+            'syncTimeout': 'connection.syncTimeout',
+            'isSyncingConfig': 'ui.isSyncingConfig',
+            'tempParams': 'sync.tempParams',
+            'tempTuningParams': 'sync.tempTuningParams',
+            'tempStates': 'sync.tempStates'
+        };
+        
+        if (prop in stateMap) {
+            appStore.setState(stateMap[prop], value);
+            return true;
+        }
+        return false;
+    }
+});
+
 let currentSequenceStep = 0; const MAX_SEQUENCE_STEPS = 15;
 
 // === Montaż: proste przyciski wysyłające komendy do firmware ===
@@ -40,8 +95,8 @@ const parameterMapping = {
     'zn-trial-duration': 'tuning_trial_duration_ms', 'zn-max-amplitude': 'zn_amplitude'
 };
 
+// Backward compatibility: keep these for any direct references
 let bleDevice, rxCharacteristic, txCharacteristic;
-const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b", RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9", TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 let bleBuffer = '', bleMessageQueue = [], isSendingBleMessage = false; const bleChunks = new Map();
 const BLE_SEND_INTERVAL = 20;
 
@@ -77,6 +132,9 @@ let lastTelemetryUpdateTime = 0;
 const TELEMETRY_UPDATE_INTERVAL = 1000; 
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Setup communication layer message handlers
+    setupCommunicationHandlers();
+    
     initJoystick(); 
     initSignalAnalyzerChart();
     setupSignalChartControls();
@@ -450,41 +508,136 @@ function relocateAutotuneChart(method) {
 async function connectBLE() {
     addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info');
     try {
-        bleDevice = await navigator.bluetooth.requestDevice({ filters: [{ name: 'RoboBala' }], optionalServices: [SERVICE_UUID] });
-        addLogMessage(`[UI] Laczenie z ${bleDevice.name}...`, 'info');
-        const connectBtn = document.getElementById('connectBleBtn'); connectBtn.disabled = true;
+        // Use the new communication layer
+        const connected = await commLayer.connect();
+        
+        if (!connected) {
+            throw new Error('Failed to connect to device');
+        }
+        
+        // Get device info for backward compatibility
+        bleDevice = commLayer.device;
+        rxCharacteristic = commLayer.rxCharacteristic;
+        txCharacteristic = commLayer.txCharacteristic;
+        
+        const deviceName = commLayer.getDeviceName();
+        addLogMessage(`[UI] Laczenie z ${deviceName}...`, 'info');
+        
+        const connectBtn = document.getElementById('connectBleBtn');
+        connectBtn.disabled = true;
         document.getElementById('connectionText').textContent = 'Laczenie...';
-        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
-        const server = await bleDevice.gatt.connect(); const service = await server.getPrimaryService(SERVICE_UUID);
-        rxCharacteristic = await service.getCharacteristic(RX_UUID); txCharacteristic = await service.getCharacteristic(TX_UUID);
-        await txCharacteristic.startNotifications(); txCharacteristic.addEventListener('characteristicvaluechanged', handleBleNotification);
-        AppState.isConnected = true; AppState.isSynced = false;
-        document.getElementById('connectionStatus').className = 'status-indicator status-ok'; document.getElementById('connectionText').textContent = 'Polaczony';
+        
+        // Update state through state manager
+        AppState.isConnected = true;
+        AppState.isSynced = false;
+        appStore.setState('connection.deviceName', deviceName);
+        
+        document.getElementById('connectionStatus').className = 'status-indicator status-ok';
+        document.getElementById('connectionText').textContent = 'Polaczony';
         addLogMessage('[UI] Polaczono! Rozpoczynam synchronizacje...', 'success');
         document.body.classList.remove('ui-locked');
         document.getElementById('connectBleBtn').textContent = 'Synchronizowanie...';
+        
+        // Reset sync state
         AppState.isSynced = false;
         AppState.tempParams = {};
         AppState.tempTuningParams = {};
         AppState.tempStates = {};
+        
+        // Request configuration
         sendBleMessage({ type: 'request_full_config' });
-        // Brak IMU mapping w nowej architekturze
+        
+        // Setup sync timeout
         clearTimeout(AppState.syncTimeout);
         AppState.syncTimeout = setTimeout(() => {
             if (!AppState.isSynced && AppState.isConnected) {
                 addLogMessage('[UI] BLAD: Timeout synchronizacji. Robot nie odpowiedzial na czas (20s).', 'error');
                 document.getElementById('connectionText').textContent = 'Blad synchronizacji';
-                document.getElementById('connectBleBtn').textContent = 'SPROBUJ PONOWNIE ZSYNCHRONIZOWAC'; document.getElementById('connectBleBtn').style.backgroundColor = '#ff6347'; document.getElementById('connectBleBtn').disabled = false;
+                document.getElementById('connectBleBtn').textContent = 'SPROBUJ PONOWNIE ZSYNCHRONIZOWAC';
+                document.getElementById('connectBleBtn').style.backgroundColor = '#ff6347';
+                document.getElementById('connectBleBtn').disabled = false;
             }
-        }, 20000); // Timeout na całą operację synchronizacji
-    } catch (error) { addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error'); onDisconnected(); }
+        }, 20000);
+    } catch (error) {
+        addLogMessage(`[UI] Blad polaczenia BLE: ${error}`, 'error');
+        onDisconnected();
+    }
 }
 
-function onDisconnected() { AppState.isConnected = false; AppState.isSynced = false; document.body.classList.add('ui-locked'); if(AppState.isTuningActive) handleCancel(); const connectBtn = document.getElementById('connectBleBtn'); connectBtn.disabled = false; connectBtn.textContent = 'POLACZ Z ROBOTEM'; connectBtn.style.backgroundColor = ''; document.getElementById('connectionStatus').className = 'status-indicator status-disconnected'; document.getElementById('connectionText').textContent = 'Rozlaczony'; ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (el) el.checked = false; }); }
+function onDisconnected() {
+    // Update state
+    AppState.isConnected = false;
+    AppState.isSynced = false;
+    appStore.setState('ui.isLocked', true);
+    
+    document.body.classList.add('ui-locked');
+    
+    if (AppState.isTuningActive) {
+        handleCancel();
+    }
+    
+    const connectBtn = document.getElementById('connectBleBtn');
+    connectBtn.disabled = false;
+    connectBtn.textContent = 'POLACZ Z ROBOTEM';
+    connectBtn.style.backgroundColor = '';
+    
+    document.getElementById('connectionStatus').className = 'status-indicator status-disconnected';
+    document.getElementById('connectionText').textContent = 'Rozlaczony';
+    
+    ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.checked = false;
+    });
+}
+// Backward compatibility: keep old functions for any direct references
 function handleBleNotification(event) { const value = event.target.value; const decoder = new TextDecoder('utf-8'); bleBuffer += decoder.decode(value); let newlineIndex; while ((newlineIndex = bleBuffer.indexOf('\n')) !== -1) { const line = bleBuffer.substring(0, newlineIndex).trim(); bleBuffer = bleBuffer.substring(newlineIndex + 1); if (line) { try { const data = JSON.parse(line); if (data.type === 'chunk' && data.id !== undefined) { let entry = bleChunks.get(data.id); if (!entry) { entry = { total: data.total || 0, parts: new Map(), timer: setTimeout(() => { if (bleChunks.has(data.id)) { bleChunks.delete(data.id); addLogMessage(`[UI] Blad: Timeout podczas skladania wiadomosci (ID: ${data.id}).`, 'error'); } }, 5000)}; bleChunks.set(data.id, entry); } entry.parts.set(data.i, data.data || ''); if (data.total) entry.total = data.total; if (entry.parts.size === entry.total && entry.total > 0) { clearTimeout(entry.timer); let combined = ''; for (let i = 0; i < entry.total; i++) { combined += entry.parts.get(i) || ''; } bleChunks.delete(data.id); try { const fullMsg = JSON.parse(combined); processCompleteMessage(fullMsg); } catch (e) { addLogMessage(`[UI] Blad skladania chunkow: ${e}. Dane: ${combined}`, 'error'); } } } else { processCompleteMessage(data); } } catch (e) { addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error'); } } } }
 async function _sendRawBleMessage(message) { if (!rxCharacteristic) return; try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
 async function processBleQueue() { if (isSendingBleMessage || bleMessageQueue.length === 0 || !rxCharacteristic) return; isSendingBleMessage = true; const message = bleMessageQueue.shift(); await _sendRawBleMessage(message); setTimeout(() => { isSendingBleMessage = false; processBleQueue(); }, BLE_SEND_INTERVAL); }
-function sendBleMessage(message) { bleMessageQueue.push(message); processBleQueue(); }
+
+// Updated sendBleMessage to use the communication layer
+function sendBleMessage(message) {
+    // Use the new communication layer if available and connected
+    if (commLayer && commLayer.getConnectionStatus()) {
+        commLayer.send(message);
+    } else {
+        // Fallback to old method for backward compatibility
+        bleMessageQueue.push(message);
+        processBleQueue();
+    }
+}
+
+// Setup communication layer message handlers
+function setupCommunicationHandlers() {
+    // Handle disconnection
+    commLayer.onMessage('disconnected', () => {
+        onDisconnected();
+    });
+    
+    // Handle all incoming messages by routing them to processCompleteMessage
+    commLayer.onMessage('*', (type, data) => {
+        // Skip the 'disconnected' type as it's handled separately
+        if (type !== 'disconnected') {
+            processCompleteMessage(data);
+        }
+    });
+    
+    // Subscribe to state changes for UI updates
+    appStore.subscribe('connection.isConnected', (value) => {
+        document.body.classList.toggle('ui-locked', !value);
+    });
+    
+    appStore.subscribe('robot.state', (value) => {
+        const stateEl = document.getElementById('robotStateVal');
+        if (stateEl) {
+            stateEl.textContent = value;
+        }
+    });
+    
+    appStore.subscribe('tuning.isActive', (value) => {
+        // Update UI based on tuning state if needed
+        setTuningUiLock(value, appStore.getState('tuning.activeMethod'));
+    });
+}
 
 function processCompleteMessage(data) {
     if (!data || !data.type) return;
