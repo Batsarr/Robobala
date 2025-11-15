@@ -359,6 +359,25 @@ function updateModelMappingUI(){
     if(cur){ cur.textContent = `pitch: src=${modelMapping.pitch.source} sign=${modelMapping.pitch.sign} | yaw: src=${modelMapping.yaw.source} sign=${modelMapping.yaw.sign} | roll: src=${modelMapping.roll.source} sign=${modelMapping.roll.sign}`; }
 }
 function setSignButtons(containerId, sign){ const c=document.getElementById(containerId); if(!c) return; c.querySelectorAll('button').forEach(btn=>{ const s=parseInt(btn.dataset.sign); if(s===sign){ btn.classList.add('active'); } else { btn.classList.remove('active'); } }); }
+
+function updateSignBadge(badgeId, sign) {
+    const el = document.getElementById(badgeId);
+    if (!el) return;
+    const prefixMap = { 'balanceSignBadge': 'B', 'speedSignBadge': 'S', 'positionSignBadge': 'P' };
+    const prefix = prefixMap[badgeId] || '';
+    el.textContent = `${prefix}:${sign === -1 ? '-' : '+'}`;
+    el.classList.toggle('negative', sign === -1);
+    updateSignSummary();
+}
+
+function updateSignSummary() {
+    const b = getActiveSign('balanceSign');
+    const s = getActiveSign('speedSign');
+    const p = getActiveSign('positionSign');
+    const el = document.getElementById('signSummary');
+    if (!el) return;
+    el.textContent = `B:${b === -1 ? '-' : '+'} S:${s === -1 ? '-' : '+'} P:${p === -1 ? '-' : '+'}`;
+}
 function gatherModelMappingFromUI(){ modelMapping.pitch.source=parseInt(document.getElementById('modelPitchSource').value); modelMapping.yaw.source=parseInt(document.getElementById('modelYawSource').value); modelMapping.roll.source=parseInt(document.getElementById('modelRollSource').value); modelMapping.pitch.sign = getActiveSign('modelPitchSign'); modelMapping.yaw.sign = getActiveSign('modelYawSign'); modelMapping.roll.sign = getActiveSign('modelRollSign'); }
 function getActiveSign(containerId){ const c=document.getElementById(containerId); if(!c) return 1; const active=c.querySelector('button.active'); return active? parseInt(active.dataset.sign):1; }
 function resetModelMapping(){ modelMapping = { pitch:{source:0,sign:1}, yaw:{source:1,sign:1}, roll:{source:2,sign:1} }; updateModelMappingUI(); }
@@ -375,6 +394,47 @@ document.getElementById('modelMappingBtn')?.addEventListener('click', ()=> { ope
 document.getElementById('modelMappingCloseBtn')?.addEventListener('click', ()=> closeModelMappingModal());
 document.getElementById('modelMappingLoadBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'get_model_mapping'}); });
 document.getElementById('modelMappingSaveBtn')?.addEventListener('click', ()=> { gatherModelMappingFromUI(); sendBleMessage({type:'set_model_mapping', mapping:modelMapping}); addLogMessage('[UI] Wyslano mapowanie modelu 3D do robota.', 'info'); });
+    // Feedback sign toggles wiring - init once here (not in the test result handler)
+    const signButtonMap = {
+        'balanceSign': 'balance_feedback_sign',
+        'speedSign': 'speed_feedback_sign',
+        'positionSign': 'position_feedback_sign'
+    };
+    Object.keys(signButtonMap).forEach(containerId => {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        el.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const sign = parseInt(btn.dataset.sign);
+                // Only send change if robot is IDLE
+                const robotState = appStore.getState('robot.state');
+                if (robotState !== 'IDLE') {
+                    showNotification('Zmiana znaku tylko w trybie IDLE', 'warn');
+                    return;
+                }
+                // Send set_param to robot
+                const key = signButtonMap[containerId];
+                sendBleMessage({ type: 'set_param', key: key, value: sign });
+                // Optimistically update UI
+                setSignButtons(containerId, sign);
+                updateSignBadge(containerId + 'Badge', sign);
+            });
+        });
+    });
+    // Disable sign toggles outside of IDLE for safety
+    appStore.subscribe('robot.state', (newVal) => {
+        const isIdle = (newVal === 'IDLE');
+        Object.keys(signButtonMap).forEach(containerId => {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            el.querySelectorAll('button').forEach(btn => {
+                btn.disabled = !isIdle;
+            });
+            el.classList.toggle('disabled', !isIdle);
+        });
+    });
+    // Initial summary update
+    updateSignSummary();
 document.getElementById('modelMappingResetBtn')?.addEventListener('click', ()=> { resetModelMapping(); addLogMessage('[UI] Przywrócono domyślne mapowanie modelu (identity).', 'info'); });
 // Toggle pomocy w modalum model mapping
 const mmHelp = document.getElementById('modelMappingHelp');
@@ -777,6 +837,8 @@ function processCompleteMessage(data) {
             AppState.tempParams = {};
             AppState.tempTuningParams = {};
             AppState.tempStates = {};
+            // Update sign summary/badges after applying synchronized parameters
+            if (typeof updateSignSummary === 'function') updateSignSummary();
             break;
         case 'set_rgb_blink': // NOWE: Obsługa komend RGB
         case 'log':
@@ -896,11 +958,17 @@ function applySingleParam(snakeKey, value) {
     }
     // Feedback sign params - special handling: update sign buttons
     if (snakeKey === 'balance_feedback_sign') {
-        setSignButtons('balanceSign', parseInt(value));
+        const v = parseInt(value);
+        setSignButtons('balanceSign', v);
+        updateSignBadge('balanceSignBadge', v);
     } else if (snakeKey === 'speed_feedback_sign') {
-        setSignButtons('speedSign', parseInt(value));
+        const v = parseInt(value);
+        setSignButtons('speedSign', v);
+        updateSignBadge('speedSignBadge', v);
     } else if (snakeKey === 'position_feedback_sign') {
-        setSignButtons('positionSign', parseInt(value));
+        const v = parseInt(value);
+        setSignButtons('positionSign', v);
+        updateSignBadge('positionSignBadge', v);
     }
 }
 
@@ -1740,45 +1808,7 @@ function handleDynamicTestResult(raw) {
     };
 
     setTuningUiLock(false, '');
-    // Feedback sign toggles wiring
-    const signButtonMap = {
-        'balanceSign': 'balance_feedback_sign',
-        'speedSign': 'speed_feedback_sign',
-        'positionSign': 'position_feedback_sign'
-    };
-    Object.keys(signButtonMap).forEach(containerId => {
-        const el = document.getElementById(containerId);
-        if (!el) return;
-        el.querySelectorAll('button').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const sign = parseInt(btn.dataset.sign);
-                // Only send change if robot is IDLE
-                const robotState = appStore.getState('robot.state');
-                if (robotState !== 'IDLE') {
-                    showNotification('Zmien jasnie tylko w trybie IDLE', 'warn');
-                    return;
-                }
-                // Send set_param to robot
-                const key = signButtonMap[containerId];
-                sendBleMessage({ type: 'set_param', key: key, value: sign });
-                // Optimistically update UI (firmware will respond with set_param sync if accepted)
-                setSignButtons(containerId, sign);
-            });
-        });
-    });
-
-    // Disable sign toggles outside of IDLE for safety
-    appStore.subscribe('robot.state', (newVal) => {
-        const isIdle = (newVal === 'IDLE');
-        Object.keys(signButtonMap).forEach(containerId => {
-            const el = document.getElementById(containerId);
-            if (!el) return;
-            el.querySelectorAll('button').forEach(btn => {
-                btn.disabled = !isIdle;
-            });
-            el.classList.toggle('disabled', !isIdle);
-        });
-    });
+    // ...existing code...
 
     // Aktualizacja historii wyników jeżeli tabela istnieje
     try {

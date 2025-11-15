@@ -379,6 +379,20 @@ body.ui-locked #connectBleBtn, body.ui-locked #emergencyStopBtn {
 .sign-toggle button { flex:1; background:#4a4f58; color:#61dafb; }
 .sign-toggle button.active { background:#a2f279; color:#282c34; }
 .sign-toggle button:disabled { opacity: 0.5; cursor: not-allowed; }
+.sign-badge {
+    display: inline-block;
+    font-size: 0.85em;
+    margin-left: 8px;
+    padding: 3px 6px;
+    border-radius: 10px;
+    background: #2b2f33;
+    color: #61dafb;
+    border: 1px solid #4a4f58;
+}
+.sign-badge.negative { background: #ff6b6b; color: #282c34; }
+.sign-summary {
+    display:inline-block; padding: 3px 8px; margin-left:10px; border-radius:10px; background:#282c34; color:#61dafb; font-size:0.9em; border:1px solid #4a4f58;
+}
 #model-mapping-current { font-family:monospace; background:#111; border:1px solid #333; padding:8px; border-radius:6px; text-align:left; font-size:0.85em; }
 
 /* Usunięty nowy blok stylów autotune (powielenie) - powrót do legacy definicji powyżej */

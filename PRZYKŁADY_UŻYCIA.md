@@ -71,6 +71,8 @@ appStore.subscribe(['robot.balancing', 'robot.speedMode'], (value, path) => {
         updateSpeedModeIndicator(value);
     }
 });
+
+Po połączeniu w Dashboard pojawi się skrócony status znaków: B (Balans), S (Prędkość), P (Pozycja) w formacie np. "B:+ S:+ P:+" — dzięki temu od razu widać obecny kierunek sprzężenia.
 ```
 
 ---
