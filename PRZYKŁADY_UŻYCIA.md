@@ -354,15 +354,12 @@ appStore.subscribe('connection.isConnected', (value) => {
 
 ---
 
-## Testowanie z MockCommunication
 
 ### Przykład: Rozwój UI bez Fizycznego Robota
 
 ```javascript
 // W trybie deweloperskim użyj MockCommunication
 const isDevelopment = true;
-
-let commLayer;
 if (isDevelopment) {
     // Mock dla testów
     commLayer = new MockCommunication();

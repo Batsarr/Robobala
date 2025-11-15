@@ -894,6 +894,14 @@ function applySingleParam(snakeKey, value) {
         const span = document.getElementById('rollTrimValueDisplay');
         if (span) span.textContent = parseFloat(value).toFixed(2);
     }
+    // Feedback sign params - special handling: update sign buttons
+    if (snakeKey === 'balance_feedback_sign') {
+        setSignButtons('balanceSign', parseInt(value));
+    } else if (snakeKey === 'speed_feedback_sign') {
+        setSignButtons('speedSign', parseInt(value));
+    } else if (snakeKey === 'position_feedback_sign') {
+        setSignButtons('positionSign', parseInt(value));
+    }
 }
 
 function applySingleAutotuneParam(snakeKey, value) {
@@ -1732,6 +1740,45 @@ function handleDynamicTestResult(raw) {
     };
 
     setTuningUiLock(false, '');
+    // Feedback sign toggles wiring
+    const signButtonMap = {
+        'balanceSign': 'balance_feedback_sign',
+        'speedSign': 'speed_feedback_sign',
+        'positionSign': 'position_feedback_sign'
+    };
+    Object.keys(signButtonMap).forEach(containerId => {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        el.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const sign = parseInt(btn.dataset.sign);
+                // Only send change if robot is IDLE
+                const robotState = appStore.getState('robot.state');
+                if (robotState !== 'IDLE') {
+                    showNotification('Zmien jasnie tylko w trybie IDLE', 'warn');
+                    return;
+                }
+                // Send set_param to robot
+                const key = signButtonMap[containerId];
+                sendBleMessage({ type: 'set_param', key: key, value: sign });
+                // Optimistically update UI (firmware will respond with set_param sync if accepted)
+                setSignButtons(containerId, sign);
+            });
+        });
+    });
+
+    // Disable sign toggles outside of IDLE for safety
+    appStore.subscribe('robot.state', (newVal) => {
+        const isIdle = (newVal === 'IDLE');
+        Object.keys(signButtonMap).forEach(containerId => {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            el.querySelectorAll('button').forEach(btn => {
+                btn.disabled = !isIdle;
+            });
+            el.classList.toggle('disabled', !isIdle);
+        });
+    });
 
     // Aktualizacja historii wyników jeżeli tabela istnieje
     try {
