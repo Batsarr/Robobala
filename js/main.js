@@ -26,7 +26,7 @@ const AppState = new Proxy({}, {
         // Map old property names to new state paths
         const stateMap = {
             'isConnected': 'connection.isConnected',
-            'isSynced': 'connection.isSynced',
+        'isSynced': 'connection.isSynced',
             'isApplyingConfig': 'ui.isApplyingConfig',
             'lastKnownRobotState': 'robot.state',
             'isSequenceRunning': 'sequence.isRunning',
@@ -115,7 +115,7 @@ const availableActions = {
     'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' },
     'toggle_speed_mode': { label: 'Wlacz/Wylacz Tryb Predkosci', elementId: 'speedModeSwitch' },
     'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyStopBtn' },
-    'reset_zero': { label: 'Resetuj Osie', elementId: 'resetZeroBtn' }
+    'reset_pitch': { label: 'Resetuj Korekte Pionu', elementId: 'resetZeroBtn' }
 };
 const availableTelemetry = { 'pitch': { label: 'Pitch (Kat)', color: '#61dafb' }, 'roll': { label: 'Roll (Przechyl)', color: '#a2f279' }, 'speed': { label: 'Predkosc', color: '#f7b731'}, 'target_speed': { label: 'Predkosc Zadana', color: '#ff9f43' }, 'output': { label: 'Wyjscie PID', color: '#ff6347'}, 'encoder_left': { label: 'Enkoder L', color: '#9966ff' }, 'encoder_right': { label: 'Enkoder P', color: '#cc66ff' } };
 const builtInPresetsData = { '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 95.0, balanceKiInput: 0.0, balanceKdInput: 3.23 }}, '2': { name: "2. PID Mieciutki (Plynny)", params: { balanceKpInput: 80.0, balanceKiInput: 0.0, balanceKdInput: 2.8 }}, '3': { name: "3. PID Agresywny (Sztywny)", params: { balanceKpInput: 110.0, balanceKiInput: 0.0, balanceKdInput: 4.0 }} };
@@ -656,24 +656,8 @@ async function processBleQueue() { if (isSendingBleMessage || bleMessageQueue.le
 
 // Updated sendBleMessage to use the communication layer
 function sendBleMessage(message) {
-    // If the message is a full_config, always send it as a sequence of small set_param packets
-    if (message && message.type === 'full_config' && message.params) {
-        // Fire-and-forget; sendFullConfigToRobot handles per-param sending and throttling
-        sendFullConfigToRobot();
-        return;
-    }
     // Use the new communication layer if available and connected
     if (commLayer && commLayer.getConnectionStatus()) {
-        // Sanity check: avoid sending large JSON messages from UI to robot
-        try {
-            const json = JSON.stringify(message);
-            if (json.length > 230) {
-                addLogMessage(`[UI] Uwaga: wysylana duza wiadomosc BLE (len=${json.length}). Preferuj malutkie paczki.`, 'warn');
-            }
-        } catch (e) {
-            // If serializing fails, just send — but log the error
-            addLogMessage('[UI] Blad serializacji wiadomosci BLE.', 'warn');
-        }
         commLayer.send(message);
     } else {
         // Fallback to old method for backward compatibility
@@ -986,6 +970,8 @@ function applySingleParam(snakeKey, value) {
         setSignButtons('positionSign', v);
         updateSignBadge('positionSignBadge', v);
     }
+    // Config dirty flag – inform UI whether there are runtime changes not persisted
+    
 }
 
 function applySingleAutotuneParam(snakeKey, value) {
@@ -2048,6 +2034,8 @@ document.getElementById('trimPlus001Btn')?.addEventListener('click', () => updat
 document.getElementById('trimPlus01Btn')?.addEventListener('click', () => updateAndSendTrim(0.1));
 // Roll trim: aktualizacja + wysyłka set_param
 document.getElementById('resetRollZeroBtn')?.addEventListener('click', () => sendBleMessage({ type: 'reset_roll' }));
+// Reset korekty pionu (pitch trim) - ustawia trim na 0.0 (runtime)
+document.getElementById('resetZeroBtn')?.addEventListener('click', () => sendBleMessage({ type: 'reset_pitch' }));
 function updateAndSendRollTrim(delta) {
     const span = document.getElementById('rollTrimValueDisplay');
     if (!span) return; const current = parseFloat(span.textContent) || 0; const v = current + delta; span.textContent = v.toFixed(2);
