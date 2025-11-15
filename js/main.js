@@ -115,7 +115,8 @@ const availableActions = {
     'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' },
     'toggle_speed_mode': { label: 'Wlacz/Wylacz Tryb Predkosci', elementId: 'speedModeSwitch' },
     'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyStopBtn' },
-    'reset_pitch': { label: 'Resetuj Korekte Pionu', elementId: 'resetZeroBtn' }
+    'reset_pitch': { label: 'Ustaw punkt 0 (Pitch)', elementId: 'resetZeroBtn' },
+    'reset_roll': { label: 'Ustaw punkt 0 (Roll)', elementId: 'resetRollZeroBtn' }
 };
 const availableTelemetry = { 'pitch': { label: 'Pitch (Kat)', color: '#61dafb' }, 'roll': { label: 'Roll (Przechyl)', color: '#a2f279' }, 'speed': { label: 'Predkosc', color: '#f7b731'}, 'target_speed': { label: 'Predkosc Zadana', color: '#ff9f43' }, 'output': { label: 'Wyjscie PID', color: '#ff6347'}, 'encoder_left': { label: 'Enkoder L', color: '#9966ff' }, 'encoder_right': { label: 'Enkoder P', color: '#cc66ff' } };
 const builtInPresetsData = { '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 95.0, balanceKiInput: 0.0, balanceKdInput: 3.23 }}, '2': { name: "2. PID Mieciutki (Plynny)", params: { balanceKpInput: 80.0, balanceKiInput: 0.0, balanceKdInput: 2.8 }}, '3': { name: "3. PID Agresywny (Sztywny)", params: { balanceKpInput: 110.0, balanceKiInput: 0.0, balanceKdInput: 4.0 }} };
@@ -149,12 +150,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Nowy modal Mapowanie Czujnika – korzysta z istniejących komend mount_calib2_* (backend już implementuje kwaternion-first)
     // Sekwencyjny kreator mapowania czujnika (auto-wykrycie rotacji ≥ 90°)
     let sensorWizard = { step: 0, rotStartYaw: null, monitorId: null, progress: {upright:false, rotation:false, saved:false} };
+    let sensorModalTelemetryMonitorId = null;
     function openSensorMappingModal(){
         const m=document.getElementById('sensor-mapping-modal'); if(!m) return; m.style.display='flex';
         sensorWizard = { step:0, rotStartYaw:null, monitorId:null, progress:{upright:false, rotation:false, saved:false} };
         updateSensorWizardUI();
+        initSensorMappingPreview();
+        if (!sensorModalTelemetryMonitorId) sensorModalTelemetryMonitorId = setInterval(updateModalTelemetryDisplay, 200);
     }
-    function closeSensorMappingModal(){ const m=document.getElementById('sensor-mapping-modal'); if(!m) return; if(sensorWizard.monitorId){ clearInterval(sensorWizard.monitorId); sensorWizard.monitorId=null; } m.style.display='none'; }
+    function closeSensorMappingModal(){ const m=document.getElementById('sensor-mapping-modal'); if(!m) return; if(sensorWizard.monitorId){ clearInterval(sensorWizard.monitorId); sensorWizard.monitorId=null; } if (sensorModalTelemetryMonitorId) { clearInterval(sensorModalTelemetryMonitorId); sensorModalTelemetryMonitorId = null; } m.style.display='none'; }
     function setWizardProgress(){
         const el = document.getElementById('sensorWizardProgress');
         if(!el) return;
@@ -254,6 +258,8 @@ document.addEventListener('DOMContentLoaded', () => {
     init3DVisualization(); 
     animate3D(); 
     setTuningUiLock(false, '');
+    // Initialize sensor mapping preview (Three.js cube) and controls
+    initSensorMappingPreview();
 initAutotuneTuningChart();
 // Start strojenia dostępny dopiero po wyborze metody
 const startBtnInit = document.getElementById('start-tuning-btn');
@@ -323,6 +329,100 @@ if (logHistEl && logHistEl.style.display === 'block' && autoEl && autoEl.checked
         renderAllLogs(true);
     }
 }
+
+// --- Sensor mapping 3D preview (simple cube with axes) ---
+let sensorPreview = { scene: null, camera: null, renderer: null, cube: null, axes: null, animId: null };
+function initSensorMappingPreview() {
+    const container = document.getElementById('sensor-mapping-preview');
+    if (!container) return;
+    // Clean up existing renderer
+    if (sensorPreview.renderer && sensorPreview.renderer.domElement) {
+        while (container.firstChild) container.removeChild(container.firstChild);
+        sensorPreview.renderer.dispose();
+        sensorPreview.renderer = null;
+    }
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+    camera.position.set(3, 3, 6);
+    camera.lookAt(0, 0, 0);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setClearColor(0x000000, 0);
+    container.appendChild(renderer.domElement);
+    const geom = new THREE.BoxGeometry(2, 0.2, 2);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.2, roughness: 0.7 });
+    const cube = new THREE.Mesh(geom, mat);
+    // Add small axes helper
+    const axes = new THREE.AxesHelper(3);
+    scene.add(axes);
+    scene.add(cube);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambient);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+    dir.position.set(5, 10, 7);
+    scene.add(dir);
+    sensorPreview.scene = scene; sensorPreview.camera = camera; sensorPreview.renderer = renderer; sensorPreview.cube = cube; sensorPreview.axes = axes;
+    // Animation loop
+    function render() {
+        sensorPreview.animId = requestAnimationFrame(render);
+        renderer.render(scene, camera);
+    }
+    render();
+    // Resize handler
+    window.addEventListener('resize', () => {
+        if (!sensorPreview.renderer) return;
+        const w = container.clientWidth; const h = container.clientHeight;
+        sensorPreview.camera.aspect = w / h; sensorPreview.camera.updateProjectionMatrix(); sensorPreview.renderer.setSize(w, h);
+    });
+    // Update display initial values
+    updateSensorMappingDisplays();
+    // Buttons wiring
+    ['pitchMinus90Btn','pitchPlus90Btn','rollMinus90Btn','rollPlus90Btn','yawMinus90Btn','yawPlus90Btn'].forEach(id => {
+        const b = document.getElementById(id);
+        if (!b) return;
+        b.addEventListener('click', (e) => {
+            const delta = id.includes('Minus') ? -90 : 90;
+            if (id.startsWith('pitch')) rotateSensorCube('x', delta);
+            if (id.startsWith('roll')) rotateSensorCube('z', delta);
+            if (id.startsWith('yaw')) rotateSensorCube('y', delta);
+        });
+    });
+    document.getElementById('setModalPitchZeroBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'set_pitch_zero' }); addLogMessage('[UI] Wyslano polecenie: ustaw punkt 0 (Pitch)', 'info'); });
+    document.getElementById('setModalRollZeroBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'set_roll_zero' }); addLogMessage('[UI] Wyslano polecenie: ustaw punkt 0 (Roll)', 'info'); });
+}
+
+function rotateSensorCube(axis, deg) {
+    if (!sensorPreview.cube) return;
+    const rad = THREE.MathUtils.degToRad(deg);
+    if (axis === 'x') sensorPreview.cube.rotateX(rad);
+    else if (axis === 'y') sensorPreview.cube.rotateY(rad);
+    else if (axis === 'z') sensorPreview.cube.rotateZ(rad);
+    updateSensorMappingDisplays();
+}
+
+function updateSensorMappingDisplays() {
+    if (!sensorPreview.cube) return;
+    const q = sensorPreview.cube.quaternion;
+    const eul = new THREE.Euler().setFromQuaternion(q, 'ZYX');
+    const yaw = THREE.MathUtils.radToDeg(eul.x);
+    const pitch = THREE.MathUtils.radToDeg(eul.y);
+    const roll = THREE.MathUtils.radToDeg(eul.z);
+    document.getElementById('modal-pitch-display').textContent = pitch.toFixed(2) + '°';
+    document.getElementById('modal-roll-display').textContent = roll.toFixed(2) + '°';
+    document.getElementById('modal-yaw-display').textContent = yaw.toFixed(2) + '°';
+}
+
+function updateModalTelemetryDisplay() {
+    const e = getRawEuler();
+    const pd = document.getElementById('modal-pitch-telemetry');
+    const rd = document.getElementById('modal-roll-telemetry');
+    const yd = document.getElementById('modal-yaw-telemetry');
+    if (pd) pd.textContent = (e.pitch || 0).toFixed(2) + '°';
+    if (rd) rd.textContent = (e.roll || 0).toFixed(2) + '°';
+    if (yd) yd.textContent = (e.yaw || 0).toFixed(2) + '°';
+}
+
+// Main reset buttons are mapped below; please use the assigned handlers via toolButtons mapping.
 function renderAllLogs(keepScrollBottom=false){
     const box = document.getElementById('log-history'); if(!box) return;
     const wasBottom = (box.scrollTop + box.clientHeight + 8) >= box.scrollHeight;
@@ -2021,7 +2121,7 @@ function setupParameterListeners() {
     ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if(!el) return; el.addEventListener('change', (e) => { if (AppState.isApplyingConfig) return; const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
 
     // POPRAWKA: Usunięto stare listenery dla trim+/- i dodano nowe, poprawne dla precyzyjnych przycisków.
-const toolButtons = { 'resetZeroBtn': { type: 'reset_pitch' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
+const toolButtons = { 'resetZeroBtn': { type: 'set_pitch_zero' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
 // Trim: aktualizacja + wysyłka set_param (jednolite traktowanie)
 function updateAndSendTrim(delta) {
     const span = document.getElementById('trimValueDisplay');
@@ -2033,9 +2133,9 @@ document.getElementById('trimMinus001Btn')?.addEventListener('click', () => upda
 document.getElementById('trimPlus001Btn')?.addEventListener('click', () => updateAndSendTrim(0.01));
 document.getElementById('trimPlus01Btn')?.addEventListener('click', () => updateAndSendTrim(0.1));
 // Roll trim: aktualizacja + wysyłka set_param
-document.getElementById('resetRollZeroBtn')?.addEventListener('click', () => sendBleMessage({ type: 'reset_roll' }));
+document.getElementById('resetRollZeroBtn')?.addEventListener('click', () => sendBleMessage({ type: 'set_roll_zero' }));
 // Reset korekty pionu (pitch trim) - ustawia trim na 0.0 (runtime)
-document.getElementById('resetZeroBtn')?.addEventListener('click', () => sendBleMessage({ type: 'reset_pitch' }));
+document.getElementById('resetZeroBtn')?.addEventListener('click', () => sendBleMessage({ type: 'set_pitch_zero' }));
 function updateAndSendRollTrim(delta) {
     const span = document.getElementById('rollTrimValueDisplay');
     if (!span) return; const current = parseFloat(span.textContent) || 0; const v = current + delta; span.textContent = v.toFixed(2);

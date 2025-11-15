@@ -49,7 +49,7 @@
             <div class="control-row"><span class="control-label">Trzymaj Pozycje</span><label class="switch"><input type="checkbox" id="holdPositionSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
-            <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Resetuj Korekte Pionu</button>
+            <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Ustaw punkt 0 (Pitch)</button>
             <div class="trim-controls">
                 <button id="trimMinus01Btn">-0.1</button>
                 <button id="trimMinus001Btn">-0.01</button>
@@ -57,7 +57,7 @@
                 <button id="trimPlus001Btn">+0.01</button>
                 <button id="trimPlus01Btn">+0.1</button>
             </div>
-            <button id="resetRollZeroBtn" style="margin-top:10px; width:100%;">Resetuj Korekte Roll</button>
+            <button id="resetRollZeroBtn" style="margin-top:10px; width:100%;">Ustaw punkt 0 (Roll)</button>
             <div class="trim-controls">
                 <button id="rollTrimMinus01Btn">-0.1</button>
                 <button id="rollTrimMinus001Btn">-0.01</button>
@@ -497,6 +497,34 @@
             </div>
             <div id="sensorWizardProgress" style="margin-top:12px; font-family:monospace; background:#111; border:1px solid #333; border-radius:6px; padding:8px; text-align:left;">
                 [ ] Pion | [ ] Rotacja ≥ 90° | [ ] Zapis
+            </div>
+            <div style="display:flex; gap:10px; margin-top:12px; align-items:flex-start;">
+                <div id="sensor-mapping-preview" style="flex:1; min-width:250px; height:200px; background:#000; border-radius:6px; overflow:hidden;"></div>
+                <div style="width:320px; display:flex; flex-direction:column; gap:8px;">
+                    <div style="display:flex; justify-content:space-between; gap:6px;">
+                        <div>
+                            <div>Pitch (Cube): <span id="modal-pitch-display">0.0°</span></div>
+                            <div style="font-size:0.8em; color:#9fa;">Telemetry: <span id="modal-pitch-telemetry">0.0°</span></div>
+                        </div>
+                        <div>
+                            <div>Roll (Cube): <span id="modal-roll-display">0.0°</span></div>
+                            <div style="font-size:0.8em; color:#9fa;">Telemetry: <span id="modal-roll-telemetry">0.0°</span></div>
+                        </div>
+                        <div>
+                            <div>Yaw (Cube): <span id="modal-yaw-display">0.0°</span></div>
+                            <div style="font-size:0.8em; color:#9fa;">Telemetry: <span id="modal-yaw-telemetry">0.0°</span></div>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Pitch</div><button id="pitchMinus90Btn">-90°</button><button id="pitchPlus90Btn">+90°</button></div>
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Roll</div><button id="rollMinus90Btn">-90°</button><button id="rollPlus90Btn">+90°</button></div>
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Yaw</div><button id="yawMinus90Btn">-90°</button><button id="yawPlus90Btn">+90°</button></div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button id="setModalPitchZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Pitch)</button>
+                        <button id="setModalRollZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Roll)</button>
+                    </div>
+                </div>
             </div>
             <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
                 <button id="sensorWizardCancelBtn" style="background:#ff6347;">Anuluj</button>
