@@ -656,8 +656,24 @@ async function processBleQueue() { if (isSendingBleMessage || bleMessageQueue.le
 
 // Updated sendBleMessage to use the communication layer
 function sendBleMessage(message) {
+    // If the message is a full_config, always send it as a sequence of small set_param packets
+    if (message && message.type === 'full_config' && message.params) {
+        // Fire-and-forget; sendFullConfigToRobot handles per-param sending and throttling
+        sendFullConfigToRobot();
+        return;
+    }
     // Use the new communication layer if available and connected
     if (commLayer && commLayer.getConnectionStatus()) {
+        // Sanity check: avoid sending large JSON messages from UI to robot
+        try {
+            const json = JSON.stringify(message);
+            if (json.length > 230) {
+                addLogMessage(`[UI] Uwaga: wysylana duza wiadomosc BLE (len=${json.length}). Preferuj malutkie paczki.`, 'warn');
+            }
+        } catch (e) {
+            // If serializing fails, just send — but log the error
+            addLogMessage('[UI] Blad serializacji wiadomosci BLE.', 'warn');
+        }
         commLayer.send(message);
     } else {
         // Fallback to old method for backward compatibility
