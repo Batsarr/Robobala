@@ -1694,12 +1694,12 @@ function runDynamicTest(testType) {
     if (!checkTuningPrerequisites()) return;
     addLogMessage(`[Test] Uruchamianie testu: ${testType}`, 'info');
 
-    const testId = Date.now();
+    const testId = Date.now() >>> 0;
     // Nasłuch zakończenia aby odblokować UI, nawet jeśli nie otrzymamy metryk (np. anulowanie)
     const onMsg = (evt) => {
         const data = evt.detail || evt;
         if (!data || !data.type) return;
-        if ((data.type === 'test_complete' && data.testId === testId) || (data.type === 'test_result' && data.testId === testId)) {
+    if ((data.type === 'test_complete' && Number(data.testId) === testId) || (data.type === 'test_result' && Number(data.testId) === testId)) {
             // Gdy dostaniemy komplet lub zakończenie, odblokuj UI
             setTuningUiLock(false, '');
             window.removeEventListener('ble_message', onMsg);

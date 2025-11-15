@@ -62,7 +62,6 @@ function updateProgressDisplay(current, total, bestFitness) {
 
 function updateFitnessChart() {
     const canvas = document.getElementById('fitness-chart');
-    if (!canvas) return; // Defensive check
     const ctx = canvas.getContext('2d');
     
     // Clear canvas
@@ -71,11 +70,8 @@ function updateFitnessChart() {
     if (fitnessChartData.length === 0) return;
     
     // Find min/max for scaling
-    const validFitnessData = fitnessChartData.filter(d => d.y !== Infinity && d.y !== undefined);
-    if (validFitnessData.length === 0) return;
-
-    const minFitness = Math.min(...validFitnessData.map(d => d.y));
-    const maxFitness = Math.max(...validFitnessData.map(d => d.y));
+    const minFitness = Math.min(...fitnessChartData.map(d => d.y));
+    const maxFitness = Math.max(...fitnessChartData.map(d => d.y));
     const maxIteration = Math.max(...fitnessChartData.map(d => d.x));
     
     const padding = 40;
@@ -102,10 +98,9 @@ function updateFitnessChart() {
     ctx.lineWidth = 2;
     ctx.beginPath();
     
-    validFitnessData.forEach((point, i) => {
+    fitnessChartData.forEach((point, i) => {
         const x = padding + (point.x / maxIteration) * width;
-        const yRange = (maxFitness - minFitness) > 0 ? (maxFitness - minFitness) : 1;
-        const y = canvas.height - padding - ((point.y - minFitness) / yRange) * height;
+        const y = canvas.height - padding - ((point.y - minFitness) / (maxFitness - minFitness + 0.0001)) * height;
         
         if (i === 0) {
             ctx.moveTo(x, y);
@@ -117,10 +112,9 @@ function updateFitnessChart() {
     
     // Draw points
     ctx.fillStyle = '#a2f279';
-    validFitnessData.forEach(point => {
+    fitnessChartData.forEach(point => {
         const x = padding + (point.x / maxIteration) * width;
-        const yRange = (maxFitness - minFitness) > 0 ? (maxFitness - minFitness) : 1;
-        const y = canvas.height - padding - ((point.y - minFitness) / yRange) * height;
+        const y = canvas.height - padding - ((point.y - minFitness) / (maxFitness - minFitness + 0.0001)) * height;
         ctx.beginPath();
         ctx.arc(x, y, 3, 0, 2 * Math.PI);
         ctx.fill();
@@ -136,7 +130,6 @@ function addTestToResultsTable(testNum, params, fitness, itae, overshoot) {
             refreshRecentList();
         }
     } catch(_) {}
-    if (!tbody) return; // Defensive check
     const row = tbody.insertRow(0); // Insert at top
     
     row.innerHTML = `
@@ -145,8 +138,8 @@ function addTestToResultsTable(testNum, params, fitness, itae, overshoot) {
         <td>${params.ki.toFixed(3)}</td>
         <td>${params.kd.toFixed(3)}</td>
         <td>${fitness.toFixed(4)}</td>
-        <td>${(itae || 0).toFixed(2)}</td>
-        <td>${(overshoot || 0).toFixed(2)}%</td>
+        <td>${itae.toFixed(2)}</td>
+        <td>${overshoot.toFixed(2)}%</td>
         <td><button onclick="applyParameters(${params.kp}, ${params.ki}, ${params.kd})" class="btn-small">Zastosuj</button></td>
     `;
     
@@ -155,20 +148,15 @@ function addTestToResultsTable(testNum, params, fitness, itae, overshoot) {
 
 function applyParameters(kp, ki, kd) {
     const loop = document.getElementById('tuning-loop-selector').value;
-    let kpKey = 'kp_b', kiKey = 'ki_b', kdKey = 'kd_b';
-    if (loop === 'speed') { kpKey = 'kp_s'; kiKey = 'ki_s'; kdKey = 'kd_s'; }
-    else if (loop === 'position') { kpKey = 'kp_p'; kiKey = 'ki_p'; kdKey = 'kd_p'; }
+    let prefix = '';
+    if (loop === 'balance') prefix = 'kp_b';
+    else if (loop === 'speed') prefix = 'kp_s';
+    else if (loop === 'position') prefix = 'kp_p';
     
     // Send parameters to robot
-    if(typeof sendBleCommand === 'function') {
-        sendBleCommand('set_param', {key: kpKey, value: kp});
-        sendBleCommand('set_param', {key: kiKey, value: ki});
-        sendBleCommand('set_param', {key: kdKey, value: kd});
-    } else { // Fallback
-        sendBleMessage({ type: 'set_param', key: kpKey, value: kp});
-        sendBleMessage({ type: 'set_param', key: kiKey, value: ki});
-        sendBleMessage({ type: 'set_param', key: kdKey, value: kd});
-    }
+    sendBleCommand('set_param', {key: prefix.replace('kp', 'kp'), value: kp});
+    sendBleCommand('set_param', {key: prefix.replace('kp', 'ki'), value: ki});
+    sendBleCommand('set_param', {key: prefix.replace('kp', 'kd'), value: kd});
     
     showNotification(`Zastosowano parametry: Kp=${kp.toFixed(3)}, Ki=${ki.toFixed(3)}, Kd=${kd.toFixed(3)}`);
 }
@@ -179,16 +167,15 @@ function applyParameters(kp, ki, kd) {
  */
 function sendBaselinePIDToRobot() {
     const loop = document.getElementById('tuning-loop-selector')?.value || 'balance';
-    let kpKey = 'kp_b', kiKey = 'ki_b', kdKey = 'kd_b';
-    if (loop === 'speed') { kpKey = 'kp_s'; kiKey = 'ki_s'; kdKey = 'kd_s'; }
-    else if (loop === 'position') { kpKey = 'kp_p'; kiKey = 'ki_p'; kdKey = 'kd_p'; }
+    let prefix = '';
+    if (loop === 'balance') prefix = 'kp_b';
+    else if (loop === 'speed') prefix = 'kp_s';
+    else if (loop === 'position') prefix = 'kp_p';
     
     // Send baseline parameters to robot
-    if(typeof sendBleCommand === 'function') {
-        sendBleCommand('set_param', {key: kpKey, value: baselinePID.kp});
-        sendBleCommand('set_param', {key: kiKey, value: baselinePID.ki});
-        sendBleCommand('set_param', {key: kdKey, value: baselinePID.kd});
-    }
+    sendBleCommand('set_param', {key: prefix.replace('kp', 'kp'), value: baselinePID.kp});
+    sendBleCommand('set_param', {key: prefix.replace('kp', 'ki'), value: baselinePID.ki});
+    sendBleCommand('set_param', {key: prefix.replace('kp', 'kd'), value: baselinePID.kd});
     
     console.log(`[Tuning] Restored baseline PID: Kp=${baselinePID.kp.toFixed(3)}, Ki=${baselinePID.ki.toFixed(3)}, Kd=${baselinePID.kd.toFixed(3)}`);
 }
@@ -261,7 +248,6 @@ class GeneticAlgorithm {
         this.generation = 0;
         this.testCounter = 0;
         fitnessChartData = [];
-        this.bestIndividual = null;
     }
     
     createRandomIndividual() {
@@ -274,21 +260,34 @@ class GeneticAlgorithm {
     }
     
     async evaluateFitness(individual) {
-        const testId = Date.now();
+    const testId = Date.now() >>> 0;
         this.testCounter++;
         
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                window.removeEventListener('ble_message', completeHandler); // Clean up on timeout
-                window.removeEventListener('ble_message', metricsHandler);
                 reject(new Error('Test timeout'));
             }, 10000); // 10 second timeout
             
-            const metricsHandler = (event) => {
-                const data = event.detail; // Get data from CustomEvent
-                if ((data.type === 'metrics_result' || data.type === 'test_result') && data.testId === testId) {
+            // Handler for test completion (success or failure)
+            const completeHandler = (data) => {
+                if (data.type === 'test_complete' && Number(data.testId) === testId) {
                     clearTimeout(timeout);
-                    const fitness = (data.itae || 9999) + (data.overshoot || 0) * 10 + (data.steady_state_error || 0) * 5;
+                    window.removeEventListener('ble_message', completeHandler);
+                    window.removeEventListener('ble_message', metricsHandler);
+                    
+                    // If test failed (e.g., emergency stop), reject with special reason
+                    if (!data.success) {
+                        reject({ reason: 'interrupted_by_emergency', testId: testId });
+                        return;
+                    }
+                }
+            };
+            
+            // Handler for test metrics
+            const metricsHandler = (data) => {
+                if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
+                    clearTimeout(timeout);
+                    const fitness = data.itae + data.overshoot * 10 + data.steady_state_error * 5;
                     individual.fitness = fitness;
                     
                     addTestToResultsTable(this.testCounter, individual, fitness, data.itae, data.overshoot);
@@ -300,20 +299,8 @@ class GeneticAlgorithm {
                 }
             };
             
-            const completeHandler = (event) => {
-                const data = event.detail;
-                if (data.type === 'test_complete' && data.testId === testId) {
-                    if (!data.success) {
-                        clearTimeout(timeout);
-                        window.removeEventListener('ble_message', completeHandler);
-                        window.removeEventListener('ble_message', metricsHandler);
-                        reject({ reason: 'interrupted_by_emergency', testId: testId });
-                    }
-                }
-            };
-            
-            window.addEventListener('ble_message', metricsHandler);
             window.addEventListener('ble_message', completeHandler);
+            window.addEventListener('ble_message', metricsHandler);
             
             sendBleCommand('run_metrics_test', {
                 kp: individual.kp,
@@ -379,7 +366,7 @@ class GeneticAlgorithm {
         const newPopulation = [];
         
         // Elitism
-        if (this.elitism && this.population[0].fitness !== Infinity) {
+        if (this.elitism) {
             newPopulation.push({...this.population[0]});
         }
         
@@ -389,10 +376,10 @@ class GeneticAlgorithm {
             const parent2 = this.tournamentSelection();
             
             let offspring;
-            if (Math.random() < this.crossoverRate && parent1 && parent2) {
+            if (Math.random() < this.crossoverRate) {
                 offspring = this.crossover(parent1, parent2);
             } else {
-                offspring = {...(parent1 || this.createRandomIndividual())};
+                offspring = {...parent1};
             }
             
             offspring = this.mutate(offspring);
@@ -403,17 +390,15 @@ class GeneticAlgorithm {
         this.population = newPopulation;
         this.generation++;
         
-        updateProgressDisplay(this.generation, this.generations, this.bestIndividual ? this.bestIndividual.fitness : Infinity);
+        updateProgressDisplay(this.generation, this.generations, this.bestIndividual.fitness);
     }
     
     tournamentSelection() {
         const tournamentSize = 3;
         let best = null;
-        const validPopulation = this.population.filter(p => p.fitness !== Infinity);
-        if (validPopulation.length === 0) return null;
-
+        
         for (let i = 0; i < tournamentSize; i++) {
-            const candidate = validPopulation[Math.floor(Math.random() * validPopulation.length)];
+            const candidate = this.population[Math.floor(Math.random() * this.population.length)];
             if (!best || candidate.fitness < best.fitness) {
                 best = candidate;
             }
@@ -457,8 +442,7 @@ class GeneticAlgorithm {
         this.isRunning = true;
         this.initialize();
         
-        const progressEl = document.getElementById('tuning-progress-panel');
-        if (progressEl) progressEl.style.display = 'block';
+        document.getElementById('tuning-progress').style.display = 'block';
         
         while (this.generation < this.generations && this.isRunning) {
             if (!this.isPaused) {
@@ -469,13 +453,7 @@ class GeneticAlgorithm {
         }
         
         this.isRunning = false;
-        
-        // POPRAWKA: Dodano sprawdzenie, czy this.bestIndividual nie jest null.
-        if (this.bestIndividual) {
-            showNotification(`Optymalizacja GA zakończona! Najlepsze fitness: ${this.bestIndividual.fitness.toFixed(4)}`);
-        } else {
-            showNotification('Optymalizacja GA zakończona - nie znaleziono żadnego rozwiązania.');
-        }
+        showNotification(`Optymalizacja GA zakończona! Najlepsze fitness: ${this.bestIndividual.fitness.toFixed(4)}`);
     }
     
     pause() { 
@@ -549,21 +527,34 @@ class ParticleSwarmOptimization {
     }
     
     async evaluateFitness(particle) {
-        const testId = Date.now();
+    const testId = Date.now() >>> 0;
         this.testCounter++;
         
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                window.removeEventListener('ble_message', completeHandler);
-                window.removeEventListener('ble_message', metricsHandler);
                 reject(new Error('Test timeout'));
             }, 10000);
             
-            const metricsHandler = (event) => {
-                const data = event.detail;
-                if ((data.type === 'metrics_result' || data.type === 'test_result') && data.testId === testId) {
+            // Handler for test completion (success or failure)
+            const completeHandler = (data) => {
+                if (data.type === 'test_complete' && Number(data.testId) === testId) {
                     clearTimeout(timeout);
-                    const fitness = (data.itae || 9999) + (data.overshoot || 0) * 10 + (data.steady_state_error || 0) * 5;
+                    window.removeEventListener('ble_message', completeHandler);
+                    window.removeEventListener('ble_message', metricsHandler);
+                    
+                    // If test failed (e.g., emergency stop), reject with special reason
+                    if (!data.success) {
+                        reject({ reason: 'interrupted_by_emergency', testId: testId });
+                        return;
+                    }
+                }
+            };
+            
+            // Handler for test metrics
+            const metricsHandler = (data) => {
+                if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
+                    clearTimeout(timeout);
+                    const fitness = data.itae + data.overshoot * 10 + data.steady_state_error * 5;
                     particle.fitness = fitness;
                     
                     if (fitness < particle.bestFitness) {
@@ -581,26 +572,15 @@ class ParticleSwarmOptimization {
                     
                     addTestToResultsTable(this.testCounter, particle.position, fitness, data.itae, data.overshoot);
                     
+                    // Remove handlers
                     window.removeEventListener('ble_message', completeHandler);
                     window.removeEventListener('ble_message', metricsHandler);
                     resolve(fitness);
                 }
             };
-
-            const completeHandler = (event) => {
-                const data = event.detail;
-                if (data.type === 'test_complete' && data.testId === testId) {
-                    if (!data.success) {
-                        clearTimeout(timeout);
-                        window.removeEventListener('ble_message', completeHandler);
-                        window.removeEventListener('ble_message', metricsHandler);
-                        reject({ reason: 'interrupted_by_emergency', testId: testId });
-                    }
-                }
-            };
             
-            window.addEventListener('ble_message', metricsHandler);
             window.addEventListener('ble_message', completeHandler);
+            window.addEventListener('ble_message', metricsHandler);
             
             sendBleCommand('run_metrics_test', {
                 kp: particle.position.kp,
@@ -662,7 +642,6 @@ class ParticleSwarmOptimization {
     }
     
     updateVelocity(particle) {
-        if (!this.globalBest) return; // Don't update if no global best yet
         const r1 = Math.random();
         const r2 = Math.random();
         
@@ -691,8 +670,7 @@ class ParticleSwarmOptimization {
         this.isRunning = true;
         this.initialize();
         
-        const progressEl = document.getElementById('tuning-progress-panel');
-        if (progressEl) progressEl.style.display = 'block';
+        document.getElementById('tuning-progress').style.display = 'block';
         
         while (this.iteration < this.iterations && this.isRunning) {
             if (!this.isPaused) {
@@ -703,13 +681,7 @@ class ParticleSwarmOptimization {
         }
         
         this.isRunning = false;
-        
-        // POPRAWKA: Dodano sprawdzenie, czy this.globalBest nie jest null.
-        if (this.globalBest) {
-            showNotification(`Optymalizacja PSO zakończona! Najlepsze fitness: ${this.globalBest.fitness.toFixed(4)}`);
-        } else {
-            showNotification('Optymalizacja PSO zakończona - nie znaleziono żadnego rozwiązania.');
-        }
+        showNotification(`Optymalizacja PSO zakończona! Najlepsze fitness: ${this.globalBest.fitness.toFixed(4)}`);
     }
     
     pause() { 
@@ -750,24 +722,21 @@ class ZieglerNicholsRelay {
     
     async run() {
         this.isRunning = true;
-        const testId = Date.now();
+    const testId = Date.now() >>> 0;
         
         this.oscillationData = [];
         this.peaks = [];
         this.valleys = [];
         
-        const displayEl = document.getElementById('zn-oscillation-display');
-        if (displayEl) displayEl.style.display = 'block';
+        document.getElementById('zn-oscillation-display').style.display = 'block';
         
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                window.removeEventListener('ble_message', handler);
                 reject(new Error('ZN test timeout'));
             }, 30000); // 30 second timeout
             
-            const handler = (event) => {
-                const data = event.detail;
-                if (data.type === 'relay_state' && data.testId === testId) {
+            const handler = (data) => {
+                if (data.type === 'relay_state' && Number(data.testId) === testId) {
                     this.oscillationData.push({
                         time: data.time,
                         angle: data.angle,
@@ -777,8 +746,8 @@ class ZieglerNicholsRelay {
                     this.detectPeaksValleys();
                     this.updateRelayChart();
                     
-                    const cyclesEl = document.getElementById('zn-detected-cycles');
-                    if(cyclesEl) cyclesEl.textContent = Math.min(this.peaks.length, this.valleys.length);
+                    document.getElementById('zn-detected-cycles').textContent = 
+                        Math.min(this.peaks.length, this.valleys.length);
                     
                     // Check if we have enough cycles
                     if (this.peaks.length >= this.minCycles && this.valleys.length >= this.minCycles) {
@@ -789,7 +758,7 @@ class ZieglerNicholsRelay {
                         this.displayResults(results);
                         resolve(results);
                     }
-                } else if (data.type === 'test_complete' && data.testId === testId) {
+                } else if (data.type === 'test_complete' && Number(data.testId) === testId) {
                     clearTimeout(timeout);
                     window.removeEventListener('ble_message', handler);
                     
@@ -867,7 +836,6 @@ class ZieglerNicholsRelay {
     
     updateRelayChart() {
         const canvas = document.getElementById('zn-oscillation-chart');
-        if (!canvas) return;
         const ctx = canvas.getContext('2d');
         
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -982,17 +950,13 @@ class BayesianOptimization {
         await this.trainSurrogate();
         
         // Show visualization
-        const vizEl = document.getElementById('bayesian-visualization');
-        if (vizEl) vizEl.style.display = 'block';
+        document.getElementById('bayesian-visualization').style.display = 'block';
         this.updateVisualization();
     }
     
     async trainSurrogate() {
         // Use ml5.js neural network as surrogate for Gaussian Process
-        if (typeof ml5 === 'undefined') {
-            console.error('ml5.js is not loaded. Bayesian Optimization cannot work.');
-            return;
-        }
+        // In a real implementation, you'd use a proper GP library
         
         if (!this.neuralNetwork) {
             this.neuralNetwork = ml5.neuralNetwork({
@@ -1036,9 +1000,7 @@ class BayesianOptimization {
     }
     
     async acquireNext() {
-        if (!this.neuralNetwork || !this.neuralNetwork.isTrained) {
-            return this.sampleRandom(); // Fallback if model not ready
-        }
+        // Use acquisition function to select next sample point
         let bestAcquisition = -Infinity;
         let bestSample = null;
         
@@ -1067,7 +1029,7 @@ class BayesianOptimization {
     async calculateAcquisition(sample) {
         // Predict mean using neural network
         const prediction = await this.neuralNetwork.predict({kp: sample.kp, ki: sample.ki, kd: sample.kd});
-        const predictedFitness = prediction[0].value; // ml5 uses .value
+        const predictedFitness = prediction[0].fitness;
         
         // Find current best
         const validSamples = this.samples.filter(s => s.fitness !== Infinity);
@@ -1095,44 +1057,46 @@ class BayesianOptimization {
     }
     
     async evaluateSample(sample) {
-        const testId = Date.now();
+    const testId = Date.now() >>> 0;
         this.testCounter++;
         
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                window.removeEventListener('ble_message', completeHandler);
-                window.removeEventListener('ble_message', metricsHandler);
                 reject(new Error('Test timeout'));
             }, 10000);
             
-            const metricsHandler = (event) => {
-                const data = event.detail;
-                if ((data.type === 'metrics_result' || data.type === 'test_result') && data.testId === testId) {
+            // Handler for test completion (success or failure)
+            const completeHandler = (data) => {
+                if (data.type === 'test_complete' && Number(data.testId) === testId) {
                     clearTimeout(timeout);
-                    const fitness = (data.itae || 9999) + (data.overshoot || 0) * 10 + (data.steady_state_error || 0) * 5;
+                    window.removeEventListener('ble_message', completeHandler);
+                    window.removeEventListener('ble_message', metricsHandler);
+                    
+                    // If test failed (e.g., emergency stop), reject with special reason
+                    if (!data.success) {
+                        reject({ reason: 'interrupted_by_emergency', testId: testId });
+                        return;
+                    }
+                }
+            };
+            
+            // Handler for test metrics
+            const metricsHandler = (data) => {
+                if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
+                    clearTimeout(timeout);
+                    const fitness = data.itae + data.overshoot * 10 + data.steady_state_error * 5;
                     
                     addTestToResultsTable(this.testCounter, sample, fitness, data.itae, data.overshoot);
                     
+                    // Remove handlers
                     window.removeEventListener('ble_message', completeHandler);
                     window.removeEventListener('ble_message', metricsHandler);
                     resolve(fitness);
                 }
             };
-
-            const completeHandler = (event) => {
-                const data = event.detail;
-                if (data.type === 'test_complete' && data.testId === testId) {
-                    if (!data.success) {
-                        clearTimeout(timeout);
-                        window.removeEventListener('ble_message', completeHandler);
-                        window.removeEventListener('ble_message', metricsHandler);
-                        reject({ reason: 'interrupted_by_emergency', testId: testId });
-                    }
-                }
-            };
             
-            window.addEventListener('ble_message', metricsHandler);
             window.addEventListener('ble_message', completeHandler);
+            window.addEventListener('ble_message', metricsHandler);
             
             sendBleCommand('run_metrics_test', {
                 kp: sample.kp,
@@ -1153,7 +1117,6 @@ class BayesianOptimization {
     
     updateVisualization() {
         const canvas = document.getElementById('bayesian-space-chart');
-        if (!canvas) return;
         const ctx = canvas.getContext('2d');
         
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1195,7 +1158,7 @@ class BayesianOptimization {
             // Color based on fitness (gradient from red=bad to blue=good)
             const minFitness = Math.min(...validSamples.map(s => s.fitness));
             const maxFitness = Math.max(...validSamples.map(s => s.fitness));
-            const normalized = (maxFitness - minFitness) > 0 ? (sample.fitness - minFitness) / (maxFitness - minFitness) : 0;
+            const normalized = (sample.fitness - minFitness) / (maxFitness - minFitness + 0.001);
             const hue = (1 - normalized) * 240; // 240=blue (good), 0=red (bad)
             
             ctx.fillStyle = `hsl(${hue}, 70%, 50%)`;
@@ -1220,8 +1183,7 @@ class BayesianOptimization {
     async run() {
         this.isRunning = true;
         
-        const progressEl = document.getElementById('tuning-progress-panel');
-        if (progressEl) progressEl.style.display = 'block';
+        document.getElementById('tuning-progress').style.display = 'block';
         showNotification('Inicjalizacja Bayesian Optimization...');
         
         await this.initialize();
