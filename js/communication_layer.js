@@ -125,6 +125,7 @@ class BLECommunication extends CommunicationLayer {
         
         // Chunked message handling
         this.chunks = new Map();
+    this.MAX_OUTGOING_MESSAGE_LENGTH = 230; // match firmware's ~256 fragment limit
     }
     
     /**
@@ -284,6 +285,10 @@ class BLECommunication extends CommunicationLayer {
      * @param {Object} message - Message to send
      */
     async send(message) {
+        const json = JSON.stringify(message) + '\n';
+        if (json.length > this.MAX_OUTGOING_MESSAGE_LENGTH) {
+            console.warn(`[BLE] Outgoing message length ${json.length} > ${this.MAX_OUTGOING_MESSAGE_LENGTH}. Prefer small packets (set_param) or splitting.`);
+        }
         this.messageQueue.push(message);
         this.processQueue();
     }

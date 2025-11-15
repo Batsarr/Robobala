@@ -656,8 +656,24 @@ async function processBleQueue() { if (isSendingBleMessage || bleMessageQueue.le
 
 // Updated sendBleMessage to use the communication layer
 function sendBleMessage(message) {
+    // If the message is a full_config, always send it as a sequence of small set_param packets
+    if (message && message.type === 'full_config' && message.params) {
+        // Fire-and-forget; sendFullConfigToRobot handles per-param sending and throttling
+        sendFullConfigToRobot();
+        return;
+    }
     // Use the new communication layer if available and connected
     if (commLayer && commLayer.getConnectionStatus()) {
+        // Sanity check: avoid sending large JSON messages from UI to robot
+        try {
+            const json = JSON.stringify(message);
+            if (json.length > 230) {
+                addLogMessage(`[UI] Uwaga: wysylana duza wiadomosc BLE (len=${json.length}). Preferuj malutkie paczki.`, 'warn');
+            }
+        } catch (e) {
+            // If serializing fails, just send — but log the error
+            addLogMessage('[UI] Blad serializacji wiadomosci BLE.', 'warn');
+        }
         commLayer.send(message);
     } else {
         // Fallback to old method for backward compatibility
@@ -1923,7 +1939,7 @@ function setupNumericInputs() {
         plusBtn.addEventListener('click', () => updateValue(step)); 
     }); 
 }
-function sendFullConfigToRobot() {
+async function sendFullConfigToRobot() {
     const params = {};
     for (const [inputId, snakeKey] of Object.entries(parameterMapping)) {
         const input = document.getElementById(inputId);
@@ -1947,8 +1963,14 @@ function sendFullConfigToRobot() {
     // Add trim parameters from displays
     params['trim_angle'] = parseFloat(document.getElementById('trimValueDisplay').textContent) || 0;
     params['roll_trim'] = parseFloat(document.getElementById('rollTrimValueDisplay').textContent) || 0;
-    addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info');
-    sendBleMessage({ type: 'full_config', params });
+    addLogMessage('[UI] Wysylam pelna konfiguracje do robota (jako set_param po jednym).', 'info');
+    // Explicitly send each parameter as a separate, small packet (set_param)
+    for (const [k, v] of Object.entries(params)) {
+        sendBleMessage({ type: 'set_param', key: k, value: v });
+        // Throttle to keep messages small and avoid BLE stack errors
+        await new Promise((res) => setTimeout(res, BLE_SEND_INTERVAL));
+    }
+    addLogMessage('[UI] Pelna konfiguracja wyslana (set_param).', 'success');
 }
 // LEGACY REMOVED: setupEventListeners() nieużywane po refaktorze – zachowane tylko jako komentarz dla historii.
 // (Jeśli potrzebne w przyszłości: przenieść potrzebne listenery do setupParameterListeners.)
