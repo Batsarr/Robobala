@@ -35,8 +35,13 @@
             <div class="calib-axis" style="display: flex; align-items: center; margin: 10px 0; justify-content: space-between;">
                 <span>Mag (Magnetyczne):</span><progress id="calib-mag-bar" value="0" max="3" style="flex: 1; margin: 0 10px;"></progress><span id="calib-mag-text">0</span>/3
             </div>
-            <button id="calib-update-btn" style="width: 48%; margin-right: 4%;">Aktualizuj Status</button>
-            <button id="calib-close-btn" style="width: 48%;">Zamknij</button>
+            <div style="display:flex; gap:8px;">
+                <button id="calib-update-btn" style="flex:1;">Aktualizuj Status</button>
+                <button id="calib-close-btn" style="flex:1;">Zamknij</button>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+                <button id="calib-save-btn" style="display:none; background:#61dafb; padding:6px 12px; border-radius:6px;">Zapisz offset do EEPROM</button>
+            </div>
         </div>
     </div>
 
@@ -500,7 +505,7 @@
             </div>
             <div class="sensor-mapping-wrapper" style="display:flex; gap:10px; margin-top:12px; align-items:flex-start;">
                 <div id="sensor-mapping-preview" class="sensor-mapping-preview" style="flex:1; min-width:250px; height:200px; background:#000; border-radius:6px; overflow:hidden;"></div>
-                <div class="sensor-mapping-controls" style="width:320px; display:flex; flex-direction:column; gap:8px;">
+                    <div class="sensor-mapping-controls" style="width:320px; display:flex; flex-direction:column; gap:8px;">
                     <div style="display:flex; justify-content:space-between; gap:6px;">
                         <div>
                             <div>Pitch (Cube): <span id="modal-pitch-display">0.0°</span></div>
@@ -519,6 +524,35 @@
                         <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Pitch</div><button id="pitchMinus90Btn">-90°</button><button id="pitchPlus90Btn">+90°</button></div>
                         <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Roll</div><button id="rollMinus90Btn">-90°</button><button id="rollPlus90Btn">+90°</button></div>
                         <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Yaw</div><button id="yawMinus90Btn">-90°</button><button id="yawPlus90Btn">+90°</button></div>
+                    </div>
+                    <!-- DODANE: Kontrolki remapu IMU (wpływają na wewnętrzne wektory - PID) -->
+                    <hr style="border-color:#2a2a35;">
+                    <div style="margin-top:6px;">
+                        <strong>Mapowanie osi IMU (wpływ na PID)</strong>
+                        <div style="display:flex; gap:6px; margin-top:6px;">
+                            <div style="flex:1;">
+                                <div>Pitch (Źródło)</div>
+                                <select id="imuPitchSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
+                                <div class="sign-toggle" id="imuPitchSign" style="margin-top:6px;"><button data-sign="1" class="active" title="Dodatni">+1</button><button data-sign="-1" title="Ujemny">-1</button></div>
+                            </div>
+                            <div style="flex:1;">
+                                <div>Yaw (Źródło)</div>
+                                <select id="imuYawSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
+                                <div class="sign-toggle" id="imuYawSign" style="margin-top:6px;"><button data-sign="1" class="active">+1</button><button data-sign="-1">-1</button></div>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:6px; margin-top:6px; align-items:center;">
+                            <div style="flex:1;">
+                                <div>Roll (Źródło)</div>
+                                <select id="imuRollSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
+                                <div class="sign-toggle" id="imuRollSign" style="margin-top:6px;"><button data-sign="1" class="active">+1</button><button data-sign="-1">-1</button></div>
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:6px; min-width:120px;">
+                                <button id="imuMappingLoadBtn" style="background:#61dafb;">Wczytaj</button>
+                                <button id="imuMappingSaveBtn" style="background:#a2f279;">Zapisz</button>
+                            </div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px; margin-top:8px;"><input id="markFrontFaceChk" type="checkbox"><label for="markFrontFaceChk">Oznacz front (góra/dół) w podglądzie</label></div>
                     </div>
                     <div style="display:flex; gap:8px;">
                         <button id="setModalPitchZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Pitch)</button>

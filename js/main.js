@@ -156,6 +156,8 @@ document.addEventListener('DOMContentLoaded', () => {
         sensorWizard = { step: 0, rotStartYaw: null, monitorId: null, progress: { upright: false, rotation: false, saved: false } };
         updateSensorWizardUI();
         initSensorMappingPreview();
+        // Load IMU mapping from EEPROM when opening the modal
+        sendBleMessage({ type: 'get_imu_mapping' });
         if (!sensorModalTelemetryMonitorId) sensorModalTelemetryMonitorId = setInterval(updateModalTelemetryDisplay, 200);
     }
     function closeSensorMappingModal() { const m = document.getElementById('sensor-mapping-modal'); if (!m) return; if (sensorWizard.monitorId) { clearInterval(sensorWizard.monitorId); sensorWizard.monitorId = null; } if (sensorModalTelemetryMonitorId) { clearInterval(sensorModalTelemetryMonitorId); sensorModalTelemetryMonitorId = null; } m.style.display = 'none'; }
@@ -215,6 +217,38 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 100);
     }
     document.getElementById('sensorMappingBtn')?.addEventListener('click', () => { openSensorMappingModal(); });
+    // IMU mapping load/save controls
+    document.getElementById('imuMappingLoadBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'get_imu_mapping' }); });
+    document.getElementById('imuMappingSaveBtn')?.addEventListener('click', () => {
+        if (!AppState.isConnected) { addLogMessage('[UI] Musisz być połączony z robotem aby zapisać mapowanie IMU.', 'warn'); return; }
+        if (!confirm('Zapisz mapowanie IMU do pamięci EEPROM robota?')) return;
+        const mapping = gatherIMUMappingFromUI();
+        sendBleMessage({ type: 'set_imu_mapping', mapping });
+        addLogMessage('[UI] Wysłano mapowanie IMU do robota (set_imu_mapping).', 'info');
+    });
+    // Add change handler for selects to apply runtime mapping for immediate feedback (no EEPROM save)
+    ['imuPitchSource', 'imuYawSource', 'imuRollSource'].forEach(selectId => {
+        const s = document.getElementById(selectId);
+        if (!s) return;
+        s.addEventListener('change', () => {
+            if (AppState.isConnected) {
+                const mapping = gatherIMUMappingFromUI();
+                sendBleMessage({ type: 'set_imu_mapping', mapping });
+            }
+        });
+    });
+    // Sign toggle wiring for IMU remap controls
+    ['imuPitchSign', 'imuYawSign', 'imuRollSign'].forEach(containerId => {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        el.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', () => { const sign = parseInt(btn.dataset.sign); setSignButtons(containerId, sign); });
+        });
+    });
+    // Toggle preview face indicator
+    document.getElementById('markFrontFaceChk')?.addEventListener('change', (e) => {
+        try { if (sensorPreview && sensorPreview.faceIndicator) sensorPreview.faceIndicator.visible = e.target.checked; } catch (err) { /* no-op */ }
+    });
     document.getElementById('sensorWizardCancelBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'sensor_map_cancel' }); closeSensorMappingModal(); });
     document.getElementById('sensorWizardBackBtn')?.addEventListener('click', () => {
         if (sensorWizard.step === 0) return; // nic
@@ -383,6 +417,15 @@ function initSensorMappingPreview() {
     sensorPreview.yArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 1.1, 0x00ff00);
     sensorPreview.zArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 1.1, 0x0000ff);
     cube.add(sensorPreview.xArrow); cube.add(sensorPreview.yArrow); cube.add(sensorPreview.zArrow);
+    // Face indicator - small plane on cube front to indicate virtual sensor front/top orientation
+    const faceGeom = new THREE.PlaneGeometry(0.8, 0.8);
+    const faceMat = new THREE.MeshBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.75, side: THREE.DoubleSide });
+    const faceIndicator = new THREE.Mesh(faceGeom, faceMat);
+    faceIndicator.position.set(0, 0, 1.3);
+    faceIndicator.lookAt(sensorPreview.camera.position);
+    faceIndicator.visible = false;
+    cube.add(faceIndicator);
+    sensorPreview.faceIndicator = faceIndicator;
     // Animation loop
     function render() {
         sensorPreview.animId = requestAnimationFrame(render);
@@ -412,6 +455,26 @@ function initSensorMappingPreview() {
     document.getElementById('setModalRollZeroBtn')?.addEventListener('click', () => { setRollZero(); });
 }
 
+// Gather IMU mapping from sensor mapping modal
+function gatherIMUMappingFromUI() {
+    const mapping = {
+        pitch: { source: parseInt(document.getElementById('imuPitchSource')?.value || '0'), sign: parseInt(getActiveSign('imuPitchSign')) },
+        yaw: { source: parseInt(document.getElementById('imuYawSource')?.value || '1'), sign: parseInt(getActiveSign('imuYawSign')) },
+        roll: { source: parseInt(document.getElementById('imuRollSource')?.value || '2'), sign: parseInt(getActiveSign('imuRollSign')) }
+    };
+    return mapping;
+}
+
+function updateIMUMappingUIFromData(data) {
+    if (!data || !data.pitch) return;
+    const p = document.getElementById('imuPitchSource'); if (p) p.value = data.pitch.source || '0';
+    const y = document.getElementById('imuYawSource'); if (y) y.value = data.yaw.source || '1';
+    const r = document.getElementById('imuRollSource'); if (r) r.value = data.roll.source || '2';
+    setSignButtons('imuPitchSign', parseInt(data.pitch.sign));
+    setSignButtons('imuYawSign', parseInt(data.yaw.sign));
+    setSignButtons('imuRollSign', parseInt(data.roll.sign));
+}
+
 function rotateSensorCube(axis, deg) {
     if (!sensorPreview.cube) return;
     const rad = THREE.MathUtils.degToRad(deg);
@@ -419,6 +482,70 @@ function rotateSensorCube(axis, deg) {
     else if (axis === 'y') sensorPreview.cube.rotateY(rad);
     else if (axis === 'z') sensorPreview.cube.rotateZ(rad);
     updateSensorMappingDisplays();
+    // Apply rotation transform to current IMU mapping values (UI only until user saves)
+    if (Math.abs(deg) % 90 === 0) {
+        try { applyRotationToIMUMapping(axis, deg); } catch (e) { /* no-op */ }
+    }
+}
+
+function mappingObjToMatrix(mapping) {
+    // mapping: { pitch:{source,sign}, yaw:{...}, roll:{...} }
+    const M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    const setRow = (rowIdx, m) => { const col = parseInt(m.source); const sign = parseInt(m.sign) || 1; M[rowIdx][col] = sign; };
+    setRow(0, mapping.pitch);
+    setRow(1, mapping.yaw);
+    setRow(2, mapping.roll);
+    return M;
+}
+
+function matrixToMappingObj(M) {
+    const findInRow = (row) => {
+        for (let c = 0; c < 3; c++) {
+            const v = M[row][c]; if (v === 0) continue; return { source: c, sign: v };
+        }
+        // default fallback
+        return { source: 0, sign: 1 };
+    };
+    return { pitch: findInRow(0), yaw: findInRow(1), roll: findInRow(2) };
+}
+
+function multiplyMatrix(A, B) {
+    const R = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { let s = 0; for (let k = 0; k < 3; k++) s += A[i][k] * B[k][j]; R[i][j] = s; }
+    return R;
+}
+
+function getRotationMatrix(axis, deg) {
+    const d = ((deg % 360) + 360) % 360; // normalize
+    // Build RA for +90 degree rotation - adapt sign for negative angle
+    const q = (d === 270) ? -90 : d; // for -90 deg normalized to 270; make it -90 to handle below
+    let RA = null;
+    if (axis === 'x') {
+        if (q === 90) RA = [[1, 0, 0], [0, 0, -1], [0, 1, 0]];
+        else if (q === -90) RA = [[1, 0, 0], [0, 0, 1], [0, -1, 0]];
+        else if (q === 180) RA = [[1, 0, 0], [0, -1, 0], [0, 0, -1]];
+        else RA = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    } else if (axis === 'y') {
+        if (q === 90) RA = [[0, 0, 1], [0, 1, 0], [-1, 0, 0]];
+        else if (q === -90) RA = [[0, 0, -1], [0, 1, 0], [1, 0, 0]];
+        else if (q === 180) RA = [[-1, 0, 0], [0, 1, 0], [0, 0, -1]];
+        else RA = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    } else { // z
+        if (q === 90) RA = [[0, -1, 0], [1, 0, 0], [0, 0, 1]];
+        else if (q === -90) RA = [[0, 1, 0], [-1, 0, 0], [0, 0, 1]];
+        else if (q === 180) RA = [[-1, 0, 0], [0, -1, 0], [0, 0, 1]];
+        else RA = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    }
+    return RA;
+}
+
+function applyRotationToIMUMapping(axis, deg) {
+    const cur = gatherIMUMappingFromUI();
+    const M = mappingObjToMatrix(cur);
+    const R = getRotationMatrix(axis, deg);
+    const Mprime = multiplyMatrix(M, R);
+    const newMap = matrixToMappingObj(Mprime);
+    updateIMUMappingUIFromData(newMap);
 }
 
 function updateSensorMappingDisplays() {
@@ -514,7 +641,13 @@ function applyModelMappingToEuler(e) { // e={pitch,yaw,roll}; zwraca przemapowan
 document.getElementById('modelMappingBtn')?.addEventListener('click', () => { openModelMappingModal(); sendBleMessage({ type: 'get_model_mapping' }); });
 document.getElementById('modelMappingCloseBtn')?.addEventListener('click', () => closeModelMappingModal());
 document.getElementById('modelMappingLoadBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'get_model_mapping' }); });
-document.getElementById('modelMappingSaveBtn')?.addEventListener('click', () => { gatherModelMappingFromUI(); sendBleMessage({ type: 'set_model_mapping', mapping: modelMapping }); addLogMessage('[UI] Wyslano mapowanie modelu 3D do robota.', 'info'); });
+document.getElementById('modelMappingSaveBtn')?.addEventListener('click', () => {
+    if (!AppState.isConnected) { addLogMessage('[UI] Musisz być połączony z robotem aby zapisać mapowanie modelu 3D.', 'warn'); return; }
+    if (!confirm('Zapisz mapowanie modelu 3D do pamięci EEPROM robota?')) return;
+    gatherModelMappingFromUI();
+    sendBleMessage({ type: 'set_model_mapping', mapping: modelMapping });
+    addLogMessage('[UI] Wyslano mapowanie modelu 3D do robota.', 'info');
+});
 // Feedback sign toggles wiring - init once here (not in the test result handler)
 const signButtonMap = {
     'balanceSign': 'balance_feedback_sign',
@@ -881,6 +1014,8 @@ function processCompleteMessage(data) {
         case 'imu_mapping':
             // Zachowaj w pamięci (może w przyszłości do obliczeń sterowania UI)
             window.imuMapping = data;
+            // Aktualizuj kontrolki w modalu mapowania czujnika (jeśli otwarte)
+            try { updateIMUMappingUIFromData(data); } catch (e) { /* no-op */ }
             addLogMessage('[UI] Otrzymano mapowanie czujnika (imu_mapping).', 'info');
             break;
         case 'model_mapping':
@@ -930,6 +1065,12 @@ function processCompleteMessage(data) {
             } else if (data.command === 'save_tunings') {
                 const level = data.success ? 'success' : 'error';
                 addLogMessage(`[ROBOT] Zapis do EEPROM: ${data.message || (data.success ? 'OK' : 'Blad')}`, level);
+            } else if (data.command === 'calibrate_mpu') {
+                const level = data.success ? 'success' : 'error';
+                addLogMessage(`[ROBOT] Kalibracja IMU: ${data.message || (data.success ? 'Zapisane do EEPROM' : 'Blad')}`, level);
+            } else if (data.command === 'set_imu_mapping') {
+                const level = data.success ? 'success' : 'error';
+                addLogMessage(`[ROBOT] Mapowanie IMU: ${data.message || (data.success ? 'Zapisane' : 'BLAD')}`, level);
             } else {
                 // Ogólna obsługa dla innych poleceń
                 const level = data.success ? 'info' : 'warn';
@@ -1015,7 +1156,7 @@ function refreshRecentList() {
     if (!box) return;
     const last5 = tuningHistory.slice(-5).reverse();
     if (!last5.length) { box.textContent = 'Brak danych.'; return; }
-    box.innerHTML = last5.map((r, idx) => `#${r.idx} | Kp=${r.kp.toFixed(3)} Ki=${r.ki.toFixed(3)} Kd=${r.kd.toFixed(3)} | fitness=${r.fitness.toFixed(4)} | ITAE=${(r.itae ?? NaN).toFixed?.(2) ?? '---'} | ov=${(r.overshoot ?? NaN).toFixed?.(2) ?? '---'}%`).join('\n');
+    box.innerHTML = last5.map((r, idx) => `#${r.idx} | Kp=${r.kp.toFixed(3)} Ki=${r.ki.toFixed(3)} Kd=${r.kd.toFixed(3)} | fitness=${r.fitness.toFixed(4)} | ITAE=${(r.itae ?? NaN).toFixed?.(2) ?? '---'} | ov=${(r.overshoot ?? NaN).toFixed?.(2) ?? '---'}${r.testType === 'metrics_test' ? '°' : '%'}`).join('\n');
 }
 function refreshHistoryTable() {
     const tbody = document.getElementById('results-table-body');
@@ -1024,7 +1165,7 @@ function refreshHistoryTable() {
     for (let i = tuningHistory.length - 1; i >= 0; i--) {
         const r = tuningHistory[i];
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${r.idx}</td><td>${r.kp.toFixed(3)}</td><td>${r.ki.toFixed(3)}</td><td>${r.kd.toFixed(3)}</td><td>${r.fitness.toFixed(4)}</td><td>${(r.itae ?? 0).toFixed(2)}</td><td>${(r.overshoot ?? 0).toFixed(2)}%</td><td><button class="btn-small" data-apply="${i}">Zastosuj</button></td>`;
+        tr.innerHTML = `<td>${r.idx}</td><td>${r.kp.toFixed(3)}</td><td>${r.ki.toFixed(3)}</td><td>${r.kd.toFixed(3)}</td><td>${r.fitness.toFixed(4)}</td><td>${(r.itae ?? 0).toFixed(2)}</td><td>${(r.overshoot ?? 0).toFixed(2)}${r.testType === 'metrics_test' ? '°' : '%'}</td><td><button class="btn-small" data-apply="${i}">Zastosuj</button></td>`;
         tbody.appendChild(tr);
     }
     { const hc = document.getElementById('historyCount'); if (hc) hc.textContent = `${tuningHistory.length} prób`; }
@@ -1952,7 +2093,7 @@ function handleDynamicTestResult(raw) {
     try {
         if (typeof addTestToResultsTable === 'function' && data.kp !== undefined && data.kd !== undefined) {
             const nextIdx = (document.getElementById('results-table-body')?.children.length || 0) + 1;
-            addTestToResultsTable(nextIdx, { kp: data.kp, ki: data.ki ?? 0, kd: data.kd }, data.itae ?? Infinity, data.itae ?? NaN, data.overshoot ?? NaN);
+            addTestToResultsTable(nextIdx, { kp: data.kp, ki: data.ki ?? 0, kd: data.kd }, data.itae ?? Infinity, data.itae ?? NaN, data.overshoot ?? NaN, data.test_type || 'metrics_test');
             // pokaż kontener wyników
             const cont = document.getElementById('results-container');
             if (cont) cont.style.display = 'block';
@@ -2309,11 +2450,41 @@ function setupCalibrationModal() {
     const upd = document.getElementById('calib-update-btn');
     if (upd) upd.addEventListener('click', refreshCalibrationFromTelemetry);
     const close = document.getElementById('calib-close-btn');
-    if (close) close.addEventListener('click', () => { const sys = parseInt(document.getElementById('calib-sys-text').textContent) || 0; if (sys >= 3) { hideCalibrationModal(); } else if (confirm('Poziom kalibracji systemu jest niski (<3). Czy na pewno chcesz zamknac?')) { hideCalibrationModal(); } });
+    if (close) close.addEventListener('click', () => {
+        const sys = parseInt(document.getElementById('calib-sys-text').textContent) || 0;
+        if (sys >= 3 || confirm('Poziom kalibracji systemu jest niski (<3). Czy na pewno chcesz zamknac?')) {
+            hideCalibrationModal();
+        }
+    });
+    const saveBtn = document.getElementById('calib-save-btn');
+    if (saveBtn) saveBtn.addEventListener('click', () => {
+        if (!AppState.isConnected) { addLogMessage('[UI] Musisz się połączyć z robotem, aby zapisać kalibrację.', 'warn'); return; }
+        if (!confirm('Czy na pewno chcesz zapisać bieżącą kalibrację IMU do EEPROM robota?')) return;
+        addLogMessage('[UI] Wysłano żądanie zapisania kalibracji IMU do EEPROM...', 'info');
+        sendBleMessage({ type: 'calibrate_mpu' });
+    });
 }
 function showCalibrationModal() { document.getElementById('calibration-modal').style.display = 'flex'; isCalibrationModalShown = true; sendBleMessage({ type: 'set_rgb_blink', colors: ['00FF00', 'FFA500'] }); addLogMessage('[UI] Rozpocznij proces kalibracji IMU - obracaj robota powoli we wszystkich kierunkach.', 'info'); }
 function hideCalibrationModal() { document.getElementById('calibration-modal').style.display = 'none'; isCalibrationModalShown = false; sendBleMessage({ type: 'stop_rgb_blink' }); addLogMessage('[UI] Asystent kalibracji zamkniety.', 'info'); }
-function updateCalibrationProgress(axis, value) { if (document.getElementById('calibration-modal').style.display === 'none') return; const barId = `calib-${axis}-bar`; const textId = `calib-${axis}-text`; const bar = document.getElementById(barId); const text = document.getElementById(textId); if (bar && text) { bar.value = value; text.textContent = value; const sys = parseInt(document.getElementById('calib-sys-text').textContent) || 0; if (sys >= 3 && document.getElementById('calibration-modal').style.display !== 'none') { hideCalibrationModal(); addLogMessage('[UI] Kalibracja systemu osiagnela poziom 3. Asystent zamkniety.', 'success'); } } }; // ZMIANA: Usunięto duplikację funkcji setupCalibrationModal()
+function updateCalibrationProgress(axis, value) {
+    if (document.getElementById('calibration-modal').style.display === 'none') return;
+    const barId = `calib-${axis}-bar`;
+    const textId = `calib-${axis}-text`;
+    const bar = document.getElementById(barId);
+    const text = document.getElementById(textId);
+    if (bar && text) {
+        bar.value = value;
+        text.textContent = value;
+        const sys = parseInt(document.getElementById('calib-sys-text').textContent) || 0;
+        const saveBtn = document.getElementById('calib-save-btn');
+        // Don't auto-close the modal. Offer save option when Sys>=3
+        if (sys >= 3) {
+            if (saveBtn) saveBtn.style.display = 'inline-block';
+        } else {
+            if (saveBtn) saveBtn.style.display = 'none';
+        }
+    }
+}; // ZMIANA: Usunięto duplikację funkcji setupCalibrationModal()
 function init3DVisualization() { const container = document.getElementById('robot3d-container'); scene3D = new THREE.Scene(); camera3D = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 2000); camera3D.position.set(28, 22, 48); camera3D.lookAt(0, 8, 0); renderer3D = new THREE.WebGLRenderer({ antialias: true }); renderer3D.setSize(container.clientWidth, container.clientHeight); container.appendChild(renderer3D.domElement); controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement); controls3D.target.set(0, 8, 0); controls3D.maxPolarAngle = Math.PI / 2; const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); scene3D.add(ambientLight); const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9); directionalLight.position.set(10, 20, 15); scene3D.add(directionalLight); const PLANE_SIZE_CM = 2000; groundTexture = createCheckerTexture(40); const repeats = PLANE_SIZE_CM / 40; groundTexture.repeat.set(repeats, repeats); const groundMaterial = new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1.0, metalness: 0.0 }); const groundGeo = new THREE.PlaneGeometry(PLANE_SIZE_CM, PLANE_SIZE_CM, 1, 1); groundMesh = new THREE.Mesh(groundGeo, groundMaterial); groundMesh.rotation.x = -Math.PI / 2; groundMesh.position.y = 0; scene3D.add(groundMesh); robotPivot = createRobotModel3D(); robotPivot.position.y = 4.1; scene3D.add(robotPivot); skyDome = createSkyDome(); scene3D.add(skyDome); window.addEventListener('resize', () => { const width = container.clientWidth; const height = container.clientHeight; camera3D.aspect = width / height; camera3D.updateProjectionMatrix(); renderer3D.setSize(width, height); }); setupControls3D(); setupCalibrationModal(); }; // ZMIANA: Usunięto duplikację funkcji setupCalibrationModal()
 function createCustomWheel(totalRadius, tireThickness, width) { const wheelGroup = new THREE.Group(); const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 }); const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.4 }); const rimRadius = totalRadius - tireThickness; const tire = new THREE.Mesh(new THREE.TorusGeometry(rimRadius + tireThickness / 2, tireThickness / 2, 16, 100), tireMaterial); wheelGroup.add(tire); const rimShape = new THREE.Shape(); rimShape.absarc(0, 0, rimRadius, 0, Math.PI * 2, false); const holePath = new THREE.Path(); holePath.absarc(0, 0, rimRadius * 0.85, 0, Math.PI * 2, true); rimShape.holes.push(holePath); const extrudeSettings = { depth: width * 0.4, bevelEnabled: false }; const outerRimGeometry = new THREE.ExtrudeGeometry(rimShape, extrudeSettings); outerRimGeometry.center(); const outerRim = new THREE.Mesh(outerRimGeometry, rimMaterial); wheelGroup.add(outerRim); const hubRadius = rimRadius * 0.2; const hub = new THREE.Mesh(new THREE.CylinderGeometry(hubRadius, hubRadius, width * 0.5, 24), rimMaterial); hub.rotateX(Math.PI / 2); wheelGroup.add(hub); const spokeLength = (rimRadius * 0.85) - hubRadius; const spokeGeometry = new THREE.BoxGeometry(spokeLength, rimRadius * 0.15, width * 0.4); spokeGeometry.translate(hubRadius + spokeLength / 2, 0, 0); for (let i = 0; i < 6; i++) { const spoke = new THREE.Mesh(spokeGeometry, rimMaterial); spoke.rotation.z = i * (Math.PI / 3); wheelGroup.add(spoke); } return wheelGroup; }
 function createRobotModel3D() { const BODY_WIDTH = 9.0, BODY_HEIGHT = 6.0, BODY_DEPTH = 3.5, WHEEL_GAP = 1.0; const MAST_HEIGHT = 14.5, MAST_THICKNESS = 1.5; const BATTERY_WIDTH = 6.0, BATTERY_HEIGHT = 1.0, BATTERY_DEPTH = 3.0; const TIRE_THICKNESS = 1.0, WHEEL_WIDTH = 2.0; const WHEEL_RADIUS_3D = 4.1; const pivot = new THREE.Object3D(); const model = new THREE.Group(); const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1C1C1C }); const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0x4169E1 }); const body = new THREE.Mesh(new THREE.BoxGeometry(BODY_WIDTH, BODY_HEIGHT, BODY_DEPTH), bodyMaterial); body.position.y = WHEEL_RADIUS_3D; model.add(body); const mast = new THREE.Mesh(new THREE.BoxGeometry(MAST_THICKNESS, MAST_HEIGHT, MAST_THICKNESS), bodyMaterial); mast.position.y = WHEEL_RADIUS_3D + BODY_HEIGHT / 2 + MAST_HEIGHT / 2; model.add(mast); const battery = new THREE.Mesh(new THREE.BoxGeometry(BATTERY_WIDTH, BATTERY_HEIGHT, BATTERY_DEPTH), batteryMaterial); battery.position.y = mast.position.y + MAST_HEIGHT / 2 + BATTERY_HEIGHT / 2; model.add(battery); leftWheel = createCustomWheel(WHEEL_RADIUS_3D, TIRE_THICKNESS, WHEEL_WIDTH); leftWheel.rotation.y = Math.PI / 2; leftWheel.position.set(-(BODY_WIDTH / 2 + WHEEL_GAP), WHEEL_RADIUS_3D, 0); model.add(leftWheel); rightWheel = createCustomWheel(WHEEL_RADIUS_3D, TIRE_THICKNESS, WHEEL_WIDTH); rightWheel.rotation.y = Math.PI / 2; rightWheel.position.set(BODY_WIDTH / 2 + WHEEL_GAP, WHEEL_RADIUS_3D, 0); model.add(rightWheel); model.position.y = -WHEEL_RADIUS_3D; pivot.add(model); return pivot; }
@@ -2540,7 +2711,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let currentTuningSession = null;
 
-function startTuning() {
+async function requestFullConfigAndSync(timeoutMs = 20000) {
+    return new Promise((resolve, reject) => {
+        let resolved = false;
+        const onSync = (evt) => {
+            const data = (evt && evt.detail) ? evt.detail : evt;
+            if (!data || !data.type) return;
+            if (data.type === 'sync_complete' || data.type === 'sync_end') {
+                if (!resolved) {
+                    resolved = true;
+                    window.removeEventListener('ble_message', onSync);
+                    resolve(true);
+                }
+            }
+        };
+        window.addEventListener('ble_message', onSync);
+        // Send a request for full configuration
+        sendBleCommand('request_full_config', {});
+        setTimeout(() => {
+            if (!resolved) {
+                window.removeEventListener('ble_message', onSync);
+                reject(new Error('request_full_config timeout'));
+            }
+        }, timeoutMs);
+    });
+}
+
+async function startTuning() {
     if (!checkTuningPrerequisites()) return;
 
     const method = document.querySelector('.method-tab.active')?.dataset.method;
@@ -2549,8 +2746,13 @@ function startTuning() {
         return;
     }
 
-    // CRITICAL: Capture baseline PID parameters before starting tuning
-    // These will be used to restore safe balancing state during pause or after emergency
+    // CRITICAL: Request full configuration from robot and capture baseline PID
+    // This ensures baseline reflects the actual runtime parameters on the robot
+    try {
+        await requestFullConfigAndSync(5000);
+    } catch (err) {
+        addLogMessage('[UI] Ostrzezenie: synchronizacja konfiguracji nie powiodla sie. Zastosuje lokalne wartosci UI.', 'warn');
+    }
     captureBaselinePID();
 
     const searchSpace = {
