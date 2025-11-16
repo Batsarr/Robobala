@@ -984,12 +984,10 @@ function processCompleteMessage(data) {
                     data.viz_roll = mapped.roll;
                     // Pola kompatybilności: pitch/yaw/roll = surowe + trim (korekcja widoczna w dashboard)
                     // Pobierz aktualne wartości trim (telemetria może nie zawierać ich w każdej paczce)
-                    const currentTrim = (data.trim_angle !== undefined) ? Number(data.trim_angle) : Number((window.telemetryData && window.telemetryData.trim_angle) || parseFloat(document.getElementById('trimValueDisplay')?.textContent || '0') || 0);
-                    const currentRollTrim = (data.roll_trim !== undefined) ? Number(data.roll_trim) : Number((window.telemetryData && window.telemetryData.roll_trim) || parseFloat(document.getElementById('rollTrimValueDisplay')?.textContent || '0') || 0);
-                    // Zwracamy pitch/roll skorygowane o trimy (wyświetlane jako 'wartość po korekcji' w dashboard)
-                    data.pitch = (data.raw_pitch || 0) + (isNaN(currentTrim) ? 0 : currentTrim);
+                    // telemetry quaternion already contains trim & corrections (q_final), UI should use that directly
+                    data.pitch = (data.raw_pitch || 0);
                     data.yaw = data.raw_yaw;
-                    data.roll = (data.raw_roll || 0) + (isNaN(currentRollTrim) ? 0 : currentRollTrim);
+                    data.roll = (data.raw_roll || 0);
                 }
             }
             updateTelemetryUI(data);
@@ -1218,16 +1216,14 @@ function applySingleParam(snakeKey, value) {
     if (snakeKey === 'trim_angle') {
         const span = document.getElementById('trimValueDisplay');
         if (span) span.textContent = parseFloat(value).toFixed(2);
-        // Aktualizuj natychmiast display skorygowanej wartości (angleVal)
+        // Telemetry quaternion already includes trim; show raw/effective pitch directly
         const rawPitch = window.telemetryData && typeof window.telemetryData.raw_pitch === 'number' ? window.telemetryData.raw_pitch : 0;
-        const corrected = rawPitch + Number(value || 0);
-        const angleEl = document.getElementById('angleVal'); if (angleEl) angleEl.textContent = corrected.toFixed(1) + ' \u00B0';
+        const angleEl = document.getElementById('angleVal'); if (angleEl) angleEl.textContent = rawPitch.toFixed(1) + ' \u00B0';
     } else if (snakeKey === 'roll_trim') {
         const span = document.getElementById('rollTrimValueDisplay');
         if (span) span.textContent = parseFloat(value).toFixed(2);
         const rawRoll = window.telemetryData && typeof window.telemetryData.raw_roll === 'number' ? window.telemetryData.raw_roll : 0;
-        const correctedR = rawRoll + Number(value || 0);
-        const rollEl = document.getElementById('rollVal'); if (rollEl) rollEl.textContent = correctedR.toFixed(1) + ' \u00B0';
+        const rollEl = document.getElementById('rollVal'); if (rollEl) rollEl.textContent = rawRoll.toFixed(1) + ' \u00B0';
     }
     // Feedback sign params - special handling: update sign buttons
     if (snakeKey === 'balance_feedback_sign') {
@@ -2326,31 +2322,27 @@ function setupParameterListeners() {
     function setPitchZero() {
         const eul = getRawEuler();
         if (!eul) { addLogMessage('[UI] Brak danych telemetrii (pitch). Nie mozna ustawic punktu 0.', 'warn'); return; }
-        const rawPitch = Number(eul.pitch || 0);
-        const computedTrim = -rawPitch; // trim that zeros the pitch
-        // Send set_param to actually change the trim value in firmware
-        sendBleMessage({ type: 'set_param', key: 'trim_angle', value: computedTrim });
-        // Backward compatibility: also send the legacy command
-        sendBleMessage({ type: 'set_pitch_zero' });
-        // Update UI immediately
-        const span = document.getElementById('trimValueDisplay'); if (span) span.textContent = computedTrim.toFixed(2);
-        // Show corrected angle as 0.0 in dashboard for immediate feedback and update charts/history
+        // Set new angle offset in firmware (persisted) and reset visible trim to 0
+        sendBleMessage({ type: 'set_pitch_zero' }); // saves angleOffset to EEPROM
+        // Reset pitch trim so visible correction is 0
+        sendBleMessage({ type: 'reset_pitch' });
+        // Immediate UI updates for responsiveness
+        const span = document.getElementById('trimValueDisplay'); if (span) span.textContent = '0.00';
         const val = document.getElementById('angleVal'); if (val) val.textContent = '0.0 °';
         pitchHistory.push(0); if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift(); updateChart({ pitch: 0 });
-        addLogMessage(`[UI] Punkt 0 (Pitch) ustawiony. Trim param = ${computedTrim.toFixed(2)}°`, 'success');
+        addLogMessage('[UI] Punkt 0 (Pitch) ustawiony i trim zresetowany do 0 (wyslano set_pitch_zero + reset_pitch).', 'success');
     }
 
     function setRollZero() {
         const eul = getRawEuler();
         if (!eul) { addLogMessage('[UI] Brak danych telemetrii (roll). Nie mozna ustawic punktu 0.', 'warn'); return; }
-        const rawRoll = Number(eul.roll || 0);
-        const computedTrim = -rawRoll; // trim that zeros the roll
-        sendBleMessage({ type: 'set_param', key: 'roll_trim', value: computedTrim });
-        sendBleMessage({ type: 'set_roll_zero' });
-        const span = document.getElementById('rollTrimValueDisplay'); if (span) span.textContent = computedTrim.toFixed(2);
+        // Set new roll offset in firmware and reset roll trim to zero
+        sendBleMessage({ type: 'set_roll_zero' }); // persists new roll offset to EEPROM
+        sendBleMessage({ type: 'reset_roll' });
+        const span = document.getElementById('rollTrimValueDisplay'); if (span) span.textContent = '0.00';
         const val = document.getElementById('rollVal'); if (val) val.textContent = '0.0 °';
         updateChart({ roll: 0 });
-        addLogMessage(`[UI] Punkt 0 (Roll) ustawiony. Roll trim = ${computedTrim.toFixed(2)}°`, 'success');
+        addLogMessage('[UI] Punkt 0 (Roll) ustawiony i roll trim zresetowany do 0 (wyslano set_roll_zero + reset_roll).', 'success');
     }
 
     document.getElementById('saveBtn')?.addEventListener('click', () => {
