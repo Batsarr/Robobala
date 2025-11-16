@@ -127,9 +127,13 @@ let isAnimation3DEnabled = true, isMovement3DEnabled = false, lastEncoderAvg = 0
 window.telemetryData = {};
 let isCalibrationModalShown = false;
 // UI base for 'Set Zero' feature — apparent trim is actualTrim - uiTrimZeroBase
-let uiTrimZeroBasePitch = 0.0; // baseline trim value used to compute apparent trims
+// Uwaga: baseline UI działa tylko jako przesunięcie wizualne (nie zmienia firmware).
+// uiTrimZeroBase* = ile "udajemy" w UI, że trim wynosi 0; firmware nadal trzyma realny trim.
+let uiTrimZeroBasePitch = 0.0;
 let uiTrimZeroBaseRoll = 0.0;
-let uiZeroBaselineAnglePitch = 0.0; // baseline corrected angle to subtract from displayed angle
+// uiZeroBaselineAngle* = surowy kąt (raw_* + firmware_trim) w momencie naciśnięcia "Ustaw punkt 0",
+// odejmowany potem tylko od wyświetlanego kąta – NIE wchodzi do logiki wysyłania trimów.
+let uiZeroBaselineAnglePitch = 0.0;
 let uiZeroBaselineAngleRoll = 0.0;
 let originalFirmwareTrimPitch = null;
 let originalFirmwareTrimRoll = null;
@@ -1359,7 +1363,13 @@ function normalizeTelemetryData(d) {
 
 function updateTelemetryUI(data) {
     data = normalizeTelemetryData(data);
-    window.telemetryData = data; // Zapisz ostatnie dane telemetryczne globalnie
+
+    // Zapisz ostatnie dane telemetryczne globalnie – zachowując raw_pitch/raw_roll/qw.., żeby
+    // set_zero i korekta pionu miały zawsze dostęp do pełnej informacji.
+    window.telemetryData = {
+        ...(window.telemetryData || {}),
+        ...data
+    };
     if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
     // Fitness paused indicator
     const dash = document.getElementById('autotune-dashboard');
@@ -1384,10 +1394,20 @@ function updateTelemetryUI(data) {
         }
     }
     if (typeof data.raw_pitch === 'number' || typeof data.pitch === 'number') {
+        // SUROWY kąt z kwaternionu (bez trima)
         const rawPitchVal = (typeof data.raw_pitch === 'number') ? data.raw_pitch : (data.raw_pitch || 0);
-        const actualTrimForPitch = (typeof trimAngle !== 'undefined') ? Number(trimAngle) : Number((window.telemetryData && window.telemetryData.trim_angle) || 0);
+
+        // Aktualny trim z telemetrii (priorytet: data, potem ostatni zapisany w window.telemetryData)
+        const telemetryTrimPitch = (data.trim_angle !== undefined)
+            ? Number(data.trim_angle)
+            : Number((window.telemetryData && window.telemetryData.trim_angle) || 0);
+
+        const actualTrimForPitch = isNaN(telemetryTrimPitch) ? 0 : telemetryTrimPitch;
+
+        // "Widoczny" trim w UI = firmware_trim - uiTrimZeroBasePitch
         const apparentTrimVal = actualTrimForPitch - (uiTrimZeroBasePitch || 0);
-        // Display the angle relative to UI baseline angle so set_zero results in 0 shown
+
+        // Kąt widoczny na dashboardzie liczony względem baseline kąta, zapamiętanego przy "Ustaw punkt 0"
         const correctedPitch = rawPitchVal + actualTrimForPitch - (uiZeroBaselineAnglePitch || 0);
         document.getElementById('angleVal').textContent = correctedPitch.toFixed(1) + ' \u00B0';
         const vizPitchVal = (data.viz_pitch !== undefined) ? data.viz_pitch : rawPitchVal || 0;
@@ -1399,7 +1419,13 @@ function updateTelemetryUI(data) {
     }
     if (typeof data.raw_roll === 'number' || typeof data.roll === 'number') {
         const rawRollVal = (typeof data.raw_roll === 'number') ? data.raw_roll : (data.raw_roll || 0);
-        const actualTrimForRoll = (typeof rollTrim !== 'undefined') ? Number(rollTrim) : Number((window.telemetryData && window.telemetryData.roll_trim) || 0);
+
+        const telemetryRollTrim = (data.roll_trim !== undefined)
+            ? Number(data.roll_trim)
+            : Number((window.telemetryData && window.telemetryData.roll_trim) || 0);
+
+        const actualTrimForRoll = isNaN(telemetryRollTrim) ? 0 : telemetryRollTrim;
+
         const apparentRollTrimVal = actualTrimForRoll - (uiTrimZeroBaseRoll || 0);
         const correctedRoll = rawRollVal + actualTrimForRoll - (uiZeroBaselineAngleRoll || 0);
         const vizRollVal = (data.viz_roll !== undefined) ? data.viz_roll : rawRollVal || 0;
@@ -1466,21 +1492,40 @@ function updateTelemetryUI(data) {
     if (calibGyro !== undefined) { document.getElementById('calibGyroVal').textContent = calibGyro; updateCalibrationProgress('gyro', calibGyro); }
     const calibMag = (data.calib_mag !== undefined) ? data.calib_mag : data.cm;
     if (calibMag !== undefined) { document.getElementById('calibMagVal').textContent = calibMag; updateCalibrationProgress('mag', calibMag); }
-    const trimAngle = (data.trim_angle !== undefined) ? Number(data.trim_angle) : (typeof data.ta !== 'undefined' ? Number(data.ta) : undefined);
-    if (typeof trimAngle !== 'undefined') {
+    const trimAngle = (data.trim_angle !== undefined)
+        ? Number(data.trim_angle)
+        : (typeof data.ta !== 'undefined' ? Number(data.ta) : undefined);
+
+    if (typeof trimAngle !== 'undefined' && !isNaN(trimAngle)) {
         if (originalFirmwareTrimPitch === null) originalFirmwareTrimPitch = trimAngle;
-        const apparentTrim = Number(trimAngle) - Number(uiTrimZeroBasePitch || 0);
-        const span = document.getElementById('trimValueDisplay'); if (span) span.textContent = apparentTrim.toFixed(2);
-        const origSpan = document.getElementById('trimOriginalDisplay'); if (origSpan) origSpan.textContent = originalFirmwareTrimPitch.toFixed(2);
-        const deltaSpan = document.getElementById('trimDeltaDisplay'); if (deltaSpan) deltaSpan.textContent = (Number(trimAngle) - (originalFirmwareTrimPitch || 0)).toFixed(2);
+        const apparentTrim = trimAngle - Number(uiTrimZeroBasePitch || 0);
+
+        const span = document.getElementById('trimValueDisplay');
+        if (span) span.textContent = apparentTrim.toFixed(2);
+
+        const origSpan = document.getElementById('trimOriginalDisplay');
+        if (origSpan) origSpan.textContent = originalFirmwareTrimPitch.toFixed(2);
+
+        const deltaSpan = document.getElementById('trimDeltaDisplay');
+        if (deltaSpan) deltaSpan.textContent = (trimAngle - (originalFirmwareTrimPitch || 0)).toFixed(2);
     }
-    const rollTrim = (data.roll_trim !== undefined) ? Number(data.roll_trim) : (typeof data.rt !== 'undefined' ? Number(data.rt) : undefined);
-    if (typeof rollTrim !== 'undefined') {
+
+    const rollTrim = (data.roll_trim !== undefined)
+        ? Number(data.roll_trim)
+        : (typeof data.rt !== 'undefined' ? Number(data.rt) : undefined);
+
+    if (typeof rollTrim !== 'undefined' && !isNaN(rollTrim)) {
         if (originalFirmwareTrimRoll === null) originalFirmwareTrimRoll = rollTrim;
-        const apparentRollTrim = Number(rollTrim) - Number(uiTrimZeroBaseRoll || 0);
-        const rollSpan = document.getElementById('rollTrimValueDisplay'); if (rollSpan) rollSpan.textContent = apparentRollTrim.toFixed(2);
-        const origRollSpan = document.getElementById('rollTrimOriginalDisplay'); if (origRollSpan) origRollSpan.textContent = originalFirmwareTrimRoll.toFixed(2);
-        const rollDeltaSpan = document.getElementById('rollTrimDeltaDisplay'); if (rollDeltaSpan) rollDeltaSpan.textContent = (Number(rollTrim) - (originalFirmwareTrimRoll || 0)).toFixed(2);
+        const apparentRollTrim = rollTrim - Number(uiTrimZeroBaseRoll || 0);
+
+        const rollSpan = document.getElementById('rollTrimValueDisplay');
+        if (rollSpan) rollSpan.textContent = apparentRollTrim.toFixed(2);
+
+        const origRollSpan = document.getElementById('rollTrimOriginalDisplay');
+        if (origRollSpan) origRollSpan.textContent = originalFirmwareTrimRoll.toFixed(2);
+
+        const rollDeltaSpan = document.getElementById('rollTrimDeltaDisplay');
+        if (rollDeltaSpan) rollDeltaSpan.textContent = (rollTrim - (originalFirmwareTrimRoll || 0)).toFixed(2);
     }
     if (data.states && !AppState.isApplyingConfig) {
         AppState.isApplyingConfig = true;
