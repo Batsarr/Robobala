@@ -1383,33 +1383,36 @@ function updateTelemetryUI(data) {
             loopLoadItemEl.classList.toggle('error', loadVal > 90);
         }
     }
-    if (typeof data.raw_pitch === 'number' || typeof data.pitch === 'number') {
-        const rawPitchVal = (typeof data.raw_pitch === 'number') ? data.raw_pitch : (data.raw_pitch || 0);
+    if (typeof data.raw_pitch === 'number' || typeof data.pitch === 'number' || typeof data.viz_pitch === 'number') {
+        const rawPitchVal = (typeof data.raw_pitch === 'number') ? data.raw_pitch : (typeof data.pitch === 'number' ? data.pitch : (typeof data.viz_pitch === 'number' ? data.viz_pitch : 0));
         const actualTrimForPitch = (typeof trimAngle !== 'undefined') ? Number(trimAngle) : Number((window.telemetryData && window.telemetryData.trim_angle) || 0);
         const apparentTrimVal = actualTrimForPitch - (uiTrimZeroBasePitch || 0);
         // Display the angle relative to UI baseline angle so set_zero results in 0 shown
         const correctedPitch = rawPitchVal + actualTrimForPitch - (uiZeroBaselineAnglePitch || 0);
         document.getElementById('angleVal').textContent = correctedPitch.toFixed(1) + ' \u00B0';
-        const vizPitchVal = (data.viz_pitch !== undefined) ? data.viz_pitch : rawPitchVal || 0;
+        const vizPitchVal = (typeof data.viz_pitch === 'number') ? data.viz_pitch : rawPitchVal || 0;
         document.getElementById('robot3d-pitch').textContent = vizPitchVal.toFixed(1) + '°';
         // Update trims display (apparent)
         const span = document.getElementById('trimValueDisplay'); if (span) span.textContent = apparentTrimVal.toFixed(2);
         pitchHistory.push(correctedPitch);
         if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
     }
-    if (typeof data.raw_roll === 'number' || typeof data.roll === 'number') {
-        const rawRollVal = (typeof data.raw_roll === 'number') ? data.raw_roll : (data.raw_roll || 0);
+    if (typeof data.raw_roll === 'number' || typeof data.roll === 'number' || typeof data.viz_roll === 'number') {
+        const rawRollVal = (typeof data.raw_roll === 'number') ? data.raw_roll : (typeof data.roll === 'number' ? data.roll : (typeof data.viz_roll === 'number' ? data.viz_roll : 0));
         const actualTrimForRoll = (typeof rollTrim !== 'undefined') ? Number(rollTrim) : Number((window.telemetryData && window.telemetryData.roll_trim) || 0);
         const apparentRollTrimVal = actualTrimForRoll - (uiTrimZeroBaseRoll || 0);
         const correctedRoll = rawRollVal + actualTrimForRoll - (uiZeroBaselineAngleRoll || 0);
-        const vizRollVal = (data.viz_roll !== undefined) ? data.viz_roll : rawRollVal || 0;
+        const vizRollVal = (typeof data.viz_roll === 'number') ? data.viz_roll : rawRollVal || 0;
         document.getElementById('robot3d-roll').textContent = vizRollVal.toFixed(1) + '°';
         document.getElementById('rollVal').textContent = correctedRoll.toFixed(1) + ' \u00B0';
         const rollSpan = document.getElementById('rollTrimValueDisplay'); if (rollSpan) rollSpan.textContent = apparentRollTrimVal.toFixed(2);
     }
-    if (data.yaw !== undefined) {
-        document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' °';
-        document.getElementById('compassNeedle').style.transform = `rotate(${data.yaw}deg)`;
+    if (data.yaw !== undefined || data.raw_yaw !== undefined || data.viz_yaw !== undefined) {
+        const yawVal = (typeof data.yaw === 'number') ? data.yaw : ((typeof data.raw_yaw === 'number') ? data.raw_yaw : (typeof data.viz_yaw === 'number' ? data.viz_yaw : 0));
+        const yawDisplay = Number(yawVal);
+        document.getElementById('yawVal').textContent = yawDisplay.toFixed(1) + ' °';
+        const compassEl = document.getElementById('compassNeedle');
+        if (compassEl) compassEl.style.transform = `rotate(${yawDisplay}deg)`;
     }
     // speed actual (sp) and target (ts) short keys
     const speedActual = (data.speed !== undefined) ? data.speed : data.sp;
