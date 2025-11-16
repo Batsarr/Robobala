@@ -2417,42 +2417,98 @@ function setupParameterListeners() {
 
     function setPitchZero() {
         const eul = getRawEuler();
-        if (!eul) { addLogMessage('[UI] Brak danych telemetrii (pitch). Nie mozna ustawic punktu 0.', 'warn'); return; }
+        if (!eul) {
+            addLogMessage('[UI] Brak danych telemetrii (pitch). Nie mozna ustawic punktu 0.', 'warn');
+            return;
+        }
+
         const rawPitch = Number(eul.pitch || 0);
-        // computedTrim so that rawPitch + computedTrim == 0
-        const computedTrim = -rawPitch; // trim that zeros the displayed pitch
-        // Send set_param to actually change the trim value in firmware
-        sendBleMessage({ type: 'set_param', key: 'trim_angle', value: computedTrim });
-        // Backward compatibility: also send the legacy command
+
+        // Aktualny trim z telemetrii (jeśli jest)
+        const telemetryTrimPitch = (window.telemetryData && window.telemetryData.trim_angle !== undefined)
+            ? Number(window.telemetryData.trim_angle)
+            : 0;
+
+        const currentFirmwareTrim = isNaN(telemetryTrimPitch) ? 0 : telemetryTrimPitch;
+
+        // Chcemy, aby po ustawieniu: rawPitch + newTrim == 0  => newTrim = -(rawPitch)
+        const newTrim = -rawPitch;
+
+        // Wyślij nowy trim do firmware
+        sendBleMessage({ type: 'set_param', key: 'trim_angle', value: newTrim });
+        // Dla zgodności z wcześniejszym firmware zostawiamy też komendę skrótową
         sendBleMessage({ type: 'set_pitch_zero' });
-        // Update UI base so apparent trim becomes zero and displayed angle is zero
-        uiTrimZeroBasePitch = computedTrim;
-        uiZeroBaselineAnglePitch = rawPitch + computedTrim; // normally 0, but keep for correctness
-        const span = document.getElementById('trimValueDisplay'); if (span) span.textContent = (0).toFixed(2);
-        // Set displayed total trim original and delta
-        const origSpan = document.getElementById('trimOriginalDisplay'); if (origSpan && originalFirmwareTrimPitch !== null) origSpan.textContent = originalFirmwareTrimPitch.toFixed(2);
-        const deltaSpan = document.getElementById('trimDeltaDisplay'); if (deltaSpan) deltaSpan.textContent = (computedTrim - (originalFirmwareTrimPitch || 0)).toFixed(2);
-        // Show corrected angle as 0.0 in dashboard for immediate feedback and update charts/history
-        const val = document.getElementById('angleVal'); if (val) val.textContent = '0.0 °';
-        pitchHistory.push(0); if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift(); updateChart({ pitch: 0 });
-        addLogMessage(`[UI] Punkt 0 (Pitch) ustawiony. Wyliczony trim = ${computedTrim.toFixed(2)}° (apparent = 0). Przycisk 'Zapisz' utrwali zmiany w EEPROM.`, 'success');
+
+        // Aktualizacja baseline UI: od teraz traktujemy newTrim jako „realny” trim,
+        // a uiTrimZeroBasePitch ustawiamy na newTrim, żeby w UI apparentTrim = 0
+        uiTrimZeroBasePitch = newTrim;
+        uiZeroBaselineAnglePitch = 0; // bo rawPitch + newTrim == 0
+
+        const span = document.getElementById('trimValueDisplay');
+        if (span) span.textContent = '0.00';
+
+        // Zaktualizuj informacje o oryginalnym i delta-trimie, jeśli były wcześniej znane
+        const origSpan = document.getElementById('trimOriginalDisplay');
+        if (origSpan && originalFirmwareTrimPitch !== null) {
+            origSpan.textContent = originalFirmwareTrimPitch.toFixed(2);
+        }
+        const deltaSpan = document.getElementById('trimDeltaDisplay');
+        if (deltaSpan && originalFirmwareTrimPitch !== null) {
+            deltaSpan.textContent = (newTrim - originalFirmwareTrimPitch).toFixed(2);
+        }
+
+        // Natychmiast pokazujemy 0.0° na dashboardzie, resztę będzie korygować bieżąca telemetria
+        const val = document.getElementById('angleVal');
+        if (val) val.textContent = '0.0 °';
+
+        pitchHistory.push(0);
+        if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
+        updateChart({ pitch: 0 });
+
+        addLogMessage(`[UI] Punkt 0 (Pitch) ustawiony. Nowy trim_angle = ${newTrim.toFixed(2)}° (UI pokazuje 0° dla aktualnej pozycji).`, 'success');
     }
 
     function setRollZero() {
         const eul = getRawEuler();
-        if (!eul) { addLogMessage('[UI] Brak danych telemetrii (roll). Nie mozna ustawic punktu 0.', 'warn'); return; }
+        if (!eul) {
+            addLogMessage('[UI] Brak danych telemetrii (roll). Nie mozna ustawic punktu 0.', 'warn');
+            return;
+        }
+
         const rawRoll = Number(eul.roll || 0);
-        const computedTrim = -rawRoll; // trim to zero displayed roll
-        sendBleMessage({ type: 'set_param', key: 'roll_trim', value: computedTrim });
+
+        const telemetryRollTrim = (window.telemetryData && window.telemetryData.roll_trim !== undefined)
+            ? Number(window.telemetryData.roll_trim)
+            : 0;
+
+        const currentFirmwareRollTrim = isNaN(telemetryRollTrim) ? 0 : telemetryRollTrim;
+
+        // Analogicznie: rawRoll + newRollTrim == 0 => newRollTrim = -rawRoll
+        const newRollTrim = -rawRoll;
+
+        sendBleMessage({ type: 'set_param', key: 'roll_trim', value: newRollTrim });
         sendBleMessage({ type: 'set_roll_zero' });
-        uiTrimZeroBaseRoll = computedTrim;
-        uiZeroBaselineAngleRoll = rawRoll + computedTrim; // normally 0
-        const span = document.getElementById('rollTrimValueDisplay'); if (span) span.textContent = (0).toFixed(2);
-        const origSpan = document.getElementById('rollTrimOriginalDisplay'); if (origSpan && originalFirmwareTrimRoll !== null) origSpan.textContent = originalFirmwareTrimRoll.toFixed(2);
-        const deltaSpan = document.getElementById('rollTrimDeltaDisplay'); if (deltaSpan) deltaSpan.textContent = (computedTrim - (originalFirmwareTrimRoll || 0)).toFixed(2);
-        const val = document.getElementById('rollVal'); if (val) val.textContent = '0.0 °';
+
+        uiTrimZeroBaseRoll = newRollTrim;
+        uiZeroBaselineAngleRoll = 0;
+
+        const span = document.getElementById('rollTrimValueDisplay');
+        if (span) span.textContent = '0.00';
+
+        const origRollSpan = document.getElementById('rollTrimOriginalDisplay');
+        if (origRollSpan && originalFirmwareTrimRoll !== null) {
+            origRollSpan.textContent = originalFirmwareTrimRoll.toFixed(2);
+        }
+        const rollDeltaSpan = document.getElementById('rollTrimDeltaDisplay');
+        if (rollDeltaSpan && originalFirmwareTrimRoll !== null) {
+            rollDeltaSpan.textContent = (newRollTrim - originalFirmwareTrimRoll).toFixed(2);
+        }
+
+        const val = document.getElementById('rollVal');
+        if (val) val.textContent = '0.0 °';
+
         updateChart({ roll: 0 });
-        addLogMessage(`[UI] Punkt 0 (Roll) ustawiony. Wyliczony roll_trim = ${computedTrim.toFixed(2)}° (apparent = 0). Przycisk 'Zapisz' utrwali zmiany w EEPROM.`, 'success');
+        addLogMessage(`[UI] Punkt 0 (Roll) ustawiony. Nowy roll_trim = ${newRollTrim.toFixed(2)}° (UI pokazuje 0° dla aktualnej pozycji).`, 'success');
     }
 
     document.getElementById('saveBtn')?.addEventListener('click', () => {
