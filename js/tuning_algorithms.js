@@ -28,122 +28,64 @@ function showNotification(message) {
     } else {
         console.log(`[Notification] ${message}`);
     }
-}
 
-function mean(arr) {
-    if (arr.length === 0) return 0;
-    return arr.reduce((a, b) => a + b, 0) / arr.length;
-}
-
-// NOTE: a delay helper (const delay = ms => ...) is already defined earlier in the file;
-// the duplicate function declaration was removed to avoid "Declaration or statement expected" / duplicate identifier errors.
-
-function updateBestDisplay(params) {
-    document.getElementById('best-kp').textContent = params.kp.toFixed(3);
-    document.getElementById('best-ki').textContent = params.ki.toFixed(3);
-    document.getElementById('best-kd').textContent = params.kd.toFixed(3);
-    if (params.fitness !== undefined && params.fitness !== Infinity) {
-        document.getElementById('best-fitness').textContent = params.fitness.toFixed(4);
-    }
-    document.getElementById('apply-best-btn').disabled = false;
-}
-
-function updateProgressDisplay(current, total, bestFitness) {
-    document.getElementById('current-iteration').textContent = current;
-    document.getElementById('total-iterations').textContent = total;
-    if (bestFitness !== undefined && bestFitness !== Infinity) {
-        document.getElementById('best-fitness').textContent = bestFitness.toFixed(4);
+    function mean(arr) {
+        if (arr.length === 0) return 0;
+        return arr.reduce((a, b) => a + b, 0) / arr.length;
     }
 
-    // Update chart
-    fitnessChartData.push({ x: current, y: bestFitness });
-    updateFitnessChart();
-}
+    // NOTE: a delay helper (const delay = ms => ...) is already defined earlier in the file;
+    // the duplicate function declaration was removed to avoid "Declaration or statement expected" / duplicate identifier errors.
 
-function updateFitnessChart() {
-    const canvas = document.getElementById('fitness-chart');
-    const ctx = canvas.getContext('2d');
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (fitnessChartData.length === 0) return;
-
-    // Find min/max for scaling
-    const minFitness = Math.min(...fitnessChartData.map(d => d.y));
-    const maxFitness = Math.max(...fitnessChartData.map(d => d.y));
-    const maxIteration = Math.max(...fitnessChartData.map(d => d.x));
-
-    const padding = 40;
-    const width = canvas.width - 2 * padding;
-    const height = canvas.height - 2 * padding;
-
-    // Draw axes
-    ctx.strokeStyle = '#61dafb';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(padding, padding);
-    ctx.lineTo(padding, canvas.height - padding);
-    ctx.lineTo(canvas.width - padding, canvas.height - padding);
-    ctx.stroke();
-
-    // Draw labels
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '12px Arial';
-    ctx.fillText('Fitness', 5, padding);
-    ctx.fillText('Iteracja', canvas.width - padding, canvas.height - padding + 20);
-
-    // Draw data
-    ctx.strokeStyle = '#a2f279';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-
-    fitnessChartData.forEach((point, i) => {
-        const x = padding + (point.x / maxIteration) * width;
-        const y = canvas.height - padding - ((point.y - minFitness) / (maxFitness - minFitness + 0.0001)) * height;
-
-        if (i === 0) {
-            ctx.moveTo(x, y);
-        } else {
-            ctx.lineTo(x, y);
+    function updateBestDisplay(params) {
+        document.getElementById('best-kp').textContent = params.kp.toFixed(3);
+        document.getElementById('best-ki').textContent = params.ki.toFixed(3);
+        document.getElementById('best-kd').textContent = params.kd.toFixed(3);
+        if (params.fitness !== undefined && params.fitness !== Infinity) {
+            document.getElementById('best-fitness').textContent = params.fitness.toFixed(4);
         }
-    });
-    ctx.stroke();
+        document.getElementById('apply-best-btn').disabled = false;
+    }
 
-    // Draw points
-    ctx.fillStyle = '#a2f279';
-    fitnessChartData.forEach(point => {
-        const x = padding + (point.x / maxIteration) * width;
-        const y = canvas.height - padding - ((point.y - minFitness) / (maxFitness - minFitness + 0.0001)) * height;
-        ctx.beginPath();
-        ctx.arc(x, y, 3, 0, 2 * Math.PI);
-        ctx.fill();
-    });
-}
-
-function addTestToResultsTable(testNum, params, fitness, itae, overshoot, testType) {
-    const tbody = document.getElementById('results-table-body');
-    // Zapis do historii globalnej
-    try {
-        if (Array.isArray(tuningHistory)) {
-            tuningHistory.push({ idx: testNum, kp: params.kp, ki: params.ki, kd: params.kd, fitness, itae, overshoot, testType: testType || 'metrics_test' });
-            refreshRecentList();
+    function updateProgressDisplay(current, total, bestFitness) {
+        document.getElementById('current-iteration').textContent = current;
+        document.getElementById('total-iterations').textContent = total;
+        if (bestFitness !== undefined && bestFitness !== Infinity) {
+            document.getElementById('best-fitness').textContent = bestFitness.toFixed(4);
         }
-    } catch (_) { }
-    const row = tbody.insertRow(0); // Insert at top
 
-    row.innerHTML = `
-        <td>${testNum}</td>
-        <td>${params.kp.toFixed(3)}</td>
-        <td>${params.ki.toFixed(3)}</td>
-        <td>${params.kd.toFixed(3)}</td>
-        <td>${fitness.toFixed(4)}</td>
-        <td>${itae.toFixed(2)}</td>
-        <td>${overshoot.toFixed(2)}${(testType === 'metrics_test') ? '°' : '%'}</td>
-        <td><button onclick="applyParameters(${params.kp}, ${params.ki}, ${params.kd})" class="btn-small">Zastosuj</button></td>
-    `;
+        // Update chart
+        fitnessChartData.push({ x: current, y: bestFitness });
+        updateFitnessChart();
+    }
 
-    // Tabela jest widoczna w modalu historii – brak odwołania do nieistniejącego #results-container
+    function addTestToResultsTable(testNum, params, fitness, itae, overshoot, testType = 'metrics_test') {
+        const tbody = document.getElementById('results-table-body');
+        // Save to global tuning history if available
+        try {
+            if (Array.isArray(tuningHistory)) {
+                tuningHistory.push({ idx: testNum, kp: params.kp, ki: params.ki, kd: params.kd, fitness, itae, overshoot, testType });
+                refreshRecentList();
+            }
+        } catch (err) {
+            // ignore
+        }
+        if (!tbody) return;
+
+        const row = tbody.insertRow(0); // Insert at top
+        row.innerHTML = `
+            <td>${testNum}</td>
+            <td>${params.kp.toFixed(3)}</td>
+            <td>${params.ki.toFixed(3)}</td>
+            <td>${params.kd.toFixed(3)}</td>
+            <td>${(fitness === Infinity || isNaN(fitness)) ? '---' : fitness.toFixed(4)}</td>
+            <td>${(isNaN(itae) ? '---' : itae.toFixed(2))}</td>
+            <td>${isNaN(overshoot) ? '---' : overshoot.toFixed(2)}${(testType === 'metrics_test') ? '°' : '%'}</td>
+            <td><button onclick="applyParameters(${params.kp}, ${params.ki}, ${params.kd})" class="btn-small">Zastosuj</button></td>
+        `;
+
+        // Table displayed in history modal - no reference to absent #results-container expected
+    }
 }
 
 function applyParameters(kp, ki, kd) {
@@ -238,6 +180,9 @@ class GeneticAlgorithm {
         this.isRunning = false;
         this.isPaused = false;
         this.testCounter = 0;
+        // Debug id to correlate logs for multiple sessions
+        this._debugId = (Date.now() >>> 0) & 0xFFFF;
+        try { addLogMessage(`[GA:${this._debugId}] Constructed GA session: pop=${this.populationSize} gen=${this.generations}`, 'info'); } catch (e) { console.debug('[GA] log failed', e); }
     }
 
     initialize() {
@@ -252,6 +197,15 @@ class GeneticAlgorithm {
         this.generation = 0;
         this.testCounter = 0;
         fitnessChartData = [];
+        try { addLogMessage(`[GA:${this._debugId}] initialize: population length = ${this.population.length}`, 'info'); } catch (e) { console.debug('GA init log failed', e); }
+        // Safety: if population ended up empty for some reason, repopulate with at least 1
+        if (!this.population || this.population.length === 0) {
+            const fallbackSize = Math.max(1, this.populationSize || 20);
+            for (let i = 0; i < fallbackSize; i++) {
+                this.population.push(this.createRandomIndividual());
+            }
+            try { addLogMessage(`[GA:${this._debugId}] Warning: population was empty, repopulated to ${this.population.length}`, 'warn'); } catch (e) { console.debug('GA repopulate warn', e); }
+        }
     }
 
     createRandomIndividual() {
@@ -281,6 +235,7 @@ class GeneticAlgorithm {
                     clearTimeout(timeout);
                     window.removeEventListener('ble_message', completeHandler);
                     window.removeEventListener('ble_message', metricsHandler);
+                    window.removeEventListener('ble_message', ackHandler);
 
                     // If test failed (e.g., emergency stop), reject with special reason
                     if (!data.success) {
@@ -303,13 +258,34 @@ class GeneticAlgorithm {
                     // Remove handlers
                     window.removeEventListener('ble_message', completeHandler);
                     window.removeEventListener('ble_message', metricsHandler);
-                    resolve(fitness);
+                    window.removeEventListener('ble_message', ackHandlerBayes);
+                    window.removeEventListener('ble_message', ackHandler);
+                    window.removeEventListener('ble_message', ackHandlerGA);
+                }
+            };
+
+            // Listen for ACK failure (e.g., 'Kolejka pelna') and reject fast
+            const ackHandlerGA = (evt) => {
+                const d = (evt && evt.detail) ? evt.detail : evt;
+                if (d.type === 'ack' && d.command === 'run_metrics_test') {
+                    if (!d.success) {
+                        clearTimeout(timeout);
+                        window.removeEventListener('ble_message', completeHandler);
+                        window.removeEventListener('ble_message', metricsHandler);
+                        window.removeEventListener('ble_message', ackHandlerGA);
+                        try { addLogMessage(`[GA:${this._debugId}] run_metrics_test ACK failed: ${d.message || 'N/A'}`, 'error'); } catch (e) { console.debug('GA ack log failed', e); }
+                        reject({ reason: 'ack_failed', message: d.message });
+                        return;
+                    } else {
+                        window.removeEventListener('ble_message', ackHandlerGA);
+                    }
                 }
             };
 
             window.addEventListener('ble_message', completeHandler);
+            window.addEventListener('ble_message', ackHandlerGA);
             window.addEventListener('ble_message', metricsHandler);
-
+            try { addLogMessage(`[GA:${this._debugId}] Sending run_metrics_test: testId=${testId} Kp=${individual.kp.toFixed(3)} Ki=${individual.ki.toFixed(3)} Kd=${individual.kd.toFixed(3)} testCounter=${this.testCounter}`, 'info'); } catch (e) { console.debug('[GA] log failed', e); }
             sendBleCommand('run_metrics_test', {
                 kp: individual.kp,
                 ki: individual.ki,
@@ -449,20 +425,38 @@ class GeneticAlgorithm {
 
     async run() {
         this.isRunning = true;
-        this.initialize();
+        try {
+            this.initialize();
+            const progressEl = document.getElementById('tuning-progress-panel');
+            if (progressEl) progressEl.style.display = 'block';
+            try { addLogMessage(`[GA:${this._debugId}] run() started: generations=${this.generations} population=${this.population.length}`, 'info'); } catch (e) { console.debug('[GA] run start log failed', e); }
 
-        document.getElementById('tuning-progress').style.display = 'block';
-
-        while (this.generation < this.generations && this.isRunning) {
-            if (!this.isPaused) {
-                await this.runGeneration();
-            } else {
-                await delay(100);
+            while (this.generation < this.generations && this.isRunning) {
+                if (!this.isPaused) {
+                    await this.runGeneration();
+                } else {
+                    await delay(100);
+                }
             }
-        }
 
-        this.isRunning = false;
-        showNotification(`Optymalizacja GA zakończona! Najlepsze fitness: ${this.bestIndividual.fitness.toFixed(4)}`);
+            this.isRunning = false;
+            // Be defensive: bestIndividual might be null if initialization failed or no population
+            try {
+                if (this.bestIndividual && typeof this.bestIndividual.fitness === 'number' && isFinite(this.bestIndividual.fitness)) {
+                    showNotification(`Optymalizacja GA zakończona! Najlepsze fitness: ${this.bestIndividual.fitness.toFixed(4)}`);
+                } else {
+                    showNotification(`Optymalizacja GA zakończona: brak wyników`);
+                }
+            } catch (err) {
+                console.error('[GA] showNotification error:', err);
+            }
+            try { addLogMessage(`[GA:${this._debugId}] run() finished: generation=${this.generation} population=${this.population.length} best=${this.bestIndividual ? JSON.stringify(this.bestIndividual) : 'null'}`, 'info'); } catch (e) { console.debug('[GA] run finish log failed', e); }
+        } catch (err) {
+            this.isRunning = false;
+            console.error(`[GA:${this._debugId}] run() error:`, err);
+            try { addLogMessage(`[GA:${this._debugId}] run() error: ${err && err.message ? err.message : String(err)}`, 'error'); } catch (e) { console.debug('[GA] log failed', e); }
+            throw err;
+        }
     }
 
     pause() {
@@ -506,6 +500,8 @@ class ParticleSwarmOptimization {
         this.isRunning = false;
         this.isPaused = false;
         this.testCounter = 0;
+        this._debugId = (Date.now() >>> 0) & 0xFFFF;
+        try { addLogMessage(`[PSO:${this._debugId}] Constructed PSO: particles=${this.numParticles} iterations=${this.iterations}`, 'info'); } catch (e) { console.debug('[PSO] log failed', e); }
     }
 
     initialize() {
@@ -557,6 +553,7 @@ class ParticleSwarmOptimization {
                     clearTimeout(timeout);
                     window.removeEventListener('ble_message', completeHandler);
                     window.removeEventListener('ble_message', metricsHandler);
+                    window.removeEventListener('ble_message', ackHandlerBayes);
 
                     // If test failed (e.g., emergency stop), reject with special reason
                     if (!data.success) {
@@ -596,9 +593,45 @@ class ParticleSwarmOptimization {
                 }
             };
 
+            // Listen for ACK; reject early if firmware NACKs the run_metrics_test request
+            const ackHandlerPSO = (evt) => {
+                const d = (evt && evt.detail) ? evt.detail : evt;
+                if (d.type === 'ack' && d.command === 'run_metrics_test') {
+                    if (!d.success) {
+                        clearTimeout(timeout);
+                        window.removeEventListener('ble_message', completeHandler);
+                        window.removeEventListener('ble_message', metricsHandler);
+                        window.removeEventListener('ble_message', ackHandlerPSO);
+                        try { addLogMessage(`[PSO] run_metrics_test ACK failed: ${d.message || 'N/A'}`, 'error'); } catch (e) { console.debug('[PSO] ack log failed', e); }
+                        reject({ reason: 'ack_failed', message: d.message });
+                        return;
+                    } else {
+                        window.removeEventListener('ble_message', ackHandlerPSO);
+                    }
+                }
+            };
+            // Bayes: ack handler for run_metrics_test NACKs
+            const ackHandlerBayes = (evt) => {
+                const d = (evt && evt.detail) ? evt.detail : evt;
+                if (d.type === 'ack' && d.command === 'run_metrics_test') {
+                    if (!d.success) {
+                        clearTimeout(timeout);
+                        window.removeEventListener('ble_message', completeHandler);
+                        window.removeEventListener('ble_message', metricsHandler);
+                        window.removeEventListener('ble_message', ackHandlerBayes);
+                        try { addLogMessage(`[Bayes] run_metrics_test ACK failed: ${d.message || 'N/A'}`, 'error'); } catch (e) { console.debug('[Bayes] ack log failed', e); }
+                        reject({ reason: 'ack_failed', message: d.message });
+                        return;
+                    } else {
+                        window.removeEventListener('ble_message', ackHandlerBayes);
+                    }
+                }
+            };
             window.addEventListener('ble_message', completeHandler);
             window.addEventListener('ble_message', metricsHandler);
-
+            window.addEventListener('ble_message', ackHandlerBayes);
+            window.addEventListener('ble_message', ackHandlerPSO);
+            try { addLogMessage(`[PSO] Sending run_metrics_test: testId=${testId} Kp=${particle.position.kp.toFixed(3)} Ki=${particle.position.ki.toFixed(3)} Kd=${particle.position.kd.toFixed(3)} testCounter=${this.testCounter}`, 'info'); } catch (e) { console.debug('[PSO] log failed', e); }
             sendBleCommand('run_metrics_test', {
                 kp: particle.position.kp,
                 ki: particle.position.ki,
@@ -685,20 +718,35 @@ class ParticleSwarmOptimization {
 
     async run() {
         this.isRunning = true;
-        this.initialize();
+        try {
+            this.initialize();
+            const progressEl = document.getElementById('tuning-progress-panel');
+            if (progressEl) progressEl.style.display = 'block';
 
-        document.getElementById('tuning-progress').style.display = 'block';
-
-        while (this.iteration < this.iterations && this.isRunning) {
-            if (!this.isPaused) {
-                await this.runIteration();
-            } else {
-                await delay(100);
+            while (this.iteration < this.iterations && this.isRunning) {
+                if (!this.isPaused) {
+                    await this.runIteration();
+                } else {
+                    await delay(100);
+                }
             }
+            this.isRunning = false;
+            try {
+                if (this.globalBest && typeof this.globalBest.fitness === 'number' && isFinite(this.globalBest.fitness)) {
+                    showNotification(`Optymalizacja PSO zakończona! Najlepsze fitness: ${this.globalBest.fitness.toFixed(4)}`);
+                } else {
+                    showNotification(`Optymalizacja PSO zakonczona: brak wynikow`);
+                }
+            } catch (err) {
+                console.error('[PSO] showNotification error:', err);
+            }
+            try { addLogMessage(`[PSO] run finished: iteration=${this.iteration} particles=${this.particles.length} globalBest=${this.globalBest ? JSON.stringify(this.globalBest) : 'null'}`, 'info'); } catch (e) { console.debug('[PSO] log failed', e); }
+        } catch (err) {
+            this.isRunning = false;
+            console.error('[PSO] run() error:', err);
+            try { addLogMessage(`[PSO] run() error: ${err && err.message ? err.message : String(err)}`, 'error'); } catch (e) { console.debug('[PSO] log failed', e); }
+            throw err;
         }
-
-        this.isRunning = false;
-        showNotification(`Optymalizacja PSO zakończona! Najlepsze fitness: ${this.globalBest.fitness.toFixed(4)}`);
     }
 
     pause() {
@@ -735,6 +783,8 @@ class ZieglerNicholsRelay {
         this.oscillationData = [];
         this.peaks = [];
         this.valleys = [];
+        this._debugId = (Date.now() >>> 0) & 0xFFFF;
+        try { addLogMessage(`[ZN:${this._debugId}] Constructed ZN: amplitude=${this.amplitude} minCycles=${this.minCycles}`, 'info'); } catch (e) { console.debug('[ZN] log failed', e); }
     }
 
     async run() {
@@ -745,58 +795,86 @@ class ZieglerNicholsRelay {
         this.peaks = [];
         this.valleys = [];
 
-        document.getElementById('zn-oscillation-display').style.display = 'block';
+        try {
+            const znDisplay = document.getElementById('zn-oscillation-display');
+            if (znDisplay) znDisplay.style.display = 'block';
 
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error('ZN test timeout'));
-            }, 30000); // 30 second timeout
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error('ZN test timeout'));
+                }, 30000); // 30 second timeout
 
-            const handler = (evt) => {
-                const data = (evt && evt.detail) ? evt.detail : evt;
-                if (data.type === 'relay_state' && Number(data.testId) === testId) {
-                    this.oscillationData.push({
-                        time: data.time,
-                        angle: data.angle,
-                        relayOutput: data.relay_output
-                    });
+                const handler = (evt) => {
+                    const data = (evt && evt.detail) ? evt.detail : evt;
+                    if (data.type === 'relay_state' && Number(data.testId) === testId) {
+                        this.oscillationData.push({
+                            time: data.time,
+                            angle: data.angle,
+                            relayOutput: data.relay_output
+                        });
 
-                    this.detectPeaksValleys();
-                    this.updateRelayChart();
+                        this.detectPeaksValleys();
+                        this.updateRelayChart();
 
-                    document.getElementById('zn-detected-cycles').textContent =
-                        Math.min(this.peaks.length, this.valleys.length);
+                        const znCyclesEl = document.getElementById('zn-detected-cycles');
+                        if (znCyclesEl) {
+                            znCyclesEl.textContent = Math.min(this.peaks.length, this.valleys.length);
+                        }
 
-                    // Check if we have enough cycles
-                    if (this.peaks.length >= this.minCycles && this.valleys.length >= this.minCycles) {
+                        // Check if we have enough cycles
+                        if (this.peaks.length >= this.minCycles && this.valleys.length >= this.minCycles) {
+                            clearTimeout(timeout);
+                            window.removeEventListener('ble_message', handler);
+
+                            const results = this.calculateZNParameters();
+                            this.displayResults(results);
+                            resolve(results);
+                        }
+                    } else if (data.type === 'test_complete' && Number(data.testId) === testId) {
                         clearTimeout(timeout);
                         window.removeEventListener('ble_message', handler);
 
-                        const results = this.calculateZNParameters();
-                        this.displayResults(results);
-                        resolve(results);
+                        if (this.peaks.length >= this.minCycles && this.valleys.length >= this.minCycles) {
+                            const results = this.calculateZNParameters();
+                            this.displayResults(results);
+                            resolve(results);
+                        } else {
+                            reject(new Error('Not enough oscillation cycles detected'));
+                        }
                     }
-                } else if (data.type === 'test_complete' && Number(data.testId) === testId) {
-                    clearTimeout(timeout);
-                    window.removeEventListener('ble_message', handler);
+                };
 
-                    if (this.peaks.length >= this.minCycles && this.valleys.length >= this.minCycles) {
-                        const results = this.calculateZNParameters();
-                        this.displayResults(results);
-                        resolve(results);
-                    } else {
-                        reject(new Error('Not enough oscillation cycles detected'));
+                window.addEventListener('ble_message', handler);
+                // ACK handler to detect immediate NACK for relay test
+                const ackHandlerZN = (evt) => {
+                    const d = (evt && evt.detail) ? evt.detail : evt;
+                    if (d.type === 'ack' && d.command === 'run_relay_test') {
+                        if (!d.success) {
+                            clearTimeout(timeout);
+                            window.removeEventListener('ble_message', handler);
+                            window.removeEventListener('ble_message', ackHandlerZN);
+                            try { addLogMessage(`[ZN] run_relay_test ACK failed: ${d.message || 'N/A'}`, 'error'); } catch (e) { console.debug('[ZN] ack log failed', e); }
+                            reject({ reason: 'ack_failed', message: d.message });
+                            return;
+                        } else {
+                            window.removeEventListener('ble_message', ackHandlerZN);
+                        }
                     }
-                }
-            };
+                };
+                window.addEventListener('ble_message', ackHandlerZN);
 
-            window.addEventListener('ble_message', handler);
-
-            sendBleCommand('run_relay_test', {
-                amplitude: this.amplitude,
-                testId: testId
+                try { addLogMessage(`[ZN] Sending run_relay_test: testId=${testId} amplitude=${this.amplitude}`, 'info'); } catch (e) { console.debug('[ZN] log failed', e); }
+                sendBleCommand('run_relay_test', {
+                    amplitude: this.amplitude,
+                    testId: testId
+                });
             });
-        });
+        } catch (err) {
+            this.isRunning = false;
+            console.error('[ZN] run() error:', err);
+            try { addLogMessage(`[ZN] run() error: ${err && err.message ? err.message : String(err)}`, 'error'); } catch (e) { console.debug('[ZN] log failed', e); }
+            throw err;
+        }
     }
 
     detectPeaksValleys() {
@@ -854,6 +932,7 @@ class ZieglerNicholsRelay {
 
     updateRelayChart() {
         const canvas = document.getElementById('zn-oscillation-chart');
+        if (!canvas) return;
         const ctx = canvas.getContext('2d');
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1215,58 +1294,73 @@ class BayesianOptimization {
 
     async run() {
         this.isRunning = true;
+        try {
+            const progressEl = document.getElementById('tuning-progress-panel');
+            if (progressEl) progressEl.style.display = 'block';
+            try { showNotification('Inicjalizacja Bayesian Optimization...'); } catch (e) { console.debug('[Bayes] notify init failed', e); }
 
-        document.getElementById('tuning-progress').style.display = 'block';
-        showNotification('Inicjalizacja Bayesian Optimization...');
+            await this.initialize();
 
-        await this.initialize();
+            while (this.iteration < this.iterations && this.isRunning) {
+                // 1. Select next sample using acquisition function
+                const nextSample = await this.acquireNext();
 
-        while (this.iteration < this.iterations && this.isRunning) {
-            // 1. Select next sample using acquisition function
-            const nextSample = await this.acquireNext();
+                if (!nextSample) {
+                    console.error('Failed to acquire next sample');
+                    break;
+                }
 
-            if (!nextSample) {
-                console.error('Failed to acquire next sample');
-                break;
+                // 2. Evaluate it
+                try {
+                    const fitness = await this.evaluateSample(nextSample);
+                    this.samples.push({ ...nextSample, fitness });
+                } catch (error) {
+                    console.error('Sample evaluation failed:', error);
+                    this.samples.push({ ...nextSample, fitness: Infinity });
+                }
+
+                // 3. Update surrogate model
+                await this.trainSurrogate();
+
+                // 4. Update visualization and display
+                const validSamples = this.samples.filter(s => s.fitness !== Infinity);
+                const best = validSamples.length > 0 ?
+                    validSamples.reduce((a, b) => a.fitness < b.fitness ? a : b) : null;
+
+                if (best) {
+                    updateBestDisplay(best);
+                    updateProgressDisplay(this.iteration + 1, this.iterations, best.fitness);
+                }
+
+                this.updateVisualization();
+
+                this.iteration++;
             }
 
-            // 2. Evaluate it
-            try {
-                const fitness = await this.evaluateSample(nextSample);
-                this.samples.push({ ...nextSample, fitness });
-            } catch (error) {
-                console.error('Sample evaluation failed:', error);
-                this.samples.push({ ...nextSample, fitness: Infinity });
-            }
+            this.isRunning = false;
 
-            // 3. Update surrogate model
-            await this.trainSurrogate();
-
-            // 4. Update visualization and display
             const validSamples = this.samples.filter(s => s.fitness !== Infinity);
             const best = validSamples.length > 0 ?
                 validSamples.reduce((a, b) => a.fitness < b.fitness ? a : b) : null;
 
             if (best) {
-                updateBestDisplay(best);
-                updateProgressDisplay(this.iteration + 1, this.iterations, best.fitness);
+                try {
+                    if (best && typeof best.fitness === 'number' && isFinite(best.fitness)) {
+                        showNotification(`Bayesian Optimization zakończona! Najlepsze fitness: ${best.fitness.toFixed(4)}`);
+                    } else {
+                        showNotification('Bayesian Optimization zakończona - brak udanych testów');
+                    }
+                } catch (err) {
+                    console.error('[Bayes] showNotification error:', err);
+                }
+            } else {
+                showNotification('Bayesian Optimization zakończona - brak udanych testów');
             }
-
-            this.updateVisualization();
-
-            this.iteration++;
-        }
-
-        this.isRunning = false;
-
-        const validSamples = this.samples.filter(s => s.fitness !== Infinity);
-        const best = validSamples.length > 0 ?
-            validSamples.reduce((a, b) => a.fitness < b.fitness ? a : b) : null;
-
-        if (best) {
-            showNotification(`Bayesian Optimization zakończona! Najlepsze fitness: ${best.fitness.toFixed(4)}`);
-        } else {
-            showNotification('Bayesian Optimization zakończona - brak udanych testów');
+        } catch (err) {
+            this.isRunning = false;
+            console.error('[Bayes] run() error:', err);
+            try { addLogMessage(`[Bayes] run() error: ${err && err.message ? err.message : String(err)}`, 'error'); } catch (e) { console.debug('[Bayes] log failed', e); }
+            throw err;
         }
     }
 

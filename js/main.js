@@ -924,6 +924,11 @@ async function processBleQueue() { if (isSendingBleMessage || bleMessageQueue.le
 // Updated sendBleMessage to use the communication layer
 function sendBleMessage(message) {
     // Use the new communication layer if available and connected
+    try {
+        if (['run_metrics_test', 'run_relay_test', 'cancel_test', 'request_full_config', 'set_param'].includes(message.type)) {
+            addLogMessage(`[UI -> ROBOT] Sending: ${message.type} ${JSON.stringify(message)}`, 'info');
+        }
+    } catch (e) { /* ignore logging errors */ }
     if (commLayer && commLayer.getConnectionStatus()) {
         commLayer.send(message);
     } else {
@@ -2839,6 +2844,12 @@ async function startTuning() {
                 searchSpace: searchSpace
             };
             currentTuningSession = new GeneticAlgorithm(config);
+            if (isNaN(config.populationSize) || config.populationSize <= 0 || isNaN(config.generations) || config.generations <= 0) {
+                addLogMessage('[UI] Niepoprawna konfiguracja GA: populationSize i generations muszą być > 0', 'error');
+                setTuningUiLock(false, '');
+                return;
+            }
+            try { addLogMessage(`[UI] GA config: pop=${config.populationSize} gen=${config.generations} mut=${config.mutationRate} xo=${config.crossoverRate}`, 'info'); } catch (e) { console.debug('[UI] GA config log failed', e); }
         } else if (method === 'pso') {
             config = {
                 numParticles: parseInt(document.getElementById('pso-particles').value),
@@ -2849,12 +2860,22 @@ async function startTuning() {
                 searchSpace: searchSpace
             };
             currentTuningSession = new ParticleSwarmOptimization(config);
+            if (isNaN(config.numParticles) || config.numParticles <= 0 || isNaN(config.iterations) || config.iterations <= 0) {
+                addLogMessage('[UI] Niepoprawna konfiguracja PSO: numParticles i iterations muszą być > 0', 'error');
+                setTuningUiLock(false, '');
+                return;
+            }
         } else if (method === 'zn') {
             config = {
                 amplitude: parseFloat(document.getElementById('zn-amplitude').value),
                 minCycles: parseInt(document.getElementById('zn-min-cycles').value)
             };
             currentTuningSession = new ZieglerNicholsRelay(config);
+            if (isNaN(config.minCycles) || config.minCycles <= 0 || isNaN(config.amplitude) || config.amplitude <= 0) {
+                addLogMessage('[UI] Niepoprawna konfiguracja ZN: amplitude i minCycles muszą być > 0', 'error');
+                setTuningUiLock(false, '');
+                return;
+            }
         } else if (method === 'bayesian') {
             config = {
                 iterations: parseInt(document.getElementById('bayesian-iterations').value),
@@ -2864,11 +2885,24 @@ async function startTuning() {
                 searchSpace: searchSpace
             };
             currentTuningSession = new BayesianOptimization(config);
+            if (isNaN(config.iterations) || config.iterations <= 0 || isNaN(config.initialSamples) || config.initialSamples <= 0) {
+                addLogMessage('[UI] Niepoprawna konfiguracja Bayes: iterations i initialSamples muszą być > 0', 'error');
+                setTuningUiLock(false, '');
+                return;
+            }
         } else {
             throw new Error(`Nieznana metoda: ${method}`);
         }
 
-        currentTuningSession.run().finally(() => {
+        const runStartTime = Date.now();
+        try { addLogMessage(`[UI] currentTuningSession: ${currentTuningSession.constructor.name} debugId=${currentTuningSession._debugId || 'N/A'} config=${JSON.stringify(config)}`, 'info'); } catch (e) { console.debug('[UI] tuning session log failed', e); }
+        currentTuningSession.run().then(() => {
+            addLogMessage(`[UI] Autostrojenie zakonczone (metoda: ${method.toUpperCase()}) po ${Date.now() - runStartTime}ms`, 'success');
+        }).catch((err) => {
+            console.error('[UI] Autostrojenie error:', err);
+            addLogMessage(`[UI] Błąd podczas sesji strojenia: ${(err && err.message) ? err.message : String(err)} (after ${Date.now() - runStartTime}ms)`, 'error');
+        }).finally(() => {
+            addLogMessage(`[UI] finalizing run() after ${Date.now() - runStartTime}ms (method ${method})`, 'debug');
             stopTuning(false);
         });
 
@@ -2888,6 +2922,19 @@ function pauseTuning() {
         document.getElementById('resume-tuning-btn').style.display = 'inline-block';
         document.getElementById('resume-tuning-btn').disabled = false;
     }
+}
+
+// Unified cancel handler used by events like disconnection or remote tuner end
+function handleCancel(showPrompt = true) {
+    // Cancel active tuning session (client-side) and unlock UI
+    if (currentTuningSession && typeof currentTuningSession.stop === 'function') {
+        try { currentTuningSession.stop(); } catch (err) { console.error('handleCancel: currentTuningSession.stop error', err); }
+    }
+    currentTuningSession = null;
+    setTuningUiLock(false, '');
+    // Inform the UI and finalize stop logic (no confirmation if showPrompt=false)
+    stopTuning(showPrompt === true);
+    addLogMessage('[UI] Strojenie przerwane (handleCancel).', 'warn');
 }
 
 function resumeTuning() {
