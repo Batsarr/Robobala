@@ -59,6 +59,7 @@
                 <button id="trimMinus01Btn">-0.1</button>
                 <button id="trimMinus001Btn">-0.01</button>
                 <span>Korekta Pionu: <span id="trimValueDisplay">0.00</span>°</span>
+                    <div style="font-size:0.8em; color:#9fa; margin-top:4px;">Oryginalna korekta: <span id="trimOriginalDisplay">0.00</span>° | Delta: <span id="trimDeltaDisplay">0.00</span>°</div>
                 <button id="trimPlus001Btn">+0.01</button>
                 <button id="trimPlus01Btn">+0.1</button>
             </div>
@@ -67,6 +68,7 @@
                 <button id="rollTrimMinus01Btn">-0.1</button>
                 <button id="rollTrimMinus001Btn">-0.01</button>
                 <span>Korekta Roll: <span id="rollTrimValueDisplay">0.00</span>°</span>
+                <div style="font-size:0.8em; color:#9fa; margin-top:4px;">Oryginalna korekta: <span id="rollTrimOriginalDisplay">0.00</span>° | Delta: <span id="rollTrimDeltaDisplay">0.00</span>°</div>
                 <button id="rollTrimPlus001Btn">+0.01</button>
                 <button id="rollTrimPlus01Btn">+0.1</button>
             </div>
@@ -555,8 +557,14 @@
                         <div style="display:flex; align-items:center; gap:6px; margin-top:8px;"><input id="markFrontFaceChk" type="checkbox"><label for="markFrontFaceChk">Oznacz front (góra/dół) w podglądzie</label></div>
                     </div>
                     <div style="display:flex; gap:8px;">
-                        <button id="setModalPitchZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Pitch)</button>
-                        <button id="setModalRollZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Roll)</button>
+                        <div style="display:flex; flex-direction:row; gap:6px; flex:1;">
+                            <button id="setModalPitchZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Pitch)</button>
+                            <button id="clearModalPitchZeroBtn" class="btn-small" title="Resetuj baseline UI" style="background:#4a4f58;">Wyczyść</button>
+                        </div>
+                        <div style="display:flex; flex-direction:row; gap:6px; flex:1;">
+                            <button id="setModalRollZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Roll)</button>
+                            <button id="clearModalRollZeroBtn" class="btn-small" title="Resetuj baseline UI" style="background:#4a4f58;">Wyczyść</button>
+                        </div>
                     </div>
                 </div>
             </div>
