@@ -924,11 +924,6 @@ async function processBleQueue() { if (isSendingBleMessage || bleMessageQueue.le
 // Updated sendBleMessage to use the communication layer
 function sendBleMessage(message) {
     // Use the new communication layer if available and connected
-    try {
-        if (['run_metrics_test', 'run_relay_test', 'cancel_test', 'request_full_config', 'set_param'].includes(message.type)) {
-            addLogMessage(`[UI -> ROBOT] Sending: ${message.type} ${JSON.stringify(message)}`, 'info');
-        }
-    } catch (e) { /* ignore logging errors */ }
     if (commLayer && commLayer.getConnectionStatus()) {
         commLayer.send(message);
     } else {
@@ -1383,36 +1378,33 @@ function updateTelemetryUI(data) {
             loopLoadItemEl.classList.toggle('error', loadVal > 90);
         }
     }
-    if (typeof data.raw_pitch === 'number' || typeof data.pitch === 'number' || typeof data.viz_pitch === 'number') {
-        const rawPitchVal = (typeof data.raw_pitch === 'number') ? data.raw_pitch : (typeof data.pitch === 'number' ? data.pitch : (typeof data.viz_pitch === 'number' ? data.viz_pitch : 0));
+    if (typeof data.raw_pitch === 'number' || typeof data.pitch === 'number') {
+        const rawPitchVal = (typeof data.raw_pitch === 'number') ? data.raw_pitch : (data.raw_pitch || 0);
         const actualTrimForPitch = (typeof trimAngle !== 'undefined') ? Number(trimAngle) : Number((window.telemetryData && window.telemetryData.trim_angle) || 0);
         const apparentTrimVal = actualTrimForPitch - (uiTrimZeroBasePitch || 0);
         // Display the angle relative to UI baseline angle so set_zero results in 0 shown
         const correctedPitch = rawPitchVal + actualTrimForPitch - (uiZeroBaselineAnglePitch || 0);
         document.getElementById('angleVal').textContent = correctedPitch.toFixed(1) + ' \u00B0';
-        const vizPitchVal = (typeof data.viz_pitch === 'number') ? data.viz_pitch : rawPitchVal || 0;
+        const vizPitchVal = (data.viz_pitch !== undefined) ? data.viz_pitch : rawPitchVal || 0;
         document.getElementById('robot3d-pitch').textContent = vizPitchVal.toFixed(1) + '°';
         // Update trims display (apparent)
         const span = document.getElementById('trimValueDisplay'); if (span) span.textContent = apparentTrimVal.toFixed(2);
         pitchHistory.push(correctedPitch);
         if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
     }
-    if (typeof data.raw_roll === 'number' || typeof data.roll === 'number' || typeof data.viz_roll === 'number') {
-        const rawRollVal = (typeof data.raw_roll === 'number') ? data.raw_roll : (typeof data.roll === 'number' ? data.roll : (typeof data.viz_roll === 'number' ? data.viz_roll : 0));
+    if (typeof data.raw_roll === 'number' || typeof data.roll === 'number') {
+        const rawRollVal = (typeof data.raw_roll === 'number') ? data.raw_roll : (data.raw_roll || 0);
         const actualTrimForRoll = (typeof rollTrim !== 'undefined') ? Number(rollTrim) : Number((window.telemetryData && window.telemetryData.roll_trim) || 0);
         const apparentRollTrimVal = actualTrimForRoll - (uiTrimZeroBaseRoll || 0);
         const correctedRoll = rawRollVal + actualTrimForRoll - (uiZeroBaselineAngleRoll || 0);
-        const vizRollVal = (typeof data.viz_roll === 'number') ? data.viz_roll : rawRollVal || 0;
+        const vizRollVal = (data.viz_roll !== undefined) ? data.viz_roll : rawRollVal || 0;
         document.getElementById('robot3d-roll').textContent = vizRollVal.toFixed(1) + '°';
         document.getElementById('rollVal').textContent = correctedRoll.toFixed(1) + ' \u00B0';
         const rollSpan = document.getElementById('rollTrimValueDisplay'); if (rollSpan) rollSpan.textContent = apparentRollTrimVal.toFixed(2);
     }
-    if (data.yaw !== undefined || data.raw_yaw !== undefined || data.viz_yaw !== undefined) {
-        const yawVal = (typeof data.yaw === 'number') ? data.yaw : ((typeof data.raw_yaw === 'number') ? data.raw_yaw : (typeof data.viz_yaw === 'number' ? data.viz_yaw : 0));
-        const yawDisplay = Number(yawVal);
-        document.getElementById('yawVal').textContent = yawDisplay.toFixed(1) + ' °';
-        const compassEl = document.getElementById('compassNeedle');
-        if (compassEl) compassEl.style.transform = `rotate(${yawDisplay}deg)`;
+    if (data.yaw !== undefined) {
+        document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' °';
+        document.getElementById('compassNeedle').style.transform = `rotate(${data.yaw}deg)`;
     }
     // speed actual (sp) and target (ts) short keys
     const speedActual = (data.speed !== undefined) ? data.speed : data.sp;
@@ -2847,12 +2839,6 @@ async function startTuning() {
                 searchSpace: searchSpace
             };
             currentTuningSession = new GeneticAlgorithm(config);
-            if (isNaN(config.populationSize) || config.populationSize <= 0 || isNaN(config.generations) || config.generations <= 0) {
-                addLogMessage('[UI] Niepoprawna konfiguracja GA: populationSize i generations muszą być > 0', 'error');
-                setTuningUiLock(false, '');
-                return;
-            }
-            try { addLogMessage(`[UI] GA config: pop=${config.populationSize} gen=${config.generations} mut=${config.mutationRate} xo=${config.crossoverRate}`, 'info'); } catch (e) { console.debug('[UI] GA config log failed', e); }
         } else if (method === 'pso') {
             config = {
                 numParticles: parseInt(document.getElementById('pso-particles').value),
@@ -2863,22 +2849,12 @@ async function startTuning() {
                 searchSpace: searchSpace
             };
             currentTuningSession = new ParticleSwarmOptimization(config);
-            if (isNaN(config.numParticles) || config.numParticles <= 0 || isNaN(config.iterations) || config.iterations <= 0) {
-                addLogMessage('[UI] Niepoprawna konfiguracja PSO: numParticles i iterations muszą być > 0', 'error');
-                setTuningUiLock(false, '');
-                return;
-            }
         } else if (method === 'zn') {
             config = {
                 amplitude: parseFloat(document.getElementById('zn-amplitude').value),
                 minCycles: parseInt(document.getElementById('zn-min-cycles').value)
             };
             currentTuningSession = new ZieglerNicholsRelay(config);
-            if (isNaN(config.minCycles) || config.minCycles <= 0 || isNaN(config.amplitude) || config.amplitude <= 0) {
-                addLogMessage('[UI] Niepoprawna konfiguracja ZN: amplitude i minCycles muszą być > 0', 'error');
-                setTuningUiLock(false, '');
-                return;
-            }
         } else if (method === 'bayesian') {
             config = {
                 iterations: parseInt(document.getElementById('bayesian-iterations').value),
@@ -2888,24 +2864,11 @@ async function startTuning() {
                 searchSpace: searchSpace
             };
             currentTuningSession = new BayesianOptimization(config);
-            if (isNaN(config.iterations) || config.iterations <= 0 || isNaN(config.initialSamples) || config.initialSamples <= 0) {
-                addLogMessage('[UI] Niepoprawna konfiguracja Bayes: iterations i initialSamples muszą być > 0', 'error');
-                setTuningUiLock(false, '');
-                return;
-            }
         } else {
             throw new Error(`Nieznana metoda: ${method}`);
         }
 
-        const runStartTime = Date.now();
-        try { addLogMessage(`[UI] currentTuningSession: ${currentTuningSession.constructor.name} debugId=${currentTuningSession._debugId || 'N/A'} config=${JSON.stringify(config)}`, 'info'); } catch (e) { console.debug('[UI] tuning session log failed', e); }
-        currentTuningSession.run().then(() => {
-            addLogMessage(`[UI] Autostrojenie zakonczone (metoda: ${method.toUpperCase()}) po ${Date.now() - runStartTime}ms`, 'success');
-        }).catch((err) => {
-            console.error('[UI] Autostrojenie error:', err);
-            addLogMessage(`[UI] Błąd podczas sesji strojenia: ${(err && err.message) ? err.message : String(err)} (after ${Date.now() - runStartTime}ms)`, 'error');
-        }).finally(() => {
-            addLogMessage(`[UI] finalizing run() after ${Date.now() - runStartTime}ms (method ${method})`, 'debug');
+        currentTuningSession.run().finally(() => {
             stopTuning(false);
         });
 
@@ -2925,19 +2888,6 @@ function pauseTuning() {
         document.getElementById('resume-tuning-btn').style.display = 'inline-block';
         document.getElementById('resume-tuning-btn').disabled = false;
     }
-}
-
-// Unified cancel handler used by events like disconnection or remote tuner end
-function handleCancel(showPrompt = true) {
-    // Cancel active tuning session (client-side) and unlock UI
-    if (currentTuningSession && typeof currentTuningSession.stop === 'function') {
-        try { currentTuningSession.stop(); } catch (err) { console.error('handleCancel: currentTuningSession.stop error', err); }
-    }
-    currentTuningSession = null;
-    setTuningUiLock(false, '');
-    // Inform the UI and finalize stop logic (no confirmation if showPrompt=false)
-    stopTuning(showPrompt === true);
-    addLogMessage('[UI] Strojenie przerwane (handleCancel).', 'warn');
 }
 
 function resumeTuning() {
