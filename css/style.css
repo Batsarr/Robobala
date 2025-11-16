@@ -353,6 +353,21 @@ body.ui-locked #connectBleBtn, body.ui-locked #emergencyStopBtn {
         display: block;
     }
 }
+/* Modal responsiveness for mapowanie czujnika and other large modals */
+#sensor-mapping-modal .modal-content, #sensor-mapping-modal .modal-content * { box-sizing: border-box; }
+.sensor-mapping-wrapper { display: flex; gap: 10px; align-items: flex-start; }
+.sensor-mapping-preview { width: 100%; height: 200px; min-height: 160px; border-radius: 6px; overflow: hidden; }
+.sensor-mapping-controls { width: 320px; max-width: 48%; }
+/* Make modal content scrollable and fit on small screens */
+.modal-backdrop { padding: 10px; }
+.modal-content { max-height: calc(100vh - 40px); overflow-y: auto; }
+@media (max-width: 760px) {
+    .sensor-mapping-wrapper { flex-direction: column; }
+    .sensor-mapping-controls { width: 100%; max-width: none; }
+    .sensor-mapping-preview { height: 180px; }
+    .modal-content { width: calc(100% - 20px); max-width: none; padding: 10px; }
+    .modal-backdrop { align-items: flex-start; }
+}
 .axis-mapping-row {
     display: grid;
     grid-template-columns: 1fr auto auto;
