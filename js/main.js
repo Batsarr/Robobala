@@ -26,7 +26,7 @@ const AppState = new Proxy({}, {
         // Map old property names to new state paths
         const stateMap = {
             'isConnected': 'connection.isConnected',
-        'isSynced': 'connection.isSynced',
+            'isSynced': 'connection.isSynced',
             'isApplyingConfig': 'ui.isApplyingConfig',
             'lastKnownRobotState': 'robot.state',
             'isSequenceRunning': 'sequence.isRunning',
@@ -38,7 +38,7 @@ const AppState = new Proxy({}, {
             'tempTuningParams': 'sync.tempTuningParams',
             'tempStates': 'sync.tempStates'
         };
-        
+
         if (prop in stateMap) {
             return appStore.getState(stateMap[prop]);
         }
@@ -60,7 +60,7 @@ const AppState = new Proxy({}, {
             'tempTuningParams': 'sync.tempTuningParams',
             'tempStates': 'sync.tempStates'
         };
-        
+
         if (prop in stateMap) {
             appStore.setState(stateMap[prop], value);
             return true;
@@ -72,23 +72,23 @@ const AppState = new Proxy({}, {
 let currentSequenceStep = 0; const MAX_SEQUENCE_STEPS = 15;
 
 // === Montaż: proste przyciski wysyłające komendy do firmware ===
-function openMountCalibModal(){ document.getElementById('mount-calib-modal').style.display='flex'; }
-function closeMountCalibModal(){ document.getElementById('mount-calib-modal').style.display='none'; }
+function openMountCalibModal() { document.getElementById('mount-calib-modal').style.display = 'flex'; }
+function closeMountCalibModal() { document.getElementById('mount-calib-modal').style.display = 'none'; }
 // Legacy IMU axis mapping wizard – completely removed in Quaternion-First UI
 // (previous functions runWizardStep/processWizardTelemetry/finalizeMapping deleted)
 
 // REFACTORED: Consolidated parameter mapping - includes ALL configurable parameters
-const parameterMapping = { 
+const parameterMapping = {
     // PID parameters
-'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b', 'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 'balanceIntegralLimitInput': 'balance_pid_integral_limit', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s', 'speedFilterAlphaInput': 'speed_pid_filter_alpha', 'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedIntegralLimitInput': 'speed_pid_integral_limit', 'speedDeadbandInput': 'speed_pid_deadband', 'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p', 'positionFilterAlphaInput': 'position_pid_filter_alpha', 'maxTargetSpeedInput': 'max_target_speed_from_pos_pid', 'positionIntegralLimitInput': 'position_pid_integral_limit', 'positionDeadbandInput': 'position_pid_deadband', 'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r', 'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h', 'rotationToPwmScaleInput': 'rotation_to_pwm_scale', 
+    'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b', 'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 'balanceIntegralLimitInput': 'balance_pid_integral_limit', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s', 'speedFilterAlphaInput': 'speed_pid_filter_alpha', 'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedIntegralLimitInput': 'speed_pid_integral_limit', 'speedDeadbandInput': 'speed_pid_deadband', 'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p', 'positionFilterAlphaInput': 'position_pid_filter_alpha', 'maxTargetSpeedInput': 'max_target_speed_from_pos_pid', 'positionIntegralLimitInput': 'position_pid_integral_limit', 'positionDeadbandInput': 'position_pid_deadband', 'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r', 'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h', 'rotationToPwmScaleInput': 'rotation_to_pwm_scale',
     // Joystick and mechanical parameters
     'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd',
     // Trim parameters
     'trimValueDisplay': 'trim_angle', 'rollTrimValueDisplay': 'roll_trim',
     // Auto-tuning parameters (safety, space, weights, GA, PSO, ZN)
     'safetyMaxAngle': 'safety_max_angle', 'safetyMaxSpeed': 'safety_max_speed', 'safetyMaxPwm': 'safety_max_pwm',
-'ga-kp-min': 'space_kp_min', 'ga-kp-max': 'space_kp_max', 'ga-ki-min': 'space_ki_min', 'ga-ki-max': 'space_ki_max', 'ga-kd-min': 'space_kd_min', 'ga-kd-max': 'space_kd_max',
-'include-ki-checkbox': 'search_ki',
+    'ga-kp-min': 'space_kp_min', 'ga-kp-max': 'space_kp_max', 'ga-ki-min': 'space_ki_min', 'ga-ki-max': 'space_ki_max', 'ga-kd-min': 'space_kd_min', 'ga-kd-max': 'space_kd_max',
+    'include-ki-checkbox': 'search_ki',
     'ga-weight-itae': 'weights_itae', 'ga-weight-overshoot': 'weights_overshoot', 'ga-weight-control-effort': 'weights_control_effort',
     'ga-generations': 'ga_generations', 'ga-population': 'ga_population', 'ga-mutation-rate': 'ga_mutation_rate', 'ga-elitism': 'ga_elitism', 'ga-adaptive': 'ga_adaptive', 'ga-convergence-check': 'ga_convergence_check',
     'pso-iterations': 'pso_iterations', 'pso-particles': 'pso_particles', 'pso-inertia': 'pso_inertia', 'pso-adaptive-inertia': 'pso_adaptive_inertia', 'pso-velocity-clamp': 'pso_velocity_clamp', 'pso-neighborhood': 'pso_neighborhood',
@@ -110,7 +110,7 @@ const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v4_';
 // Pitch trim: UI pokazuje wartości w stopniach. Firmware stosuje TRIM w kwaternionie (Quaternion-First),
 // więc ustawienie trim = -raw_pitch zeruje wskazanie pitch i wpływa na balans zgodnie z oczekiwaniem.
 // Podstawowe przełączniki
-const availableActions = { 
+const availableActions = {
     'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' },
     'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' },
     'toggle_speed_mode': { label: 'Wlacz/Wylacz Tryb Predkosci', elementId: 'speedModeSwitch' },
@@ -118,158 +118,158 @@ const availableActions = {
     'reset_pitch': { label: 'Ustaw punkt 0 (Pitch)', elementId: 'resetZeroBtn' },
     'reset_roll': { label: 'Ustaw punkt 0 (Roll)', elementId: 'resetRollZeroBtn' }
 };
-const availableTelemetry = { 'pitch': { label: 'Pitch (Kat)', color: '#61dafb' }, 'roll': { label: 'Roll (Przechyl)', color: '#a2f279' }, 'speed': { label: 'Predkosc', color: '#f7b731'}, 'target_speed': { label: 'Predkosc Zadana', color: '#ff9f43' }, 'output': { label: 'Wyjscie PID', color: '#ff6347'}, 'encoder_left': { label: 'Enkoder L', color: '#9966ff' }, 'encoder_right': { label: 'Enkoder P', color: '#cc66ff' } };
-const builtInPresetsData = { '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 95.0, balanceKiInput: 0.0, balanceKdInput: 3.23 }}, '2': { name: "2. PID Mieciutki (Plynny)", params: { balanceKpInput: 80.0, balanceKiInput: 0.0, balanceKdInput: 2.8 }}, '3': { name: "3. PID Agresywny (Sztywny)", params: { balanceKpInput: 110.0, balanceKiInput: 0.0, balanceKdInput: 4.0 }} };
+const availableTelemetry = { 'pitch': { label: 'Pitch (Kat)', color: '#61dafb' }, 'roll': { label: 'Roll (Przechyl)', color: '#a2f279' }, 'speed': { label: 'Predkosc', color: '#f7b731' }, 'target_speed': { label: 'Predkosc Zadana', color: '#ff9f43' }, 'output': { label: 'Wyjscie PID', color: '#ff6347' }, 'encoder_left': { label: 'Enkoder L', color: '#9966ff' }, 'encoder_right': { label: 'Enkoder P', color: '#cc66ff' } };
+const builtInPresetsData = { '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 95.0, balanceKiInput: 0.0, balanceKdInput: 3.23 } }, '2': { name: "2. PID Mieciutki (Plynny)", params: { balanceKpInput: 80.0, balanceKiInput: 0.0, balanceKdInput: 2.8 } }, '3': { name: "3. PID Agresywny (Sztywny)", params: { balanceKpInput: 110.0, balanceKiInput: 0.0, balanceKdInput: 4.0 } } };
 let skyDome;
 let scene3D, camera3D, renderer3D, controls3D, robotPivot, leftWheel, rightWheel, groundMesh, groundTexture, robotPerspectiveZoom = 40;
 let currentEncoderLeft = 0, currentEncoderRight = 0;
 let isAnimation3DEnabled = true, isMovement3DEnabled = false, lastEncoderAvg = 0;
-window.telemetryData = {}; 
+window.telemetryData = {};
 let isCalibrationModalShown = false;
 
 let pitchHistory = [], speedHistory = [];
 const HISTORY_LENGTH = 600;
 let lastTelemetryUpdateTime = 0;
-const TELEMETRY_UPDATE_INTERVAL = 1000; 
+const TELEMETRY_UPDATE_INTERVAL = 1000;
 
 document.addEventListener('DOMContentLoaded', () => {
     // Setup communication layer message handlers
     setupCommunicationHandlers();
-    
-    initJoystick(); 
+
+    initJoystick();
     initSignalAnalyzerChart();
     setupSignalChartControls();
     setupSignalAnalyzerControls();
     populatePresetSelect();
-    setupNumericInputs(); 
+    setupNumericInputs();
     // Zamiana legacy: wywołujemy nowy zestaw listenerów parametrów zamiast usuniętej funkcji.
     if (typeof setupParameterListeners === 'function') {
         setupParameterListeners();
     }
-    setupManualTuneButtons(); 
+    setupManualTuneButtons();
     // Nowy modal Mapowanie Czujnika – korzysta z istniejących komend mount_calib2_* (backend już implementuje kwaternion-first)
     // Sekwencyjny kreator mapowania czujnika (auto-wykrycie rotacji ≥ 90°)
-    let sensorWizard = { step: 0, rotStartYaw: null, monitorId: null, progress: {upright:false, rotation:false, saved:false} };
+    let sensorWizard = { step: 0, rotStartYaw: null, monitorId: null, progress: { upright: false, rotation: false, saved: false } };
     let sensorModalTelemetryMonitorId = null;
-    function openSensorMappingModal(){
-        const m=document.getElementById('sensor-mapping-modal'); if(!m) return; m.style.display='flex';
-        sensorWizard = { step:0, rotStartYaw:null, monitorId:null, progress:{upright:false, rotation:false, saved:false} };
+    function openSensorMappingModal() {
+        const m = document.getElementById('sensor-mapping-modal'); if (!m) return; m.style.display = 'flex';
+        sensorWizard = { step: 0, rotStartYaw: null, monitorId: null, progress: { upright: false, rotation: false, saved: false } };
         updateSensorWizardUI();
         initSensorMappingPreview();
         if (!sensorModalTelemetryMonitorId) sensorModalTelemetryMonitorId = setInterval(updateModalTelemetryDisplay, 200);
     }
-    function closeSensorMappingModal(){ const m=document.getElementById('sensor-mapping-modal'); if(!m) return; if(sensorWizard.monitorId){ clearInterval(sensorWizard.monitorId); sensorWizard.monitorId=null; } if (sensorModalTelemetryMonitorId) { clearInterval(sensorModalTelemetryMonitorId); sensorModalTelemetryMonitorId = null; } m.style.display='none'; }
-    function setWizardProgress(){
+    function closeSensorMappingModal() { const m = document.getElementById('sensor-mapping-modal'); if (!m) return; if (sensorWizard.monitorId) { clearInterval(sensorWizard.monitorId); sensorWizard.monitorId = null; } if (sensorModalTelemetryMonitorId) { clearInterval(sensorModalTelemetryMonitorId); sensorModalTelemetryMonitorId = null; } m.style.display = 'none'; }
+    function setWizardProgress() {
         const el = document.getElementById('sensorWizardProgress');
-        if(!el) return;
+        if (!el) return;
         const p = sensorWizard.progress;
-        el.textContent = `[${p.upright?'x':' '}] Pion | [${p.rotation?'x':' '}] Rotacja ≥ 90° | [${p.saved?'x':' '}] Zapis`;
+        el.textContent = `[${p.upright ? 'x' : ' '}] Pion | [${p.rotation ? 'x' : ' '}] Rotacja ≥ 90° | [${p.saved ? 'x' : ' '}] Zapis`;
         // Jeśli mamy zapisaną korekcję, pokaż skrócony kwaternion
-        if(p.saved && window.lastMountCorr){
-            const {qw,qx,qy,qz}=window.lastMountCorr;
+        if (p.saved && window.lastMountCorr) {
+            const { qw, qx, qy, qz } = window.lastMountCorr;
             const preview = `\nqcorr: w=${qw.toFixed(3)} x=${qx.toFixed(3)} y=${qy.toFixed(3)} z=${qz.toFixed(3)}`;
             el.textContent += preview;
         }
     }
-    function setWizardStepNo(){ const n=document.getElementById('sensorWizardStepNo'); if(n) n.textContent = (sensorWizard.step+1).toString(); }
-    function getCurrentYawDeg(){
+    function setWizardStepNo() { const n = document.getElementById('sensorWizardStepNo'); if (n) n.textContent = (sensorWizard.step + 1).toString(); }
+    function getCurrentYawDeg() {
         const td = window.telemetryData || {}; const { qw, qx, qy, qz } = td; if (typeof qw !== 'number') return null;
         const eul = computeEulerFromQuaternion(qw, qx, qy, qz); return eul ? eul.yaw : null;
     }
-    function angleDeltaDeg(a,b){ if (a===null||b===null) return null; let d = ((a - b + 540) % 360) - 180; return Math.abs(d); }
-    function updateSensorWizardUI(){
+    function angleDeltaDeg(a, b) { if (a === null || b === null) return null; let d = ((a - b + 540) % 360) - 180; return Math.abs(d); }
+    function updateSensorWizardUI() {
         setWizardStepNo(); setWizardProgress();
         const t = document.getElementById('sensorWizardText'); const hint = document.getElementById('sensorWizardHint');
         const back = document.getElementById('sensorWizardBackBtn'); const next = document.getElementById('sensorWizardNextBtn');
-        if(!t||!hint||!back||!next) return;
-        if (sensorWizard.step === 0){
+        if (!t || !hint || !back || !next) return;
+        if (sensorWizard.step === 0) {
             back.disabled = true; next.disabled = false; next.textContent = 'Dalej';
             t.innerHTML = '1) Postaw robota pionowo (koła w dół, prosto) na stabilnej powierzchni i poczekaj aż się uspokoi.<br>Po kliknięciu Dalej zarejestrujemy bazową orientację.';
             hint.textContent = 'Warunek: kalibracja IMU (Sys=3). Jeśli nie, wykonaj kalibrację przed kontynuacją.';
-        } else if (sensorWizard.step === 1){
+        } else if (sensorWizard.step === 1) {
             back.disabled = false; next.disabled = true; next.textContent = 'Czekam na ≥ 90°';
             t.innerHTML = '2) Obracaj robota powoli zgodnie z ruchem wskazówek zegara (poziomo).<br>Krok zakończy się automatycznie po wykryciu obrotu ≥ 90°.';
             hint.textContent = 'Nie podnoś robota – trzymaj koła w dół. Możesz obracać więcej (180–360°) – wystarczy przekroczyć 90°.';
         } else {
             back.disabled = false; next.disabled = false; next.textContent = 'Zapisz';
             let extra = '';
-            if(window.lastMountCorr){ const {qw,qx,qy,qz}=window.lastMountCorr; extra = `<div style="margin-top:8px; font-size:0.8em; color:#9fa;">Aktualne (ostatnie) qcorr:<br>w=${qw.toFixed(4)} x=${qx.toFixed(4)} y=${qy.toFixed(4)} z=${qz.toFixed(4)}</div>`; }
+            if (window.lastMountCorr) { const { qw, qx, qy, qz } = window.lastMountCorr; extra = `<div style="margin-top:8px; font-size:0.8em; color:#9fa;">Aktualne (ostatnie) qcorr:<br>w=${qw.toFixed(4)} x=${qx.toFixed(4)} y=${qy.toFixed(4)} z=${qz.toFixed(4)}</div>`; }
             t.innerHTML = '3) Zapisz ustawienia mapowania. Zmiany zostaną utrwalone w pamięci i zaczną działać natychmiast.' + extra;
             hint.textContent = 'Po zapisie osie w Dashboard i w modelu 3D będą już skorygowane.';
         }
     }
-    function startRotationMonitor(){
+    function startRotationMonitor() {
         // zapamiętaj yaw startowy i rozpocznij monitoring co 100ms
         sensorWizard.rotStartYaw = getCurrentYawDeg();
         if (sensorWizard.monitorId) { clearInterval(sensorWizard.monitorId); sensorWizard.monitorId = null; }
-        sensorWizard.monitorId = setInterval(()=>{
+        sensorWizard.monitorId = setInterval(() => {
             const cy = getCurrentYawDeg(); const d = angleDeltaDeg(cy, sensorWizard.rotStartYaw);
-            if (d!==null && d >= 90){
+            if (d !== null && d >= 90) {
                 clearInterval(sensorWizard.monitorId); sensorWizard.monitorId = null;
                 // auto-zamknięcie kroku rotacji
-                sendBleMessage({type:'sensor_map_capture_rot_end'});
+                sendBleMessage({ type: 'sensor_map_capture_rot_end' });
                 sensorWizard.progress.rotation = true;
                 sensorWizard.step = 2; updateSensorWizardUI(); setWizardProgress();
                 addLogMessage('[UI] Wykryto rotację ≥ 90°. Przechodzę do kroku Zapis.', 'success');
             }
         }, 100);
     }
-    document.getElementById('sensorMappingBtn')?.addEventListener('click', ()=> { openSensorMappingModal(); });
-    document.getElementById('sensorWizardCancelBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'sensor_map_cancel'}); closeSensorMappingModal(); });
-    document.getElementById('sensorWizardBackBtn')?.addEventListener('click', ()=> {
+    document.getElementById('sensorMappingBtn')?.addEventListener('click', () => { openSensorMappingModal(); });
+    document.getElementById('sensorWizardCancelBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'sensor_map_cancel' }); closeSensorMappingModal(); });
+    document.getElementById('sensorWizardBackBtn')?.addEventListener('click', () => {
         if (sensorWizard.step === 0) return; // nic
-        if (sensorWizard.step === 1){ if (sensorWizard.monitorId){ clearInterval(sensorWizard.monitorId); sensorWizard.monitorId=null; } }
+        if (sensorWizard.step === 1) { if (sensorWizard.monitorId) { clearInterval(sensorWizard.monitorId); sensorWizard.monitorId = null; } }
         sensorWizard.step -= 1; updateSensorWizardUI();
     });
-    document.getElementById('sensorWizardNextBtn')?.addEventListener('click', async ()=>{
-        if (sensorWizard.step === 0){
+    document.getElementById('sensorWizardNextBtn')?.addEventListener('click', async () => {
+        if (sensorWizard.step === 0) {
             // Start i rejestracja pozycji pionowej
-            sendBleMessage({type:'sensor_map_start'});
+            sendBleMessage({ type: 'sensor_map_start' });
             await delay(80);
-            sendBleMessage({type:'sensor_map_capture_upright'});
+            sendBleMessage({ type: 'sensor_map_capture_upright' });
             sensorWizard.progress.upright = true; setWizardProgress();
             // Rozpocznij krok rotacji i monitoring
-            sendBleMessage({type:'sensor_map_capture_rot_start'});
+            sendBleMessage({ type: 'sensor_map_capture_rot_start' });
             sensorWizard.step = 1; updateSensorWizardUI(); startRotationMonitor();
-        } else if (sensorWizard.step === 2){
+        } else if (sensorWizard.step === 2) {
             // Zapis
-            sendBleMessage({type:'sensor_map_commit'});
+            sendBleMessage({ type: 'sensor_map_commit' });
             sensorWizard.progress.saved = true; setWizardProgress();
             closeSensorMappingModal();
         }
     });
-    setupGamepadMappingModal(); 
-    setupDpadControls(); 
+    setupGamepadMappingModal();
+    setupDpadControls();
     setupSequenceControls();
     initPathVisualization();
-    loadGamepadMappings(); 
+    loadGamepadMappings();
     renderMappingModal();
     // Toggle pomocy dla mapowania czujnika
     const smHelp = document.getElementById('sensorMappingHelp');
     const smHelpBox = document.getElementById('sensorMappingHelpText');
-    if (smHelp && smHelpBox){
-        smHelp.addEventListener('click', ()=>{
+    if (smHelp && smHelpBox) {
+        smHelp.addEventListener('click', () => {
             smHelpBox.classList.toggle('visible');
             smHelpBox.setAttribute('aria-hidden', smHelpBox.classList.contains('visible') ? 'false' : 'true');
         });
     }
-    pollGamepad(); 
-    window.addEventListener('resize', initJoystick); 
-    init3DVisualization(); 
-    animate3D(); 
+    pollGamepad();
+    window.addEventListener('resize', initJoystick);
+    init3DVisualization();
+    animate3D();
     setTuningUiLock(false, '');
     // Initialize sensor mapping preview (Three.js cube) and controls
     initSensorMappingPreview();
-initAutotuneTuningChart();
-// Start strojenia dostępny dopiero po wyborze metody
-const startBtnInit = document.getElementById('start-tuning-btn');
-if (startBtnInit) startBtnInit.disabled = true;
+    initAutotuneTuningChart();
+    // Start strojenia dostępny dopiero po wyborze metody
+    const startBtnInit = document.getElementById('start-tuning-btn');
+    if (startBtnInit) startBtnInit.disabled = true;
     setupAutotuningTabs();
     // Pinned bottom logs panel wiring (toggle + clear)
     const logToggleBar = document.getElementById('log-toggle-bar');
     const logHistoryBox = document.getElementById('log-history');
     const logsAutoscroll = document.getElementById('logsAutoscroll');
-    document.getElementById('clearLogsBtn')?.addEventListener('click', ()=>{ allLogsBuffer.length = 0; renderAllLogs(true); });
+    document.getElementById('clearLogsBtn')?.addEventListener('click', () => { allLogsBuffer.length = 0; renderAllLogs(true); });
     if (logToggleBar && logHistoryBox) {
         const logCard = document.getElementById('log-card');
         const updateBodyPadding = () => {
@@ -281,7 +281,7 @@ if (startBtnInit) startBtnInit.disabled = true;
             document.body.style.setProperty('--log-card-total', total + 'px');
             document.body.classList.toggle('logs-open', logCard.classList.contains('open'));
         };
-        logToggleBar.addEventListener('click', (e)=>{
+        logToggleBar.addEventListener('click', (e) => {
             if (e.target && (e.target.id === 'logsAutoscroll' || e.target.id === 'clearLogsBtn' || e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON')) return;
             logCard.classList.toggle('open');
             if (logCard.classList.contains('open')) {
@@ -293,8 +293,8 @@ if (startBtnInit) startBtnInit.disabled = true;
         // Reaguj na resize aby trzymać poprawny padding
         window.addEventListener('resize', updateBodyPadding);
     }
-// Przyciski robotowe (loadBtn/saveBtn) mają własne listenery dalej w kodzie (setupParameterListeners)
-// Drugi wywołanie setupParameterListeners usunięte (pierwsze już wykonane wyżej) aby uniknąć podwójnych listenerów.
+    // Przyciski robotowe (loadBtn/saveBtn) mają własne listenery dalej w kodzie (setupParameterListeners)
+    // Drugi wywołanie setupParameterListeners usunięte (pierwsze już wykonane wyżej) aby uniknąć podwójnych listenerów.
     // Domyślnie nie szukamy Ki
     const kiChk = document.getElementById('include-ki-checkbox');
     if (kiChk) {
@@ -310,22 +310,22 @@ if (startBtnInit) startBtnInit.disabled = true;
     const openHistBtn = document.getElementById('open-tuning-history-btn');
     const histModal = document.getElementById('tuning-history-modal');
     if (openHistBtn && histModal) {
-        openHistBtn.addEventListener('click', ()=>{ histModal.style.display='flex'; refreshHistoryTable(); });
+        openHistBtn.addEventListener('click', () => { histModal.style.display = 'flex'; refreshHistoryTable(); });
     }
-    document.getElementById('closeHistoryBtn')?.addEventListener('click', ()=>{ histModal.style.display='none'; });
+    document.getElementById('closeHistoryBtn')?.addEventListener('click', () => { histModal.style.display = 'none'; });
     document.getElementById('exportHistoryCsvBtn')?.addEventListener('click', exportHistoryCsv);
 });
 // Osobny bufor logów systemowych (kanał 'log' z robota i ważne wpisy UI)
 // Pojedynczy, scalony bufor logów
 const allLogsBuffer = [];
 const ALL_LOGS_MAX = 2000;
-function pushLog(message, level='info'){
+function pushLog(message, level = 'info') {
     const ts = new Date().toLocaleTimeString();
-    allLogsBuffer.push({ts, level, message});
+    allLogsBuffer.push({ ts, level, message });
     if (allLogsBuffer.length > ALL_LOGS_MAX) allLogsBuffer.shift();
-const logHistEl = document.getElementById('log-history');
-const autoEl = document.getElementById('logsAutoscroll');
-if (logHistEl && logHistEl.style.display === 'block' && autoEl && autoEl.checked) {
+    const logHistEl = document.getElementById('log-history');
+    const autoEl = document.getElementById('logsAutoscroll');
+    if (logHistEl && logHistEl.style.display === 'block' && autoEl && autoEl.checked) {
         renderAllLogs(true);
     }
 }
@@ -362,6 +362,27 @@ function initSensorMappingPreview() {
     dir.position.set(5, 10, 7);
     scene.add(dir);
     sensorPreview.scene = scene; sensorPreview.camera = camera; sensorPreview.renderer = renderer; sensorPreview.cube = cube; sensorPreview.axes = axes;
+    // Create simple axis labels (X,Y,Z) using sprites so user sees orientation
+    const makeAxisLabel = (text, color) => {
+        const canvasLabel = document.createElement('canvas'); canvasLabel.width = 128; canvasLabel.height = 64; const ctxLabel = canvasLabel.getContext('2d'); ctxLabel.font = 'bold 30px Arial'; ctxLabel.textAlign = 'center'; ctxLabel.textBaseline = 'middle'; ctxLabel.fillStyle = color || '#ffffff'; ctxLabel.fillText(text, canvasLabel.width / 2, canvasLabel.height / 2);
+        const labelTex = new THREE.CanvasTexture(canvasLabel);
+        const labelMat = new THREE.SpriteMaterial({ map: labelTex, depthTest: false });
+        return new THREE.Sprite(labelMat);
+    };
+    sensorPreview.xLabel = makeAxisLabel('X', '#ff0000'); sensorPreview.xLabel.scale.set(1.2, 0.6, 1);
+    sensorPreview.yLabel = makeAxisLabel('Y', '#00ff00'); sensorPreview.yLabel.scale.set(1.2, 0.6, 1);
+    sensorPreview.zLabel = makeAxisLabel('Z', '#0000ff'); sensorPreview.zLabel.scale.set(1.2, 0.6, 1);
+    // Attach labels to cube to reflect cube rotation (so labels move with cube)
+    cube.add(sensorPreview.xLabel); cube.add(sensorPreview.yLabel); cube.add(sensorPreview.zLabel);
+    // Place labels near cube faces (local coordinates so they rotate with cube)
+    sensorPreview.xLabel.position.set(1.3, 0, 0);
+    sensorPreview.yLabel.position.set(0, 1.3, 0);
+    sensorPreview.zLabel.position.set(0, 0, 1.3);
+    // Add arrow helpers to indicate positive directions of axes
+    sensorPreview.xArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 1.1, 0xff0000);
+    sensorPreview.yArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 1.1, 0x00ff00);
+    sensorPreview.zArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 1.1, 0x0000ff);
+    cube.add(sensorPreview.xArrow); cube.add(sensorPreview.yArrow); cube.add(sensorPreview.zArrow);
     // Animation loop
     function render() {
         sensorPreview.animId = requestAnimationFrame(render);
@@ -377,7 +398,7 @@ function initSensorMappingPreview() {
     // Update display initial values
     updateSensorMappingDisplays();
     // Buttons wiring
-    ['pitchMinus90Btn','pitchPlus90Btn','rollMinus90Btn','rollPlus90Btn','yawMinus90Btn','yawPlus90Btn'].forEach(id => {
+    ['pitchMinus90Btn', 'pitchPlus90Btn', 'rollMinus90Btn', 'rollPlus90Btn', 'yawMinus90Btn', 'yawPlus90Btn'].forEach(id => {
         const b = document.getElementById(id);
         if (!b) return;
         b.addEventListener('click', (e) => {
@@ -387,8 +408,8 @@ function initSensorMappingPreview() {
             if (id.startsWith('yaw')) rotateSensorCube('y', delta);
         });
     });
-    document.getElementById('setModalPitchZeroBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'set_pitch_zero' }); addLogMessage('[UI] Wyslano polecenie: ustaw punkt 0 (Pitch)', 'info'); });
-    document.getElementById('setModalRollZeroBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'set_roll_zero' }); addLogMessage('[UI] Wyslano polecenie: ustaw punkt 0 (Roll)', 'info'); });
+    document.getElementById('setModalPitchZeroBtn')?.addEventListener('click', () => { setPitchZero(); });
+    document.getElementById('setModalRollZeroBtn')?.addEventListener('click', () => { setRollZero(); });
 }
 
 function rotateSensorCube(axis, deg) {
@@ -423,11 +444,11 @@ function updateModalTelemetryDisplay() {
 }
 
 // Main reset buttons are mapped below; please use the assigned handlers via toolButtons mapping.
-function renderAllLogs(keepScrollBottom=false){
-    const box = document.getElementById('log-history'); if(!box) return;
+function renderAllLogs(keepScrollBottom = false) {
+    const box = document.getElementById('log-history'); if (!box) return;
     const wasBottom = (box.scrollTop + box.clientHeight + 8) >= box.scrollHeight;
     box.innerHTML = '';
-    for (const row of allLogsBuffer){
+    for (const row of allLogsBuffer) {
         const div = document.createElement('div');
         let color = '#ccc';
         if (row.level === 'error') color = '#ff6347';
@@ -437,28 +458,28 @@ function renderAllLogs(keepScrollBottom=false){
         div.textContent = `[${row.ts}] ${row.message}`;
         box.appendChild(div);
     }
-    if (keepScrollBottom || wasBottom){ box.scrollTop = box.scrollHeight; }
+    if (keepScrollBottom || wasBottom) { box.scrollTop = box.scrollHeight; }
 }
 
 // --- Model Mapping (wizualizacja 3D) ---
-let modelMapping = { pitch:{source:0,sign:1}, yaw:{source:1,sign:1}, roll:{source:2,sign:1} }; // domyślne: identity
-function openModelMappingModal(){ const m=document.getElementById('model-mapping-modal'); if(!m) return; m.style.display='flex'; updateModelMappingUI(); }
-function closeModelMappingModal(){ const m=document.getElementById('model-mapping-modal'); if(!m) return; m.style.display='none'; }
-function updateModelMappingUI(){
+let modelMapping = { pitch: { source: 0, sign: 1 }, yaw: { source: 1, sign: 1 }, roll: { source: 2, sign: 1 } }; // domyślne: identity
+function openModelMappingModal() { const m = document.getElementById('model-mapping-modal'); if (!m) return; m.style.display = 'flex'; updateModelMappingUI(); }
+function closeModelMappingModal() { const m = document.getElementById('model-mapping-modal'); if (!m) return; m.style.display = 'none'; }
+function updateModelMappingUI() {
     // Ustaw dropdowny
-    const sPitch=document.getElementById('modelPitchSource'); const sYaw=document.getElementById('modelYawSource'); const sRoll=document.getElementById('modelRollSource');
-    if(sPitch) sPitch.value=String(modelMapping.pitch.source);
-    if(sYaw) sYaw.value=String(modelMapping.yaw.source);
-    if(sRoll) sRoll.value=String(modelMapping.roll.source);
+    const sPitch = document.getElementById('modelPitchSource'); const sYaw = document.getElementById('modelYawSource'); const sRoll = document.getElementById('modelRollSource');
+    if (sPitch) sPitch.value = String(modelMapping.pitch.source);
+    if (sYaw) sYaw.value = String(modelMapping.yaw.source);
+    if (sRoll) sRoll.value = String(modelMapping.roll.source);
     // Ustaw przyciski sign
     setSignButtons('modelPitchSign', modelMapping.pitch.sign);
     setSignButtons('modelYawSign', modelMapping.yaw.sign);
     setSignButtons('modelRollSign', modelMapping.roll.sign);
     // Podgląd
-    const cur=document.getElementById('model-mapping-current');
-    if(cur){ cur.textContent = `pitch: src=${modelMapping.pitch.source} sign=${modelMapping.pitch.sign} | yaw: src=${modelMapping.yaw.source} sign=${modelMapping.yaw.sign} | roll: src=${modelMapping.roll.source} sign=${modelMapping.roll.sign}`; }
+    const cur = document.getElementById('model-mapping-current');
+    if (cur) { cur.textContent = `pitch: src=${modelMapping.pitch.source} sign=${modelMapping.pitch.sign} | yaw: src=${modelMapping.yaw.source} sign=${modelMapping.yaw.sign} | roll: src=${modelMapping.roll.source} sign=${modelMapping.roll.sign}`; }
 }
-function setSignButtons(containerId, sign){ const c=document.getElementById(containerId); if(!c) return; c.querySelectorAll('button').forEach(btn=>{ const s=parseInt(btn.dataset.sign); if(s===sign){ btn.classList.add('active'); } else { btn.classList.remove('active'); } }); }
+function setSignButtons(containerId, sign) { const c = document.getElementById(containerId); if (!c) return; c.querySelectorAll('button').forEach(btn => { const s = parseInt(btn.dataset.sign); if (s === sign) { btn.classList.add('active'); } else { btn.classList.remove('active'); } }); }
 
 function updateSignBadge(badgeId, sign) {
     const el = document.getElementById(badgeId);
@@ -478,75 +499,75 @@ function updateSignSummary() {
     if (!el) return;
     el.textContent = `B:${b === -1 ? '-' : '+'} S:${s === -1 ? '-' : '+'} P:${p === -1 ? '-' : '+'}`;
 }
-function gatherModelMappingFromUI(){ modelMapping.pitch.source=parseInt(document.getElementById('modelPitchSource').value); modelMapping.yaw.source=parseInt(document.getElementById('modelYawSource').value); modelMapping.roll.source=parseInt(document.getElementById('modelRollSource').value); modelMapping.pitch.sign = getActiveSign('modelPitchSign'); modelMapping.yaw.sign = getActiveSign('modelYawSign'); modelMapping.roll.sign = getActiveSign('modelRollSign'); }
-function getActiveSign(containerId){ const c=document.getElementById(containerId); if(!c) return 1; const active=c.querySelector('button.active'); return active? parseInt(active.dataset.sign):1; }
-function resetModelMapping(){ modelMapping = { pitch:{source:0,sign:1}, yaw:{source:1,sign:1}, roll:{source:2,sign:1} }; updateModelMappingUI(); }
-function applyModelMappingToEuler(e){ // e={pitch,yaw,roll}; zwraca przemapowane
-    const arr=[e.pitch, e.yaw, e.roll];
+function gatherModelMappingFromUI() { modelMapping.pitch.source = parseInt(document.getElementById('modelPitchSource').value); modelMapping.yaw.source = parseInt(document.getElementById('modelYawSource').value); modelMapping.roll.source = parseInt(document.getElementById('modelRollSource').value); modelMapping.pitch.sign = getActiveSign('modelPitchSign'); modelMapping.yaw.sign = getActiveSign('modelYawSign'); modelMapping.roll.sign = getActiveSign('modelRollSign'); }
+function getActiveSign(containerId) { const c = document.getElementById(containerId); if (!c) return 1; const active = c.querySelector('button.active'); return active ? parseInt(active.dataset.sign) : 1; }
+function resetModelMapping() { modelMapping = { pitch: { source: 0, sign: 1 }, yaw: { source: 1, sign: 1 }, roll: { source: 2, sign: 1 } }; updateModelMappingUI(); }
+function applyModelMappingToEuler(e) { // e={pitch,yaw,roll}; zwraca przemapowane
+    const arr = [e.pitch, e.yaw, e.roll];
     return {
-        pitch: (arr[modelMapping.pitch.source]||0) * modelMapping.pitch.sign,
-        yaw: (arr[modelMapping.yaw.source]||0) * modelMapping.yaw.sign,
-        roll: (arr[modelMapping.roll.source]||0) * modelMapping.roll.sign
+        pitch: (arr[modelMapping.pitch.source] || 0) * modelMapping.pitch.sign,
+        yaw: (arr[modelMapping.yaw.source] || 0) * modelMapping.yaw.sign,
+        roll: (arr[modelMapping.roll.source] || 0) * modelMapping.roll.sign
     };
 }
 // Podłączenie eventów modalu
-document.getElementById('modelMappingBtn')?.addEventListener('click', ()=> { openModelMappingModal(); sendBleMessage({type:'get_model_mapping'}); });
-document.getElementById('modelMappingCloseBtn')?.addEventListener('click', ()=> closeModelMappingModal());
-document.getElementById('modelMappingLoadBtn')?.addEventListener('click', ()=> { sendBleMessage({type:'get_model_mapping'}); });
-document.getElementById('modelMappingSaveBtn')?.addEventListener('click', ()=> { gatherModelMappingFromUI(); sendBleMessage({type:'set_model_mapping', mapping:modelMapping}); addLogMessage('[UI] Wyslano mapowanie modelu 3D do robota.', 'info'); });
-    // Feedback sign toggles wiring - init once here (not in the test result handler)
-    const signButtonMap = {
-        'balanceSign': 'balance_feedback_sign',
-        'speedSign': 'speed_feedback_sign',
-        'positionSign': 'position_feedback_sign'
-    };
+document.getElementById('modelMappingBtn')?.addEventListener('click', () => { openModelMappingModal(); sendBleMessage({ type: 'get_model_mapping' }); });
+document.getElementById('modelMappingCloseBtn')?.addEventListener('click', () => closeModelMappingModal());
+document.getElementById('modelMappingLoadBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'get_model_mapping' }); });
+document.getElementById('modelMappingSaveBtn')?.addEventListener('click', () => { gatherModelMappingFromUI(); sendBleMessage({ type: 'set_model_mapping', mapping: modelMapping }); addLogMessage('[UI] Wyslano mapowanie modelu 3D do robota.', 'info'); });
+// Feedback sign toggles wiring - init once here (not in the test result handler)
+const signButtonMap = {
+    'balanceSign': 'balance_feedback_sign',
+    'speedSign': 'speed_feedback_sign',
+    'positionSign': 'position_feedback_sign'
+};
+Object.keys(signButtonMap).forEach(containerId => {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    el.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const sign = parseInt(btn.dataset.sign);
+            // Only send change if robot is IDLE
+            const robotState = appStore.getState('robot.state');
+            if (robotState !== 'IDLE') {
+                showNotification('Zmiana znaku tylko w trybie IDLE', 'warn');
+                return;
+            }
+            // Send set_param to robot
+            const key = signButtonMap[containerId];
+            sendBleMessage({ type: 'set_param', key: key, value: sign });
+            // Optimistically update UI
+            setSignButtons(containerId, sign);
+            updateSignBadge(containerId + 'Badge', sign);
+        });
+    });
+});
+// Disable sign toggles outside of IDLE for safety
+appStore.subscribe('robot.state', (newVal) => {
+    const isIdle = (newVal === 'IDLE');
     Object.keys(signButtonMap).forEach(containerId => {
         const el = document.getElementById(containerId);
         if (!el) return;
         el.querySelectorAll('button').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const sign = parseInt(btn.dataset.sign);
-                // Only send change if robot is IDLE
-                const robotState = appStore.getState('robot.state');
-                if (robotState !== 'IDLE') {
-                    showNotification('Zmiana znaku tylko w trybie IDLE', 'warn');
-                    return;
-                }
-                // Send set_param to robot
-                const key = signButtonMap[containerId];
-                sendBleMessage({ type: 'set_param', key: key, value: sign });
-                // Optimistically update UI
-                setSignButtons(containerId, sign);
-                updateSignBadge(containerId + 'Badge', sign);
-            });
+            btn.disabled = !isIdle;
         });
+        el.classList.toggle('disabled', !isIdle);
     });
-    // Disable sign toggles outside of IDLE for safety
-    appStore.subscribe('robot.state', (newVal) => {
-        const isIdle = (newVal === 'IDLE');
-        Object.keys(signButtonMap).forEach(containerId => {
-            const el = document.getElementById(containerId);
-            if (!el) return;
-            el.querySelectorAll('button').forEach(btn => {
-                btn.disabled = !isIdle;
-            });
-            el.classList.toggle('disabled', !isIdle);
-        });
-    });
-    // Initial summary update
-    updateSignSummary();
-document.getElementById('modelMappingResetBtn')?.addEventListener('click', ()=> { resetModelMapping(); addLogMessage('[UI] Przywrócono domyślne mapowanie modelu (identity).', 'info'); });
+});
+// Initial summary update
+updateSignSummary();
+document.getElementById('modelMappingResetBtn')?.addEventListener('click', () => { resetModelMapping(); addLogMessage('[UI] Przywrócono domyślne mapowanie modelu (identity).', 'info'); });
 // Toggle pomocy w modalum model mapping
 const mmHelp = document.getElementById('modelMappingHelp');
 const mmHelpBox = document.getElementById('modelMappingHelpText');
-if(mmHelp && mmHelpBox){
-    mmHelp.addEventListener('click', ()=>{
+if (mmHelp && mmHelpBox) {
+    mmHelp.addEventListener('click', () => {
         mmHelpBox.classList.toggle('visible');
         mmHelpBox.setAttribute('aria-hidden', mmHelpBox.classList.contains('visible') ? 'false' : 'true');
     });
 }
 // Listenery znaków
-['modelPitchSign','modelYawSign','modelRollSign'].forEach(id=>{ const c=document.getElementById(id); if(!c) return; c.querySelectorAll('button').forEach(btn=>{ btn.addEventListener('click',()=>{ c.querySelectorAll('button').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }); }); });
+['modelPitchSign', 'modelYawSign', 'modelRollSign'].forEach(id => { const c = document.getElementById(id); if (!c) return; c.querySelectorAll('button').forEach(btn => { btn.addEventListener('click', () => { c.querySelectorAll('button').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }); }); });
 
 // --- Przeliczanie kątów Euler’a z kwaternionu (telemetria: qw,qx,qy,qz) ---
 function computeEulerFromQuaternion(qw, qx, qy, qz) {
@@ -581,7 +602,7 @@ function getRawEuler() {
     return eul || { pitch: 0, yaw: 0, roll: 0 };
 }
 
-const debounce = (func, delay) => { let timeout; return function(...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
+const debounce = (func, delay) => { let timeout; return function (...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 function addLogMessage(message, level = 'info') { pushLog(message, level); const el = document.getElementById('log-history'); if (el && el.style.display === 'block') { renderAllLogs(true); } }
 function clearLogs() { if (typeof allLogsBuffer !== 'undefined') { allLogsBuffer.length = 0; } const box = document.getElementById('log-history'); if (box) box.innerHTML = ''; }
@@ -670,43 +691,43 @@ async function connectBLE() {
     try {
         // Use the new communication layer
         const connected = await commLayer.connect();
-        
+
         if (!connected) {
             throw new Error('Failed to connect to device');
         }
-        
+
         // Get device info for backward compatibility
         bleDevice = commLayer.device;
         rxCharacteristic = commLayer.rxCharacteristic;
         txCharacteristic = commLayer.txCharacteristic;
-        
+
         const deviceName = commLayer.getDeviceName();
         addLogMessage(`[UI] Laczenie z ${deviceName}...`, 'info');
-        
+
         const connectBtn = document.getElementById('connectBleBtn');
         connectBtn.disabled = true;
         document.getElementById('connectionText').textContent = 'Laczenie...';
-        
+
         // Update state through state manager
         AppState.isConnected = true;
         AppState.isSynced = false;
         appStore.setState('connection.deviceName', deviceName);
-        
+
         document.getElementById('connectionStatus').className = 'status-indicator status-ok';
         document.getElementById('connectionText').textContent = 'Polaczony';
         addLogMessage('[UI] Polaczono! Rozpoczynam synchronizacje...', 'success');
         document.body.classList.remove('ui-locked');
         document.getElementById('connectBleBtn').textContent = 'Synchronizowanie...';
-        
+
         // Reset sync state
         AppState.isSynced = false;
         AppState.tempParams = {};
         AppState.tempTuningParams = {};
         AppState.tempStates = {};
-        
+
         // Request configuration
         sendBleMessage({ type: 'request_full_config' });
-        
+
         // Setup sync timeout
         clearTimeout(AppState.syncTimeout);
         AppState.syncTimeout = setTimeout(() => {
@@ -729,28 +750,28 @@ function onDisconnected() {
     AppState.isConnected = false;
     AppState.isSynced = false;
     appStore.setState('ui.isLocked', true);
-    
+
     document.body.classList.add('ui-locked');
-    
+
     if (AppState.isTuningActive) {
         handleCancel();
     }
-    
+
     const connectBtn = document.getElementById('connectBleBtn');
     connectBtn.disabled = false;
     connectBtn.textContent = 'POLACZ Z ROBOTEM';
     connectBtn.style.backgroundColor = '';
-    
+
     document.getElementById('connectionStatus').className = 'status-indicator status-disconnected';
     document.getElementById('connectionText').textContent = 'Rozlaczony';
-    
+
     ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.checked = false;
     });
 }
 // Backward compatibility: keep old functions for any direct references
-function handleBleNotification(event) { const value = event.target.value; const decoder = new TextDecoder('utf-8'); bleBuffer += decoder.decode(value); let newlineIndex; while ((newlineIndex = bleBuffer.indexOf('\n')) !== -1) { const line = bleBuffer.substring(0, newlineIndex).trim(); bleBuffer = bleBuffer.substring(newlineIndex + 1); if (line) { try { const data = JSON.parse(line); if (data.type === 'chunk' && data.id !== undefined) { let entry = bleChunks.get(data.id); if (!entry) { entry = { total: data.total || 0, parts: new Map(), timer: setTimeout(() => { if (bleChunks.has(data.id)) { bleChunks.delete(data.id); addLogMessage(`[UI] Blad: Timeout podczas skladania wiadomosci (ID: ${data.id}).`, 'error'); } }, 5000)}; bleChunks.set(data.id, entry); } entry.parts.set(data.i, data.data || ''); if (data.total) entry.total = data.total; if (entry.parts.size === entry.total && entry.total > 0) { clearTimeout(entry.timer); let combined = ''; for (let i = 0; i < entry.total; i++) { combined += entry.parts.get(i) || ''; } bleChunks.delete(data.id); try { const fullMsg = JSON.parse(combined); processCompleteMessage(fullMsg); } catch (e) { addLogMessage(`[UI] Blad skladania chunkow: ${e}. Dane: ${combined}`, 'error'); } } } else { processCompleteMessage(data); } } catch (e) { addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error'); } } } }
+function handleBleNotification(event) { const value = event.target.value; const decoder = new TextDecoder('utf-8'); bleBuffer += decoder.decode(value); let newlineIndex; while ((newlineIndex = bleBuffer.indexOf('\n')) !== -1) { const line = bleBuffer.substring(0, newlineIndex).trim(); bleBuffer = bleBuffer.substring(newlineIndex + 1); if (line) { try { const data = JSON.parse(line); if (data.type === 'chunk' && data.id !== undefined) { let entry = bleChunks.get(data.id); if (!entry) { entry = { total: data.total || 0, parts: new Map(), timer: setTimeout(() => { if (bleChunks.has(data.id)) { bleChunks.delete(data.id); addLogMessage(`[UI] Blad: Timeout podczas skladania wiadomosci (ID: ${data.id}).`, 'error'); } }, 5000) }; bleChunks.set(data.id, entry); } entry.parts.set(data.i, data.data || ''); if (data.total) entry.total = data.total; if (entry.parts.size === entry.total && entry.total > 0) { clearTimeout(entry.timer); let combined = ''; for (let i = 0; i < entry.total; i++) { combined += entry.parts.get(i) || ''; } bleChunks.delete(data.id); try { const fullMsg = JSON.parse(combined); processCompleteMessage(fullMsg); } catch (e) { addLogMessage(`[UI] Blad skladania chunkow: ${e}. Dane: ${combined}`, 'error'); } } } else { processCompleteMessage(data); } } catch (e) { addLogMessage(`[UI] Blad parsowania JSON: ${e}. Dane: ${line}`, 'error'); } } } }
 async function _sendRawBleMessage(message) { if (!rxCharacteristic) return; try { const encoder = new TextEncoder(); await rxCharacteristic.writeValueWithoutResponse(encoder.encode(JSON.stringify(message) + '\n')); } catch (error) { addLogMessage(`[UI] Blad wysylania danych BLE: ${error}`, 'error'); } }
 async function processBleQueue() { if (isSendingBleMessage || bleMessageQueue.length === 0 || !rxCharacteristic) return; isSendingBleMessage = true; const message = bleMessageQueue.shift(); await _sendRawBleMessage(message); setTimeout(() => { isSendingBleMessage = false; processBleQueue(); }, BLE_SEND_INTERVAL); }
 
@@ -772,7 +793,7 @@ function setupCommunicationHandlers() {
     commLayer.onMessage('disconnected', () => {
         onDisconnected();
     });
-    
+
     // Handle all incoming messages by routing them to processCompleteMessage
     commLayer.onMessage('*', (type, data) => {
         // Skip the 'disconnected' type as it's handled separately
@@ -780,19 +801,19 @@ function setupCommunicationHandlers() {
             processCompleteMessage(data);
         }
     });
-    
+
     // Subscribe to state changes for UI updates
     appStore.subscribe('connection.isConnected', (value) => {
         document.body.classList.toggle('ui-locked', !value);
     });
-    
+
     appStore.subscribe('robot.state', (value) => {
         const stateEl = document.getElementById('robotStateVal');
         if (stateEl) {
             stateEl.textContent = value;
         }
     });
-    
+
     appStore.subscribe('tuning.isActive', (value) => {
         // Update UI based on tuning state if needed
         setTuningUiLock(value, appStore.getState('tuning.activeMethod'));
@@ -813,25 +834,29 @@ function processCompleteMessage(data) {
     // Note: Emergency stop during tuning is automatically handled by algorithms
     // through test_complete message with success=false. No manual pause needed here.
     // The algorithms will detect the failed test, enter pause state, and restore baseline PID.
-    switch(data.type) {
+    switch (data.type) {
         case 'telemetry':
-    // Jeśli dostępny jest kwaternion, policz kąty bez dodatkowego mapowania (Quaternion-First)
+            // Jeśli dostępny jest kwaternion, policz kąty bez dodatkowego mapowania (Quaternion-First)
             if (typeof data.qw === 'number' && typeof data.qx === 'number' && typeof data.qy === 'number' && typeof data.qz === 'number') {
                 const eul = computeEulerFromQuaternion(data.qw, data.qx, data.qy, data.qz);
                 if (eul) {
                     // Zachowaj SUROWE kąty z kwaternionu (dla logiki, wykresów, ścieżki)
                     data.raw_pitch = eul.pitch;
-                    data.raw_yaw   = eul.yaw;
-                    data.raw_roll  = eul.roll;
+                    data.raw_yaw = eul.yaw;
+                    data.raw_roll = eul.roll;
                     // Oblicz tylko dla wizualizacji (model 3D) – nie wpływa na logikę
                     const mapped = applyModelMappingToEuler(eul);
                     data.viz_pitch = mapped.pitch;
-                    data.viz_yaw   = mapped.yaw;
-                    data.viz_roll  = mapped.roll;
-                    // Pola kompatybilności: pitch/yaw/roll = surowe (dla istniejących funkcji)
-                    data.pitch = data.raw_pitch;
-                    data.yaw   = data.raw_yaw;
-                    data.roll  = data.raw_roll;
+                    data.viz_yaw = mapped.yaw;
+                    data.viz_roll = mapped.roll;
+                    // Pola kompatybilności: pitch/yaw/roll = surowe + trim (korekcja widoczna w dashboard)
+                    // Pobierz aktualne wartości trim (telemetria może nie zawierać ich w każdej paczce)
+                    const currentTrim = (data.trim_angle !== undefined) ? Number(data.trim_angle) : Number((window.telemetryData && window.telemetryData.trim_angle) || parseFloat(document.getElementById('trimValueDisplay')?.textContent || '0') || 0);
+                    const currentRollTrim = (data.roll_trim !== undefined) ? Number(data.roll_trim) : Number((window.telemetryData && window.telemetryData.roll_trim) || parseFloat(document.getElementById('rollTrimValueDisplay')?.textContent || '0') || 0);
+                    // Zwracamy pitch/roll skorygowane o trimy (wyświetlane jako 'wartość po korekcji' w dashboard)
+                    data.pitch = (data.raw_pitch || 0) + (isNaN(currentTrim) ? 0 : currentTrim);
+                    data.yaw = data.raw_yaw;
+                    data.roll = (data.raw_roll || 0) + (isNaN(currentRollTrim) ? 0 : currentRollTrim);
                 }
             }
             updateTelemetryUI(data);
@@ -844,11 +869,11 @@ function processCompleteMessage(data) {
             break;
         case 'status_update':
             // Specjalna obsługa mount_corr_set (echo po sensor_map_commit)
-            if(data.message === 'mount_corr_set' && typeof data.qw === 'number'){
-                window.lastMountCorr = {qw:data.qw,qx:data.qx,qy:data.qy,qz:data.qz};
+            if (data.message === 'mount_corr_set' && typeof data.qw === 'number') {
+                window.lastMountCorr = { qw: data.qw, qx: data.qx, qy: data.qy, qz: data.qz };
                 addLogMessage(`[UI] Korekcja montażu zastosowana: w=${data.qw.toFixed(3)} x=${data.qx.toFixed(3)} y=${data.qy.toFixed(3)} z=${data.qz.toFixed(3)}`, 'success');
                 // Jeśli modal nadal otwarty a zapis jeszcze nie zaznaczony, odśwież postęp
-                if(document.getElementById('sensor-mapping-modal')?.style.display === 'flex'){
+                if (document.getElementById('sensor-mapping-modal')?.style.display === 'flex') {
                     sensorWizard.progress.saved = true; setWizardProgress(); updateSensorWizardUI();
                 }
             }
@@ -860,7 +885,7 @@ function processCompleteMessage(data) {
             break;
         case 'model_mapping':
             // Aktualizacja struktury modelMapping z EEPROM
-            if(data.pitch && data.yaw && data.roll){
+            if (data.pitch && data.yaw && data.roll) {
                 modelMapping.pitch.source = parseInt(data.pitch.source); modelMapping.pitch.sign = parseInt(data.pitch.sign);
                 modelMapping.yaw.source = parseInt(data.yaw.source); modelMapping.yaw.sign = parseInt(data.yaw.sign);
                 modelMapping.roll.source = parseInt(data.roll.source); modelMapping.roll.sign = parseInt(data.roll.sign);
@@ -894,7 +919,7 @@ function processCompleteMessage(data) {
                 if (data.key === 'search_ki') updateSearchSpaceInputs();
             }
             break;
-        
+
         case 'ack':
             if (data.command === 'request_full_config') { // NOWE: Obsługa ACK dla request_full_config
                 if (data.success) {
@@ -927,7 +952,7 @@ function processCompleteMessage(data) {
             if (AppState.tempStates.holding_pos !== undefined) document.getElementById('holdPositionSwitch').checked = AppState.tempStates.holding_pos;
             if (AppState.tempStates.speed_mode !== undefined) document.getElementById('speedModeSwitch').checked = AppState.tempStates.speed_mode;
             AppState.isApplyingConfig = false;
-            
+
             // Zaktualizuj UI
             clearTimeout(AppState.syncTimeout);
             AppState.isSynced = true;
@@ -953,7 +978,7 @@ function processCompleteMessage(data) {
             if (data.motor && data.direction && data.found_pwm !== undefined) {
                 const { motor, direction, found_pwm } = data;
                 addLogMessage(`[UI] Auto-strojenie zakończone dla ${motor} ${direction}. Znaleziono PWM: ${found_pwm}`, 'success');
-                
+
                 // Znajdź odpowiedni wiersz i pole input
                 const row = document.querySelector(`.manual-tune-row[data-motor="${motor}"][data-direction="${direction}"]`);
                 if (row) {
@@ -979,8 +1004,8 @@ function processCompleteMessage(data) {
             handleCancel(false);
             break;
     }
-// Broadcast BLE message for client-side autotuning algorithms (Simple Test API)
-try { window.dispatchEvent(new CustomEvent('ble_message', { detail: data })); } catch(e) {}
+    // Broadcast BLE message for client-side autotuning algorithms (Simple Test API)
+    try { window.dispatchEvent(new CustomEvent('ble_message', { detail: data })); } catch (e) { }
 }
 
 // Historia prób strojenia + lista ostatnich 5
@@ -990,22 +1015,22 @@ function refreshRecentList() {
     if (!box) return;
     const last5 = tuningHistory.slice(-5).reverse();
     if (!last5.length) { box.textContent = 'Brak danych.'; return; }
-    box.innerHTML = last5.map((r, idx)=> `#${r.idx} | Kp=${r.kp.toFixed(3)} Ki=${r.ki.toFixed(3)} Kd=${r.kd.toFixed(3)} | fitness=${r.fitness.toFixed(4)} | ITAE=${(r.itae??NaN).toFixed?.(2)??'---'} | ov=${(r.overshoot??NaN).toFixed?.(2)??'---'}%`).join('\n');
+    box.innerHTML = last5.map((r, idx) => `#${r.idx} | Kp=${r.kp.toFixed(3)} Ki=${r.ki.toFixed(3)} Kd=${r.kd.toFixed(3)} | fitness=${r.fitness.toFixed(4)} | ITAE=${(r.itae ?? NaN).toFixed?.(2) ?? '---'} | ov=${(r.overshoot ?? NaN).toFixed?.(2) ?? '---'}%`).join('\n');
 }
-function refreshHistoryTable(){
+function refreshHistoryTable() {
     const tbody = document.getElementById('results-table-body');
     if (!tbody) return;
     tbody.innerHTML = '';
-    for (let i=tuningHistory.length-1; i>=0; i--) {
+    for (let i = tuningHistory.length - 1; i >= 0; i--) {
         const r = tuningHistory[i];
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${r.idx}</td><td>${r.kp.toFixed(3)}</td><td>${r.ki.toFixed(3)}</td><td>${r.kd.toFixed(3)}</td><td>${r.fitness.toFixed(4)}</td><td>${(r.itae??0).toFixed(2)}</td><td>${(r.overshoot??0).toFixed(2)}%</td><td><button class="btn-small" data-apply="${i}">Zastosuj</button></td>`;
+        tr.innerHTML = `<td>${r.idx}</td><td>${r.kp.toFixed(3)}</td><td>${r.ki.toFixed(3)}</td><td>${r.kd.toFixed(3)}</td><td>${r.fitness.toFixed(4)}</td><td>${(r.itae ?? 0).toFixed(2)}</td><td>${(r.overshoot ?? 0).toFixed(2)}%</td><td><button class="btn-small" data-apply="${i}">Zastosuj</button></td>`;
         tbody.appendChild(tr);
     }
-{ const hc = document.getElementById('historyCount'); if (hc) hc.textContent = `${tuningHistory.length} prób`; }
+    { const hc = document.getElementById('historyCount'); if (hc) hc.textContent = `${tuningHistory.length} prób`; }
     // Delegacja dla przycisków Zastosuj
-    tbody.querySelectorAll('button[data-apply]').forEach(btn=>{
-        btn.addEventListener('click', ()=>{
+    tbody.querySelectorAll('button[data-apply]').forEach(btn => {
+        btn.addEventListener('click', () => {
             const i = parseInt(btn.getAttribute('data-apply'));
             const r = tuningHistory[i];
             if (!r) return;
@@ -1013,15 +1038,15 @@ function refreshHistoryTable(){
         });
     });
 }
-function exportHistoryCsv(){
+function exportHistoryCsv() {
     if (!tuningHistory.length) { showNotification('Brak danych historii'); return; }
-    const headers = ['#','Kp','Ki','Kd','Fitness','ITAE','Overshoot'];
+    const headers = ['#', 'Kp', 'Ki', 'Kd', 'Fitness', 'ITAE', 'Overshoot'];
     const lines = [headers.join(',')];
-    tuningHistory.forEach(r=>{
-        lines.push([r.idx, r.kp.toFixed(3), r.ki.toFixed(3), r.kd.toFixed(3), r.fitness.toFixed(4), (r.itae??0).toFixed(2), (r.overshoot??0).toFixed(2)].join(','));
+    tuningHistory.forEach(r => {
+        lines.push([r.idx, r.kp.toFixed(3), r.ki.toFixed(3), r.kd.toFixed(3), r.fitness.toFixed(4), (r.itae ?? 0).toFixed(2), (r.overshoot ?? 0).toFixed(2)].join(','));
     });
     const csv = lines.join('\n');
-    const blob = new Blob([csv], {type:'text/csv'});
+    const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = 'tuning_history.csv'; a.click(); URL.revokeObjectURL(url);
@@ -1052,9 +1077,16 @@ function applySingleParam(snakeKey, value) {
     if (snakeKey === 'trim_angle') {
         const span = document.getElementById('trimValueDisplay');
         if (span) span.textContent = parseFloat(value).toFixed(2);
+        // Aktualizuj natychmiast display skorygowanej wartości (angleVal)
+        const rawPitch = window.telemetryData && typeof window.telemetryData.raw_pitch === 'number' ? window.telemetryData.raw_pitch : 0;
+        const corrected = rawPitch + Number(value || 0);
+        const angleEl = document.getElementById('angleVal'); if (angleEl) angleEl.textContent = corrected.toFixed(1) + ' \u00B0';
     } else if (snakeKey === 'roll_trim') {
         const span = document.getElementById('rollTrimValueDisplay');
         if (span) span.textContent = parseFloat(value).toFixed(2);
+        const rawRoll = window.telemetryData && typeof window.telemetryData.raw_roll === 'number' ? window.telemetryData.raw_roll : 0;
+        const correctedR = rawRoll + Number(value || 0);
+        const rollEl = document.getElementById('rollVal'); if (rollEl) rollEl.textContent = correctedR.toFixed(1) + ' \u00B0';
     }
     // Feedback sign params - special handling: update sign buttons
     if (snakeKey === 'balance_feedback_sign') {
@@ -1071,7 +1103,7 @@ function applySingleParam(snakeKey, value) {
         updateSignBadge('positionSignBadge', v);
     }
     // Config dirty flag – inform UI whether there are runtime changes not persisted
-    
+
 }
 
 function applySingleAutotuneParam(snakeKey, value) {
@@ -1121,17 +1153,17 @@ function applySingleAutotuneParam(snakeKey, value) {
     }
 }
 
-function applyFullConfig(params) { 
-    for (const [inputId, snakeKey] of Object.entries(parameterMapping)) { 
-        const input = document.getElementById(inputId); 
-        if (input && params[snakeKey] !== undefined) { 
-            let value = params[snakeKey]; 
-            if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha', 'weights_itae', 'weights_overshoot', 'weights_control_effort'].includes(snakeKey)) { 
-                value = (value * 100); 
-            } 
-            input.value = value; 
-        } 
-    } 
+function applyFullConfig(params) {
+    for (const [inputId, snakeKey] of Object.entries(parameterMapping)) {
+        const input = document.getElementById(inputId);
+        if (input && params[snakeKey] !== undefined) {
+            let value = params[snakeKey];
+            if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha', 'weights_itae', 'weights_overshoot', 'weights_control_effort'].includes(snakeKey)) {
+                value = (value * 100);
+            }
+            input.value = value;
+        }
+    }
 }
 
 function normalizeTelemetryData(d) {
@@ -1161,7 +1193,7 @@ function normalizeTelemetryData(d) {
 function updateTelemetryUI(data) {
     data = normalizeTelemetryData(data);
     window.telemetryData = data; // Zapisz ostatnie dane telemetryczne globalnie
-if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
+    if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
     // Fitness paused indicator
     const dash = document.getElementById('autotune-dashboard');
     if (dash) {
@@ -1171,9 +1203,9 @@ if (data.robot_state !== undefined) document.getElementById('robotStateVal').tex
             dash.style.display = 'block';
         }
     }
-// loop time: support long 'loop_time' or short 'lt'
-const loopTimeVal = (data.loop_time !== undefined) ? data.loop_time : data.lt;
-if (loopTimeVal !== undefined) document.getElementById('loopTimeVal').textContent = loopTimeVal + ' \u00B5s';
+    // loop time: support long 'loop_time' or short 'lt'
+    const loopTimeVal = (data.loop_time !== undefined) ? data.loop_time : data.lt;
+    if (loopTimeVal !== undefined) document.getElementById('loopTimeVal').textContent = loopTimeVal + ' \u00B5s';
     if (data.loop_load !== undefined) {
         const loopLoadValEl = document.getElementById('loopLoadVal');
         const loopLoadItemEl = document.getElementById('loopLoadItem');
@@ -1185,13 +1217,17 @@ if (loopTimeVal !== undefined) document.getElementById('loopTimeVal').textConten
         }
     }
     if (data.pitch !== undefined) {
+        // angleVal shows corrected pitch (raw + trim)
         document.getElementById('angleVal').textContent = data.pitch.toFixed(1) + ' \u00B0';
-        document.getElementById('robot3d-pitch').textContent = data.pitch.toFixed(1) + '°';
+        // robot3d displays the raw/mapped viz value (orientation of sensor), independent of trim
+        const vizPitchVal = (data.viz_pitch !== undefined) ? data.viz_pitch : data.raw_pitch || 0;
+        document.getElementById('robot3d-pitch').textContent = vizPitchVal.toFixed(1) + '°';
         pitchHistory.push(data.pitch);
         if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
     }
     if (data.roll !== undefined) {
-        document.getElementById('robot3d-roll').textContent = data.roll.toFixed(1) + '°';
+        const vizRollVal = (data.viz_roll !== undefined) ? data.viz_roll : data.raw_roll || 0;
+        document.getElementById('robot3d-roll').textContent = vizRollVal.toFixed(1) + '°';
         document.getElementById('rollVal').textContent = data.roll.toFixed(1) + ' \u00B0';
     }
     if (data.yaw !== undefined) {
@@ -1228,7 +1264,7 @@ if (loopTimeVal !== undefined) document.getElementById('loopTimeVal').textConten
             document.getElementById('pitchMax').textContent = maxPitch.toFixed(1) + '°';
             document.getElementById('pitchAvg').textContent = avgPitch.toFixed(1) + '°';
         }
-         if (speedHistory.length > 0) {
+        if (speedHistory.length > 0) {
             const minSpeed = Math.min(...speedHistory);
             const maxSpeed = Math.max(...speedHistory);
             const avgSpeed = speedHistory.reduce((sum, val) => sum + val, 0) / speedHistory.length; // Poprawka: toFixed(0) dla speedAvg
@@ -1289,16 +1325,16 @@ function initSignalAnalyzerChart() {
         options: {
             animation: false, responsive: true, maintainAspectRatio: false,
             scales: {
-                x: { 
-                    display: true, 
-                    title: { display: true, text: 'Czas', color: '#fff' }, 
+                x: {
+                    display: true,
+                    title: { display: true, text: 'Czas', color: '#fff' },
                     ticks: { color: '#fff' }
                 },
-                y: { type: 'linear', display: true, position: 'left', id: 'y-pitch', ticks: { color: availableTelemetry['pitch']?.color || '#61dafb' }, title: { display: true, text: 'Pitch (°)', color: availableTelemetry['pitch']?.color || '#61dafb' }},
+                y: { type: 'linear', display: true, position: 'left', id: 'y-pitch', ticks: { color: availableTelemetry['pitch']?.color || '#61dafb' }, title: { display: true, text: 'Pitch (°)', color: availableTelemetry['pitch']?.color || '#61dafb' } },
                 y1: { type: 'linear', display: false, position: 'right', id: 'y-speed', ticks: { color: availableTelemetry['speed']?.color || '#f7b731' }, title: { display: true, text: 'Speed (imp/s)', color: availableTelemetry['speed']?.color || '#f7b731' }, grid: { drawOnChartArea: false } }
             },
-            plugins: { 
-                legend: { labels: { color: '#fff' } }, 
+            plugins: {
+                legend: { labels: { color: '#fff' } },
                 tooltip: { mode: 'index', intersect: false }
             },
             onClick: handleChartClick,
@@ -1311,11 +1347,11 @@ function initSignalAnalyzerChart() {
             }
         }
     });
-    
+
     // Add range selection functionality
     const canvas = ctx.canvas;
     let selectionStart = null;
-    
+
     canvas.addEventListener('mousedown', (e) => {
         if (e.shiftKey) {
             chartRangeSelection.isSelecting = true;
@@ -1324,7 +1360,7 @@ function initSignalAnalyzerChart() {
             chartRangeSelection.startIndex = getChartIndexFromX(selectionStart);
         }
     });
-    
+
     canvas.addEventListener('mousemove', (e) => {
         if (chartRangeSelection.isSelecting && selectionStart !== null) {
             const rect = canvas.getBoundingClientRect();
@@ -1333,7 +1369,7 @@ function initSignalAnalyzerChart() {
             highlightSelectedRange();
         }
     });
-    
+
     canvas.addEventListener('mouseup', (e) => {
         if (chartRangeSelection.isSelecting) {
             chartRangeSelection.isSelecting = false;
@@ -1411,20 +1447,20 @@ function getChartIndexFromX(xPixel) {
     const chart = signalAnalyzerChart;
     const xScale = chart.scales['x'];
     const dataLength = chart.data.labels.length;
-    
+
     // Calculate which index this X coordinate corresponds to
     const xStart = xScale.left;
     const xEnd = xScale.right;
     const xRange = xEnd - xStart;
-    
+
     // Prevent division by zero
     if (xRange === 0 || dataLength === 0) {
         return 0;
     }
-    
+
     const relativeX = (xPixel - xStart) / xRange;
     const index = Math.round(relativeX * (dataLength - 1));
-    
+
     return Math.max(0, Math.min(dataLength - 1, index));
 }
 
@@ -1439,41 +1475,41 @@ function highlightSelectedRange() {
     }
 }
 
-function exportChartDataToCsv(exportRange = false) { 
-    const data = signalAnalyzerChart.data; 
-    let csvContent = "data:text/csv;charset=utf-8,"; 
-    let headers = ['Time']; 
-    data.datasets.forEach(ds => headers.push(ds.label)); 
-    csvContent += headers.join(',') + '\n'; 
-    
+function exportChartDataToCsv(exportRange = false) {
+    const data = signalAnalyzerChart.data;
+    let csvContent = "data:text/csv;charset=utf-8,";
+    let headers = ['Time'];
+    data.datasets.forEach(ds => headers.push(ds.label));
+    csvContent += headers.join(',') + '\n';
+
     let startIdx = 0;
     let endIdx = data.labels.length - 1;
-    
+
     // If exporting range and a range is selected, use it
     if (exportRange && chartRangeSelection.startIndex !== null && chartRangeSelection.endIndex !== null) {
         startIdx = Math.min(chartRangeSelection.startIndex, chartRangeSelection.endIndex);
         endIdx = Math.max(chartRangeSelection.startIndex, chartRangeSelection.endIndex);
         addLogMessage(`[UI] Eksportowanie zakresu: ${startIdx} - ${endIdx}`, 'info');
     }
-    
-    for (let i = startIdx; i <= endIdx; i++) { 
-        let row = [data.labels[i]]; 
-        data.datasets.forEach(ds => { 
-            const value = ds.data[i] !== null ? ds.data[i].toFixed(4) : ''; 
-            row.push(value); 
-        }); 
-        csvContent += row.join(',') + '\n'; 
-    } 
-    const encodedUri = encodeURI(csvContent); 
-    const link = document.createElement("a"); 
-    link.setAttribute("href", encodedUri); 
+
+    for (let i = startIdx; i <= endIdx; i++) {
+        let row = [data.labels[i]];
+        data.datasets.forEach(ds => {
+            const value = ds.data[i] !== null ? ds.data[i].toFixed(4) : '';
+            row.push(value);
+        });
+        csvContent += row.join(',') + '\n';
+    }
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
     const filename = exportRange ? "telemetry_data_range.csv" : "telemetry_data.csv";
-    link.setAttribute("download", filename); 
-    document.body.appendChild(link); 
-    link.click(); 
-    document.body.removeChild(link); 
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     const message = exportRange ? '[UI] Zaznaczony zakres wyeksportowany do CSV.' : '[UI] Dane wykresu wyeksportowane do CSV.';
-    addLogMessage(message, 'info'); 
+    addLogMessage(message, 'info');
 }
 function exportChartToPng() { const link = document.createElement('a'); link.download = 'telemetry_chart.png'; link.href = signalAnalyzerChart.toBase64Image(); link.click(); addLogMessage('[UI] Wykres wyeksportowany do PNG.', 'info'); }
 
@@ -1499,7 +1535,7 @@ async function applySelectedPreset() {
         AppState.isApplyingConfig = true;
         for (const [key, value] of Object.entries(presetData)) {
             const input = document.getElementById(key);
-            if (input) { let actualValue = value; if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(parameterMapping[key])) { actualValue = (value * 100); } input.value = actualValue; } 
+            if (input) { let actualValue = value; if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(parameterMapping[key])) { actualValue = (value * 100); } input.value = actualValue; }
             else if (['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].includes(key)) { document.getElementById(key).checked = value; }
         }
         AppState.isApplyingConfig = false; addLogMessage('[UI] Zastosowano wartosci presetu. Zapisz na robocie, aby wyslac.', 'info');
@@ -1517,8 +1553,8 @@ function addSequenceStep() {
     list.appendChild(stepDiv); updateAccordionHeight(list.closest('.accordion-content'));
     stepDiv.querySelector('.sequence-type').addEventListener('change', (e) => {
         const valueInput = stepDiv.querySelector('.sequence-value'); const type = e.target.value;
-        if (type === 'wait_condition') { valueInput.type = 'text'; valueInput.value = 'pitch < 0.5'; } 
-        else if (type === 'set_param') { valueInput.type = 'text'; valueInput.value = 'balanceKpInput=100.0'; } 
+        if (type === 'wait_condition') { valueInput.type = 'text'; valueInput.value = 'pitch < 0.5'; }
+        else if (type === 'set_param') { valueInput.type = 'text'; valueInput.value = 'balanceKpInput=100.0'; }
         else { valueInput.type = 'number'; valueInput.value = '20'; }
     });
     stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => { stepDiv.remove(); updateAccordionHeight(list.closest('.accordion-content')); });
@@ -1621,9 +1657,9 @@ function executeNextSequenceStep() {
 let pathCanvas, pathCtx; let robotPathX = 0, robotPathY = 0, robotPathHeading = 0; const CM_PER_PIXEL = 1.0; let plannedPath = [], actualPath = [];
 function initPathVisualization() { pathCanvas = document.getElementById('pathCanvas'); pathCtx = pathCanvas.getContext('2d'); pathCanvas.width = pathCanvas.clientWidth; pathCanvas.height = pathCanvas.clientHeight; resetPathVisualization(); }
 function drawPathVisualization() { if (!pathCtx) return; pathCtx.clearRect(0, 0, pathCanvas.width, pathCanvas.height); const drawPath = (path, color) => { pathCtx.strokeStyle = color; pathCtx.lineWidth = 2; pathCtx.beginPath(); if (path.length > 0) { pathCtx.moveTo(path[0].x, path[0].y); path.forEach(p => pathCtx.lineTo(p.x, p.y)); } pathCtx.stroke(); }; drawPath(plannedPath, '#61dafb'); drawPath(actualPath, '#a2f279'); if (actualPath.length > 0) { const lastPos = actualPath[actualPath.length - 1]; pathCtx.fillStyle = '#ff6347'; pathCtx.beginPath(); pathCtx.arc(lastPos.x, lastPos.y, 4, 0, Math.PI * 2); pathCtx.fill(); } }
-function addPlannedPathSegment(type, value) { let { x, y, heading } = plannedPath.length > 0 ? plannedPath[plannedPath.length-1] : {x: robotPathX, y: robotPathY, heading: robotPathHeading}; let newX = x, newY = y, newHeading = heading; const angleRad = (heading - 90) * Math.PI / 180; if (type === 'move_fwd') { newX += Math.cos(angleRad) * value / CM_PER_PIXEL; newY += Math.sin(angleRad) * value / CM_PER_PIXEL; } else if (type === 'move_bwd') { newX -= Math.cos(angleRad) * value / CM_PER_PIXEL; newY -= Math.sin(angleRad) * value / CM_PER_PIXEL; } else if (type === 'rotate_r') { newHeading += value; } else if (type === 'rotate_l') { newHeading -= value; } plannedPath.push({ x: newX, y: newY, heading: newHeading }); drawPathVisualization(); }
+function addPlannedPathSegment(type, value) { let { x, y, heading } = plannedPath.length > 0 ? plannedPath[plannedPath.length - 1] : { x: robotPathX, y: robotPathY, heading: robotPathHeading }; let newX = x, newY = y, newHeading = heading; const angleRad = (heading - 90) * Math.PI / 180; if (type === 'move_fwd') { newX += Math.cos(angleRad) * value / CM_PER_PIXEL; newY += Math.sin(angleRad) * value / CM_PER_PIXEL; } else if (type === 'move_bwd') { newX -= Math.cos(angleRad) * value / CM_PER_PIXEL; newY -= Math.sin(angleRad) * value / CM_PER_PIXEL; } else if (type === 'rotate_r') { newHeading += value; } else if (type === 'rotate_l') { newHeading -= value; } plannedPath.push({ x: newX, y: newY, heading: newHeading }); drawPathVisualization(); }
 function updateActualPath(data) { if (data.pos_x_cm !== undefined && data.pos_y_cm !== undefined && data.yaw !== undefined) { const actualX = robotPathX + (data.pos_x_cm / CM_PER_PIXEL); const actualY = robotPathY - (data.pos_y_cm / CM_PER_PIXEL); actualPath.push({ x: actualX, y: actualY, heading: data.yaw }); drawPathVisualization(); } }
-function resetPathVisualization() { robotPathX = pathCanvas.width / 2; robotPathY = pathCanvas.height / 2; robotPathHeading = 0; plannedPath = [{x: robotPathX, y: robotPathY, heading: robotPathHeading}]; actualPath = [{x: robotPathX, y: robotPathY, heading: robotPathHeading}]; const ReportPanel = document.getElementById('sequenceReportPanel'); if (ReportPanel) { ReportPanel.style.display = 'none'; } drawPathVisualization(); }
+function resetPathVisualization() { robotPathX = pathCanvas.width / 2; robotPathY = pathCanvas.height / 2; robotPathHeading = 0; plannedPath = [{ x: robotPathX, y: robotPathY, heading: robotPathHeading }]; actualPath = [{ x: robotPathX, y: robotPathY, heading: robotPathHeading }]; const ReportPanel = document.getElementById('sequenceReportPanel'); if (ReportPanel) { ReportPanel.style.display = 'none'; } drawPathVisualization(); }
 function showSequenceReport() { document.getElementById('sequence-report-panel').style.display = 'block'; document.getElementById('avgHeadingError').textContent = 'X.X °'; document.getElementById('maxHeadingError').textContent = 'Y.Y °'; document.getElementById('totalDistanceCovered').textContent = 'Z.Z cm'; }
 
 let autotuneTuningChart; let autotuneChartData = { labels: [], datasets: [] };
@@ -1642,8 +1678,8 @@ function updateAutotuneTuningChart(data) {
         if (!dataset) { dataset = { label: label, data: [], borderColor: color, fill: false, tension: 0.1, pointRadius: 0 }; autotuneTuningChart.data.datasets.push(dataset); }
         dataset.data.push(value);
     };
-    if(data.pitch !== undefined) mapDataToDataset('Pitch', data.pitch, '#61dafb');
-    if(data.target_pitch !== undefined) mapDataToDataset('Target Pitch', data.target_pitch, '#a2f279');
+    if (data.pitch !== undefined) mapDataToDataset('Pitch', data.pitch, '#61dafb');
+    if (data.target_pitch !== undefined) mapDataToDataset('Target Pitch', data.target_pitch, '#a2f279');
     autotuneTuningChart.update('none');
 }
 // Ujednolicony przełącznik zakładek metod (zapobiega dublowaniu listenerów)
@@ -1661,7 +1697,7 @@ function activateMethodTab(method) {
     content.classList.add('active');
 
     // Reset danych wykresu dla nowej karty
-    try { autotuneChartData.labels = []; autotuneChartData.datasets = []; autotuneTuningChart.update(); } catch(e) {}
+    try { autotuneChartData.labels = []; autotuneChartData.datasets = []; autotuneTuningChart.update(); } catch (e) { }
 
     // Stabilizacja wysokości akordeonu (kilkukrotne wymuszenie)
     const accordionContent = document.querySelector('#autotuning-card-content')?.closest('.accordion-content');
@@ -1681,85 +1717,85 @@ function activateMethodTab(method) {
     // Ustaw pozycję wykresu względem wybranej metody
     relocateAutotuneChart(method);
 
-// Odblokuj Start po wyborze metody
-const startBtn = document.getElementById('start-tuning-btn');
-if (startBtn) startBtn.disabled = false;
+    // Odblokuj Start po wyborze metody
+    const startBtn = document.getElementById('start-tuning-btn');
+    if (startBtn) startBtn.disabled = false;
 }
 
 function setupAutotuningTabs() {
     document.querySelectorAll('.method-tab').forEach(tab => {
-        tab.addEventListener('click', function() {
+        tab.addEventListener('click', function () {
             activateMethodTab(this.dataset.method);
         });
     });
     document.querySelectorAll('input[type="range"]').forEach(range => {
         const valueDisplay = document.getElementById(range.id + '-val');
         if (valueDisplay) {
-            range.addEventListener('input', () => { 
+            range.addEventListener('input', () => {
                 let unit = valueDisplay.dataset.unit || '';
                 valueDisplay.textContent = range.value + unit;
-                if(range.id === 'ga-generations') document.getElementById('ga-gen-total').textContent = range.value;
-                if(range.id === 'pso-iterations') document.getElementById('pso-it-total').textContent = range.value;
-                if(range.id.includes('-weight-')) valueDisplay.textContent = range.value + '%';
+                if (range.id === 'ga-generations') document.getElementById('ga-gen-total').textContent = range.value;
+                if (range.id === 'pso-iterations') document.getElementById('pso-it-total').textContent = range.value;
+                if (range.id.includes('-weight-')) valueDisplay.textContent = range.value + '%';
             });
             range.dispatchEvent(new Event('input'));
         }
     });
-// Legacy przyciski (GA/PSO/ZN sterowane przez robota) – usunięte
+    // Legacy przyciski (GA/PSO/ZN sterowane przez robota) – usunięte
     // Obsługa testów dynamicznych (impuls, prędkość)
     const impulseBtn = document.getElementById('run-impulse-test');
-    if (impulseBtn) impulseBtn.addEventListener('click', function() {
+    if (impulseBtn) impulseBtn.addEventListener('click', function () {
         const power = parseInt(document.getElementById('impulsePowerInput').value) || 40;
         sendBleMessage({ type: 'execute_position_test_impulse', impulse_power: power });
         addLogMessage('[UI] Wysłano test impulsu pozycji.', 'info');
     });
     const speedBtn = document.getElementById('run-speed-test');
-    if (speedBtn) speedBtn.addEventListener('click', function() {
+    if (speedBtn) speedBtn.addEventListener('click', function () {
         const dist = parseFloat(document.getElementById('distanceCmInput').value) || 50;
         const speed = parseFloat(document.getElementById('speedCmpsInput').value) || 20;
         sendBleMessage({ type: 'execute_speed_test_run', distance_cm: dist, speed_cmps: speed });
         addLogMessage('[UI] Wysłano test prędkości.', 'info');
     });
-document.querySelectorAll('.run-test-btn').forEach(btn => btn.addEventListener('click', function() { runDynamicTest(this.dataset.testType); }));
-const applyZnBtn = document.getElementById('apply-zn-results');
-if (applyZnBtn) applyZnBtn.addEventListener('click', () => {
-         const kp = parseFloat(document.getElementById('zn-kp-suggest').textContent), kd = parseFloat(document.getElementById('zn-kd-suggest').textContent);
-         if(!isNaN(kp) && !isNaN(kd)) {
+    document.querySelectorAll('.run-test-btn').forEach(btn => btn.addEventListener('click', function () { runDynamicTest(this.dataset.testType); }));
+    const applyZnBtn = document.getElementById('apply-zn-results');
+    if (applyZnBtn) applyZnBtn.addEventListener('click', () => {
+        const kp = parseFloat(document.getElementById('zn-kp-suggest').textContent), kd = parseFloat(document.getElementById('zn-kd-suggest').textContent);
+        if (!isNaN(kp) && !isNaN(kd)) {
             document.getElementById('balanceKpInput').value = kp.toFixed(4); document.getElementById('balanceKdInput').value = kd.toFixed(4);
             document.getElementById('balanceKpInput').dispatchEvent(new Event('change')); document.getElementById('balanceKdInput').dispatchEvent(new Event('change'));
             addLogMessage('[UI] Zastosowano wartosci z Z-N.', 'info');
         }
-});
-const __loopSel = document.getElementById('tuning-loop-selector');
-if (__loopSel) __loopSel.addEventListener('change', updateSearchSpaceInputs);
-updateSearchSpaceInputs();
+    });
+    const __loopSel = document.getElementById('tuning-loop-selector');
+    if (__loopSel) __loopSel.addEventListener('change', updateSearchSpaceInputs);
+    updateSearchSpaceInputs();
 }
 
 // Główne zakładki w panelu optymalizacji (Konfiguracja/Metody)
-function setupMainAutotuneTabs(){
+function setupMainAutotuneTabs() {
     const tabs = document.querySelectorAll('.autotune-main-tab');
     const panes = document.querySelectorAll('.autotune-main-content');
-    tabs.forEach(tab=>{
-        tab.addEventListener('click', ()=>{
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
             const target = tab.dataset.tab;
-            tabs.forEach(t=>t.classList.remove('active'));
-            panes.forEach(p=>p.classList.remove('active'));
+            tabs.forEach(t => t.classList.remove('active'));
+            panes.forEach(p => p.classList.remove('active'));
             tab.classList.add('active');
             document.querySelector(`.autotune-main-content[data-tab="${target}"]`)?.classList.add('active');
-    // Pokazuj przyciski sterujące tylko na zakładce 'methods'
-    const controlsBar = document.getElementById('tuning-controls-bar');
-    if (controlsBar) controlsBar.style.display = (target === 'methods') ? 'flex' : 'none';
+            // Pokazuj przyciski sterujące tylko na zakładce 'methods'
+            const controlsBar = document.getElementById('tuning-controls-bar');
+            if (controlsBar) controlsBar.style.display = (target === 'methods') ? 'flex' : 'none';
         });
     });
-// Ustaw widoczność kontrolek zgodnie z aktywną zakładką na starcie
-const activeMain = document.querySelector('.autotune-main-tab.active')?.dataset.tab || 'config';
-const controlsBar = document.getElementById('tuning-controls-bar');
-if (controlsBar) controlsBar.style.display = (activeMain === 'methods') ? 'flex' : 'none';
+    // Ustaw widoczność kontrolek zgodnie z aktywną zakładką na starcie
+    const activeMain = document.querySelector('.autotune-main-tab.active')?.dataset.tab || 'config';
+    const controlsBar = document.getElementById('tuning-controls-bar');
+    if (controlsBar) controlsBar.style.display = (activeMain === 'methods') ? 'flex' : 'none';
 }
 function updateSearchSpaceInputs() {
-const __loopEl = document.getElementById('tuning-loop-selector');
-const selectedLoop = __loopEl ? __loopEl.value : 'balance';
-const includeKi = !!document.getElementById('include-ki-checkbox')?.checked;
+    const __loopEl = document.getElementById('tuning-loop-selector');
+    const selectedLoop = __loopEl ? __loopEl.value : 'balance';
+    const includeKi = !!document.getElementById('include-ki-checkbox')?.checked;
     const showKi = includeKi && ['speed', 'position', 'heading', 'balance', 'rotation'].includes(selectedLoop);
     ['ga', 'pso'].forEach(prefix => {
         const kiMinEl = document.getElementById(`${prefix}-ki-min`);
@@ -1773,26 +1809,26 @@ function setTuningUiLock(isLocked, method) {
     AppState.isTuningActive = isLocked;
     AppState.activeTuningMethod = isLocked ? method : '';
 
-// Globalny tryb strojenia (odblokowane: Sterowanie, Optymalizacja, Logi)
-document.body.classList.toggle('tuning-active', isLocked);
+    // Globalny tryb strojenia (odblokowane: Sterowanie, Optymalizacja, Logi)
+    document.body.classList.toggle('tuning-active', isLocked);
 
-// Wyłączamy przełączanie zakładek i testy UI
+    // Wyłączamy przełączanie zakładek i testy UI
     document.querySelectorAll('.run-test-btn').forEach(btn => btn.disabled = isLocked);
     document.querySelectorAll('.method-tab').forEach(tab => tab.disabled = isLocked);
     // Dashboard legacy usunięty
 
-// Przełącz widoki w panelu optymalizacji
-const cfgPanel = document.getElementById('autotuning-config-panel');
-const progress = document.getElementById('tuning-progress-panel');
-if (cfgPanel) cfgPanel.classList.toggle('autotune-config-hide', isLocked);
-if (progress) progress.style.display = isLocked ? 'block' : 'none';
+    // Przełącz widoki w panelu optymalizacji
+    const cfgPanel = document.getElementById('autotuning-config-panel');
+    const progress = document.getElementById('tuning-progress-panel');
+    if (cfgPanel) cfgPanel.classList.toggle('autotune-config-hide', isLocked);
+    if (progress) progress.style.display = isLocked ? 'block' : 'none';
 }
 // Legacy handler wyników strojenia (serwerowych) został usunięty.
 // Wyniki algorytmów (GA/PSO/ZN/Bayesian) są obsługiwane wyłącznie po stronie klienta.
 
 function addResultToTable(tableBody, data) {
     // Add table row (for desktop)
-    const row = tableBody.insertRow(0); 
+    const row = tableBody.insertRow(0);
     row.insertCell().textContent = tableBody.rows.length;
     row.insertCell().textContent = (data.kp !== undefined ? data.kp.toFixed(4) : '---');
     row.insertCell().textContent = (data.ki !== undefined ? data.ki.toFixed(4) : '---');
@@ -1800,21 +1836,21 @@ function addResultToTable(tableBody, data) {
     row.insertCell().textContent = (data.fitness !== undefined ? data.fitness.toFixed(4) : '---');
     row.insertCell().textContent = (data.overshoot !== undefined ? data.overshoot.toFixed(2) : '---');
     row.insertCell().textContent = (data.rise_time !== undefined ? data.rise_time.toFixed(2) : '---');
-    const actionsCell = row.insertCell(); 
+    const actionsCell = row.insertCell();
     const applyBtn = document.createElement('button');
-    applyBtn.textContent = 'Zastosuj'; 
+    applyBtn.textContent = 'Zastosuj';
     applyBtn.classList.add('test-btn');
-    applyBtn.addEventListener('click', () => { 
+    applyBtn.addEventListener('click', () => {
         document.getElementById('balanceKpInput').value = data.kp;
         document.getElementById('balanceKiInput').value = data.ki;
         document.getElementById('balanceKdInput').value = data.kd;
         sendBleMessage({ type: 'set_param', key: 'kp_b', value: data.kp });
         sendBleMessage({ type: 'set_param', key: 'ki_b', value: data.ki });
         sendBleMessage({ type: 'set_param', key: 'kd_b', value: data.kd });
-        addLogMessage('[UI] Zastosowano parametry z historii strojenia.', 'info'); 
+        addLogMessage('[UI] Zastosowano parametry z historii strojenia.', 'info');
     });
     actionsCell.appendChild(applyBtn);
-    
+
     // Also add block entry (for mobile)
     const method = AppState.activeTuningMethod;
     let blockContainer;
@@ -1823,23 +1859,23 @@ function addResultToTable(tableBody, data) {
     } else if (method.startsWith('pso')) {
         blockContainer = document.getElementById('pso-results-blocks');
     }
-    
+
     if (blockContainer) {
         const block = document.createElement('div');
         block.className = 'result-entry';
-        
+
         const header = document.createElement('div');
         header.className = 'result-header';
         header.innerHTML = `<strong>Wynik #${tableBody.rows.length}:</strong> Fitness = ${data.fitness !== undefined ? data.fitness.toFixed(4) : '---'}`;
-        
+
         const params = document.createElement('div');
         params.className = 'result-params';
         params.textContent = `Kp: ${data.kp !== undefined ? data.kp.toFixed(4) : '---'}, Ki: ${data.ki !== undefined ? data.ki.toFixed(4) : '---'}, Kd: ${data.kd !== undefined ? data.kd.toFixed(4) : '---'}`;
-        
+
         const metrics = document.createElement('div');
         metrics.className = 'result-metrics';
         metrics.textContent = `Overshoot: ${data.overshoot !== undefined ? data.overshoot.toFixed(2) + '%' : '---'}, Rise Time: ${data.rise_time !== undefined ? data.rise_time.toFixed(2) + 'ms' : '---'}`;
-        
+
         const applyBtnBlock = document.createElement('button');
         applyBtnBlock.textContent = 'Zastosuj';
         applyBtnBlock.classList.add('test-btn');
@@ -1852,12 +1888,12 @@ function addResultToTable(tableBody, data) {
             sendBleMessage({ type: 'set_param', key: 'kd_b', value: data.kd });
             addLogMessage('[UI] Zastosowano parametry z historii strojenia.', 'info');
         });
-        
+
         block.appendChild(header);
         block.appendChild(params);
         block.appendChild(metrics);
         block.appendChild(applyBtnBlock);
-        
+
         blockContainer.insertBefore(block, blockContainer.firstChild);
     }
 }
@@ -1877,7 +1913,7 @@ function runDynamicTest(testType) {
     const onMsg = (evt) => {
         const data = evt.detail || evt;
         if (!data || !data.type) return;
-    if ((data.type === 'test_complete' && Number(data.testId) === testId) || (data.type === 'test_result' && Number(data.testId) === testId)) {
+        if ((data.type === 'test_complete' && Number(data.testId) === testId) || (data.type === 'test_result' && Number(data.testId) === testId)) {
             // Gdy dostaniemy komplet lub zakończenie, odblokuj UI
             setTuningUiLock(false, '');
             window.removeEventListener('ble_message', onMsg);
@@ -1891,9 +1927,9 @@ function runDynamicTest(testType) {
     const kp = parseFloat(document.getElementById('balanceKpInput')?.value) || 0;
     const ki = parseFloat(document.getElementById('balanceKiInput')?.value) || 0;
     const kd = parseFloat(document.getElementById('balanceKdInput')?.value) || 0;
-// Ujednolicenie: firmware oczekuje komendy 'run_metrics_test'
-sendBleCommand('run_metrics_test', { kp, ki, kd, testId });
-setTuningUiLock(true, 'single-tests');
+    // Ujednolicenie: firmware oczekuje komendy 'run_metrics_test'
+    sendBleCommand('run_metrics_test', { kp, ki, kd, testId });
+    setTuningUiLock(true, 'single-tests');
 }
 function handleDynamicTestResult(raw) {
     // Ujednolicenie: obsłuż zarówno legacy 'test_result' jak i nowoczesne 'metrics_result'
@@ -1921,7 +1957,7 @@ function handleDynamicTestResult(raw) {
             const cont = document.getElementById('results-container');
             if (cont) cont.style.display = 'block';
         }
-    } catch(_) {}
+    } catch (_) { }
 
     // Lekka notyfikacja do logów
     addLogMessage(`[Test] Wyniki: ITAE=${data.itae?.toFixed?.(4) ?? '---'}, Overshoot=${data.overshoot?.toFixed?.(2) ?? '---'}%`, 'info');
@@ -1958,25 +1994,25 @@ window.addEventListener('gamepadconnected', (e) => { gamepadIndex = e.gamepad.in
 window.addEventListener('gamepaddisconnected', (e) => { gamepadIndex = null; document.getElementById('gamepadStatus').textContent = 'Brak'; document.getElementById('gamepadStatus').style.color = '#f7b731'; addLogMessage('[UI] Gamepad rozlaczony.', 'warn'); });
 function startMapping(action, buttonElement) { if (gamepadIndex === null) { addLogMessage("Podlacz gamepada, aby rozpoczac mapowanie!", "warn"); return; } isMappingButton = true; actionToMap = action; document.querySelectorAll('.mapping-button').forEach(btn => btn.textContent = "Przypisz"); buttonElement.textContent = "Czekam..."; addLogMessage(`[UI] Nasluchiwanie na przycisk dla akcji: ${availableActions[action].label}...`, "info"); }
 function renderMappingModal() { const list = document.getElementById('gamepad-mapping-list'); list.innerHTML = ''; for (const [action, config] of Object.entries(availableActions)) { const row = document.createElement('div'); row.className = 'mapping-row'; const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action); row.innerHTML = `<span class="mapping-label">${config.label}</span><span class="mapping-display">${buttonIndex !== undefined ? `Przycisk ${buttonIndex}` : 'Brak'}</span><button class="mapping-button" data-action="${action}">Przypisz</button>`; list.appendChild(row); } list.querySelectorAll('.mapping-button').forEach(button => { button.addEventListener('click', (e) => { const action = e.target.dataset.action; startMapping(action, e.target); }); }); }
-function setupNumericInputs() { 
-    document.querySelectorAll('.numeric-input-wrapper').forEach(wrapper => { 
-        const container = wrapper.closest('.setting-container') || wrapper.closest('.pwm-input-row'); 
-        if (!container) return; 
-        const input = container.querySelector('input[type=number]'); 
-        const minusBtn = wrapper.querySelector('button:first-child'); 
-        const plusBtn = wrapper.querySelector('button:last-child'); 
-        if (!input || !minusBtn || !plusBtn || input.disabled) return; 
-        const step = parseFloat(input.step) || 1; 
-        const isFloat = input.step.includes('.'); 
-        
+function setupNumericInputs() {
+    document.querySelectorAll('.numeric-input-wrapper').forEach(wrapper => {
+        const container = wrapper.closest('.setting-container') || wrapper.closest('.pwm-input-row');
+        if (!container) return;
+        const input = container.querySelector('input[type=number]');
+        const minusBtn = wrapper.querySelector('button:first-child');
+        const plusBtn = wrapper.querySelector('button:last-child');
+        if (!input || !minusBtn || !plusBtn || input.disabled) return;
+        const step = parseFloat(input.step) || 1;
+        const isFloat = input.step.includes('.');
+
         // Add automatic value clamping on input
         input.addEventListener('input', (e) => {
             let value = parseFloat(e.target.value);
             if (isNaN(value)) return;
-            
+
             const min = parseFloat(e.target.min);
             const max = parseFloat(e.target.max);
-            
+
             if (!isNaN(min) && value < min) {
                 e.target.value = min;
             }
@@ -1984,7 +2020,7 @@ function setupNumericInputs() {
                 e.target.value = max;
             }
         });
-        
+
         // Also clamp on blur (when user leaves the field)
         input.addEventListener('blur', (e) => {
             let value = parseFloat(e.target.value);
@@ -1992,10 +2028,10 @@ function setupNumericInputs() {
                 e.target.value = parseFloat(e.target.min) || 0;
                 return;
             }
-            
+
             const min = parseFloat(e.target.min);
             const max = parseFloat(e.target.max);
-            
+
             if (!isNaN(min) && value < min) {
                 e.target.value = min;
                 e.target.dispatchEvent(new Event('change', { bubbles: true }));
@@ -2005,25 +2041,25 @@ function setupNumericInputs() {
                 e.target.dispatchEvent(new Event('change', { bubbles: true }));
             }
         });
-        
-        const updateValue = (amount) => { 
-            let current = parseFloat(input.value); 
-            if (isNaN(current)) current = 0; 
-            let newValue = current + amount; 
-            if (isFloat) { 
-                const dp = (step.toString().split('.')[1] || '').length; 
-                newValue = parseFloat(newValue.toFixed(dp)); 
-            } 
-            const min = parseFloat(input.min); 
-            const max = parseFloat(input.max); 
-            if (!isNaN(min)) newValue = Math.max(min, newValue); 
-            if (!isNaN(max)) newValue = Math.min(max, newValue); 
-            input.value = newValue; 
-            input.dispatchEvent(new Event('change', { bubbles: true })); 
-        }; 
-        minusBtn.addEventListener('click', () => updateValue(-step)); 
-        plusBtn.addEventListener('click', () => updateValue(step)); 
-    }); 
+
+        const updateValue = (amount) => {
+            let current = parseFloat(input.value);
+            if (isNaN(current)) current = 0;
+            let newValue = current + amount;
+            if (isFloat) {
+                const dp = (step.toString().split('.')[1] || '').length;
+                newValue = parseFloat(newValue.toFixed(dp));
+            }
+            const min = parseFloat(input.min);
+            const max = parseFloat(input.max);
+            if (!isNaN(min)) newValue = Math.max(min, newValue);
+            if (!isNaN(max)) newValue = Math.min(max, newValue);
+            input.value = newValue;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+        minusBtn.addEventListener('click', () => updateValue(-step));
+        plusBtn.addEventListener('click', () => updateValue(step));
+    });
 }
 function sendFullConfigToRobot() {
     const params = {};
@@ -2056,18 +2092,18 @@ function sendFullConfigToRobot() {
 // (Jeśli potrzebne w przyszłości: przenieść potrzebne listenery do setupParameterListeners.)
 
 function setupParameterListeners() {
-    const sendSingleParam = (inputId, value) => { 
-        if (AppState.isApplyingConfig) return; 
-        const snakeKey = parameterMapping[inputId]; 
-        if (snakeKey) { 
-            if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha', 'weights_itae', 'weights_overshoot', 'weights_control_effort'].includes(snakeKey)) { 
-                value /= 100.0; 
-            } 
-            sendBleMessage({ type: 'set_param', key: snakeKey, value: value }); 
-        } 
-    }; 
-    const debouncedSendSingleParam = debounce(sendSingleParam, 400); 
-    document.querySelectorAll('.config-value').forEach(input => { input.addEventListener('change', (e) => { debouncedSendSingleParam(e.target.id, parseFloat(e.target.value)); }); }); 
+    const sendSingleParam = (inputId, value) => {
+        if (AppState.isApplyingConfig) return;
+        const snakeKey = parameterMapping[inputId];
+        if (snakeKey) {
+            if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha', 'weights_itae', 'weights_overshoot', 'weights_control_effort'].includes(snakeKey)) {
+                value /= 100.0;
+            }
+            sendBleMessage({ type: 'set_param', key: snakeKey, value: value });
+        }
+    };
+    const debouncedSendSingleParam = debounce(sendSingleParam, 400);
+    document.querySelectorAll('.config-value').forEach(input => { input.addEventListener('change', (e) => { debouncedSendSingleParam(e.target.id, parseFloat(e.target.value)); }); });
     // AUTOTUNING: wysyłanie parametrów metod (GA/PSO/ZN) jako set_tuning_config_param z odpowiednimi konwersjami
     const sendTuningParam = (snakeKey, rawValue) => {
         if (AppState.isApplyingConfig) return;
@@ -2118,48 +2154,78 @@ function setupParameterListeners() {
     }
     const connectBleBtnEl = document.getElementById('connectBleBtn');
     connectBleBtnEl?.addEventListener('click', connectBLE);
-    ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if(!el) return; el.addEventListener('change', (e) => { if (AppState.isApplyingConfig) return; const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
+    ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (!el) return; el.addEventListener('change', (e) => { if (AppState.isApplyingConfig) return; const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
 
     // POPRAWKA: Usunięto stare listenery dla trim+/- i dodano nowe, poprawne dla precyzyjnych przycisków.
-const toolButtons = { 'resetZeroBtn': { type: 'set_pitch_zero' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
-// Trim: aktualizacja + wysyłka set_param (jednolite traktowanie)
-function updateAndSendTrim(delta) {
-    const span = document.getElementById('trimValueDisplay');
-    if (!span) return; const current = parseFloat(span.textContent) || 0; const v = current + delta; span.textContent = v.toFixed(2);
-    sendBleMessage({ type: 'set_param', key: 'trim_angle', value: v });
-}
-document.getElementById('trimMinus01Btn')?.addEventListener('click', () => updateAndSendTrim(-0.1));
-document.getElementById('trimMinus001Btn')?.addEventListener('click', () => updateAndSendTrim(-0.01));
-document.getElementById('trimPlus001Btn')?.addEventListener('click', () => updateAndSendTrim(0.01));
-document.getElementById('trimPlus01Btn')?.addEventListener('click', () => updateAndSendTrim(0.1));
-// Roll trim: aktualizacja + wysyłka set_param
-document.getElementById('resetRollZeroBtn')?.addEventListener('click', () => sendBleMessage({ type: 'set_roll_zero' }));
-// Reset korekty pionu (pitch trim) - ustawia trim na 0.0 (runtime)
-document.getElementById('resetZeroBtn')?.addEventListener('click', () => sendBleMessage({ type: 'set_pitch_zero' }));
-function updateAndSendRollTrim(delta) {
-    const span = document.getElementById('rollTrimValueDisplay');
-    if (!span) return; const current = parseFloat(span.textContent) || 0; const v = current + delta; span.textContent = v.toFixed(2);
-    sendBleMessage({ type: 'set_param', key: 'roll_trim', value: v });
-}
-document.getElementById('rollTrimMinus01Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.1));
-document.getElementById('rollTrimMinus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.01));
-document.getElementById('rollTrimPlus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.01));
-document.getElementById('rollTrimPlus01Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.1));
+    const toolButtons = { 'resetZeroBtn': { type: 'set_pitch_zero' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
+    // Trim: aktualizacja + wysyłka set_param (jednolite traktowanie)
+    function updateAndSendTrim(delta) {
+        const span = document.getElementById('trimValueDisplay');
+        if (!span) return; const current = parseFloat(span.textContent) || 0; const v = current + delta; span.textContent = v.toFixed(2);
+        sendBleMessage({ type: 'set_param', key: 'trim_angle', value: v });
+    }
+    document.getElementById('trimMinus01Btn')?.addEventListener('click', () => updateAndSendTrim(-0.1));
+    document.getElementById('trimMinus001Btn')?.addEventListener('click', () => updateAndSendTrim(-0.01));
+    document.getElementById('trimPlus001Btn')?.addEventListener('click', () => updateAndSendTrim(0.01));
+    document.getElementById('trimPlus01Btn')?.addEventListener('click', () => updateAndSendTrim(0.1));
+    // Roll trim: aktualizacja + wysyłka set_param
+    document.getElementById('resetRollZeroBtn')?.addEventListener('click', () => setRollZero());
+    // Reset korekty pionu (pitch trim) - ustawia trim tak, by skorygowany kąt wynosił 0
+    document.getElementById('resetZeroBtn')?.addEventListener('click', () => setPitchZero());
+    function updateAndSendRollTrim(delta) {
+        const span = document.getElementById('rollTrimValueDisplay');
+        if (!span) return; const current = parseFloat(span.textContent) || 0; const v = current + delta; span.textContent = v.toFixed(2);
+        sendBleMessage({ type: 'set_param', key: 'roll_trim', value: v });
+    }
+    document.getElementById('rollTrimMinus01Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.1));
+    document.getElementById('rollTrimMinus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.01));
+    document.getElementById('rollTrimPlus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.01));
+    document.getElementById('rollTrimPlus01Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.1));
 
-document.getElementById('saveBtn')?.addEventListener('click', () => {
+    function setPitchZero() {
+        const eul = getRawEuler();
+        if (!eul) { addLogMessage('[UI] Brak danych telemetrii (pitch). Nie mozna ustawic punktu 0.', 'warn'); return; }
+        const rawPitch = Number(eul.pitch || 0);
+        const computedTrim = -rawPitch; // trim that zeros the pitch
+        // Send set_param to actually change the trim value in firmware
+        sendBleMessage({ type: 'set_param', key: 'trim_angle', value: computedTrim });
+        // Backward compatibility: also send the legacy command
+        sendBleMessage({ type: 'set_pitch_zero' });
+        // Update UI immediately
+        const span = document.getElementById('trimValueDisplay'); if (span) span.textContent = computedTrim.toFixed(2);
+        // Show corrected angle as 0.0 in dashboard for immediate feedback and update charts/history
+        const val = document.getElementById('angleVal'); if (val) val.textContent = '0.0 °';
+        pitchHistory.push(0); if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift(); updateChart({ pitch: 0 });
+        addLogMessage(`[UI] Punkt 0 (Pitch) ustawiony. Trim param = ${computedTrim.toFixed(2)}°`, 'success');
+    }
+
+    function setRollZero() {
+        const eul = getRawEuler();
+        if (!eul) { addLogMessage('[UI] Brak danych telemetrii (roll). Nie mozna ustawic punktu 0.', 'warn'); return; }
+        const rawRoll = Number(eul.roll || 0);
+        const computedTrim = -rawRoll; // trim that zeros the roll
+        sendBleMessage({ type: 'set_param', key: 'roll_trim', value: computedTrim });
+        sendBleMessage({ type: 'set_roll_zero' });
+        const span = document.getElementById('rollTrimValueDisplay'); if (span) span.textContent = computedTrim.toFixed(2);
+        const val = document.getElementById('rollVal'); if (val) val.textContent = '0.0 °';
+        updateChart({ roll: 0 });
+        addLogMessage(`[UI] Punkt 0 (Roll) ustawiony. Roll trim = ${computedTrim.toFixed(2)}°`, 'success');
+    }
+
+    document.getElementById('saveBtn')?.addEventListener('click', () => {
         if (AppState.isConnected && confirm("Czy na pewno chcesz trwale zapisać bieżącą konfigurację z panelu do pamięci EEPROM robota?")) {
             addLogMessage('[UI] Wyslano polecenie zapisu konfiguracji do EEPROM...', 'info');
             sendBleMessage({ type: 'save_tunings' });
         } else if (!AppState.isConnected) { addLogMessage('[UI] Połącz z robotem przed zapisem konfiguracji.', 'warn'); }
     });
-document.getElementById('loadBtn')?.addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { AppState.isSynced = false; AppState.tempParams = {}; AppState.tempStates = {}; sendBleMessage({ type: 'request_full_config' }); } });
+    document.getElementById('loadBtn')?.addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { AppState.isSynced = false; AppState.tempParams = {}; AppState.tempStates = {}; sendBleMessage({ type: 'request_full_config' }); } });
 
     document.getElementById('calibrateMpuBtn')?.addEventListener('click', showCalibrationModal);
     document.getElementById('calibrateZeroPointBtn')?.addEventListener('click', () => { if (confirm("Upewnij sie, ze robot stoi na idealnie plaskiej powierzchni. Robot bedzie balansowal przez 10 sekund w celu znalezienia dokladnego punktu rownowagi. Kontynuowac?")) { sendBleMessage({ type: 'calibrate_zero_point' }); } });
 
-document.getElementById('applySelectedPresetBtn')?.addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn')?.addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn')?.addEventListener('click', deleteSelectedPreset); 
-document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container') || icon.closest('.control-row') || icon.closest('.fitness-weight-item'); if(!container) return; const next = container.nextElementSibling; const helpText = (next && next.classList && next.classList.contains('help-text')) ? next : container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); }); 
-// Legacy IMU mapping wizard: usunięty
+    document.getElementById('applySelectedPresetBtn')?.addEventListener('click', applySelectedPreset); document.getElementById('saveCurrentAsPresetBtn')?.addEventListener('click', saveCurrentAsPreset); document.getElementById('deleteSelectedPresetBtn')?.addEventListener('click', deleteSelectedPreset);
+    document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container') || icon.closest('.control-row') || icon.closest('.fitness-weight-item'); if (!container) return; const next = container.nextElementSibling; const helpText = (next && next.classList && next.classList.contains('help-text')) ? next : container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); });
+    // Legacy IMU mapping wizard: usunięty
 }
 function setupManualTuneButtons() {
     // Przechowuj timery auto-stop dla testów 5s
@@ -2223,7 +2289,7 @@ function flashElement(element) { if (!element) return; const target = element.ta
 function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
 function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
 function setupDpadControls() { document.querySelectorAll('.dpad-btn').forEach(btn => { btn.addEventListener('click', (e) => { const action = e.currentTarget.dataset.dpad; if (action === 'up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'stop') sendBleMessage({ type: 'command_stop' }); }); }); }
-function refreshCalibrationFromTelemetry(){
+function refreshCalibrationFromTelemetry() {
     // Odczytaj ostatnią telemetrię i zaktualizuj paski w modalu
     const td = window.telemetryData || {};
     const sys = Number.isFinite(td.calib_sys) ? td.calib_sys : (Number.isFinite(td.calibSystem) ? td.calibSystem : 0);
@@ -2234,10 +2300,10 @@ function refreshCalibrationFromTelemetry(){
     const accBar = document.getElementById('calib-accel-bar'); const accTxt = document.getElementById('calib-accel-text');
     const gyrBar = document.getElementById('calib-gyro-bar'); const gyrTxt = document.getElementById('calib-gyro-text');
     const magBar = document.getElementById('calib-mag-bar'); const magTxt = document.getElementById('calib-mag-text');
-    if(sysBar) sysBar.value = sys; if(sysTxt) sysTxt.textContent = sys;
-    if(accBar) accBar.value = accel; if(accTxt) accTxt.textContent = accel;
-    if(gyrBar) gyrBar.value = gyro; if(gyrTxt) gyrTxt.textContent = gyro;
-    if(magBar) magBar.value = mag; if(magTxt) magTxt.textContent = mag;
+    if (sysBar) sysBar.value = sys; if (sysTxt) sysTxt.textContent = sys;
+    if (accBar) accBar.value = accel; if (accTxt) accTxt.textContent = accel;
+    if (gyrBar) gyrBar.value = gyro; if (gyrTxt) gyrTxt.textContent = gyro;
+    if (magBar) magBar.value = mag; if (magTxt) magTxt.textContent = mag;
 }
 function setupCalibrationModal() {
     const upd = document.getElementById('calib-update-btn');
@@ -2252,62 +2318,62 @@ function init3DVisualization() { const container = document.getElementById('robo
 function createCustomWheel(totalRadius, tireThickness, width) { const wheelGroup = new THREE.Group(); const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 }); const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.4 }); const rimRadius = totalRadius - tireThickness; const tire = new THREE.Mesh(new THREE.TorusGeometry(rimRadius + tireThickness / 2, tireThickness / 2, 16, 100), tireMaterial); wheelGroup.add(tire); const rimShape = new THREE.Shape(); rimShape.absarc(0, 0, rimRadius, 0, Math.PI * 2, false); const holePath = new THREE.Path(); holePath.absarc(0, 0, rimRadius * 0.85, 0, Math.PI * 2, true); rimShape.holes.push(holePath); const extrudeSettings = { depth: width * 0.4, bevelEnabled: false }; const outerRimGeometry = new THREE.ExtrudeGeometry(rimShape, extrudeSettings); outerRimGeometry.center(); const outerRim = new THREE.Mesh(outerRimGeometry, rimMaterial); wheelGroup.add(outerRim); const hubRadius = rimRadius * 0.2; const hub = new THREE.Mesh(new THREE.CylinderGeometry(hubRadius, hubRadius, width * 0.5, 24), rimMaterial); hub.rotateX(Math.PI / 2); wheelGroup.add(hub); const spokeLength = (rimRadius * 0.85) - hubRadius; const spokeGeometry = new THREE.BoxGeometry(spokeLength, rimRadius * 0.15, width * 0.4); spokeGeometry.translate(hubRadius + spokeLength / 2, 0, 0); for (let i = 0; i < 6; i++) { const spoke = new THREE.Mesh(spokeGeometry, rimMaterial); spoke.rotation.z = i * (Math.PI / 3); wheelGroup.add(spoke); } return wheelGroup; }
 function createRobotModel3D() { const BODY_WIDTH = 9.0, BODY_HEIGHT = 6.0, BODY_DEPTH = 3.5, WHEEL_GAP = 1.0; const MAST_HEIGHT = 14.5, MAST_THICKNESS = 1.5; const BATTERY_WIDTH = 6.0, BATTERY_HEIGHT = 1.0, BATTERY_DEPTH = 3.0; const TIRE_THICKNESS = 1.0, WHEEL_WIDTH = 2.0; const WHEEL_RADIUS_3D = 4.1; const pivot = new THREE.Object3D(); const model = new THREE.Group(); const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1C1C1C }); const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0x4169E1 }); const body = new THREE.Mesh(new THREE.BoxGeometry(BODY_WIDTH, BODY_HEIGHT, BODY_DEPTH), bodyMaterial); body.position.y = WHEEL_RADIUS_3D; model.add(body); const mast = new THREE.Mesh(new THREE.BoxGeometry(MAST_THICKNESS, MAST_HEIGHT, MAST_THICKNESS), bodyMaterial); mast.position.y = WHEEL_RADIUS_3D + BODY_HEIGHT / 2 + MAST_HEIGHT / 2; model.add(mast); const battery = new THREE.Mesh(new THREE.BoxGeometry(BATTERY_WIDTH, BATTERY_HEIGHT, BATTERY_DEPTH), batteryMaterial); battery.position.y = mast.position.y + MAST_HEIGHT / 2 + BATTERY_HEIGHT / 2; model.add(battery); leftWheel = createCustomWheel(WHEEL_RADIUS_3D, TIRE_THICKNESS, WHEEL_WIDTH); leftWheel.rotation.y = Math.PI / 2; leftWheel.position.set(-(BODY_WIDTH / 2 + WHEEL_GAP), WHEEL_RADIUS_3D, 0); model.add(leftWheel); rightWheel = createCustomWheel(WHEEL_RADIUS_3D, TIRE_THICKNESS, WHEEL_WIDTH); rightWheel.rotation.y = Math.PI / 2; rightWheel.position.set(BODY_WIDTH / 2 + WHEEL_GAP, WHEEL_RADIUS_3D, 0); model.add(rightWheel); model.position.y = -WHEEL_RADIUS_3D; pivot.add(model); return pivot; }
 function createCheckerTexture(squareSizeCm = 20, colorA = '#C8C8C8', colorB = '#787878') { const size = 256; const squares = 2; const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size; const ctx = canvas.getContext('2d'); const s = size / squares; for (let y = 0; y < squares; y++) { for (let x = 0; x < squares; x++) { ctx.fillStyle = ((x + y) % 2 === 0) ? colorA : colorB; ctx.fillRect(x * s, y * s, s, s); } } const tex = new THREE.CanvasTexture(canvas); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 8; tex.encoding = THREE.sRGBEncoding; return tex; }
-function createSkyDome() { 
-    const width = 2048, height = 1024; 
-    const canvas = document.createElement('canvas'); 
-    canvas.width = width; 
-    canvas.height = height; 
-    const ctx = canvas.getContext('2d'); 
-    
+function createSkyDome() {
+    const width = 2048, height = 1024;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+
     // Create gradient background
-    const grad = ctx.createLinearGradient(0, 0, 0, height); 
-    grad.addColorStop(0, '#87CEEB'); 
-    grad.addColorStop(0.6, '#B0E0E6'); 
-    grad.addColorStop(1, '#E6F2FA'); 
-    ctx.fillStyle = grad; 
-    ctx.fillRect(0, 0, width, height); 
-    
+    const grad = ctx.createLinearGradient(0, 0, 0, height);
+    grad.addColorStop(0, '#87CEEB');
+    grad.addColorStop(0.6, '#B0E0E6');
+    grad.addColorStop(1, '#E6F2FA');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
     // Draw clouds with seamless wrapping
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'; 
-    for (let i = 0; i < 150; i++) { 
-        const x = Math.random() * width; 
-        const y = Math.random() * height * 0.6; 
-        const radius = 20 + Math.random() * 80; 
-        const blur = 10 + Math.random() * 20; 
-        ctx.filter = `blur(${blur}px)`; 
-        
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    for (let i = 0; i < 150; i++) {
+        const x = Math.random() * width;
+        const y = Math.random() * height * 0.6;
+        const radius = 20 + Math.random() * 80;
+        const blur = 10 + Math.random() * 20;
+        ctx.filter = `blur(${blur}px)`;
+
         // Draw the cloud
-        ctx.beginPath(); 
-        ctx.arc(x, y, radius, 0, Math.PI * 2); 
-        ctx.fill(); 
-        
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
         // Draw the cloud again on the opposite edge to create seamless wrapping
         // If cloud is near the right edge, draw it also on the left edge
         if (x > width - radius * 2) {
-            ctx.beginPath(); 
-            ctx.arc(x - width, y, radius, 0, Math.PI * 2); 
-            ctx.fill(); 
+            ctx.beginPath();
+            ctx.arc(x - width, y, radius, 0, Math.PI * 2);
+            ctx.fill();
         }
         // If cloud is near the left edge, draw it also on the right edge
         if (x < radius * 2) {
-            ctx.beginPath(); 
-            ctx.arc(x + width, y, radius, 0, Math.PI * 2); 
-            ctx.fill(); 
+            ctx.beginPath();
+            ctx.arc(x + width, y, radius, 0, Math.PI * 2);
+            ctx.fill();
         }
-    } 
-    ctx.filter = 'none'; 
-    
-    const tex = new THREE.CanvasTexture(canvas); 
-    tex.wrapS = THREE.RepeatWrapping; 
-    tex.wrapT = THREE.ClampToEdgeWrapping; 
-    tex.encoding = THREE.sRGBEncoding; 
-    
-    const skyGeo = new THREE.SphereGeometry(1000, 32, 16); 
-    const skyMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide }); 
-    const skyDome = new THREE.Mesh(skyGeo, skyMat); 
-    return skyDome; 
+    }
+    ctx.filter = 'none';
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.encoding = THREE.sRGBEncoding;
+
+    const skyGeo = new THREE.SphereGeometry(1000, 32, 16);
+    const skyMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide });
+    const skyDome = new THREE.Mesh(skyGeo, skyMat);
+    return skyDome;
 }
-function setupControls3D() { document.getElementById('reset3dViewBtn').addEventListener('click', () => { camera3D.position.set(28, 22, 48); controls3D.target.set(0, 8, 0); controls3D.update(); }); document.getElementById('toggle3dAnimationBtn').addEventListener('click', () => isAnimation3DEnabled = !isAnimation3DEnabled); document.getElementById('toggle3dMovementBtn').addEventListener('click', () => { isMovement3DEnabled = !isMovement3DEnabled; if(!isMovement3DEnabled) { lastEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2; } }); }
+function setupControls3D() { document.getElementById('reset3dViewBtn').addEventListener('click', () => { camera3D.position.set(28, 22, 48); controls3D.target.set(0, 8, 0); controls3D.update(); }); document.getElementById('toggle3dAnimationBtn').addEventListener('click', () => isAnimation3DEnabled = !isAnimation3DEnabled); document.getElementById('toggle3dMovementBtn').addEventListener('click', () => { isMovement3DEnabled = !isMovement3DEnabled; if (!isMovement3DEnabled) { lastEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2; } }); }
 
 function update3DAnimation() {
     if (isAnimation3DEnabled && robotPivot) {
@@ -2333,7 +2399,7 @@ function update3DAnimation() {
                 // Permutacja osi + znaki: realizujemy przez przejście do Euler, przemapowanie i złożenie z powrotem.
                 // Dla ograniczenia artefaktów wprowadzamy jednorazowy kwaternion docelowy i płynne przejście (slerp).
                 const eulRaw = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
-                let mapped = eulRaw ? applyModelMappingToEuler(eulRaw) : {pitch:0,yaw:0,roll:0};
+                let mapped = eulRaw ? applyModelMappingToEuler(eulRaw) : { pitch: 0, yaw: 0, roll: 0 };
                 // Jeśli negCount jest nieparzyste – stosujemy fallback (bez prób tworzenia niepoprawnej rotacji).
                 if (negCount % 2 === 0) {
                     // Można spróbować zakodować kombinację dwóch flips jako rotację 180° wokół pozostałej osi.
@@ -2341,7 +2407,7 @@ function update3DAnimation() {
                     if (negCount === 2) {
                         // Znajdź oś, która pozostała dodatnia
                         const idx = signs.findIndex(s => s === 1);
-                        const axisVec = idx === 0 ? new THREE.Vector3(1,0,0) : (idx === 1 ? new THREE.Vector3(0,1,0) : new THREE.Vector3(0,0,1));
+                        const axisVec = idx === 0 ? new THREE.Vector3(1, 0, 0) : (idx === 1 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1));
                         qCorr.setFromAxisAngle(axisVec, Math.PI); // 180° rotacja kompensująca dwa odbicia
                     }
                 }
@@ -2365,7 +2431,7 @@ function update3DAnimation() {
 
         // Stała wysokość (z minimalnym podniesieniem aby koła nie "przecinały" podłogi)
         robotPivot.position.y = 4.4; // 4.1 + 0.3 buffer
-        
+
         // Aktualizacja kamery w trybie "Perspektywa Robota"
         const isRobotPerspective = document.getElementById('robotPerspectiveCheckbox').checked;
         controls3D.enabled = !isRobotPerspective; // Wylacz OrbitControls w trybie perspektywy
@@ -2373,10 +2439,10 @@ function update3DAnimation() {
         if (isRobotPerspective) {
             const offset = new THREE.Vector3(0, 15, robotPerspectiveZoom); // Uzyj zmiennej do kontroli dystansu
             offset.applyQuaternion(robotPivot.quaternion); // Obroc wektor offsetu zgodnie z orientacja robota
-            
+
             const cameraPosition = robotPivot.position.clone().add(offset);
             camera3D.position.lerp(cameraPosition, 0.1); // Plynne przejscie do nowej pozycji
-            
+
             const lookAtPosition = robotPivot.position.clone().add(new THREE.Vector3(0, 10, 0)); // Patrz troche powyzej srodka robota
             camera3D.lookAt(lookAtPosition);
         }
@@ -2431,41 +2497,41 @@ function animate3D() {
 // ========================================================================
 
 function initAutoTuningUI() {
-// Zakładki już obsługiwane przez setupAutotuningTabs()+activateMethodTab
-// Upewnij się że domyślnie aktywna karta jest poprawnie ustawiona
-const initial = document.querySelector('.method-tab.active')?.dataset.method || 'ga';
-activateMethodTab(initial);
+    // Zakładki już obsługiwane przez setupAutotuningTabs()+activateMethodTab
+    // Upewnij się że domyślnie aktywna karta jest poprawnie ustawiona
+    const initial = document.querySelector('.method-tab.active')?.dataset.method || 'ga';
+    activateMethodTab(initial);
 }
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
-document.addEventListener('DOMContentLoaded', ()=>{ initAutoTuningUI(); setupMainAutotuneTabs(); });
+    document.addEventListener('DOMContentLoaded', () => { initAutoTuningUI(); setupMainAutotuneTabs(); });
 } else {
-initAutoTuningUI();
-setupMainAutotuneTabs();
+    initAutoTuningUI();
+    setupMainAutotuneTabs();
 }
 
 // Listen for BLE messages
-window.addEventListener('message', function(event) {
-if (event.data && event.data.type) {
-    // Dispatch custom event for algorithm handlers
-    const bleEvent = new CustomEvent('ble_message', { detail: event.data });
-    window.dispatchEvent(bleEvent);
-}
+window.addEventListener('message', function (event) {
+    if (event.data && event.data.type) {
+        // Dispatch custom event for algorithm handlers
+        const bleEvent = new CustomEvent('ble_message', { detail: event.data });
+        window.dispatchEvent(bleEvent);
+    }
 });
 
 // ML accordion helpers: bridge to Bayesian tab
 document.addEventListener('DOMContentLoaded', () => {
-const openBtn = document.getElementById('ml-open-bayesian');
-if (openBtn) openBtn.addEventListener('click', () => {
-    activateMethodTab('bayesian');
-    document.querySelector('#autotuning-card-content')?.scrollIntoView({behavior:'smooth'});
-});
-const startBtn = document.getElementById('ml-start-bayesian');
-if (startBtn) startBtn.addEventListener('click', () => {
-    activateMethodTab('bayesian');
-    document.getElementById('start-tuning-btn')?.click();
-});
+    const openBtn = document.getElementById('ml-open-bayesian');
+    if (openBtn) openBtn.addEventListener('click', () => {
+        activateMethodTab('bayesian');
+        document.querySelector('#autotuning-card-content')?.scrollIntoView({ behavior: 'smooth' });
+    });
+    const startBtn = document.getElementById('ml-start-bayesian');
+    if (startBtn) startBtn.addEventListener('click', () => {
+        activateMethodTab('bayesian');
+        document.getElementById('start-tuning-btn')?.click();
+    });
 });
 
 // ========================================================================
@@ -2475,141 +2541,141 @@ if (startBtn) startBtn.addEventListener('click', () => {
 let currentTuningSession = null;
 
 function startTuning() {
-if (!checkTuningPrerequisites()) return;
+    if (!checkTuningPrerequisites()) return;
 
-const method = document.querySelector('.method-tab.active')?.dataset.method;
-if (!method) {
-    addLogMessage('[UI] Nie wybrano metody optymalizacji.', 'warn');
-    return;
-}
-
-// CRITICAL: Capture baseline PID parameters before starting tuning
-// These will be used to restore safe balancing state during pause or after emergency
-captureBaselinePID();
-
-const searchSpace = {
-    kp_min: parseFloat(document.getElementById('search-kp-min')?.value || 0),
-    kp_max: parseFloat(document.getElementById('search-kp-max')?.value || 50),
-    ki_min: parseFloat(document.getElementById('search-ki-min')?.value || 0),
-    ki_max: parseFloat(document.getElementById('search-ki-max')?.value || 1),
-    kd_min: parseFloat(document.getElementById('search-kd-min')?.value || 0),
-    kd_max: parseFloat(document.getElementById('search-kd-max')?.value || 5)
-};
-
-setTuningUiLock(true, method);
-document.getElementById('tuning-status-text').textContent = 'Uruchamianie...';
-document.getElementById('current-iteration').textContent = '0';
-fitnessChartData = [];
-updateFitnessChart();
-document.getElementById('start-tuning-btn').disabled = true;
-document.getElementById('pause-tuning-btn').disabled = false;
-document.getElementById('stop-tuning-btn').disabled = false;
-
-addLogMessage(`[UI] Rozpoczynam strojenie po stronie UI metodą: ${method.toUpperCase()}`, 'info');
-
-try {
-    let config;
-    if (method === 'ga') {
-        config = {
-            populationSize: parseInt(document.getElementById('ga-population').value),
-            generations: parseInt(document.getElementById('ga-generations').value),
-            mutationRate: parseFloat(document.getElementById('ga-mutation').value) / 100.0,
-            crossoverRate: parseFloat(document.getElementById('ga-crossover').value) / 100.0,
-            elitism: document.getElementById('ga-elitism').checked,
-            searchSpace: searchSpace
-        };
-        currentTuningSession = new GeneticAlgorithm(config);
-    } else if (method === 'pso') {
-        config = {
-            numParticles: parseInt(document.getElementById('pso-particles').value),
-            iterations: parseInt(document.getElementById('pso-iterations').value),
-            inertiaWeight: parseFloat(document.getElementById('pso-inertia').value),
-            cognitiveWeight: parseFloat(document.getElementById('pso-cognitive').value),
-            socialWeight: parseFloat(document.getElementById('pso-social').value),
-            searchSpace: searchSpace
-        };
-        currentTuningSession = new ParticleSwarmOptimization(config);
-    } else if (method === 'zn') {
-        config = {
-            amplitude: parseFloat(document.getElementById('zn-amplitude').value),
-            minCycles: parseInt(document.getElementById('zn-min-cycles').value)
-        };
-        currentTuningSession = new ZieglerNicholsRelay(config);
-    } else if (method === 'bayesian') {
-         config = {
-            iterations: parseInt(document.getElementById('bayesian-iterations').value),
-            initialSamples: parseInt(document.getElementById('bayesian-initial').value),
-            acquisitionFunction: document.getElementById('bayesian-acquisition').value,
-            xi: parseFloat(document.getElementById('bayesian-xi').value),
-            searchSpace: searchSpace
-        };
-        currentTuningSession = new BayesianOptimization(config);
-    } else {
-         throw new Error(`Nieznana metoda: ${method}`);
+    const method = document.querySelector('.method-tab.active')?.dataset.method;
+    if (!method) {
+        addLogMessage('[UI] Nie wybrano metody optymalizacji.', 'warn');
+        return;
     }
-    
-    currentTuningSession.run().finally(() => {
-        stopTuning(false); 
-    });
 
-} catch (error) {
-    console.error('Błąd inicjalizacji strojenia:', error);
-    addLogMessage('Błąd inicjalizacji strojenia: ' + error.message, 'error');
-    stopTuning(false);
-}
+    // CRITICAL: Capture baseline PID parameters before starting tuning
+    // These will be used to restore safe balancing state during pause or after emergency
+    captureBaselinePID();
+
+    const searchSpace = {
+        kp_min: parseFloat(document.getElementById('search-kp-min')?.value || 0),
+        kp_max: parseFloat(document.getElementById('search-kp-max')?.value || 50),
+        ki_min: parseFloat(document.getElementById('search-ki-min')?.value || 0),
+        ki_max: parseFloat(document.getElementById('search-ki-max')?.value || 1),
+        kd_min: parseFloat(document.getElementById('search-kd-min')?.value || 0),
+        kd_max: parseFloat(document.getElementById('search-kd-max')?.value || 5)
+    };
+
+    setTuningUiLock(true, method);
+    document.getElementById('tuning-status-text').textContent = 'Uruchamianie...';
+    document.getElementById('current-iteration').textContent = '0';
+    fitnessChartData = [];
+    updateFitnessChart();
+    document.getElementById('start-tuning-btn').disabled = true;
+    document.getElementById('pause-tuning-btn').disabled = false;
+    document.getElementById('stop-tuning-btn').disabled = false;
+
+    addLogMessage(`[UI] Rozpoczynam strojenie po stronie UI metodą: ${method.toUpperCase()}`, 'info');
+
+    try {
+        let config;
+        if (method === 'ga') {
+            config = {
+                populationSize: parseInt(document.getElementById('ga-population').value),
+                generations: parseInt(document.getElementById('ga-generations').value),
+                mutationRate: parseFloat(document.getElementById('ga-mutation').value) / 100.0,
+                crossoverRate: parseFloat(document.getElementById('ga-crossover').value) / 100.0,
+                elitism: document.getElementById('ga-elitism').checked,
+                searchSpace: searchSpace
+            };
+            currentTuningSession = new GeneticAlgorithm(config);
+        } else if (method === 'pso') {
+            config = {
+                numParticles: parseInt(document.getElementById('pso-particles').value),
+                iterations: parseInt(document.getElementById('pso-iterations').value),
+                inertiaWeight: parseFloat(document.getElementById('pso-inertia').value),
+                cognitiveWeight: parseFloat(document.getElementById('pso-cognitive').value),
+                socialWeight: parseFloat(document.getElementById('pso-social').value),
+                searchSpace: searchSpace
+            };
+            currentTuningSession = new ParticleSwarmOptimization(config);
+        } else if (method === 'zn') {
+            config = {
+                amplitude: parseFloat(document.getElementById('zn-amplitude').value),
+                minCycles: parseInt(document.getElementById('zn-min-cycles').value)
+            };
+            currentTuningSession = new ZieglerNicholsRelay(config);
+        } else if (method === 'bayesian') {
+            config = {
+                iterations: parseInt(document.getElementById('bayesian-iterations').value),
+                initialSamples: parseInt(document.getElementById('bayesian-initial').value),
+                acquisitionFunction: document.getElementById('bayesian-acquisition').value,
+                xi: parseFloat(document.getElementById('bayesian-xi').value),
+                searchSpace: searchSpace
+            };
+            currentTuningSession = new BayesianOptimization(config);
+        } else {
+            throw new Error(`Nieznana metoda: ${method}`);
+        }
+
+        currentTuningSession.run().finally(() => {
+            stopTuning(false);
+        });
+
+    } catch (error) {
+        console.error('Błąd inicjalizacji strojenia:', error);
+        addLogMessage('Błąd inicjalizacji strojenia: ' + error.message, 'error');
+        stopTuning(false);
+    }
 }
 
 function pauseTuning() {
-if (currentTuningSession && typeof currentTuningSession.pause === 'function') {
-    currentTuningSession.pause();
-    document.getElementById('tuning-status-text').textContent = 'Wstrzymany';
-    addLogMessage('[UI] Strojenie wstrzymane.', 'info');
-    document.getElementById('pause-tuning-btn').style.display = 'none';
-    document.getElementById('resume-tuning-btn').style.display = 'inline-block';
-    document.getElementById('resume-tuning-btn').disabled = false;
-}
+    if (currentTuningSession && typeof currentTuningSession.pause === 'function') {
+        currentTuningSession.pause();
+        document.getElementById('tuning-status-text').textContent = 'Wstrzymany';
+        addLogMessage('[UI] Strojenie wstrzymane.', 'info');
+        document.getElementById('pause-tuning-btn').style.display = 'none';
+        document.getElementById('resume-tuning-btn').style.display = 'inline-block';
+        document.getElementById('resume-tuning-btn').disabled = false;
+    }
 }
 
 function resumeTuning() {
-if (currentTuningSession && typeof currentTuningSession.resume === 'function') {
-    currentTuningSession.resume();
-    document.getElementById('tuning-status-text').textContent = 'W trakcie';
-    addLogMessage('[UI] Strojenie wznowione.', 'info');
-    document.getElementById('resume-tuning-btn').style.display = 'none';
-    document.getElementById('pause-tuning-btn').style.display = 'inline-block';
-    document.getElementById('pause-tuning-btn').disabled = false;
-}
+    if (currentTuningSession && typeof currentTuningSession.resume === 'function') {
+        currentTuningSession.resume();
+        document.getElementById('tuning-status-text').textContent = 'W trakcie';
+        addLogMessage('[UI] Strojenie wznowione.', 'info');
+        document.getElementById('resume-tuning-btn').style.display = 'none';
+        document.getElementById('pause-tuning-btn').style.display = 'inline-block';
+        document.getElementById('pause-tuning-btn').disabled = false;
+    }
 }
 
 function stopTuning(showPrompt = true) {
-if (showPrompt && !confirm('Czy na pewno chcesz zatrzymać proces strojenia?')) {
-    return;
-}
-if (currentTuningSession && typeof currentTuningSession.stop === 'function') {
-    currentTuningSession.stop();
-}
-currentTuningSession = null;
-setTuningUiLock(false, '');
-document.getElementById('tuning-status-text').textContent = 'Zatrzymany';
-addLogMessage('[UI] Strojenie zatrzymane.', 'warn');
+    if (showPrompt && !confirm('Czy na pewno chcesz zatrzymać proces strojenia?')) {
+        return;
+    }
+    if (currentTuningSession && typeof currentTuningSession.stop === 'function') {
+        currentTuningSession.stop();
+    }
+    currentTuningSession = null;
+    setTuningUiLock(false, '');
+    document.getElementById('tuning-status-text').textContent = 'Zatrzymany';
+    addLogMessage('[UI] Strojenie zatrzymane.', 'warn');
 
-document.getElementById('start-tuning-btn').disabled = false;
-document.getElementById('pause-tuning-btn').disabled = true;
-document.getElementById('stop-tuning-btn').disabled = true;
-document.getElementById('resume-tuning-btn').style.display = 'none';
-document.getElementById('pause-tuning-btn').style.display = 'inline-block';
+    document.getElementById('start-tuning-btn').disabled = false;
+    document.getElementById('pause-tuning-btn').disabled = true;
+    document.getElementById('stop-tuning-btn').disabled = true;
+    document.getElementById('resume-tuning-btn').style.display = 'none';
+    document.getElementById('pause-tuning-btn').style.display = 'inline-block';
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-const startBtn = document.getElementById('start-tuning-btn');
-const pauseBtn = document.getElementById('pause-tuning-btn');
-const resumeBtn = document.getElementById('resume-tuning-btn');
-const stopBtn = document.getElementById('stop-tuning-btn');
+    const startBtn = document.getElementById('start-tuning-btn');
+    const pauseBtn = document.getElementById('pause-tuning-btn');
+    const resumeBtn = document.getElementById('resume-tuning-btn');
+    const stopBtn = document.getElementById('stop-tuning-btn');
 
-if (startBtn) startBtn.addEventListener('click', startTuning);
-if (pauseBtn) pauseBtn.addEventListener('click', pauseTuning);
-if (resumeBtn) resumeBtn.addEventListener('click', resumeTuning);
-if (stopBtn) stopBtn.addEventListener('click', () => stopTuning(true));
+    if (startBtn) startBtn.addEventListener('click', startTuning);
+    if (pauseBtn) pauseBtn.addEventListener('click', pauseTuning);
+    if (resumeBtn) resumeBtn.addEventListener('click', resumeTuning);
+    if (stopBtn) stopBtn.addEventListener('click', () => stopTuning(true));
 });
 
 
