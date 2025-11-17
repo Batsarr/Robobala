@@ -1152,7 +1152,7 @@ function processCompleteMessage(data) {
         case 'ack':
             if (data.command === 'request_full_config') { // NOWE: Obsługa ACK dla request_full_config
                 if (data.success) {
-                    addLogMessage(`[UI] Robot potwierdzil wyslanie konfiguracji: ${data.message}`, 'info');
+                    addLogMessage(`[UI] Robot potwierdzil wyslanie konfiguracji: ${data.message || 'OK'}`, 'info');
                 } else {
                     addLogMessage(`[UI] Robot odrzucil zadanie konfiguracji: ${data.message || 'Nieznany blad'}`, 'error');
                 }
