@@ -127,15 +127,11 @@ let isAnimation3DEnabled = true, isMovement3DEnabled = false, lastEncoderAvg = 0
 window.telemetryData = {};
 let isCalibrationModalShown = false;
 // UI base for 'Set Zero' feature — apparent trim is actualTrim - uiTrimZeroBase
-// Uwaga: baseline UI działa tylko jako przesunięcie wizualne (nie zmienia firmware).
-// uiTrimZeroBase* = ile "udajemy" w UI, że trim wynosi 0; firmware nadal trzyma realny trim.
-let uiTrimZeroBasePitch = 0.0;
-let uiTrimZeroBaseRoll = 0.0;
-// uiZeroBaselineAngle* = surowy kąt (raw_* + firmware_trim) w momencie naciśnięcia "Ustaw punkt 0",
-// odejmowany potem tylko od wyświetlanego kąta – NIE wchodzi do logiki wysyłania trimów.
-let uiZeroBaselineAnglePitch = 0.0;
-let uiZeroBaselineAngleRoll = 0.0;
-let originalFirmwareTrimPitch = null;
+// Prosty model trymów:
+//  - firmware trzyma jedną wartość trim_angle / roll_trim (w stopniach)
+//  - UI pokazuje dokładnie tę wartość, a kąt liczymy z kwaternionu + trim
+//  - przycisk "Ustaw 0" wylicza nowy trim tak, aby aktualna pozycja dawała 0°.
+let originalFirmwareTrimPitch = null; // tylko do celów informacyjnych/logów
 let originalFirmwareTrimRoll = null;
 
 let pitchHistory = [], speedHistory = [];
@@ -1236,28 +1232,25 @@ function applySingleParam(snakeKey, value) {
             }
         }
     }
-    // Fallback dla trimów (jeśli elementy są poza mappingiem lub dodatkowe odświeżenie)
+    // Fallback dla trimów – UI pokazuje bezpośrednio wartości z firmware, kąt = raw + trim
     if (snakeKey === 'trim_angle') {
         const actual = Number(value || 0);
         if (originalFirmwareTrimPitch === null) originalFirmwareTrimPitch = actual;
-        const apparentVal = actual - (uiTrimZeroBasePitch || 0);
-        const span = document.getElementById('trimValueDisplay'); if (span) span.textContent = apparentVal.toFixed(2);
-        const origSpan = document.getElementById('trimOriginalDisplay'); if (origSpan) origSpan.textContent = originalFirmwareTrimPitch.toFixed(2);
-        const deltaSpan = document.getElementById('trimDeltaDisplay'); if (deltaSpan) deltaSpan.textContent = (actual - (originalFirmwareTrimPitch || 0)).toFixed(2);
-        // Update displayed angle with apparent trim
+        const span = document.getElementById('trimValueDisplay');
+        if (span) span.textContent = actual.toFixed(2);
         const rawPitch = window.telemetryData && typeof window.telemetryData.raw_pitch === 'number' ? window.telemetryData.raw_pitch : 0;
-        const corrected = rawPitch + actual - (uiZeroBaselineAnglePitch || 0);
-        const angleEl = document.getElementById('angleVal'); if (angleEl) angleEl.textContent = corrected.toFixed(1) + ' \u00B0';
+        const corrected = rawPitch + actual;
+        const angleEl = document.getElementById('angleVal');
+        if (angleEl) angleEl.textContent = corrected.toFixed(1) + ' \u00B0';
     } else if (snakeKey === 'roll_trim') {
         const actualR = Number(value || 0);
         if (originalFirmwareTrimRoll === null) originalFirmwareTrimRoll = actualR;
-        const apparentR = actualR - (uiTrimZeroBaseRoll || 0);
-        const span = document.getElementById('rollTrimValueDisplay'); if (span) span.textContent = apparentR.toFixed(2);
-        const origRollSpan = document.getElementById('rollTrimOriginalDisplay'); if (origRollSpan) origRollSpan.textContent = originalFirmwareTrimRoll.toFixed(2);
-        const rollDeltaSpan = document.getElementById('rollTrimDeltaDisplay'); if (rollDeltaSpan) rollDeltaSpan.textContent = (actualR - (originalFirmwareTrimRoll || 0)).toFixed(2);
+        const span = document.getElementById('rollTrimValueDisplay');
+        if (span) span.textContent = actualR.toFixed(2);
         const rawRoll = window.telemetryData && typeof window.telemetryData.raw_roll === 'number' ? window.telemetryData.raw_roll : 0;
-        const correctedR = rawRoll + actualR - (uiZeroBaselineAngleRoll || 0);
-        const rollEl = document.getElementById('rollVal'); if (rollEl) rollEl.textContent = correctedR.toFixed(1) + ' \u00B0';
+        const correctedR = rawRoll + actualR;
+        const rollEl = document.getElementById('rollVal');
+        if (rollEl) rollEl.textContent = correctedR.toFixed(1) + ' \u00B0';
     }
     // Feedback sign params - special handling: update sign buttons
     if (snakeKey === 'balance_feedback_sign') {
@@ -1404,16 +1397,13 @@ function updateTelemetryUI(data) {
 
         const actualTrimForPitch = isNaN(telemetryTrimPitch) ? 0 : telemetryTrimPitch;
 
-        // "Widoczny" trim w UI = firmware_trim - uiTrimZeroBasePitch
-        const apparentTrimVal = actualTrimForPitch - (uiTrimZeroBasePitch || 0);
-
-        // Kąt widoczny na dashboardzie liczony względem baseline kąta, zapamiętanego przy "Ustaw punkt 0"
-        const correctedPitch = rawPitchVal + actualTrimForPitch - (uiZeroBaselineAnglePitch || 0);
+        // Kąt używany do balansowania i w dashboardzie: raw + trim
+        const correctedPitch = rawPitchVal + actualTrimForPitch;
         document.getElementById('angleVal').textContent = correctedPitch.toFixed(1) + ' \u00B0';
         const vizPitchVal = (data.viz_pitch !== undefined) ? data.viz_pitch : rawPitchVal || 0;
         document.getElementById('robot3d-pitch').textContent = vizPitchVal.toFixed(1) + '°';
-        // Update trims display (apparent)
-        const span = document.getElementById('trimValueDisplay'); if (span) span.textContent = apparentTrimVal.toFixed(2);
+        const span = document.getElementById('trimValueDisplay');
+        if (span) span.textContent = actualTrimForPitch.toFixed(2);
         pitchHistory.push(correctedPitch);
         if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
     }
@@ -1426,12 +1416,12 @@ function updateTelemetryUI(data) {
 
         const actualTrimForRoll = isNaN(telemetryRollTrim) ? 0 : telemetryRollTrim;
 
-        const apparentRollTrimVal = actualTrimForRoll - (uiTrimZeroBaseRoll || 0);
-        const correctedRoll = rawRollVal + actualTrimForRoll - (uiZeroBaselineAngleRoll || 0);
+        const correctedRoll = rawRollVal + actualTrimForRoll;
         const vizRollVal = (data.viz_roll !== undefined) ? data.viz_roll : rawRollVal || 0;
         document.getElementById('robot3d-roll').textContent = vizRollVal.toFixed(1) + '°';
         document.getElementById('rollVal').textContent = correctedRoll.toFixed(1) + ' \u00B0';
-        const rollSpan = document.getElementById('rollTrimValueDisplay'); if (rollSpan) rollSpan.textContent = apparentRollTrimVal.toFixed(2);
+        const rollSpan = document.getElementById('rollTrimValueDisplay');
+        if (rollSpan) rollSpan.textContent = actualTrimForRoll.toFixed(2);
     }
     if (data.yaw !== undefined) {
         document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' °';
@@ -2388,13 +2378,15 @@ function setupParameterListeners() {
 
     // POPRAWKA: Usunięto stare listenery dla trim+/- i dodano nowe, poprawne dla precyzyjnych przycisków.
     const toolButtons = { 'resetZeroBtn': { type: 'set_pitch_zero' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
-    // Trim: aktualizacja + wysyłka set_param (jednolite traktowanie)
+    // Trim: aktualizacja + wysyłka set_param (używamy bezpośrednio wartości firmware)
     function updateAndSendTrim(delta) {
         const span = document.getElementById('trimValueDisplay');
-        if (!span) return; const currentApparent = parseFloat(span.textContent) || 0; const newApparent = currentApparent + delta; span.textContent = newApparent.toFixed(2);
-        // Send absolute value: actualTrim = uiTrimZeroBasePitch + apparentTrim
-        const actualToSend = (uiTrimZeroBasePitch || 0) + newApparent;
-        sendBleMessage({ type: 'set_param', key: 'trim_angle', value: actualToSend });
+        if (!span) return;
+        const current = parseFloat(span.textContent) || 0;
+        const newTrim = current + delta;
+        span.textContent = newTrim.toFixed(2);
+        sendBleMessage({ type: 'set_param', key: 'trim_angle', value: newTrim });
+        addLogMessage(`[UI] Korekta trima Pitch: delta=${delta.toFixed(2)}, nowy trim_angle=${newTrim.toFixed(2)}`);
     }
     document.getElementById('trimMinus01Btn')?.addEventListener('click', () => updateAndSendTrim(-0.1));
     document.getElementById('trimMinus001Btn')?.addEventListener('click', () => updateAndSendTrim(-0.01));
@@ -2406,9 +2398,12 @@ function setupParameterListeners() {
     document.getElementById('resetZeroBtn')?.addEventListener('click', () => setPitchZero());
     function updateAndSendRollTrim(delta) {
         const span = document.getElementById('rollTrimValueDisplay');
-        if (!span) return; const currentApparent = parseFloat(span.textContent) || 0; const newApparent = currentApparent + delta; span.textContent = newApparent.toFixed(2);
-        const actualToSend = (uiTrimZeroBaseRoll || 0) + newApparent;
-        sendBleMessage({ type: 'set_param', key: 'roll_trim', value: actualToSend });
+        if (!span) return;
+        const current = parseFloat(span.textContent) || 0;
+        const newTrim = current + delta;
+        span.textContent = newTrim.toFixed(2);
+        sendBleMessage({ type: 'set_param', key: 'roll_trim', value: newTrim });
+        addLogMessage(`[UI] Korekta trima Roll: delta=${delta.toFixed(2)}, nowy roll_trim=${newTrim.toFixed(2)}`);
     }
     document.getElementById('rollTrimMinus01Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.1));
     document.getElementById('rollTrimMinus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.01));
@@ -2439,23 +2434,8 @@ function setupParameterListeners() {
         // Dla zgodności z wcześniejszym firmware zostawiamy też komendę skrótową
         sendBleMessage({ type: 'set_pitch_zero' });
 
-        // Aktualizacja baseline UI: od teraz traktujemy newTrim jako „realny” trim,
-        // a uiTrimZeroBasePitch ustawiamy na newTrim, żeby w UI apparentTrim = 0
-        uiTrimZeroBasePitch = newTrim;
-        uiZeroBaselineAnglePitch = 0; // bo rawPitch + newTrim == 0
-
         const span = document.getElementById('trimValueDisplay');
-        if (span) span.textContent = '0.00';
-
-        // Zaktualizuj informacje o oryginalnym i delta-trimie, jeśli były wcześniej znane
-        const origSpan = document.getElementById('trimOriginalDisplay');
-        if (origSpan && originalFirmwareTrimPitch !== null) {
-            origSpan.textContent = originalFirmwareTrimPitch.toFixed(2);
-        }
-        const deltaSpan = document.getElementById('trimDeltaDisplay');
-        if (deltaSpan && originalFirmwareTrimPitch !== null) {
-            deltaSpan.textContent = (newTrim - originalFirmwareTrimPitch).toFixed(2);
-        }
+        if (span) span.textContent = newTrim.toFixed(2);
 
         // Natychmiast pokazujemy 0.0° na dashboardzie, resztę będzie korygować bieżąca telemetria
         const val = document.getElementById('angleVal');
@@ -2489,20 +2469,8 @@ function setupParameterListeners() {
         sendBleMessage({ type: 'set_param', key: 'roll_trim', value: newRollTrim });
         sendBleMessage({ type: 'set_roll_zero' });
 
-        uiTrimZeroBaseRoll = newRollTrim;
-        uiZeroBaselineAngleRoll = 0;
-
         const span = document.getElementById('rollTrimValueDisplay');
-        if (span) span.textContent = '0.00';
-
-        const origRollSpan = document.getElementById('rollTrimOriginalDisplay');
-        if (origRollSpan && originalFirmwareTrimRoll !== null) {
-            origRollSpan.textContent = originalFirmwareTrimRoll.toFixed(2);
-        }
-        const rollDeltaSpan = document.getElementById('rollTrimDeltaDisplay');
-        if (rollDeltaSpan && originalFirmwareTrimRoll !== null) {
-            rollDeltaSpan.textContent = (newRollTrim - originalFirmwareTrimRoll).toFixed(2);
-        }
+        if (span) span.textContent = newRollTrim.toFixed(2);
 
         const val = document.getElementById('rollVal');
         if (val) val.textContent = '0.0 °';
