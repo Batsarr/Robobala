@@ -40,7 +40,7 @@
                 <button id="calib-close-btn" style="flex:1;">Zamknij</button>
             </div>
             <div style="display:flex; justify-content:flex-end; margin-top:10px;">
-                <button id="calib-save-btn" style="display:none; background:#61dafb; padding:6px 12px; border-radius:6px;">Zapisz offset do EEPROM</button>
+                <button id="calib-save-btn" style="display:none; background:#61dafb; padding:6px 12px; border-radius:6px;">Zapisz Kalibrację</button>
             </div>
         </div>
     </div>
@@ -54,19 +54,19 @@
             <div class="control-row"><span class="control-label">Trzymaj Pozycje</span><label class="switch"><input type="checkbox" id="holdPositionSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
-            <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Ustaw punkt 0 (Pitch)</button>
+            <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Ustaw Zero (Pitch)</button>
             <div class="trim-controls">
                 <button id="trimMinus01Btn">-0.1</button>
                 <button id="trimMinus001Btn">-0.01</button>
-                <span>Korekta Pionu: <span id="trimValueDisplay">0.00</span>°</span>
+                <span>Korekta ręczna: <span id="trimValueDisplay">0.00</span>°</span>
                 <button id="trimPlus001Btn">+0.01</button>
                 <button id="trimPlus01Btn">+0.1</button>
             </div>
-            <button id="resetRollZeroBtn" style="margin-top:10px; width:100%;">Ustaw punkt 0 (Roll)</button>
+            <button id="resetRollZeroBtn" style="margin-top:10px; width:100%;">Ustaw Zero (Roll)</button>
             <div class="trim-controls">
                 <button id="rollTrimMinus01Btn">-0.1</button>
                 <button id="rollTrimMinus001Btn">-0.01</button>
-                <span>Korekta Roll: <span id="rollTrimValueDisplay">0.00</span>°</span>
+                <span>Korekta ręczna Roll: <span id="rollTrimValueDisplay">0.00</span>°</span>
                 <button id="rollTrimPlus001Btn">+0.01</button>
                 <button id="rollTrimPlus01Btn">+0.1</button>
             </div>
@@ -159,7 +159,17 @@
                 <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
                     <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Asystent Kalibracji IMU</button>
                     <button id="calibrateZeroPointBtn" style="width:100%; background-color:#f7b731;">Znajdz Pion Automatycznie</button>
-                    <button id="sensorMappingBtn" style="width:100%; background-color:#f7b731;">Mapowanie czujnika</button>
+                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                        <label for="sensorMountingSelect" style="font-size: 0.9em; color: #ccc;">Montaż czujnika (orientacja):</label>
+                        <select id="sensorMountingSelect" style="width:100%; padding: 8px; background-color:#20232a; color: #fff; border: 1px solid #61dafb; border-radius: 4px;">
+                            <option value="standard">Montaż standardowy (poziomy)</option>
+                            <option value="rotated_90_cw">Obrócony o 90° w prawo</option>
+                            <option value="rotated_90_ccw">Obrócony o 90° w lewo</option>
+                            <option value="rotated_180">Obrócony o 180°</option>
+                            <option value="inverted">Odwrócony (góra dół)</option>
+                            <option value="custom">Niestandardowy (zaawansowany)</option>
+                        </select>
+                    </div>
                     <button id="modelMappingBtn" style="width:100%; background-color:#f7b731;">Mapowanie modelu 3D</button>
                 </div>
             </fieldset>
