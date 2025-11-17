@@ -222,38 +222,6 @@
                    <legend>Sterowanie Precyzyjne (D-Pad)</legend>
                    <div class="dpad-input-group"><label for="dpadDistInput">Dystans (cm):</label><input type="number" id="dpadDistInput" value="20"></div>
                    <div class="dpad-input-group"><label for="dpadAngleInput">Kat (st.):</label><input type="number" id="dpadAngleInput" value="90"></div>
-                   <div class="dpad-input-group" style="margin-top:8px;">
-                       <details>
-                           <summary>Parametry rozszerzone (opcjonalne)</summary>
-                           <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; margin-top:8px;">
-                               <div>
-                                   <label for="dpadMoveSpeed" title="Maks. prędkość w jeździe prosto (cm/s)">Prędkość (cm/s)</label>
-                                   <input type="number" id="dpadMoveSpeed" min="1" step="1" placeholder="np. 25">
-                               </div>
-                               <div>
-                                   <label for="dpadMoveAccel" title="Limit przyspieszenia (cm/s²)">Przyspieszenie (cm/s²)</label>
-                                   <input type="number" id="dpadMoveAccel" min="1" step="1" placeholder="np. 80">
-                               </div>
-                               <div>
-                                   <label for="dpadMoveTolerance" title="Tolerancja zakończenia ruchu (cm)">Tolerancja (cm)</label>
-                                   <input type="number" id="dpadMoveTolerance" min="0" step="0.1" placeholder="np. 1.0">
-                               </div>
-                               <div>
-                                   <label for="dpadMoveTimeout" title="Maks. czas ruchu do przodu/tyłu (ms)">Timeout (ms)</label>
-                                   <input type="number" id="dpadMoveTimeout" min="0" step="100" placeholder="np. 5000">
-                               </div>
-                               <div>
-                                   <label for="dpadRotateTolerance" title="Tolerancja zakończenia obrotu (°)">Tolerancja obrotu (°)</label>
-                                   <input type="number" id="dpadRotateTolerance" min="0" step="0.5" placeholder="np. 2.0">
-                               </div>
-                               <div>
-                                   <label for="dpadRotateTimeout" title="Maks. czas obrotu (ms)">Timeout obrotu (ms)</label>
-                                   <input type="number" id="dpadRotateTimeout" min="0" step="100" placeholder="np. 4000">
-                               </div>
-                           </div>
-                           <div style="font-size:0.85em; color:#bbb; margin-top:6px;">Pozostaw puste, aby użyć wartości domyślnych z firmware.</div>
-                       </details>
-                   </div>
                    <div class="dpad-container">
                        <button id="dpad-up" class="dpad-btn" data-dpad="up">&#8593;</button><button id="dpad-left" class="dpad-btn" data-dpad="left">&#8592;</button><button id="dpad-stop" class="dpad-btn" data-dpad="stop">&#215;</button><button id="dpad-right" class="dpad-btn" data-dpad="right">&#8594;</button><button id="dpad-down" class="dpad-btn" data-dpad="down">&#8595;</button>
                    </div>
@@ -303,17 +271,7 @@
                     <!-- Usunięto legacy mapowanie osi IMU – zastąpione nowym kreatorem 'Mapowanie czujnika' w Dashboard -->
                     <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" min="1" max="30" step="0.1" value="8.2"><button>+</button></div> <div class="help-text">Średnica koła robota w centymetrach. Parametr kluczowy dla obliczania prędkości i pokonanego dystansu. Zmierz dokładnie średnicę od krawędzi do krawędzi przez środek koła. Większe koła = większa prędkość przy tych samych obrotach silnika. Typowy zakres: 6-12 cm.</div> </div>
                     <div class="setting-container"> <label for="trackWidthInput">Rozstaw kol (cm)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="trackWidthInput" min="5" max="50" step="0.1" value="12.5"><button>+</button></div> <div class="help-text">Odległość między środkami obu kół (szerokość toru). Wpływa na obliczenia obrotu - szerszy rozstaw wymaga większej różnicy prędkości kół do wykonania tego samego skrętu. Zmierz odległość między środkami osi kół. Typowy zakres: 10-20 cm.</div> </div>
-                    <div class="setting-container">
-                        <label for="encoderPprInput">Impulsy na obrot (PPR)<span class="help-icon">?</span></label>
-                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="encoderPprInput" min="100" max="20000" step="10" value="820"><button>+</button></div>
-                        <div class="ppr-measure" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:6px;">
-                            <button id="pprMeasureStartBtn" class="btn-small">Pomiar PPR: Start</button>
-                            <button id="pprMeasureStopBtn" class="btn-small" disabled>Stop &amp; Wpisz</button>
-                            <span style="font-size:0.9em; color:#bbb;">ΔL: <span id="pprDeltaL">0</span> | ΔP: <span id="pprDeltaR">0</span> | Śr.: <span id="pprDeltaAvg">0</span> | PPR→ <span id="pprChosen">0</span></span>
-                            <span id="pprMeasureHint" style="font-size:0.85em; color:#888;">Podnieś robota i obróć kołem o dokładnie 1 pełny obrót.</span>
-                        </div>
-                        <div class="help-text">Podaj liczbę impulsów zliczanych przez firmware na jeden pełny obrót koła w trybie kwadraturowym x4 (oba kanały i oba zbocza). Najprościej: użyj powyżej „Pomiar PPR”. Jeśli obracasz JEDNO koło – PPR = większa z delt (ΔL lub ΔP). Jeśli obracasz OBA koła po 1 obrocie – PPR = średnia Δ(R,L). UI wybierze poprawnie i wpisze wynik automatycznie. Jeśli producent podaje PPR (na kanał), typowo tutaj ≈ 4 × PPR. Jeśli podaje CPR (4x), tutaj ≈ CPR.</div>
-                    </div>
+                    <div class="setting-container"> <label for="encoderPprInput">Impulsy na obrot (PPR)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="encoderPprInput" min="100" max="5000" step="10" value="820"><button>+</button></div> <div class="help-text">Liczba impulsów enkodera na jeden pełny obrót koła. Zależy od rozdzielczości enkodera i przekładni (jeśli jest). Wartość ta wpływa na dokładność pomiaru prędkości i pozycji. Wyższa wartość = większa precyzja. Sprawdź specyfikację swojego enkodera i przekładni. Typowy zakres: 300-2000 PPR.</div> </div>
                 </div>
                 <button class="accordion-header" onclick="toggleAccordion(this)">2. Kalibracja PWM Silnikow</button>
                 <div class="accordion-content">
