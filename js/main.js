@@ -753,6 +753,57 @@ function getRawEuler() {
     return eul || { pitch: 0, yaw: 0, roll: 0 };
 }
 
+// GLOBALNE: ustawianie punktu 0 dla Pitch i Roll.
+// UWAGA: Kwaternion z telemetrii ma już zastosowane trymy (firmware wysyła q_final),
+// więc aby uzyskać surowy fizyczny kąt przed trybem, odejmujemy aktualny trim.
+function setPitchZero() {
+    if (!window.telemetryData) {
+        addLogMessage('[UI] Brak danych telemetrii (pitch).', 'warn');
+        return;
+    }
+    const correctedPitch = Number(window.telemetryData.pitch || 0); // pitch po zastosowaniu trimu
+    const currentTrim = Number(window.telemetryData.trim_angle || 0);
+    const rawPitch = correctedPitch - currentTrim; // surowy kąt przed trybem
+    if (isNaN(rawPitch)) {
+        addLogMessage('[UI] Nieprawidlowy odczyt pitch.', 'error');
+        return;
+    }
+    const newTrim = -rawPitch; // corrected = raw + newTrim => 0
+    sendBleMessage({ type: 'set_param', key: 'trim_angle', value: newTrim });
+    sendBleMessage({ type: 'set_pitch_zero' }); // skrót zgodności
+    const span = document.getElementById('trimValueDisplay');
+    if (span) span.textContent = newTrim.toFixed(2);
+    const val = document.getElementById('angleVal');
+    if (val) val.textContent = '0.0 °';
+    pitchHistory.push(0);
+    if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
+    updateChart({ pitch: 0 });
+    addLogMessage(`[UI] Punkt 0 (Pitch) ustawiony. Nowy trim_angle = ${newTrim.toFixed(2)}° (aktualna pozycja traktowana jako pion).`, 'success');
+}
+
+function setRollZero() {
+    if (!window.telemetryData) {
+        addLogMessage('[UI] Brak danych telemetrii (roll).', 'warn');
+        return;
+    }
+    const correctedRoll = Number(window.telemetryData.roll || 0);
+    const currentRollTrim = Number(window.telemetryData.roll_trim || 0);
+    const rawRoll = correctedRoll - currentRollTrim;
+    if (isNaN(rawRoll)) {
+        addLogMessage('[UI] Nieprawidlowy odczyt roll.', 'error');
+        return;
+    }
+    const newRollTrim = -rawRoll;
+    sendBleMessage({ type: 'set_param', key: 'roll_trim', value: newRollTrim });
+    sendBleMessage({ type: 'set_roll_zero' });
+    const span = document.getElementById('rollTrimValueDisplay');
+    if (span) span.textContent = newRollTrim.toFixed(2);
+    const val = document.getElementById('rollVal');
+    if (val) val.textContent = '0.0 °';
+    updateChart({ roll: 0 });
+    addLogMessage(`[UI] Punkt 0 (Roll) ustawiony. Nowy roll_trim = ${newRollTrim.toFixed(2)}° (aktualna pozycja traktowana jako pion).`, 'success');
+}
+
 const debounce = (func, delay) => { let timeout; return function (...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 function addLogMessage(message, level = 'info') { pushLog(message, level); const el = document.getElementById('log-history'); if (el && el.style.display === 'block') { renderAllLogs(true); } }
@@ -2416,75 +2467,6 @@ function setupParameterListeners() {
     document.getElementById('rollTrimPlus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.01));
     document.getElementById('rollTrimPlus01Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.1));
 
-    function setPitchZero() {
-        const eul = getRawEuler();
-        if (!eul) {
-            addLogMessage('[UI] Brak danych telemetrii (pitch). Nie mozna ustawic punktu 0.', 'warn');
-            return;
-        }
-
-        const rawPitch = Number(eul.pitch || 0);
-
-        // Aktualny trim z telemetrii (jeśli jest)
-        const telemetryTrimPitch = (window.telemetryData && window.telemetryData.trim_angle !== undefined)
-            ? Number(window.telemetryData.trim_angle)
-            : 0;
-
-        const currentFirmwareTrim = isNaN(telemetryTrimPitch) ? 0 : telemetryTrimPitch;
-
-        // Cel: po naciśnięciu „Ustaw 0” bieżący odczyt staje się 0° i robot dąży do tego kąta.
-        // Przy modelu: corrected = raw + trim -> nowy trim powinien wynosić -raw.
-        const newTrim = -rawPitch;
-
-        // Wyślij nowy trim do firmware
-        sendBleMessage({ type: 'set_param', key: 'trim_angle', value: newTrim });
-        // Dla zgodności z wcześniejszym firmware zostawiamy też komendę skrótową
-        sendBleMessage({ type: 'set_pitch_zero' });
-
-        const span = document.getElementById('trimValueDisplay');
-        if (span) span.textContent = newTrim.toFixed(2);
-
-        // Natychmiast pokazujemy 0.0° na dashboardzie, resztę będzie korygować bieżąca telemetria
-        const val = document.getElementById('angleVal');
-        if (val) val.textContent = '0.0 °';
-
-        pitchHistory.push(0);
-        if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
-        updateChart({ pitch: 0 });
-
-        addLogMessage(`[UI] Punkt 0 (Pitch) ustawiony. Nowy trim_angle = ${newTrim.toFixed(2)}° (UI pokazuje 0° dla aktualnej pozycji).`, 'success');
-    }
-
-    function setRollZero() {
-        const eul = getRawEuler();
-        if (!eul) {
-            addLogMessage('[UI] Brak danych telemetrii (roll). Nie mozna ustawic punktu 0.', 'warn');
-            return;
-        }
-
-        const rawRoll = Number(eul.roll || 0);
-
-        const telemetryRollTrim = (window.telemetryData && window.telemetryData.roll_trim !== undefined)
-            ? Number(window.telemetryData.roll_trim)
-            : 0;
-
-        const currentFirmwareRollTrim = isNaN(telemetryRollTrim) ? 0 : telemetryRollTrim;
-
-        // Analogicznie dla roll: corrected = raw + trim -> nowy trim = -raw
-        const newRollTrim = -rawRoll;
-
-        sendBleMessage({ type: 'set_param', key: 'roll_trim', value: newRollTrim });
-        sendBleMessage({ type: 'set_roll_zero' });
-
-        const span = document.getElementById('rollTrimValueDisplay');
-        if (span) span.textContent = newRollTrim.toFixed(2);
-
-        const val = document.getElementById('rollVal');
-        if (val) val.textContent = '0.0 °';
-
-        updateChart({ roll: 0 });
-        addLogMessage(`[UI] Punkt 0 (Roll) ustawiony. Nowy roll_trim = ${newRollTrim.toFixed(2)}° (UI pokazuje 0° dla aktualnej pozycji).`, 'success');
-    }
 
     document.getElementById('saveBtn')?.addEventListener('click', () => {
         if (AppState.isConnected && confirm("Czy na pewno chcesz trwale zapisać bieżącą konfigurację z panelu do pamięci EEPROM robota?")) {
