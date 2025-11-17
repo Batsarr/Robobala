@@ -750,27 +750,43 @@ if (mmHelp && mmHelpBox) {
 // Listenery znaków
 ['modelPitchSign', 'modelYawSign', 'modelRollSign'].forEach(id => { const c = document.getElementById(id); if (!c) return; c.querySelectorAll('button').forEach(btn => { btn.addEventListener('click', () => { c.querySelectorAll('button').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }); }); });
 
-// --- Przeliczanie kątów Euler’a z kwaternionu (telemetria: qw,qx,qy,qz) ---
+// Polyfill dla Math.copysign (nie istnieje natywnie w JavaScript)
+if (!Math.copysign) {
+    Math.copysign = function(x, y) {
+        return Math.sign(y) * Math.abs(x);
+    };
+}
+
+// --- Przeliczanie kątów Euler'a z kwaternionu (telemetria: qw,qx,qy,qz) ---
 function computeEulerFromQuaternion(qw, qx, qy, qz) {
-    try {
-        if ([qw, qx, qy, qz].some(v => typeof v !== 'number' || Number.isNaN(v))) return null;
-        // ZYX (yaw-pitch-roll) zgodnie z firmware (imu_math.h)
-        const n = Math.hypot(qw, qx, qy, qz) || 1;
-        qw /= n; qx /= n; qy /= n; qz /= n;
-        const siny_cosp = 2 * (qw * qz + qx * qy);
-        const cosy_cosp = 1 - 2 * (qy * qy + qz * qz);
-        const yaw = Math.atan2(siny_cosp, cosy_cosp);
-        const sinp = 2 * (qw * qy - qz * qx);
-        const pitch = Math.abs(sinp) >= 1 ? Math.sign(sinp) * (Math.PI / 2) : Math.asin(sinp);
-        const sinr_cosp = 2 * (qw * qx + qy * qz);
-        const cosr_cosp = 1 - 2 * (qx * qx + qy * qy);
-        const roll = Math.atan2(sinr_cosp, cosr_cosp);
-        return {
-            yaw: THREE.MathUtils.radToDeg(yaw),
-            pitch: THREE.MathUtils.radToDeg(pitch),
-            roll: THREE.MathUtils.radToDeg(roll)
-        };
-    } catch (_) { return null; }
+    // Implementacja stabilna numerycznie, odporna na gimbal lock
+    const euler = { pitch: 0, roll: 0, yaw: 0 };
+
+    // Roll (oś x)
+    const sinr_cosp = 2 * (qw * qx + qy * qz);
+    const cosr_cosp = 1 - 2 * (qx * qx + qy * qy);
+    euler.roll = Math.atan2(sinr_cosp, cosr_cosp);
+
+    // Pitch (oś y)
+    const sinp = 2 * (qw * qy - qz * qx);
+    if (Math.abs(sinp) >= 1) {
+        // Użyj copy sign, aby obsłużyć przypadek, gdy sinp jest poza zakresem [-1, 1]
+        euler.pitch = Math.copysign(Math.PI / 2, sinp); // Gimbal lock
+    } else {
+        euler.pitch = Math.asin(sinp);
+    }
+
+    // Yaw (oś z)
+    const siny_cosp = 2 * (qw * qz + qx * qy);
+    const cosy_cosp = 1 - 2 * (qy * qy + qz * qz);
+    euler.yaw = Math.atan2(siny_cosp, cosy_cosp);
+
+    // Konwersja na stopnie
+    euler.pitch = euler.pitch * 180 / Math.PI;
+    euler.roll = euler.roll * 180 / Math.PI;
+    euler.yaw = euler.yaw * 180 / Math.PI;
+
+    return euler;
 }
 
 // Usunięto legacy mapowanie IMU (Quaternion-First). Euler liczony bezpośrednio z kwaternionu.
