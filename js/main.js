@@ -761,9 +761,20 @@ function setPitchZero() {
         addLogMessage('[UI] Brak danych telemetrii (pitch).', 'warn');
         return;
     }
-    const correctedPitch = Number(window.telemetryData.pitch || 0); // pitch po zastosowaniu trimu
+    // Oblicz skorygowany kąt bezpośrednio z kwaternionu (q_final z firmware)
+    let correctedPitch = Number(window.telemetryData.pitch);
+    if (typeof correctedPitch !== 'number' || isNaN(correctedPitch)) {
+        if (typeof window.telemetryData.qw === 'number') {
+            const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
+            correctedPitch = eul ? eul.pitch : 0;
+        } else {
+            correctedPitch = 0;
+        }
+    }
     const currentTrim = Number(window.telemetryData.trim_angle || 0);
-    const rawPitch = correctedPitch - currentTrim; // surowy kąt przed trybem
+    // Zaokrąglij lekko, by uniknąć flipa znaku przy ±0.00x
+    correctedPitch = Math.round(correctedPitch * 100) / 100;
+    const rawPitch = correctedPitch - currentTrim; // surowy kąt przed trimem
     if (isNaN(rawPitch)) {
         addLogMessage('[UI] Nieprawidlowy odczyt pitch.', 'error');
         return;
@@ -786,8 +797,17 @@ function setRollZero() {
         addLogMessage('[UI] Brak danych telemetrii (roll).', 'warn');
         return;
     }
-    const correctedRoll = Number(window.telemetryData.roll || 0);
+    let correctedRoll = Number(window.telemetryData.roll);
+    if (typeof correctedRoll !== 'number' || isNaN(correctedRoll)) {
+        if (typeof window.telemetryData.qw === 'number') {
+            const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
+            correctedRoll = eul ? eul.roll : 0;
+        } else {
+            correctedRoll = 0;
+        }
+    }
     const currentRollTrim = Number(window.telemetryData.roll_trim || 0);
+    correctedRoll = Math.round(correctedRoll * 100) / 100;
     const rawRoll = correctedRoll - currentRollTrim;
     if (isNaN(rawRoll)) {
         addLogMessage('[UI] Nieprawidlowy odczyt roll.', 'error');
@@ -1056,14 +1076,11 @@ function processCompleteMessage(data) {
                     data.viz_pitch = mapped.pitch;
                     data.viz_yaw = mapped.yaw;
                     data.viz_roll = mapped.roll;
-                    // Pola kompatybilności: pitch/yaw/roll = surowe + trim (korekcja widoczna w dashboard)
-                    // Pobierz aktualne wartości trim (telemetria może nie zawierać ich w każdej paczce)
-                    const currentTrim = (data.trim_angle !== undefined) ? Number(data.trim_angle) : Number((window.telemetryData && window.telemetryData.trim_angle) || parseFloat(document.getElementById('trimValueDisplay')?.textContent || '0') || 0);
-                    const currentRollTrim = (data.roll_trim !== undefined) ? Number(data.roll_trim) : Number((window.telemetryData && window.telemetryData.roll_trim) || parseFloat(document.getElementById('rollTrimValueDisplay')?.textContent || '0') || 0);
-                    // Zwracamy pitch/roll skorygowane o trimy (wyświetlane jako 'wartość po korekcji' w dashboard)
-                    data.pitch = (data.raw_pitch || 0) + (isNaN(currentTrim) ? 0 : currentTrim);
+                    // Kąty z kwaternionu po stronie firmware są już skorygowane o trymy.
+                    // Dlatego ustawiamy bez dalszych korekt.
+                    data.pitch = data.raw_pitch;
                     data.yaw = data.raw_yaw;
-                    data.roll = (data.raw_roll || 0) + (isNaN(currentRollTrim) ? 0 : currentRollTrim);
+                    data.roll = data.raw_roll;
                 }
             }
             updateTelemetryUI(data);
@@ -1443,41 +1460,29 @@ function updateTelemetryUI(data) {
         }
     }
     if (typeof data.raw_pitch === 'number' || typeof data.pitch === 'number') {
-        // SUROWY kąt z kwaternionu (bez trima)
-        const rawPitchVal = (typeof data.raw_pitch === 'number') ? data.raw_pitch : (data.raw_pitch || 0);
-
-        // Aktualny trim z telemetrii (priorytet: data, potem ostatni zapisany w window.telemetryData)
-        const telemetryTrimPitch = (data.trim_angle !== undefined)
-            ? Number(data.trim_angle)
-            : Number((window.telemetryData && window.telemetryData.trim_angle) || 0);
-
-        const actualTrimForPitch = isNaN(telemetryTrimPitch) ? 0 : telemetryTrimPitch;
-
-        // Kąt używany do balansowania i w dashboardzie: raw + trim
-        const correctedPitch = rawPitchVal + actualTrimForPitch;
+        // Firmware już zastosował trymy do kwaternionu; UI używa bezpośrednio skorygowanego kąta.
+        const correctedPitch = (data.pitch !== undefined) ? data.pitch : (typeof data.raw_pitch === 'number' ? data.raw_pitch : 0);
         document.getElementById('angleVal').textContent = correctedPitch.toFixed(1) + ' \u00B0';
-        const vizPitchVal = (data.viz_pitch !== undefined) ? data.viz_pitch : rawPitchVal || 0;
+        const vizPitchVal = (data.viz_pitch !== undefined) ? data.viz_pitch : correctedPitch || 0;
         document.getElementById('robot3d-pitch').textContent = vizPitchVal.toFixed(1) + '°';
         const span = document.getElementById('trimValueDisplay');
-        if (span) span.textContent = actualTrimForPitch.toFixed(2);
+        if (span) {
+            const t = (data.trim_angle !== undefined) ? Number(data.trim_angle) : Number((window.telemetryData && window.telemetryData.trim_angle) || 0);
+            span.textContent = (isNaN(t) ? 0 : t).toFixed(2);
+        }
         pitchHistory.push(correctedPitch);
         if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
     }
     if (typeof data.raw_roll === 'number' || typeof data.roll === 'number') {
-        const rawRollVal = (typeof data.raw_roll === 'number') ? data.raw_roll : (data.raw_roll || 0);
-
-        const telemetryRollTrim = (data.roll_trim !== undefined)
-            ? Number(data.roll_trim)
-            : Number((window.telemetryData && window.telemetryData.roll_trim) || 0);
-
-        const actualTrimForRoll = isNaN(telemetryRollTrim) ? 0 : telemetryRollTrim;
-
-        const correctedRoll = rawRollVal + actualTrimForRoll;
-        const vizRollVal = (data.viz_roll !== undefined) ? data.viz_roll : rawRollVal || 0;
+        const correctedRoll = (data.roll !== undefined) ? data.roll : (typeof data.raw_roll === 'number' ? data.raw_roll : 0);
+        const vizRollVal = (data.viz_roll !== undefined) ? data.viz_roll : correctedRoll || 0;
         document.getElementById('robot3d-roll').textContent = vizRollVal.toFixed(1) + '°';
         document.getElementById('rollVal').textContent = correctedRoll.toFixed(1) + ' \u00B0';
         const rollSpan = document.getElementById('rollTrimValueDisplay');
-        if (rollSpan) rollSpan.textContent = actualTrimForRoll.toFixed(2);
+        if (rollSpan) {
+            const rt = (data.roll_trim !== undefined) ? Number(data.roll_trim) : Number((window.telemetryData && window.telemetryData.roll_trim) || 0);
+            rollSpan.textContent = (isNaN(rt) ? 0 : rt).toFixed(2);
+        }
     }
     if (data.yaw !== undefined) {
         document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' °';
