@@ -347,6 +347,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Pomiar PPR – zero liczenia po stronie użytkownika
+    initPprMeasurement();
+
     // Obsługa modala historii prób
     const openHistBtn = document.getElementById('open-tuning-history-btn');
     const histModal = document.getElementById('tuning-history-modal');
@@ -1831,14 +1834,57 @@ function setupSequenceControls() { document.getElementById('add-sequence-step-bt
 function addSequenceStep() {
     const list = document.getElementById('sequence-list'); if (list.children.length >= MAX_SEQUENCE_STEPS) { addLogMessage(`[UI] Osiagnieto maksymalna liczbe krokow (${MAX_SEQUENCE_STEPS}).`, 'warn'); return; }
     const stepDiv = document.createElement('div'); stepDiv.className = 'sequence-step';
-    stepDiv.innerHTML = `<select class="sequence-type"><option value="move_fwd">Przod (cm)</option><option value="move_bwd">Tyl (cm)</option><option value="rotate_r">Obrot Prawo (st.)</option><option value="rotate_l">Obrot Lewo (st.)</option><option value="wait_ms">Czekaj (ms)</option><option value="wait_condition">Czekaj az (np. pitch < 0.5)</option><option value="set_param">Ustaw parametr (np. Kp=100)</option></select><input type="text" class="sequence-value" value="20"><button class="remove-step-btn">&times;</button>`;
+    stepDiv.innerHTML = `
+        <div style="display:flex; gap:8px; align-items:center;">
+            <select class="sequence-type">
+                <option value="move_fwd">Przod (cm)</option>
+                <option value="move_bwd">Tyl (cm)</option>
+                <option value="rotate_r">Obrot Prawo (st.)</option>
+                <option value="rotate_l">Obrot Lewo (st.)</option>
+                <option value="wait_ms">Czekaj (ms)</option>
+                <option value="wait_condition">Czekaj az (np. pitch < 0.5)</option>
+                <option value="set_param">Ustaw parametr (np. Kp=100)</option>
+            </select>
+            <input type="number" class="sequence-value" value="20" style="min-width:110px;">
+            <button class="remove-step-btn">&times;</button>
+        </div>
+        <div class="sequence-advanced" style="display:none; margin-top:6px;">
+            <details>
+                <summary>Parametry kroku (opcjonalne)</summary>
+                <div class="seq-adv-move" style="display:none; margin-top:6px; display:grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap:8px;">
+                    <div><label style="font-size:0.85em; color:#bbb;">Predkosc (cm/s)</label><input type="number" class="seq-move-speed" step="1" placeholder="np. 25"></div>
+                    <div><label style="font-size:0.85em; color:#bbb;">Przysp. (cm/s²)</label><input type="number" class="seq-move-accel" step="1" placeholder="np. 80"></div>
+                    <div><label style="font-size:0.85em; color:#bbb;">Tolerancja (cm)</label><input type="number" class="seq-move-tol" step="0.1" placeholder="np. 1.0"></div>
+                    <div><label style="font-size:0.85em; color:#bbb;">Timeout (ms)</label><input type="number" class="seq-move-timeout" step="100" placeholder="np. 5000"></div>
+                </div>
+                <div class="seq-adv-rotate" style="display:none; margin-top:6px; display:grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap:8px;">
+                    <div><label style="font-size:0.85em; color:#bbb;">Tolerancja (°)</label><input type="number" class="seq-rot-tol" step="0.5" placeholder="np. 2.0"></div>
+                    <div><label style="font-size:0.85em; color:#bbb;">Timeout (ms)</label><input type="number" class="seq-rot-timeout" step="100" placeholder="np. 4000"></div>
+                </div>
+                <div style="font-size:0.8em; color:#888; margin-top:4px;">Pozostaw puste, aby użyć wartości domyślnych z firmware.</div>
+            </details>
+        </div>
+    `;
     list.appendChild(stepDiv); updateAccordionHeight(list.closest('.accordion-content'));
     stepDiv.querySelector('.sequence-type').addEventListener('change', (e) => {
         const valueInput = stepDiv.querySelector('.sequence-value'); const type = e.target.value;
-        if (type === 'wait_condition') { valueInput.type = 'text'; valueInput.value = 'pitch < 0.5'; }
-        else if (type === 'set_param') { valueInput.type = 'text'; valueInput.value = 'balanceKpInput=100.0'; }
-        else { valueInput.type = 'number'; valueInput.value = '20'; }
+        const advWrap = stepDiv.querySelector('.sequence-advanced');
+        const advMove = stepDiv.querySelector('.seq-adv-move');
+        const advRot = stepDiv.querySelector('.seq-adv-rotate');
+        if (type === 'wait_condition') { valueInput.type = 'text'; valueInput.value = 'pitch < 0.5'; if (advWrap) advWrap.style.display = 'none'; }
+        else if (type === 'set_param') { valueInput.type = 'text'; valueInput.value = 'balanceKpInput=100.0'; if (advWrap) advWrap.style.display = 'none'; }
+        else {
+            valueInput.type = 'number'; valueInput.value = (type.startsWith('rotate_') ? '90' : '20');
+            if (advWrap) advWrap.style.display = '';
+        }
+        if (advMove && advRot) {
+            if (type === 'move_fwd' || type === 'move_bwd') { advMove.style.display = 'grid'; advRot.style.display = 'none'; }
+            else if (type === 'rotate_r' || type === 'rotate_l') { advMove.style.display = 'none'; advRot.style.display = 'grid'; }
+            else { advMove.style.display = 'none'; advRot.style.display = 'none'; }
+        }
     });
+    // Ustaw domyślny stan dla nowo dodanego kroku
+    stepDiv.querySelector('.sequence-type').dispatchEvent(new Event('change'));
     stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => { stepDiv.remove(); updateAccordionHeight(list.closest('.accordion-content')); });
 }
 function runSequence() { if (AppState.isSequenceRunning) return; if (AppState.lastKnownRobotState !== 'TRZYMA_POZYCJE' && AppState.lastKnownRobotState !== 'BALANSUJE') { addLogMessage(`[UI] Nie mozna rozpoczac sekwencji. Robot w stanie '${AppState.lastKnownRobotState}'.`, 'error'); return; } const steps = document.querySelectorAll('.sequence-step'); if (steps.length === 0) return; resetPathVisualization(); AppState.isSequenceRunning = true; currentSequenceStep = 0; updateSequenceUI(); addLogMessage(`[UI] Rozpoczeto sekwencje z ${steps.length} krokow.`, 'info'); executeNextSequenceStep(); }
@@ -1883,10 +1929,39 @@ function executeNextSequenceStep() {
     updateSequenceUI();
     const stepNode = steps[currentSequenceStep], type = stepNode.querySelector('.sequence-type').value, value = stepNode.querySelector('.sequence-value').value; let command = {};
     switch (type) {
-        case 'move_fwd': command = { type: 'execute_move', distance_cm: parseFloat(value) }; break;
-        case 'move_bwd': command = { type: 'execute_move', distance_cm: -parseFloat(value) }; break;
-        case 'rotate_r': command = { type: 'execute_rotate', angle_deg: parseFloat(value) }; break;
-        case 'rotate_l': command = { type: 'execute_rotate', angle_deg: -parseFloat(value) }; break;
+        case 'move_fwd': {
+            command = { type: 'execute_move', distance_cm: parseFloat(value) };
+            // Opcjonalne per-krokowe parametry (cm/s, cm/s², cm, ms)
+            const n = (sel) => { const el = stepNode.querySelector(sel); if (!el) return undefined; const v = parseFloat(el.value); return Number.isFinite(v) ? v : undefined; };
+            const sp = n('.seq-move-speed'); if (sp !== undefined) command.speed_cm_s = sp;
+            const ac = n('.seq-move-accel'); if (ac !== undefined) command.accel_cm_s2 = ac;
+            const tl = n('.seq-move-tol'); if (tl !== undefined) command.tolerance_cm = tl;
+            const to = n('.seq-move-timeout'); if (to !== undefined) command.timeout_ms = Math.round(to);
+            break;
+        }
+        case 'move_bwd': {
+            command = { type: 'execute_move', distance_cm: -parseFloat(value) };
+            const n = (sel) => { const el = stepNode.querySelector(sel); if (!el) return undefined; const v = parseFloat(el.value); return Number.isFinite(v) ? v : undefined; };
+            const sp = n('.seq-move-speed'); if (sp !== undefined) command.speed_cm_s = sp;
+            const ac = n('.seq-move-accel'); if (ac !== undefined) command.accel_cm_s2 = ac;
+            const tl = n('.seq-move-tol'); if (tl !== undefined) command.tolerance_cm = tl;
+            const to = n('.seq-move-timeout'); if (to !== undefined) command.timeout_ms = Math.round(to);
+            break;
+        }
+        case 'rotate_r': {
+            command = { type: 'execute_rotate', angle_deg: parseFloat(value) };
+            const n = (sel) => { const el = stepNode.querySelector(sel); if (!el) return undefined; const v = parseFloat(el.value); return Number.isFinite(v) ? v : undefined; };
+            const rt = n('.seq-rot-tol'); if (rt !== undefined) command.tolerance_deg = rt;
+            const rto = n('.seq-rot-timeout'); if (rto !== undefined) command.timeout_ms = Math.round(rto);
+            break;
+        }
+        case 'rotate_l': {
+            command = { type: 'execute_rotate', angle_deg: -parseFloat(value) };
+            const n = (sel) => { const el = stepNode.querySelector(sel); if (!el) return undefined; const v = parseFloat(el.value); return Number.isFinite(v) ? v : undefined; };
+            const rt = n('.seq-rot-tol'); if (rt !== undefined) command.tolerance_deg = rt;
+            const rto = n('.seq-rot-timeout'); if (rto !== undefined) command.timeout_ms = Math.round(rto);
+            break;
+        }
         case 'wait_ms': {
             const duration = parseInt(value);
             const ms = Number.isFinite(duration) ? duration : 0;
@@ -2488,6 +2563,91 @@ function setupParameterListeners() {
     document.querySelectorAll('.help-icon').forEach(icon => { icon.addEventListener('click', (e) => { e.stopPropagation(); const container = icon.closest('.setting-container') || icon.closest('.control-row') || icon.closest('.fitness-weight-item'); if (!container) return; const next = container.nextElementSibling; const helpText = (next && next.classList && next.classList.contains('help-text')) ? next : container.querySelector('.help-text'); if (helpText) { helpText.classList.toggle('visible'); const accordionContent = container.closest('.accordion-content'); if (accordionContent) updateAccordionHeight(accordionContent); } }); });
     // Legacy IMU mapping wizard: usunięty
 }
+
+// ---------------------- Pomiar PPR (x4, bez liczenia przez użytkownika) ----------------------
+let pprMeasureActive = false;
+let pprStartL = 0, pprStartR = 0;
+function initPprMeasurement() {
+    const btnStart = document.getElementById('pprMeasureStartBtn');
+    const btnStop = document.getElementById('pprMeasureStopBtn');
+    const deltaLSpan = document.getElementById('pprDeltaL');
+    const deltaRSpan = document.getElementById('pprDeltaR');
+    const deltaAvgSpan = document.getElementById('pprDeltaAvg');
+    const hint = document.getElementById('pprMeasureHint');
+    if (!btnStart || !btnStop || !deltaLSpan || !deltaRSpan || !deltaAvgSpan) return;
+
+    const updateDeltas = () => {
+        const dL = Math.abs(currentEncoderLeft - pprStartL);
+        const dR = Math.abs(currentEncoderRight - pprStartR);
+        const avg = Math.round((dL + dR) / 2);
+        deltaLSpan.textContent = dL;
+        deltaRSpan.textContent = dR;
+        deltaAvgSpan.textContent = avg;
+        const chosen = choosePprValue(dL, dR, avg);
+        const chosenEl = document.getElementById('pprChosen'); if (chosenEl) chosenEl.textContent = chosen;
+    };
+
+    btnStart.addEventListener('click', () => {
+        if (!AppState.isConnected) { addLogMessage('[UI] Połącz z robotem, aby zmierzyć PPR.', 'warn'); return; }
+        // Zarejestruj wartości początkowe i wyzeruj UI
+        pprStartL = currentEncoderLeft;
+        pprStartR = currentEncoderRight;
+        pprMeasureActive = true;
+        deltaLSpan.textContent = '0';
+        deltaRSpan.textContent = '0';
+        deltaAvgSpan.textContent = '0';
+        btnStart.disabled = true;
+        btnStop.disabled = false;
+        if (hint) hint.textContent = 'Obróć jedno KOŁO o dokładnie 1 pełny obrót (drugie najlepiej przytrzymać).';
+        addLogMessage('[UI] Pomiar PPR rozpoczęty. Obróć kołem o 1 obrót.', 'info');
+    });
+
+    btnStop.addEventListener('click', () => {
+        if (!pprMeasureActive) return;
+        // Policz delty i średnią, wpisz do pola oraz wyślij do robota
+        const dL = Math.abs(currentEncoderLeft - pprStartL);
+        const dR = Math.abs(currentEncoderRight - pprStartR);
+        const avg = Math.round((dL + dR) / 2);
+        deltaLSpan.textContent = dL;
+        deltaRSpan.textContent = dR;
+        deltaAvgSpan.textContent = avg;
+        const chosen = choosePprValue(dL, dR, avg);
+        const chosenEl = document.getElementById('pprChosen'); if (chosenEl) chosenEl.textContent = chosen;
+        const input = document.getElementById('encoderPprInput');
+        if (input) {
+            input.value = String(chosen);
+            // Natychmiast wyślij jako set_param encoder_ppr
+            const v = parseFloat(input.value) || 0;
+            if (v > 0) {
+                sendBleMessage({ type: 'set_param', key: 'encoder_ppr', value: v });
+                addLogMessage(`[UI] Ustawiono PPR=${v} (z pomiaru).`, 'success');
+            }
+        }
+        pprMeasureActive = false;
+        btnStart.disabled = false;
+        btnStop.disabled = true;
+        if (hint) hint.textContent = 'Gotowe. Wartość wpisana automatycznie. W razie potrzeby powtórz pomiar.';
+    });
+
+    // Aktualizuj delty w trakcie aktywnego pomiaru przy każdej telemetrii
+    appStore.subscribe('robot.state', () => { /* noop: tylko sub zapewnia reflow w niektórych przeglądarkach */ });
+    // Hook przez globalny updateTelemetryUI – tu nie mamy bezpośredniego eventu, więc dodaj subtelny polling
+    setInterval(() => { if (pprMeasureActive) updateDeltas(); }, 150);
+}
+
+function choosePprValue(dL, dR, avg) {
+    // Jeśli kręciliśmy jednym kołem: druga delta ~0 -> weź max
+    // Jeśli oba ~równe (<=15% różnicy) -> użyj średniej
+    const maxVal = Math.max(dL, dR);
+    const minVal = Math.min(dL, dR);
+    if (maxVal === 0) return 0;
+    const relDiff = (maxVal - minVal) / maxVal; // 0..1
+    if (relDiff <= 0.15) {
+        return Math.round(avg);
+    } else {
+        return Math.round(maxVal);
+    }
+}
 function setupManualTuneButtons() {
     // Przechowuj timery auto-stop dla testów 5s
     const activeTestTimers = new Map(); // key: `${motor}-${direction}` -> timeoutId
@@ -2549,7 +2709,37 @@ function setupGamepadMappingModal() { document.getElementById('open-gamepad-moda
 function flashElement(element) { if (!element) return; const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element; target.classList.add('gamepad-flash'); setTimeout(() => target.classList.remove('gamepad-flash'), 300); }
 function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
 function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
-function setupDpadControls() { document.querySelectorAll('.dpad-btn').forEach(btn => { btn.addEventListener('click', (e) => { const action = e.currentTarget.dataset.dpad; if (action === 'up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'stop') sendBleMessage({ type: 'command_stop' }); }); }); }
+function setupDpadControls() {
+    const num = (id) => {
+        const el = document.getElementById(id);
+        if (!el) return undefined;
+        const v = parseFloat(el.value);
+        return Number.isFinite(v) ? v : undefined;
+    };
+    document.querySelectorAll('.dpad-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const action = e.currentTarget.dataset.dpad;
+            if (action === 'up' || action === 'down') {
+                const dist = num('dpadDistInput') || 0;
+                const payload = { type: 'execute_move', distance_cm: (action === 'up' ? dist : -dist) };
+                // Optional extended params
+                const sp = num('dpadMoveSpeed'); if (sp !== undefined) payload.speed_cm_s = sp;
+                const acc = num('dpadMoveAccel'); if (acc !== undefined) payload.accel_cm_s2 = acc;
+                const tol = num('dpadMoveTolerance'); if (tol !== undefined) payload.tolerance_cm = tol;
+                const to = num('dpadMoveTimeout'); if (to !== undefined) payload.timeout_ms = Math.round(to);
+                sendBleMessage(payload);
+            } else if (action === 'left' || action === 'right') {
+                const ang = num('dpadAngleInput') || 0;
+                const payload = { type: 'execute_rotate', angle_deg: (action === 'right' ? ang : -ang) };
+                const rt = num('dpadRotateTolerance'); if (rt !== undefined) payload.tolerance_deg = rt;
+                const rto = num('dpadRotateTimeout'); if (rto !== undefined) payload.timeout_ms = Math.round(rto);
+                sendBleMessage(payload);
+            } else if (action === 'stop') {
+                sendBleMessage({ type: 'command_stop' });
+            }
+        });
+    });
+}
 function refreshCalibrationFromTelemetry() {
     // Odczytaj ostatnią telemetrię i zaktualizuj paski w modalu
     const td = window.telemetryData || {};
