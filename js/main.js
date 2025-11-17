@@ -461,16 +461,23 @@ function initSensorMappingPreview() {
     document.getElementById('setModalPitchZeroBtn')?.addEventListener('click', () => { setPitchZero(); });
     document.getElementById('setModalRollZeroBtn')?.addEventListener('click', () => { setRollZero(); });
     document.getElementById('clearModalPitchZeroBtn')?.addEventListener('click', () => {
-        // Nowe zachowanie: czyścimy firmware trim do zera zamiast lokalnej bazy UI
-        sendBleMessage({ type: 'set_param', key: 'trim_angle', value: 0 });
-        addLogMessage('[UI] Korekta (Pitch) została wyczyszczona.', 'info');
-        updateTelemetryUI(window.telemetryData || {});
+        // Nowy model: trymy nie są stosowane runtime – nic do czyszczenia.
+        addLogMessage('[UI] Trym (Pitch) jest częścią montażu (qcorr) i nie podlega czyszczeniu wartością 0. Użyj przycisków ± lub Ustaw punkt 0.', 'warn');
     });
     document.getElementById('clearModalRollZeroBtn')?.addEventListener('click', () => {
-        sendBleMessage({ type: 'set_param', key: 'roll_trim', value: 0 });
-        addLogMessage('[UI] Korekta (Roll) została wyczyszczona.', 'info');
-        updateTelemetryUI(window.telemetryData || {});
+        addLogMessage('[UI] Trym (Roll) jest częścią montażu (qcorr) i nie podlega czyszczeniu wartością 0. Użyj przycisków ± lub Ustaw punkt 0.', 'warn');
     });
+    // Nowe: przyciski obrotu montażu (qcorr) o 90° wokół osi X/Y/Z
+    const rotate90 = (axis, steps) => {
+        sendBleMessage({ type: 'rotate_mount_90', axis, steps });
+        addLogMessage(`[UI] Obrót montażu 90°: axis=${axis.toUpperCase()} steps=${steps}`, 'info');
+    };
+    document.getElementById('mountXMinus90Btn')?.addEventListener('click', () => rotate90('x', -1));
+    document.getElementById('mountXPlus90Btn')?.addEventListener('click', () => rotate90('x', 1));
+    document.getElementById('mountYMinus90Btn')?.addEventListener('click', () => rotate90('y', -1));
+    document.getElementById('mountYPlus90Btn')?.addEventListener('click', () => rotate90('y', 1));
+    document.getElementById('mountZMinus90Btn')?.addEventListener('click', () => rotate90('z', -1));
+    document.getElementById('mountZPlus90Btn')?.addEventListener('click', () => rotate90('z', 1));
 }
 
 // Gather IMU mapping from sensor mapping modal
@@ -684,10 +691,8 @@ Object.keys(signButtonMap).forEach(containerId => {
                 showNotification('Zmiana znaku tylko w trybie IDLE', 'warn');
                 return;
             }
-            // Send set_param to robot
             const key = signButtonMap[containerId];
             sendBleMessage({ type: 'set_param', key: key, value: sign });
-            // Optimistically update UI
             setSignButtons(containerId, sign);
             updateSignBadge(containerId + 'Badge', sign);
         });
@@ -779,17 +784,16 @@ function setPitchZero() {
         addLogMessage('[UI] Nieprawidlowy odczyt pitch.', 'error');
         return;
     }
-    const newTrim = -rawPitch; // corrected = raw + newTrim => 0
-    sendBleMessage({ type: 'set_param', key: 'trim_angle', value: newTrim });
-    sendBleMessage({ type: 'set_pitch_zero' }); // skrót zgodności
+    const delta = -rawPitch; // obróć montaż o -pitch aby uzyskać 0°
+    sendBleMessage({ type: 'adjust_zero', value: delta });
     const span = document.getElementById('trimValueDisplay');
-    if (span) span.textContent = newTrim.toFixed(2);
+    if (span) span.textContent = '0.00';
     const val = document.getElementById('angleVal');
     if (val) val.textContent = '0.0 °';
     pitchHistory.push(0);
     if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
     updateChart({ pitch: 0 });
-    addLogMessage(`[UI] Punkt 0 (Pitch) ustawiony. Nowy trim_angle = ${newTrim.toFixed(2)}° (aktualna pozycja traktowana jako pion).`, 'success');
+    addLogMessage(`[UI] Punkt 0 (Pitch) ustawiony. Obrót montażu Y+=${delta.toFixed(2)}° (persist).`, 'success');
 }
 
 function setRollZero() {
@@ -813,15 +817,14 @@ function setRollZero() {
         addLogMessage('[UI] Nieprawidlowy odczyt roll.', 'error');
         return;
     }
-    const newRollTrim = -rawRoll;
-    sendBleMessage({ type: 'set_param', key: 'roll_trim', value: newRollTrim });
-    sendBleMessage({ type: 'set_roll_zero' });
+    const delta = -rawRoll;
+    sendBleMessage({ type: 'adjust_roll', value: delta });
     const span = document.getElementById('rollTrimValueDisplay');
-    if (span) span.textContent = newRollTrim.toFixed(2);
+    if (span) span.textContent = '0.00';
     const val = document.getElementById('rollVal');
     if (val) val.textContent = '0.0 °';
     updateChart({ roll: 0 });
-    addLogMessage(`[UI] Punkt 0 (Roll) ustawiony. Nowy roll_trim = ${newRollTrim.toFixed(2)}° (aktualna pozycja traktowana jako pion).`, 'success');
+    addLogMessage(`[UI] Punkt 0 (Roll) ustawiony. Obrót montażu X+=${delta.toFixed(2)}° (persist).`, 'success');
 }
 
 const debounce = (func, delay) => { let timeout; return function (...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
@@ -1305,25 +1308,13 @@ function applySingleParam(snakeKey, value) {
             }
         }
     }
-    // Fallback dla trimów – UI pokazuje bezpośrednio wartości z firmware, kąt = raw + trim
+    // Trim fields są wygaszone runtime – pozostawiamy UI jak jest lub ustawiamy 0.00
     if (snakeKey === 'trim_angle') {
-        const actual = Number(value || 0);
-        if (originalFirmwareTrimPitch === null) originalFirmwareTrimPitch = actual;
         const span = document.getElementById('trimValueDisplay');
-        if (span) span.textContent = actual.toFixed(2);
-        const rawPitch = window.telemetryData && typeof window.telemetryData.raw_pitch === 'number' ? window.telemetryData.raw_pitch : 0;
-        const corrected = rawPitch + actual;
-        const angleEl = document.getElementById('angleVal');
-        if (angleEl) angleEl.textContent = corrected.toFixed(1) + ' \u00B0';
+        if (span) span.textContent = (Number(value) || 0).toFixed(2);
     } else if (snakeKey === 'roll_trim') {
-        const actualR = Number(value || 0);
-        if (originalFirmwareTrimRoll === null) originalFirmwareTrimRoll = actualR;
         const span = document.getElementById('rollTrimValueDisplay');
-        if (span) span.textContent = actualR.toFixed(2);
-        const rawRoll = window.telemetryData && typeof window.telemetryData.raw_roll === 'number' ? window.telemetryData.raw_roll : 0;
-        const correctedR = rawRoll + actualR;
-        const rollEl = document.getElementById('rollVal');
-        if (rollEl) rollEl.textContent = correctedR.toFixed(1) + ' \u00B0';
+        if (span) span.textContent = (Number(value) || 0).toFixed(2);
     }
     // Feedback sign params - special handling: update sign buttons
     if (snakeKey === 'balance_feedback_sign') {
@@ -1415,8 +1406,10 @@ function normalizeTelemetryData(d) {
     if (d.ca !== undefined && d.calib_accel === undefined) d.calib_accel = d.ca;
     if (d.cm !== undefined && d.calib_mag === undefined) d.calib_mag = d.cm;
     if (d.lt !== undefined && d.loop_time === undefined) d.loop_time = d.lt;
-    if (d.ta !== undefined && d.trim_angle === undefined) d.trim_angle = d.ta;
-    if (d.rt !== undefined && d.roll_trim === undefined) d.roll_trim = d.rt;
+    if (d.ta !== undefined && d.trim_angle === undefined) d.trim_angle = d.ta; // legacy alias
+    if (d.rt !== undefined && d.roll_trim === undefined) d.roll_trim = d.rt;   // legacy alias
+    if (d.trim_angle === undefined) d.trim_angle = 0.0;
+    if (d.roll_trim === undefined) d.roll_trim = 0.0;
     if (d.states && typeof d.states === 'object') {
         const s = d.states;
         if (s.b !== undefined && s.balancing === undefined) s.balancing = s.b;
@@ -2436,19 +2429,19 @@ function setupParameterListeners() {
     }
     const connectBleBtnEl = document.getElementById('connectBleBtn');
     connectBleBtnEl?.addEventListener('click', connectBLE);
-    ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => { const el = document.getElementById(id); if (!el) return; el.addEventListener('change', (e) => { if (AppState.isApplyingConfig) return; const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' }; sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); }); });
+    ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'disableMagnetometerSwitch'].forEach(id => { const el = document.getElementById(id); if (!el) return; el.addEventListener('change', (e) => { if (AppState.isApplyingConfig) return; const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle', 'disableMagnetometerSwitch': 'set_param' }; if (typeMap[id] === 'set_param') { sendBleMessage({ type: 'set_param', key: 'disable_magnetometer', value: e.target.checked ? 1.0 : 0.0 }); } else { sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); } }); });
 
-    // POPRAWKA: Usunięto stare listenery dla trim+/- i dodano nowe, poprawne dla precyzyjnych przycisków.
+    // POPRAWKA: Trymy zmieniają fizyczny montaż (qcorr). Wysyłamy DELTY przez adjust_zero/adjust_roll.
     const toolButtons = { 'resetZeroBtn': { type: 'set_pitch_zero' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
-    // Trim: aktualizacja + wysyłka set_param (używamy bezpośrednio wartości firmware)
+    // Trim (pitch): wysyłka als delta (deg) -> adjust_zero (obrót wokół Y)
     function updateAndSendTrim(delta) {
         const span = document.getElementById('trimValueDisplay');
         if (!span) return;
-        const current = parseFloat(span.textContent) || 0;
-        const newTrim = current + delta;
-        span.textContent = newTrim.toFixed(2);
-        sendBleMessage({ type: 'set_param', key: 'trim_angle', value: newTrim });
-        addLogMessage(`[UI] Korekta trima Pitch: delta=${delta.toFixed(2)}, nowy trim_angle=${newTrim.toFixed(2)}`);
+        // Aktualizuj jedynie wskaźnik UI (nie jest już odczytem firmware)
+        const preview = (parseFloat(span.textContent) || 0) + delta;
+        span.textContent = preview.toFixed(2);
+        sendBleMessage({ type: 'adjust_zero', value: delta });
+        addLogMessage(`[UI] Montaż: Pitch Y+=${delta.toFixed(2)}° (persist)`, 'info');
     }
     document.getElementById('trimMinus01Btn')?.addEventListener('click', () => updateAndSendTrim(-0.1));
     document.getElementById('trimMinus001Btn')?.addEventListener('click', () => updateAndSendTrim(-0.01));
@@ -2461,11 +2454,10 @@ function setupParameterListeners() {
     function updateAndSendRollTrim(delta) {
         const span = document.getElementById('rollTrimValueDisplay');
         if (!span) return;
-        const current = parseFloat(span.textContent) || 0;
-        const newTrim = current + delta;
-        span.textContent = newTrim.toFixed(2);
-        sendBleMessage({ type: 'set_param', key: 'roll_trim', value: newTrim });
-        addLogMessage(`[UI] Korekta trima Roll: delta=${delta.toFixed(2)}, nowy roll_trim=${newTrim.toFixed(2)}`);
+        const preview = (parseFloat(span.textContent) || 0) + delta;
+        span.textContent = preview.toFixed(2);
+        sendBleMessage({ type: 'adjust_roll', value: delta });
+        addLogMessage(`[UI] Montaż: Roll X+=${delta.toFixed(2)}° (persist)`, 'info');
     }
     document.getElementById('rollTrimMinus01Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.1));
     document.getElementById('rollTrimMinus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.01));

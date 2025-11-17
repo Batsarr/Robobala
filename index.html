@@ -53,6 +53,7 @@
             <div class="control-row"><span class="control-label">Balansowanie</span><label class="switch"><input type="checkbox" id="balanceSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">Trzymaj Pozycje</span><label class="switch"><input type="checkbox" id="holdPositionSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
+            <div class="control-row"><span class="control-label">Wylacz Magnetometr</span><label class="switch"><input type="checkbox" id="disableMagnetometerSwitch"><span class="slider round"></span></label></div>
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
             <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Ustaw punkt 0 (Pitch)</button>
             <div class="trim-controls">
@@ -533,6 +534,11 @@
                         <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Pitch</div><button id="pitchMinus90Btn">-90°</button><button id="pitchPlus90Btn">+90°</button></div>
                         <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Roll</div><button id="rollMinus90Btn">-90°</button><button id="rollPlus90Btn">+90°</button></div>
                         <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Yaw</div><button id="yawMinus90Btn">-90°</button><button id="yawPlus90Btn">+90°</button></div>
+                    </div>
+                    <div class="mount-rotate-90" style="display:flex; gap:8px; margin-top:6px;">
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Montaż X</div><button id="mountXMinus90Btn">-90°</button><button id="mountXPlus90Btn">+90°</button></div>
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Montaż Y</div><button id="mountYMinus90Btn">-90°</button><button id="mountYPlus90Btn">+90°</button></div>
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Montaż Z</div><button id="mountZMinus90Btn">-90°</button><button id="mountZPlus90Btn">+90°</button></div>
                     </div>
                     <!-- DODANE: Kontrolki remapu IMU (wpływają na wewnętrzne wektory - PID) -->
                     <hr style="border-color:#2a2a35;">
