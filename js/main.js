@@ -759,8 +759,11 @@ if (!Math.copysign) {
 
 // --- Przeliczanie kątów Euler'a z kwaternionu (telemetria: qw,qx,qy,qz) ---
 function computeEulerFromQuaternion(qw, qx, qy, qz) {
-    // Implementacja stabilna numerycznie, odporna na gimbal lock
     const euler = { pitch: 0, roll: 0, yaw: 0 };
+
+    if ([qw, qx, qy, qz].some(v => typeof v !== 'number' || isNaN(v))) {
+        return null;
+    }
 
     // Roll (oś x)
     const sinr_cosp = 2 * (qw * qx + qy * qz);
@@ -768,10 +771,11 @@ function computeEulerFromQuaternion(qw, qx, qy, qz) {
     euler.roll = Math.atan2(sinr_cosp, cosr_cosp);
 
     // Pitch (oś y)
+    // Ta część jest kluczowa dla uniknięcia "gimbal lock"
     const sinp = 2 * (qw * qy - qz * qx);
     if (Math.abs(sinp) >= 1) {
-        // Użyj copy sign, aby obsłużyć przypadek, gdy sinp jest poza zakresem [-1, 1]
-        euler.pitch = Math.copysign(Math.PI / 2, sinp); // Gimbal lock
+        // Kopiuje znak sinp do PI/2, aby obsłużyć przypadek, gdy jesteśmy w "gimbal lock"
+        euler.pitch = Math.copysign(Math.PI / 2, sinp);
     } else {
         euler.pitch = Math.asin(sinp);
     }
@@ -781,12 +785,12 @@ function computeEulerFromQuaternion(qw, qx, qy, qz) {
     const cosy_cosp = 1 - 2 * (qy * qy + qz * qz);
     euler.yaw = Math.atan2(siny_cosp, cosy_cosp);
 
-    // Konwersja na stopnie
-    euler.pitch = euler.pitch * 180 / Math.PI;
-    euler.roll = euler.roll * 180 / Math.PI;
-    euler.yaw = euler.yaw * 180 / Math.PI;
-
-    return euler;
+    // Konwersja radianów na stopnie i zwrócenie obiektu
+    return {
+        yaw: THREE.MathUtils.radToDeg(euler.yaw),
+        pitch: THREE.MathUtils.radToDeg(euler.pitch),
+        roll: THREE.MathUtils.radToDeg(euler.roll)
+    };
 }
 
 // Usunięto legacy mapowanie IMU (Quaternion-First). Euler liczony bezpośrednio z kwaternionu.
