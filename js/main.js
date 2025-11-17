@@ -279,41 +279,6 @@ document.addEventListener('DOMContentLoaded', () => {
             closeSensorMappingModal();
         }
     });
-    
-    // Sensor mounting preset configuration
-    const sensorMountingPresets = {
-        'standard': { pitch: { source: 0, sign: 1 }, yaw: { source: 1, sign: 1 }, roll: { source: 2, sign: 1 } },
-        'rotated_90_cw': { pitch: { source: 2, sign: -1 }, yaw: { source: 1, sign: 1 }, roll: { source: 0, sign: 1 } },
-        'rotated_90_ccw': { pitch: { source: 2, sign: 1 }, yaw: { source: 1, sign: 1 }, roll: { source: 0, sign: -1 } },
-        'rotated_180': { pitch: { source: 0, sign: -1 }, yaw: { source: 1, sign: 1 }, roll: { source: 2, sign: -1 } },
-        'inverted': { pitch: { source: 0, sign: -1 }, yaw: { source: 1, sign: -1 }, roll: { source: 2, sign: -1 } }
-    };
-    
-    document.getElementById('sensorMountingSelect')?.addEventListener('change', (e) => {
-        const selectedPreset = e.target.value;
-        
-        if (selectedPreset === 'custom') {
-            // Open the advanced modal for custom configuration
-            openSensorMappingModal();
-        } else if (sensorMountingPresets[selectedPreset]) {
-            // Apply preset configuration
-            if (!AppState.isConnected) {
-                addLogMessage('[UI] Musisz być połączony z robotem aby zmienić montaż czujnika.', 'warn');
-                return;
-            }
-            
-            if (!confirm(`Czy na pewno chcesz zastosować preset montażu: "${e.target.options[e.target.selectedIndex].text}"?\n\nTo zmieni orientację osi czujnika i wymaga zapisu do EEPROM.`)) {
-                // Reset selection if user cancels
-                e.target.value = 'standard';
-                return;
-            }
-            
-            const mapping = sensorMountingPresets[selectedPreset];
-            sendBleMessage({ type: 'set_imu_mapping', mapping });
-            addLogMessage(`[UI] Zastosowano preset montażu czujnika: ${selectedPreset}`, 'success');
-        }
-    });
-    
     setupGamepadMappingModal();
     setupDpadControls();
     setupSequenceControls();
@@ -496,10 +461,15 @@ function initSensorMappingPreview() {
     document.getElementById('setModalPitchZeroBtn')?.addEventListener('click', () => { setPitchZero(); });
     document.getElementById('setModalRollZeroBtn')?.addEventListener('click', () => { setRollZero(); });
     document.getElementById('clearModalPitchZeroBtn')?.addEventListener('click', () => {
-        uiTrimZeroBasePitch = 0; uiZeroBaselineAnglePitch = 0; addLogMessage('[UI] UI baseline (Pitch) zostal wyczyszczony.', 'info'); updateTelemetryUI(window.telemetryData || {});
+        // Nowe zachowanie: czyścimy firmware trim do zera zamiast lokalnej bazy UI
+        sendBleMessage({ type: 'set_param', key: 'trim_angle', value: 0 });
+        addLogMessage('[UI] Korekta (Pitch) została wyczyszczona.', 'info');
+        updateTelemetryUI(window.telemetryData || {});
     });
     document.getElementById('clearModalRollZeroBtn')?.addEventListener('click', () => {
-        uiTrimZeroBaseRoll = 0; uiZeroBaselineAngleRoll = 0; addLogMessage('[UI] UI baseline (Roll) zostal wyczyszczony.', 'info'); updateTelemetryUI(window.telemetryData || {});
+        sendBleMessage({ type: 'set_param', key: 'roll_trim', value: 0 });
+        addLogMessage('[UI] Korekta (Roll) została wyczyszczona.', 'info');
+        updateTelemetryUI(window.telemetryData || {});
     });
 }
 
@@ -750,47 +720,27 @@ if (mmHelp && mmHelpBox) {
 // Listenery znaków
 ['modelPitchSign', 'modelYawSign', 'modelRollSign'].forEach(id => { const c = document.getElementById(id); if (!c) return; c.querySelectorAll('button').forEach(btn => { btn.addEventListener('click', () => { c.querySelectorAll('button').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }); }); });
 
-// Polyfill dla Math.copysign (nie istnieje natywnie w JavaScript)
-if (!Math.copysign) {
-    Math.copysign = function(x, y) {
-        return Math.sign(y) * Math.abs(x);
-    };
-}
-
-// --- Przeliczanie kątów Euler'a z kwaternionu (telemetria: qw,qx,qy,qz) ---
+// --- Przeliczanie kątów Euler’a z kwaternionu (telemetria: qw,qx,qy,qz) ---
 function computeEulerFromQuaternion(qw, qx, qy, qz) {
-    const euler = { pitch: 0, roll: 0, yaw: 0 };
-
-    if ([qw, qx, qy, qz].some(v => typeof v !== 'number' || isNaN(v))) {
-        return null;
-    }
-
-    // Roll (oś x)
-    const sinr_cosp = 2 * (qw * qx + qy * qz);
-    const cosr_cosp = 1 - 2 * (qx * qx + qy * qy);
-    euler.roll = Math.atan2(sinr_cosp, cosr_cosp);
-
-    // Pitch (oś y)
-    // Ta część jest kluczowa dla uniknięcia "gimbal lock"
-    const sinp = 2 * (qw * qy - qz * qx);
-    if (Math.abs(sinp) >= 1) {
-        // Kopiuje znak sinp do PI/2, aby obsłużyć przypadek, gdy jesteśmy w "gimbal lock"
-        euler.pitch = Math.copysign(Math.PI / 2, sinp);
-    } else {
-        euler.pitch = Math.asin(sinp);
-    }
-
-    // Yaw (oś z)
-    const siny_cosp = 2 * (qw * qz + qx * qy);
-    const cosy_cosp = 1 - 2 * (qy * qy + qz * qz);
-    euler.yaw = Math.atan2(siny_cosp, cosy_cosp);
-
-    // Konwersja radianów na stopnie i zwrócenie obiektu
-    return {
-        yaw: THREE.MathUtils.radToDeg(euler.yaw),
-        pitch: THREE.MathUtils.radToDeg(euler.pitch),
-        roll: THREE.MathUtils.radToDeg(euler.roll)
-    };
+    try {
+        if ([qw, qx, qy, qz].some(v => typeof v !== 'number' || Number.isNaN(v))) return null;
+        // ZYX (yaw-pitch-roll) zgodnie z firmware (imu_math.h)
+        const n = Math.hypot(qw, qx, qy, qz) || 1;
+        qw /= n; qx /= n; qy /= n; qz /= n;
+        const siny_cosp = 2 * (qw * qz + qx * qy);
+        const cosy_cosp = 1 - 2 * (qy * qy + qz * qz);
+        const yaw = Math.atan2(siny_cosp, cosy_cosp);
+        const sinp = 2 * (qw * qy - qz * qx);
+        const pitch = Math.abs(sinp) >= 1 ? Math.sign(sinp) * (Math.PI / 2) : Math.asin(sinp);
+        const sinr_cosp = 2 * (qw * qx + qy * qz);
+        const cosr_cosp = 1 - 2 * (qx * qx + qy * qy);
+        const roll = Math.atan2(sinr_cosp, cosr_cosp);
+        return {
+            yaw: THREE.MathUtils.radToDeg(yaw),
+            pitch: THREE.MathUtils.radToDeg(pitch),
+            roll: THREE.MathUtils.radToDeg(roll)
+        };
+    } catch (_) { return null; }
 }
 
 // Usunięto legacy mapowanie IMU (Quaternion-First). Euler liczony bezpośrednio z kwaternionu.
@@ -1543,16 +1493,12 @@ function updateTelemetryUI(data) {
 
     if (typeof trimAngle !== 'undefined' && !isNaN(trimAngle)) {
         if (originalFirmwareTrimPitch === null) originalFirmwareTrimPitch = trimAngle;
-        
-        // Initialize base if not set
-        if (pitchTrimBase === null) {
-            pitchTrimBase = trimAngle;
-        }
-        
-        // Calculate manual correction as difference from base
-        // NOTE: We don't update the display here - it's managed by the manual trim buttons
-        // and Set Zero function to maintain accurate cumulative tracking
-        
+        // Aparantna wartość trima to teraz bezpośrednio wartość firmware
+        const apparentTrim = trimAngle;
+
+        const span = document.getElementById('trimValueDisplay');
+        if (span) span.textContent = apparentTrim.toFixed(2);
+
         const origSpan = document.getElementById('trimOriginalDisplay');
         if (origSpan) origSpan.textContent = originalFirmwareTrimPitch.toFixed(2);
 
@@ -1566,15 +1512,10 @@ function updateTelemetryUI(data) {
 
     if (typeof rollTrim !== 'undefined' && !isNaN(rollTrim)) {
         if (originalFirmwareTrimRoll === null) originalFirmwareTrimRoll = rollTrim;
-        
-        // Initialize base if not set
-        if (rollTrimBase === null) {
-            rollTrimBase = rollTrim;
-        }
-        
-        // Calculate manual correction as difference from base
-        // NOTE: We don't update the display here - it's managed by the manual trim buttons
-        // and Set Zero function to maintain accurate cumulative tracking
+        const apparentRollTrim = rollTrim;
+
+        const rollSpan = document.getElementById('rollTrimValueDisplay');
+        if (rollSpan) rollSpan.textContent = apparentRollTrim.toFixed(2);
 
         const origRollSpan = document.getElementById('rollTrimOriginalDisplay');
         if (origRollSpan) origRollSpan.textContent = originalFirmwareTrimRoll.toFixed(2);
@@ -2443,67 +2384,33 @@ function setupParameterListeners() {
 
     // POPRAWKA: Usunięto stare listenery dla trim+/- i dodano nowe, poprawne dla precyzyjnych przycisków.
     const toolButtons = { 'resetZeroBtn': { type: 'set_pitch_zero' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
-    
-    // Track manual trim corrections separately (cumulative adjustments made by user)
-    // These are reset when Set Zero is pressed
-    let manualPitchCorrection = 0;
-    let manualRollCorrection = 0;
-    
-    // Trim base values (set by Set Zero button)
-    let pitchTrimBase = null;
-    let rollTrimBase = null;
-    
     // Trim: aktualizacja + wysyłka set_param (używamy bezpośrednio wartości firmware)
     function updateAndSendTrim(delta) {
-        // Get current trim from robot (telemetry)
-        const telemetryTrim = (window.telemetryData && window.telemetryData.trim_angle !== undefined)
-            ? Number(window.telemetryData.trim_angle)
-            : 0;
-        
-        const newTrim = telemetryTrim + delta;
-        
-        // Update manual correction counter
-        manualPitchCorrection += delta;
-        
-        // Update UI display with manual correction
         const span = document.getElementById('trimValueDisplay');
-        if (span) span.textContent = manualPitchCorrection.toFixed(2);
-        
-        // Send new trim to robot
+        if (!span) return;
+        const current = parseFloat(span.textContent) || 0;
+        const newTrim = current + delta;
+        span.textContent = newTrim.toFixed(2);
         sendBleMessage({ type: 'set_param', key: 'trim_angle', value: newTrim });
-        addLogMessage(`[UI] Korekta ręczna Pitch: ${delta > 0 ? '+' : ''}${delta.toFixed(2)}°, suma korekt: ${manualPitchCorrection.toFixed(2)}°`);
+        addLogMessage(`[UI] Korekta trima Pitch: delta=${delta.toFixed(2)}, nowy trim_angle=${newTrim.toFixed(2)}`);
     }
-    
     document.getElementById('trimMinus01Btn')?.addEventListener('click', () => updateAndSendTrim(-0.1));
     document.getElementById('trimMinus001Btn')?.addEventListener('click', () => updateAndSendTrim(-0.01));
     document.getElementById('trimPlus001Btn')?.addEventListener('click', () => updateAndSendTrim(0.01));
     document.getElementById('trimPlus01Btn')?.addEventListener('click', () => updateAndSendTrim(0.1));
-    
     // Roll trim: aktualizacja + wysyłka set_param
     document.getElementById('resetRollZeroBtn')?.addEventListener('click', () => setRollZero());
     // Reset korekty pionu (pitch trim) - ustawia trim tak, by skorygowany kąt wynosił 0
     document.getElementById('resetZeroBtn')?.addEventListener('click', () => setPitchZero());
-    
     function updateAndSendRollTrim(delta) {
-        // Get current trim from robot (telemetry)
-        const telemetryRollTrim = (window.telemetryData && window.telemetryData.roll_trim !== undefined)
-            ? Number(window.telemetryData.roll_trim)
-            : 0;
-        
-        const newTrim = telemetryRollTrim + delta;
-        
-        // Update manual correction counter
-        manualRollCorrection += delta;
-        
-        // Update UI display with manual correction
         const span = document.getElementById('rollTrimValueDisplay');
-        if (span) span.textContent = manualRollCorrection.toFixed(2);
-        
-        // Send new trim to robot
+        if (!span) return;
+        const current = parseFloat(span.textContent) || 0;
+        const newTrim = current + delta;
+        span.textContent = newTrim.toFixed(2);
         sendBleMessage({ type: 'set_param', key: 'roll_trim', value: newTrim });
-        addLogMessage(`[UI] Korekta ręczna Roll: ${delta > 0 ? '+' : ''}${delta.toFixed(2)}°, suma korekt: ${manualRollCorrection.toFixed(2)}°`);
+        addLogMessage(`[UI] Korekta trima Roll: delta=${delta.toFixed(2)}, nowy roll_trim=${newTrim.toFixed(2)}`);
     }
-    
     document.getElementById('rollTrimMinus01Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.1));
     document.getElementById('rollTrimMinus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.01));
     document.getElementById('rollTrimPlus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.01));
@@ -2518,23 +2425,24 @@ function setupParameterListeners() {
 
         const rawPitch = Number(eul.pitch || 0);
 
-        // Chcemy, aby po ustawieniu: rawPitch + newTrim == 0  => newTrim = -(rawPitch)
-        const newTrim = -rawPitch;
+        // Aktualny trim z telemetrii (jeśli jest)
+        const telemetryTrimPitch = (window.telemetryData && window.telemetryData.trim_angle !== undefined)
+            ? Number(window.telemetryData.trim_angle)
+            : 0;
 
-        // Save as base trim
-        pitchTrimBase = newTrim;
-        
-        // Reset manual correction counter
-        manualPitchCorrection = 0;
+        const currentFirmwareTrim = isNaN(telemetryTrimPitch) ? 0 : telemetryTrimPitch;
+
+        // Cel: po naciśnięciu „Ustaw 0” bieżący odczyt staje się 0° i robot dąży do tego kąta.
+        // Przy modelu: corrected = raw + trim -> nowy trim powinien wynosić -raw.
+        const newTrim = -rawPitch;
 
         // Wyślij nowy trim do firmware
         sendBleMessage({ type: 'set_param', key: 'trim_angle', value: newTrim });
         // Dla zgodności z wcześniejszym firmware zostawiamy też komendę skrótową
         sendBleMessage({ type: 'set_pitch_zero' });
 
-        // Update UI: show 0.00 in manual correction field
         const span = document.getElementById('trimValueDisplay');
-        if (span) span.textContent = '0.00';
+        if (span) span.textContent = newTrim.toFixed(2);
 
         // Natychmiast pokazujemy 0.0° na dashboardzie, resztę będzie korygować bieżąca telemetria
         const val = document.getElementById('angleVal');
@@ -2544,7 +2452,7 @@ function setupParameterListeners() {
         if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
         updateChart({ pitch: 0 });
 
-        addLogMessage(`[UI] Punkt 0 (Pitch) ustawiony na aktualnej pozycji. Korekta ręczna zresetowana do 0.00°`, 'success');
+        addLogMessage(`[UI] Punkt 0 (Pitch) ustawiony. Nowy trim_angle = ${newTrim.toFixed(2)}° (UI pokazuje 0° dla aktualnej pozycji).`, 'success');
     }
 
     function setRollZero() {
@@ -2556,27 +2464,26 @@ function setupParameterListeners() {
 
         const rawRoll = Number(eul.roll || 0);
 
-        // Analogicznie: rawRoll + newRollTrim == 0 => newRollTrim = -rawRoll
-        const newRollTrim = -rawRoll;
+        const telemetryRollTrim = (window.telemetryData && window.telemetryData.roll_trim !== undefined)
+            ? Number(window.telemetryData.roll_trim)
+            : 0;
 
-        // Save as base trim
-        rollTrimBase = newRollTrim;
-        
-        // Reset manual correction counter
-        manualRollCorrection = 0;
+        const currentFirmwareRollTrim = isNaN(telemetryRollTrim) ? 0 : telemetryRollTrim;
+
+        // Analogicznie dla roll: corrected = raw + trim -> nowy trim = -raw
+        const newRollTrim = -rawRoll;
 
         sendBleMessage({ type: 'set_param', key: 'roll_trim', value: newRollTrim });
         sendBleMessage({ type: 'set_roll_zero' });
 
-        // Update UI: show 0.00 in manual correction field
         const span = document.getElementById('rollTrimValueDisplay');
-        if (span) span.textContent = '0.00';
+        if (span) span.textContent = newRollTrim.toFixed(2);
 
         const val = document.getElementById('rollVal');
         if (val) val.textContent = '0.0 °';
 
         updateChart({ roll: 0 });
-        addLogMessage(`[UI] Punkt 0 (Roll) ustawiony na aktualnej pozycji. Korekta ręczna zresetowana do 0.00°`, 'success');
+        addLogMessage(`[UI] Punkt 0 (Roll) ustawiony. Nowy roll_trim = ${newRollTrim.toFixed(2)}° (UI pokazuje 0° dla aktualnej pozycji).`, 'success');
     }
 
     document.getElementById('saveBtn')?.addEventListener('click', () => {
