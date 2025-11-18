@@ -21,6 +21,20 @@ function toggleAccordion(header) {
             const mobileVH = 70; // vh
             const isMobile = window.matchMedia('(max-width: 768px)').matches;
             if (isMobile) {
+                content.style.maxHeight = mobileVH + 'vh';
+            } else {
+                content.style.maxHeight = desktopH + 'px';
+            }
+            content.style.overflow = 'hidden';
+        } else {
+            content.style.maxHeight = content.scrollHeight + 40 + 'px';
+        }
+        content.style.padding = '15px';
+        setTimeout(() => {
+            if (header.classList.contains('active') && !content.classList.contains('autotune-pane')) content.classList.add('auto-height');
+        }, 450);
+    }
+}
 function initSignalAnalyzerChart() {
     const ctx = document.getElementById('signalAnalyzerChart').getContext('2d');
     signalAnalyzerChart = new Chart(ctx, {
@@ -28,16 +42,16 @@ function initSignalAnalyzerChart() {
         options: {
             animation: false, responsive: true, maintainAspectRatio: false,
             scales: {
-                x: { 
-                    display: true, 
-                    title: { display: true, text: 'Czas', color: '#fff' }, 
+                x: {
+                    display: true,
+                    title: { display: true, text: 'Czas', color: '#fff' },
                     ticks: { color: '#fff' }
                 },
-                y: { type: 'linear', display: true, position: 'left', id: 'y-pitch', ticks: { color: availableTelemetry['pitch']?.color || '#61dafb' }, title: { display: true, text: 'Pitch (°)', color: availableTelemetry['pitch']?.color || '#61dafb' }},
+                y: { type: 'linear', display: true, position: 'left', id: 'y-pitch', ticks: { color: availableTelemetry['pitch']?.color || '#61dafb' }, title: { display: true, text: 'Pitch (°)', color: availableTelemetry['pitch']?.color || '#61dafb' } },
                 y1: { type: 'linear', display: false, position: 'right', id: 'y-speed', ticks: { color: availableTelemetry['speed']?.color || '#f7b731' }, title: { display: true, text: 'Speed (imp/s)', color: availableTelemetry['speed']?.color || '#f7b731' }, grid: { drawOnChartArea: false } }
             },
-            plugins: { 
-                legend: { labels: { color: '#fff' } }, 
+            plugins: {
+                legend: { labels: { color: '#fff' } },
                 tooltip: { mode: 'index', intersect: false }
             },
             onClick: handleChartClick,
@@ -50,11 +64,11 @@ function initSignalAnalyzerChart() {
             }
         }
     });
-    
+
     // Add range selection functionality
     const canvas = ctx.canvas;
     let selectionStart = null;
-    
+
     canvas.addEventListener('mousedown', (e) => {
         if (e.shiftKey) {
             chartRangeSelection.isSelecting = true;
@@ -63,7 +77,7 @@ function initSignalAnalyzerChart() {
             chartRangeSelection.startIndex = getChartIndexFromX(selectionStart);
         }
     });
-    
+
     canvas.addEventListener('mousemove', (e) => {
         if (chartRangeSelection.isSelecting && selectionStart !== null) {
             const rect = canvas.getBoundingClientRect();
@@ -72,7 +86,7 @@ function initSignalAnalyzerChart() {
             highlightSelectedRange();
         }
     });
-    
+
     canvas.addEventListener('mouseup', (e) => {
         if (chartRangeSelection.isSelecting) {
             chartRangeSelection.isSelecting = false;
@@ -150,20 +164,20 @@ function getChartIndexFromX(xPixel) {
     const chart = signalAnalyzerChart;
     const xScale = chart.scales['x'];
     const dataLength = chart.data.labels.length;
-    
+
     // Calculate which index this X coordinate corresponds to
     const xStart = xScale.left;
     const xEnd = xScale.right;
     const xRange = xEnd - xStart;
-    
+
     // Prevent division by zero
     if (xRange === 0 || dataLength === 0) {
         return 0;
     }
-    
+
     const relativeX = (xPixel - xStart) / xRange;
     const index = Math.round(relativeX * (dataLength - 1));
-    
+
     return Math.max(0, Math.min(dataLength - 1, index));
 }
 
@@ -178,41 +192,41 @@ function highlightSelectedRange() {
     }
 }
 
-function exportChartDataToCsv(exportRange = false) { 
-    const data = signalAnalyzerChart.data; 
-    let csvContent = "data:text/csv;charset=utf-8,"; 
-    let headers = ['Time']; 
-    data.datasets.forEach(ds => headers.push(ds.label)); 
-    csvContent += headers.join(',') + '\n'; 
-    
+function exportChartDataToCsv(exportRange = false) {
+    const data = signalAnalyzerChart.data;
+    let csvContent = "data:text/csv;charset=utf-8,";
+    let headers = ['Time'];
+    data.datasets.forEach(ds => headers.push(ds.label));
+    csvContent += headers.join(',') + '\n';
+
     let startIdx = 0;
     let endIdx = data.labels.length - 1;
-    
+
     // If exporting range and a range is selected, use it
     if (exportRange && chartRangeSelection.startIndex !== null && chartRangeSelection.endIndex !== null) {
         startIdx = Math.min(chartRangeSelection.startIndex, chartRangeSelection.endIndex);
         endIdx = Math.max(chartRangeSelection.startIndex, chartRangeSelection.endIndex);
         addLogMessage(`[UI] Eksportowanie zakresu: ${startIdx} - ${endIdx}`, 'info');
     }
-    
-    for (let i = startIdx; i <= endIdx; i++) { 
-        let row = [data.labels[i]]; 
-        data.datasets.forEach(ds => { 
-            const value = ds.data[i] !== null ? ds.data[i].toFixed(4) : ''; 
-            row.push(value); 
-        }); 
-        csvContent += row.join(',') + '\n'; 
-    } 
-    const encodedUri = encodeURI(csvContent); 
-    const link = document.createElement("a"); 
-    link.setAttribute("href", encodedUri); 
+
+    for (let i = startIdx; i <= endIdx; i++) {
+        let row = [data.labels[i]];
+        data.datasets.forEach(ds => {
+            const value = ds.data[i] !== null ? ds.data[i].toFixed(4) : '';
+            row.push(value);
+        });
+        csvContent += row.join(',') + '\n';
+    }
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
     const filename = exportRange ? "telemetry_data_range.csv" : "telemetry_data.csv";
-    link.setAttribute("download", filename); 
-    document.body.appendChild(link); 
-    link.click(); 
-    document.body.removeChild(link); 
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     const message = exportRange ? '[UI] Zaznaczony zakres wyeksportowany do CSV.' : '[UI] Dane wykresu wyeksportowane do CSV.';
-    addLogMessage(message, 'info'); 
+    addLogMessage(message, 'info');
 }
 function exportChartToPng() { const link = document.createElement('a'); link.download = 'telemetry_chart.png'; link.href = signalAnalyzerChart.toBase64Image(); link.click(); addLogMessage('[UI] Wykres wyeksportowany do PNG.', 'info'); }
 
@@ -238,7 +252,7 @@ async function applySelectedPreset() {
         AppState.isApplyingConfig = true;
         for (const [key, value] of Object.entries(presetData)) {
             const input = document.getElementById(key);
-            if (input) { let actualValue = value; if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(parameterMapping[key])) { actualValue = (value * 100); } input.value = actualValue; } 
+            if (input) { let actualValue = value; if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(parameterMapping[key])) { actualValue = (value * 100); } input.value = actualValue; }
             else if (['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].includes(key)) { document.getElementById(key).checked = value; }
         }
         AppState.isApplyingConfig = false; addLogMessage('[UI] Zastosowano wartosci presetu. Zapisz na robocie, aby wyslac.', 'info');
@@ -256,8 +270,8 @@ function addSequenceStep() {
     list.appendChild(stepDiv); updateAccordionHeight(list.closest('.accordion-content'));
     stepDiv.querySelector('.sequence-type').addEventListener('change', (e) => {
         const valueInput = stepDiv.querySelector('.sequence-value'); const type = e.target.value;
-        if (type === 'wait_condition') { valueInput.type = 'text'; valueInput.value = 'pitch < 0.5'; } 
-        else if (type === 'set_param') { valueInput.type = 'text'; valueInput.value = 'balanceKpInput=100.0'; } 
+        if (type === 'wait_condition') { valueInput.type = 'text'; valueInput.value = 'pitch < 0.5'; }
+        else if (type === 'set_param') { valueInput.type = 'text'; valueInput.value = 'balanceKpInput=100.0'; }
         else { valueInput.type = 'number'; valueInput.value = '20'; }
     });
     stepDiv.querySelector('.remove-step-btn').addEventListener('click', () => { stepDiv.remove(); updateAccordionHeight(list.closest('.accordion-content')); });
@@ -360,9 +374,9 @@ function executeNextSequenceStep() {
 let pathCanvas, pathCtx; let robotPathX = 0, robotPathY = 0, robotPathHeading = 0; const CM_PER_PIXEL = 1.0; let plannedPath = [], actualPath = [];
 function initPathVisualization() { pathCanvas = document.getElementById('pathCanvas'); pathCtx = pathCanvas.getContext('2d'); pathCanvas.width = pathCanvas.clientWidth; pathCanvas.height = pathCanvas.clientHeight; resetPathVisualization(); }
 function drawPathVisualization() { if (!pathCtx) return; pathCtx.clearRect(0, 0, pathCanvas.width, pathCanvas.height); const drawPath = (path, color) => { pathCtx.strokeStyle = color; pathCtx.lineWidth = 2; pathCtx.beginPath(); if (path.length > 0) { pathCtx.moveTo(path[0].x, path[0].y); path.forEach(p => pathCtx.lineTo(p.x, p.y)); } pathCtx.stroke(); }; drawPath(plannedPath, '#61dafb'); drawPath(actualPath, '#a2f279'); if (actualPath.length > 0) { const lastPos = actualPath[actualPath.length - 1]; pathCtx.fillStyle = '#ff6347'; pathCtx.beginPath(); pathCtx.arc(lastPos.x, lastPos.y, 4, 0, Math.PI * 2); pathCtx.fill(); } }
-function addPlannedPathSegment(type, value) { let { x, y, heading } = plannedPath.length > 0 ? plannedPath[plannedPath.length-1] : {x: robotPathX, y: robotPathY, heading: robotPathHeading}; let newX = x, newY = y, newHeading = heading; const angleRad = (heading - 90) * Math.PI / 180; if (type === 'move_fwd') { newX += Math.cos(angleRad) * value / CM_PER_PIXEL; newY += Math.sin(angleRad) * value / CM_PER_PIXEL; } else if (type === 'move_bwd') { newX -= Math.cos(angleRad) * value / CM_PER_PIXEL; newY -= Math.sin(angleRad) * value / CM_PER_PIXEL; } else if (type === 'rotate_r') { newHeading += value; } else if (type === 'rotate_l') { newHeading -= value; } plannedPath.push({ x: newX, y: newY, heading: newHeading }); drawPathVisualization(); }
+function addPlannedPathSegment(type, value) { let { x, y, heading } = plannedPath.length > 0 ? plannedPath[plannedPath.length - 1] : { x: robotPathX, y: robotPathY, heading: robotPathHeading }; let newX = x, newY = y, newHeading = heading; const angleRad = (heading - 90) * Math.PI / 180; if (type === 'move_fwd') { newX += Math.cos(angleRad) * value / CM_PER_PIXEL; newY += Math.sin(angleRad) * value / CM_PER_PIXEL; } else if (type === 'move_bwd') { newX -= Math.cos(angleRad) * value / CM_PER_PIXEL; newY -= Math.sin(angleRad) * value / CM_PER_PIXEL; } else if (type === 'rotate_r') { newHeading += value; } else if (type === 'rotate_l') { newHeading -= value; } plannedPath.push({ x: newX, y: newY, heading: newHeading }); drawPathVisualization(); }
 function updateActualPath(data) { if (data.pos_x_cm !== undefined && data.pos_y_cm !== undefined && data.yaw !== undefined) { const actualX = robotPathX + (data.pos_x_cm / CM_PER_PIXEL); const actualY = robotPathY - (data.pos_y_cm / CM_PER_PIXEL); actualPath.push({ x: actualX, y: actualY, heading: data.yaw }); drawPathVisualization(); } }
-function resetPathVisualization() { robotPathX = pathCanvas.width / 2; robotPathY = pathCanvas.height / 2; robotPathHeading = 0; plannedPath = [{x: robotPathX, y: robotPathY, heading: robotPathHeading}]; actualPath = [{x: robotPathX, y: robotPathY, heading: robotPathHeading}]; const ReportPanel = document.getElementById('sequenceReportPanel'); if (ReportPanel) { ReportPanel.style.display = 'none'; } drawPathVisualization(); }
+function resetPathVisualization() { robotPathX = pathCanvas.width / 2; robotPathY = pathCanvas.height / 2; robotPathHeading = 0; plannedPath = [{ x: robotPathX, y: robotPathY, heading: robotPathHeading }]; actualPath = [{ x: robotPathX, y: robotPathY, heading: robotPathHeading }]; const ReportPanel = document.getElementById('sequenceReportPanel'); if (ReportPanel) { ReportPanel.style.display = 'none'; } drawPathVisualization(); }
 function showSequenceReport() { document.getElementById('sequence-report-panel').style.display = 'block'; document.getElementById('avgHeadingError').textContent = 'X.X °'; document.getElementById('maxHeadingError').textContent = 'Y.Y °'; document.getElementById('totalDistanceCovered').textContent = 'Z.Z cm'; }
 
 function initJoystick() {
@@ -401,58 +415,58 @@ function init3DVisualization() { const container = document.getElementById('robo
 function createCustomWheel(totalRadius, tireThickness, width) { const wheelGroup = new THREE.Group(); const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 }); const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.4 }); const rimRadius = totalRadius - tireThickness; const tire = new THREE.Mesh(new THREE.TorusGeometry(rimRadius + tireThickness / 2, tireThickness / 2, 16, 100), tireMaterial); wheelGroup.add(tire); const rimShape = new THREE.Shape(); rimShape.absarc(0, 0, rimRadius, 0, Math.PI * 2, false); const holePath = new THREE.Path(); holePath.absarc(0, 0, rimRadius * 0.85, 0, Math.PI * 2, true); rimShape.holes.push(holePath); const extrudeSettings = { depth: width * 0.4, bevelEnabled: false }; const outerRimGeometry = new THREE.ExtrudeGeometry(rimShape, extrudeSettings); outerRimGeometry.center(); const outerRim = new THREE.Mesh(outerRimGeometry, rimMaterial); wheelGroup.add(outerRim); const hubRadius = rimRadius * 0.2; const hub = new THREE.Mesh(new THREE.CylinderGeometry(hubRadius, hubRadius, width * 0.5, 24), rimMaterial); hub.rotateX(Math.PI / 2); wheelGroup.add(hub); const spokeLength = (rimRadius * 0.85) - hubRadius; const spokeGeometry = new THREE.BoxGeometry(spokeLength, rimRadius * 0.15, width * 0.4); spokeGeometry.translate(hubRadius + spokeLength / 2, 0, 0); for (let i = 0; i < 6; i++) { const spoke = new THREE.Mesh(spokeGeometry, rimMaterial); spoke.rotation.z = i * (Math.PI / 3); wheelGroup.add(spoke); } return wheelGroup; }
 function createRobotModel3D() { const BODY_WIDTH = 9.0, BODY_HEIGHT = 6.0, BODY_DEPTH = 3.5, WHEEL_GAP = 1.0; const MAST_HEIGHT = 14.5, MAST_THICKNESS = 1.5; const BATTERY_WIDTH = 6.0, BATTERY_HEIGHT = 1.0, BATTERY_DEPTH = 3.0; const TIRE_THICKNESS = 1.0, WHEEL_WIDTH = 2.0; const WHEEL_RADIUS_3D = 4.1; const pivot = new THREE.Object3D(); const model = new THREE.Group(); const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1C1C1C }); const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0x4169E1 }); const body = new THREE.Mesh(new THREE.BoxGeometry(BODY_WIDTH, BODY_HEIGHT, BODY_DEPTH), bodyMaterial); body.position.y = WHEEL_RADIUS_3D; model.add(body); const mast = new THREE.Mesh(new THREE.BoxGeometry(MAST_THICKNESS, MAST_HEIGHT, MAST_THICKNESS), bodyMaterial); mast.position.y = WHEEL_RADIUS_3D + BODY_HEIGHT / 2 + MAST_HEIGHT / 2; model.add(mast); const battery = new THREE.Mesh(new THREE.BoxGeometry(BATTERY_WIDTH, BATTERY_HEIGHT, BATTERY_DEPTH), batteryMaterial); battery.position.y = mast.position.y + MAST_HEIGHT / 2 + BATTERY_HEIGHT / 2; model.add(battery); leftWheel = createCustomWheel(WHEEL_RADIUS_3D, TIRE_THICKNESS, WHEEL_WIDTH); leftWheel.rotation.y = Math.PI / 2; leftWheel.position.set(-(BODY_WIDTH / 2 + WHEEL_GAP), WHEEL_RADIUS_3D, 0); model.add(leftWheel); rightWheel = createCustomWheel(WHEEL_RADIUS_3D, TIRE_THICKNESS, WHEEL_WIDTH); rightWheel.rotation.y = Math.PI / 2; rightWheel.position.set(BODY_WIDTH / 2 + WHEEL_GAP, WHEEL_RADIUS_3D, 0); model.add(rightWheel); model.position.y = -WHEEL_RADIUS_3D; pivot.add(model); return pivot; }
 function createCheckerTexture(squareSizeCm = 20, colorA = '#C8C8C8', colorB = '#787878') { const size = 256; const squares = 2; const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size; const ctx = canvas.getContext('2d'); const s = size / squares; for (let y = 0; y < squares; y++) { for (let x = 0; x < squares; x++) { ctx.fillStyle = ((x + y) % 2 === 0) ? colorA : colorB; ctx.fillRect(x * s, y * s, s, s); } } const tex = new THREE.CanvasTexture(canvas); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 8; tex.encoding = THREE.sRGBEncoding; return tex; }
-function createSkyDome() { 
-    const width = 2048, height = 1024; 
-    const canvas = document.createElement('canvas'); 
-    canvas.width = width; 
-    canvas.height = height; 
-    const ctx = canvas.getContext('2d'); 
-    
+function createSkyDome() {
+    const width = 2048, height = 1024;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+
     // Create gradient background
-    const grad = ctx.createLinearGradient(0, 0, 0, height); 
-    grad.addColorStop(0, '#87CEEB'); 
-    grad.addColorStop(0.6, '#B0E0E6'); 
-    grad.addColorStop(1, '#E6F2FA'); 
-    ctx.fillStyle = grad; 
-    ctx.fillRect(0, 0, width, height); 
-    
+    const grad = ctx.createLinearGradient(0, 0, 0, height);
+    grad.addColorStop(0, '#87CEEB');
+    grad.addColorStop(0.6, '#B0E0E6');
+    grad.addColorStop(1, '#E6F2FA');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
     // Draw clouds with seamless wrapping
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'; 
-    for (let i = 0; i < 150; i++) { 
-        const x = Math.random() * width; 
-        const y = Math.random() * height * 0.6; 
-        const radius = 20 + Math.random() * 80; 
-        const blur = 10 + Math.random() * 20; 
-        ctx.filter = `blur(${blur}px)`; 
-        
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    for (let i = 0; i < 150; i++) {
+        const x = Math.random() * width;
+        const y = Math.random() * height * 0.6;
+        const radius = 20 + Math.random() * 80;
+        const blur = 10 + Math.random() * 20;
+        ctx.filter = `blur(${blur}px)`;
+
         // Draw the cloud
-        ctx.beginPath(); 
-        ctx.arc(x, y, radius, 0, Math.PI * 2); 
-        ctx.fill(); 
-        
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
         // Draw the cloud again on the opposite edge to create seamless wrapping
         // If cloud is near the right edge, draw it also on the left edge
         if (x > width - radius * 2) {
-            ctx.beginPath(); 
-            ctx.arc(x - width, y, radius, 0, Math.PI * 2); 
-            ctx.fill(); 
+            ctx.beginPath();
+            ctx.arc(x - width, y, radius, 0, Math.PI * 2);
+            ctx.fill();
         }
         // If cloud is near the left edge, draw it also on the right edge
         if (x < radius * 2) {
-            ctx.beginPath(); 
-            ctx.arc(x + width, y, radius, 0, Math.PI * 2); 
-            ctx.fill(); 
+            ctx.beginPath();
+            ctx.arc(x + width, y, radius, 0, Math.PI * 2);
+            ctx.fill();
         }
-    } 
-    ctx.filter = 'none'; 
-    
-    const tex = new THREE.CanvasTexture(canvas); 
-    tex.wrapS = THREE.RepeatWrapping; 
-    tex.wrapT = THREE.ClampToEdgeWrapping; 
-    tex.encoding = THREE.sRGBEncoding; 
-    
-    const skyGeo = new THREE.SphereGeometry(1000, 32, 16); 
-    const skyMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide }); 
-    const skyDome = new THREE.Mesh(skyGeo, skyMat); 
-    return skyDome; 
+    }
+    ctx.filter = 'none';
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.encoding = THREE.sRGBEncoding;
+
+    const skyGeo = new THREE.SphereGeometry(1000, 32, 16);
+    const skyMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide });
+    const skyDome = new THREE.Mesh(skyGeo, skyMat);
+    return skyDome;
 }
