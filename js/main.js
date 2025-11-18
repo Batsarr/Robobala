@@ -1004,7 +1004,7 @@ async function processBleQueue() { if (isSendingBleMessage || bleMessageQueue.le
 function sendBleMessage(message) {
     // Use the new communication layer if available and connected
     try {
-        if (['run_metrics_test', 'run_relay_test', 'cancel_test', 'request_full_config', 'set_param'].includes(message.type)) {
+        if (['run_metrics_test', 'run_relay_test', 'cancel_test', 'request_full_config', 'set_param', 'execute_move', 'execute_rotate', 'command_stop'].includes(message.type)) {
             addLogMessage(`[UI -> ROBOT] Sending: ${message.type} ${JSON.stringify(message)}`, 'info');
         }
     } catch (e) { /* ignore logging errors */ }
@@ -1035,6 +1035,10 @@ function setupCommunicationHandlers() {
     // Subscribe to state changes for UI updates
     appStore.subscribe('connection.isConnected', (value) => {
         document.body.classList.toggle('ui-locked', !value);
+        // Disable/enable D-Pad controls visually and functionally
+        document.querySelectorAll('.dpad-btn').forEach(btn => {
+            try { btn.disabled = !value; } catch (e) { }
+        });
     });
 
     appStore.subscribe('robot.state', (value) => {
@@ -1103,6 +1107,12 @@ function processCompleteMessage(data) {
                 if (document.getElementById('sensor-mapping-modal')?.style.display === 'flex') {
                     sensorWizard.progress.saved = true; setWizardProgress(); updateSensorWizardUI();
                 }
+            }
+            else if (data.message === 'autonomous_move_complete') {
+                addLogMessage(`[ROBOT] Ruch autonomiczny zakonczony. target=${data.targetPosition} current=${data.currentPosition}`, 'success');
+            }
+            else if (data.message === 'autonomous_rotate_complete') {
+                addLogMessage(`[ROBOT] Rotacja autonomiczna zakonczona. targetYaw=${data.targetYawDeg} currentYaw=${data.currentYawDeg}`, 'success');
             }
             break;
         case 'imu_mapping':
@@ -2541,7 +2551,7 @@ function setupGamepadMappingModal() { document.getElementById('open-gamepad-moda
 function flashElement(element) { if (!element) return; const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element; target.classList.add('gamepad-flash'); setTimeout(() => target.classList.remove('gamepad-flash'), 300); }
 function loadGamepadMappings() { const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY); gamepadMappings = saved ? JSON.parse(saved) : {}; }
 function saveGamepadMappings() { localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(gamepadMappings)); }
-function setupDpadControls() { document.querySelectorAll('.dpad-btn').forEach(btn => { btn.addEventListener('click', (e) => { const action = e.currentTarget.dataset.dpad; if (action === 'up') sendBleMessage({ type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'down') sendBleMessage({ type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) }); else if (action === 'left') sendBleMessage({ type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'right') sendBleMessage({ type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) }); else if (action === 'stop') sendBleMessage({ type: 'command_stop' }); }); }); }
+function setupDpadControls() { document.querySelectorAll('.dpad-btn').forEach(btn => { btn.addEventListener('click', (e) => { const action = e.currentTarget.dataset.dpad; let msg = null; if (action === 'up') msg = { type: 'execute_move', distance_cm: parseFloat(document.getElementById('dpadDistInput').value) }; else if (action === 'down') msg = { type: 'execute_move', distance_cm: -parseFloat(document.getElementById('dpadDistInput').value) }; else if (action === 'left') msg = { type: 'execute_rotate', angle_deg: -parseFloat(document.getElementById('dpadAngleInput').value) }; else if (action === 'right') msg = { type: 'execute_rotate', angle_deg: parseFloat(document.getElementById('dpadAngleInput').value) }; else if (action === 'stop') msg = { type: 'command_stop' }; if (msg) { flashElement(e.currentTarget); try { addLogMessage(`[UI -> ROBOT] Sending: ${msg.type} ${JSON.stringify(msg)}`, 'info'); } catch (err) { } sendBleMessage(msg); } }); }); }
 function refreshCalibrationFromTelemetry() {
     // Odczytaj ostatnią telemetrię i zaktualizuj paski w modalu
     const td = window.telemetryData || {};
