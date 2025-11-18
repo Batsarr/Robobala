@@ -22,70 +22,125 @@ let baselinePID = {
  * Show notification to user (fallback to console if not defined elsewhere)
  */
 function showNotification(message) {
-    // Try to use addLogMessage if available
     if (typeof addLogMessage === 'function') {
         addLogMessage(`[Tuning] ${message}`, 'info');
     } else {
         console.log(`[Notification] ${message}`);
     }
+}
 
-    function mean(arr) {
-        if (arr.length === 0) return 0;
-        return arr.reduce((a, b) => a + b, 0) / arr.length;
+// Helpers (global scope)
+function mean(arr) {
+    if (!Array.isArray(arr) || arr.length === 0) return 0;
+    return arr.reduce((a, b) => a + b, 0) / arr.length;
+}
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function updateBestDisplay(params) {
+    const elKp = document.getElementById('best-kp');
+    const elKi = document.getElementById('best-ki');
+    const elKd = document.getElementById('best-kd');
+    const elF = document.getElementById('best-fitness');
+    if (elKp) elKp.textContent = params.kp.toFixed(3);
+    if (elKi) elKi.textContent = params.ki.toFixed(3);
+    if (elKd) elKd.textContent = params.kd.toFixed(3);
+    if (elF && params.fitness !== undefined && params.fitness !== Infinity) {
+        elF.textContent = params.fitness.toFixed(4);
     }
+    const applyBtn = document.getElementById('apply-best-btn');
+    if (applyBtn) applyBtn.disabled = false;
+}
 
-    // NOTE: a delay helper (const delay = ms => ...) is already defined earlier in the file;
-    // the duplicate function declaration was removed to avoid "Declaration or statement expected" / duplicate identifier errors.
+function updateProgressDisplay(current, total, bestFitness) {
+    const itEl = document.getElementById('current-iteration');
+    const totEl = document.getElementById('total-iterations');
+    const fEl = document.getElementById('best-fitness');
+    if (itEl) itEl.textContent = current;
+    if (totEl) totEl.textContent = total;
+    if (fEl && bestFitness !== undefined && bestFitness !== Infinity) {
+        fEl.textContent = bestFitness.toFixed(4);
+    }
+    fitnessChartData.push({ x: current, y: bestFitness });
+    try { updateFitnessChart(); } catch (_) { /* no-op if chart not ready */ }
+}
 
-    function updateBestDisplay(params) {
-        document.getElementById('best-kp').textContent = params.kp.toFixed(3);
-        document.getElementById('best-ki').textContent = params.ki.toFixed(3);
-        document.getElementById('best-kd').textContent = params.kd.toFixed(3);
-        if (params.fitness !== undefined && params.fitness !== Infinity) {
-            document.getElementById('best-fitness').textContent = params.fitness.toFixed(4);
+function updateFitnessChart() {
+    const canvas = document.getElementById('fitness-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!Array.isArray(fitnessChartData) || fitnessChartData.length === 0) return;
+
+    const minFitness = Math.min(...fitnessChartData.map(d => d.y));
+    const maxFitness = Math.max(...fitnessChartData.map(d => d.y));
+    const maxIteration = Math.max(...fitnessChartData.map(d => d.x));
+
+    const padding = 40;
+    const width = canvas.width - 2 * padding;
+    const height = canvas.height - 2 * padding;
+
+    // axes
+    ctx.strokeStyle = '#61dafb';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(padding, padding);
+    ctx.lineTo(padding, canvas.height - padding);
+    ctx.lineTo(canvas.width - padding, canvas.height - padding);
+    ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '12px Arial';
+    ctx.fillText('Fitness', 5, padding);
+    ctx.fillText('Iteracja', canvas.width - padding, canvas.height - padding + 20);
+
+    // line
+    ctx.strokeStyle = '#a2f279';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    fitnessChartData.forEach((p, i) => {
+        const x = padding + (p.x / (maxIteration || 1)) * width;
+        const y = canvas.height - padding - ((p.y - minFitness) / ((maxFitness - minFitness) || 0.0001)) * height;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // points
+    ctx.fillStyle = '#a2f279';
+    fitnessChartData.forEach((p) => {
+        const x = padding + (p.x / (maxIteration || 1)) * width;
+        const y = canvas.height - padding - ((p.y - minFitness) / ((maxFitness - minFitness) || 0.0001)) * height;
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, 2 * Math.PI);
+        ctx.fill();
+    });
+}
+
+function addTestToResultsTable(testNum, params, fitness, itae, overshoot, testType = 'metrics_test') {
+    const tbody = document.getElementById('results-table-body');
+    // Save to global tuning history if available
+    try {
+        if (Array.isArray(tuningHistory)) {
+            tuningHistory.push({ idx: testNum, kp: params.kp, ki: params.ki, kd: params.kd, fitness, itae, overshoot, testType });
+            if (typeof refreshRecentList === 'function') refreshRecentList();
         }
-        document.getElementById('apply-best-btn').disabled = false;
-    }
+    } catch (_) { /* ignore */ }
+    if (!tbody) return;
 
-    function updateProgressDisplay(current, total, bestFitness) {
-        document.getElementById('current-iteration').textContent = current;
-        document.getElementById('total-iterations').textContent = total;
-        if (bestFitness !== undefined && bestFitness !== Infinity) {
-            document.getElementById('best-fitness').textContent = bestFitness.toFixed(4);
-        }
-
-        // Update chart
-        fitnessChartData.push({ x: current, y: bestFitness });
-        updateFitnessChart();
-    }
-
-    function addTestToResultsTable(testNum, params, fitness, itae, overshoot, testType = 'metrics_test') {
-        const tbody = document.getElementById('results-table-body');
-        // Save to global tuning history if available
-        try {
-            if (Array.isArray(tuningHistory)) {
-                tuningHistory.push({ idx: testNum, kp: params.kp, ki: params.ki, kd: params.kd, fitness, itae, overshoot, testType });
-                refreshRecentList();
-            }
-        } catch (err) {
-            // ignore
-        }
-        if (!tbody) return;
-
-        const row = tbody.insertRow(0); // Insert at top
-        row.innerHTML = `
-            <td>${testNum}</td>
-            <td>${params.kp.toFixed(3)}</td>
-            <td>${params.ki.toFixed(3)}</td>
-            <td>${params.kd.toFixed(3)}</td>
-            <td>${(fitness === Infinity || isNaN(fitness)) ? '---' : fitness.toFixed(4)}</td>
-            <td>${(isNaN(itae) ? '---' : itae.toFixed(2))}</td>
-            <td>${isNaN(overshoot) ? '---' : overshoot.toFixed(2)}${(testType === 'metrics_test') ? '°' : '%'}</td>
-            <td><button onclick="applyParameters(${params.kp}, ${params.ki}, ${params.kd})" class="btn-small">Zastosuj</button></td>
-        `;
-
-        // Table displayed in history modal - no reference to absent #results-container expected
-    }
+    const row = tbody.insertRow(0); // Insert at top
+    row.innerHTML = `
+        <td>${testNum}</td>
+        <td>${params.kp.toFixed(3)}</td>
+        <td>${params.ki.toFixed(3)}</td>
+        <td>${params.kd.toFixed(3)}</td>
+        <td>${(fitness === Infinity || isNaN(fitness)) ? '---' : fitness.toFixed(4)}</td>
+        <td>${(isNaN(itae) ? '---' : itae.toFixed(2))}</td>
+        <td>${isNaN(overshoot) ? '---' : overshoot.toFixed(2)}${(testType === 'metrics_test') ? '°' : '%'}</td>
+        <td><button onclick="applyParameters(${params.kp}, ${params.ki}, ${params.kd})" class="btn-small">Zastosuj</button></td>
+    `;
 }
 
 function applyParameters(kp, ki, kd) {
