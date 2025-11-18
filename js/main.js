@@ -364,10 +364,11 @@ function pushLog(message, level = 'info') {
     const ts = new Date().toLocaleTimeString();
     allLogsBuffer.push({ ts, level, message });
     if (allLogsBuffer.length > ALL_LOGS_MAX) allLogsBuffer.shift();
-    const logHistEl = document.getElementById('log-history');
+    const logCard = document.getElementById('log-card');
     const autoEl = document.getElementById('logsAutoscroll');
-    if (logHistEl && logHistEl.style.display === 'block' && autoEl && autoEl.checked) {
-        renderAllLogs(true);
+    if (logCard && logCard.classList.contains('open')) {
+        const shouldScroll = (autoEl && autoEl.checked) === true;
+        renderAllLogs(shouldScroll);
     }
 }
 
@@ -829,7 +830,7 @@ function setRollZero() {
 
 const debounce = (func, delay) => { let timeout; return function (...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-function addLogMessage(message, level = 'info') { pushLog(message, level); const el = document.getElementById('log-history'); if (el && el.style.display === 'block') { renderAllLogs(true); } }
+function addLogMessage(message, level = 'info') { pushLog(message, level); const logCard = document.getElementById('log-card'); const autoEl = document.getElementById('logsAutoscroll'); if (logCard && logCard.classList.contains('open')) { renderAllLogs((autoEl && autoEl.checked) === true); } }
 function clearLogs() { if (typeof allLogsBuffer !== 'undefined') { allLogsBuffer.length = 0; } const box = document.getElementById('log-history'); if (box) box.innerHTML = ''; }
 function toggleAccordion(header) {
     const content = header.nextElementSibling;
