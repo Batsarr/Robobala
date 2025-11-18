@@ -224,24 +224,38 @@ class GeneticAlgorithm {
         this.testCounter++;
 
         return new Promise((resolve, reject) => {
+            let done = false;
             const timeout = setTimeout(() => {
-                reject(new Error('Test timeout'));
+                if (!done) {
+                    done = true;
+                    // Best-effort cleanup
+                    window.removeEventListener('ble_message', completeHandler);
+                    window.removeEventListener('ble_message', metricsHandler);
+                    window.removeEventListener('ble_message', ackHandlerGA);
+                    reject(new Error('Test timeout'));
+                }
             }, 10000); // 10 second timeout
 
             // Handler for test completion (success or failure)
             const completeHandler = (evt) => {
                 const data = (evt && evt.detail) ? evt.detail : evt;
                 if (data.type === 'test_complete' && Number(data.testId) === testId) {
+                    if (done) return;
                     clearTimeout(timeout);
                     window.removeEventListener('ble_message', completeHandler);
                     window.removeEventListener('ble_message', metricsHandler);
-                    window.removeEventListener('ble_message', ackHandler);
+                    window.removeEventListener('ble_message', ackHandlerGA);
 
                     // If test failed (e.g., emergency stop), reject with special reason
                     if (!data.success) {
+                        done = true;
                         reject({ reason: 'interrupted_by_emergency', testId: testId });
                         return;
                     }
+
+                    // If we reached here without receiving metrics (edge case), resolve with current fitness
+                    done = true;
+                    resolve(individual.fitness);
                 }
             };
 
@@ -249,6 +263,7 @@ class GeneticAlgorithm {
             const metricsHandler = (evt) => {
                 const data = (evt && evt.detail) ? evt.detail : evt;
                 if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
+                    if (done) return;
                     clearTimeout(timeout);
                     const fitness = data.itae + data.overshoot * 10 + data.steady_state_error * 5;
                     individual.fitness = fitness;
@@ -258,9 +273,10 @@ class GeneticAlgorithm {
                     // Remove handlers
                     window.removeEventListener('ble_message', completeHandler);
                     window.removeEventListener('ble_message', metricsHandler);
-                    window.removeEventListener('ble_message', ackHandlerBayes);
-                    window.removeEventListener('ble_message', ackHandler);
                     window.removeEventListener('ble_message', ackHandlerGA);
+
+                    done = true;
+                    resolve(fitness);
                 }
             };
 
@@ -269,11 +285,13 @@ class GeneticAlgorithm {
                 const d = (evt && evt.detail) ? evt.detail : evt;
                 if (d.type === 'ack' && d.command === 'run_metrics_test') {
                     if (!d.success) {
+                        if (done) return;
                         clearTimeout(timeout);
                         window.removeEventListener('ble_message', completeHandler);
                         window.removeEventListener('ble_message', metricsHandler);
                         window.removeEventListener('ble_message', ackHandlerGA);
                         try { addLogMessage(`[GA:${this._debugId}] run_metrics_test ACK failed: ${d.message || 'N/A'}`, 'error'); } catch (e) { console.debug('GA ack log failed', e); }
+                        done = true;
                         reject({ reason: 'ack_failed', message: d.message });
                         return;
                     } else {
