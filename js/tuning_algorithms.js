@@ -353,8 +353,16 @@ class GeneticAlgorithm {
                 if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
                     if (done) return;
                     clearTimeout(timeout);
-                    const fitness = data.itae + data.overshoot * 10 + data.steady_state_error * 5;
+                    
+                    // Validate and extract metrics with fallbacks
+                    const itae = (typeof data.itae === 'number' && !isNaN(data.itae)) ? data.itae : 0;
+                    const overshoot = (typeof data.overshoot === 'number' && !isNaN(data.overshoot)) ? data.overshoot : 0;
+                    const steadyStateError = (typeof data.steady_state_error === 'number' && !isNaN(data.steady_state_error)) ? data.steady_state_error : 0;
+                    
+                    const fitness = itae + overshoot * 10 + steadyStateError * 5;
                     individual.fitness = fitness;
+                    
+                    try { addLogMessage(`[GA:${this._debugId}] Fitness calculated: ITAE=${itae.toFixed(4)}, Overshoot=${overshoot.toFixed(2)}, SSE=${steadyStateError.toFixed(2)}, Fitness=${fitness.toFixed(4)}`, 'info'); } catch (e) { console.debug('[GA] fitness log failed', e); }
 
                     // Add incremental point for this individual to fitness chart (fractional X = generation + individual/population)
                     try { fitnessChartData.push({ x: this.generation + (idx / Math.max(1, this.population.length)), y: fitness }); updateFitnessChart(); } catch (_) { }
@@ -691,9 +699,16 @@ class ParticleSwarmOptimization {
                 const data = (evt && evt.detail) ? evt.detail : evt;
                 if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
                     clearTimeout(timeout);
-                    const fitness = data.itae + data.overshoot * 10 + data.steady_state_error * 5;
-
+                    
+                    // Validate and extract metrics with fallbacks
+                    const itae = (typeof data.itae === 'number' && !isNaN(data.itae)) ? data.itae : 0;
+                    const overshoot = (typeof data.overshoot === 'number' && !isNaN(data.overshoot)) ? data.overshoot : 0;
+                    const steadyStateError = (typeof data.steady_state_error === 'number' && !isNaN(data.steady_state_error)) ? data.steady_state_error : 0;
+                    
+                    const fitness = itae + overshoot * 10 + steadyStateError * 5;
                     particle.fitness = fitness;
+                    
+                    try { addLogMessage(`[PSO] Fitness calculated: ITAE=${itae.toFixed(4)}, Overshoot=${overshoot.toFixed(2)}, SSE=${steadyStateError.toFixed(2)}, Fitness=${fitness.toFixed(4)}`, 'info'); } catch (e) { console.debug('[PSO] fitness log failed', e); }
 
                     if (fitness < particle.bestFitness) {
                         particle.bestFitness = fitness;
@@ -1330,7 +1345,15 @@ class BayesianOptimization {
                 const data = (evt && evt.detail) ? evt.detail : evt;
                 if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
                     clearTimeout(timeout);
-                    const fitness = data.itae + data.overshoot * 10 + data.steady_state_error * 5;
+                    
+                    // Validate and extract metrics with fallbacks
+                    const itae = (typeof data.itae === 'number' && !isNaN(data.itae)) ? data.itae : 0;
+                    const overshoot = (typeof data.overshoot === 'number' && !isNaN(data.overshoot)) ? data.overshoot : 0;
+                    const steadyStateError = (typeof data.steady_state_error === 'number' && !isNaN(data.steady_state_error)) ? data.steady_state_error : 0;
+                    
+                    const fitness = itae + overshoot * 10 + steadyStateError * 5;
+                    
+                    try { addLogMessage(`[Bayesian] Fitness calculated: ITAE=${itae.toFixed(4)}, Overshoot=${overshoot.toFixed(2)}, SSE=${steadyStateError.toFixed(2)}, Fitness=${fitness.toFixed(4)}`, 'info'); } catch (e) { console.debug('[Bayesian] fitness log failed', e); }
 
                     // Update UI with resulting fitness for this sample
                     try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, fitness); } catch (_) { }
