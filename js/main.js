@@ -1249,8 +1249,24 @@ function processCompleteMessage(data) {
                 }
             }
             break;
-        case 'test_result': handleDynamicTestResult(data); break;
-        case 'metrics_result': handleDynamicTestResult(data); break;
+        case 'test_result':
+        case 'metrics_result':
+            // Normalize metrics data structure for fitness evaluation
+            // Ensure metrics are at top level for tuning algorithms
+            if (data.metrics) {
+                data.itae = data.itae ?? data.metrics.itae;
+                data.overshoot = data.overshoot ?? data.metrics.overshoot;
+                data.rise_time = data.rise_time ?? data.metrics.rise_time;
+                data.settling_time = data.settling_time ?? data.metrics.settling_time;
+                data.steady_state_error = data.steady_state_error ?? data.metrics.steady_state_error;
+            }
+            if (data.params) {
+                data.kp = data.kp ?? data.params.kp;
+                data.ki = data.ki ?? data.params.ki;
+                data.kd = data.kd ?? data.params.kd;
+            }
+            handleDynamicTestResult(data);
+            break;
         case 'tuner_session_end':
             // POPRAWKA: Obsługa komunikatu o zakończeniu sesji strojenia.
             // Odblokowuje UI, gdy strojenie zostanie przerwane na robocie lub zakończy się naturalnie.
