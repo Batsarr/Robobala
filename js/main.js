@@ -272,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sensorWizard.step === 0) {
             // Start i rejestracja pozycji pionowej
             sendBleMessage({ type: 'sensor_map_start' });
-            await delay(80);
+            await RB.helpers.delay(80);
             sendBleMessage({ type: 'sensor_map_capture_upright' });
             sensorWizard.progress.upright = true; setWizardProgress();
             // Rozpocznij krok rotacji i monitoring
@@ -835,7 +835,7 @@ function setRollZero() {
 }
 
 const debounce = (func, delay) => { let timeout; return function (...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+// delay helper is provided by RB.helpers.delay (see js/helpers.js)
 function addLogMessage(message, level = 'info') { pushLog(message, level); const logCard = document.getElementById('log-card'); const autoEl = document.getElementById('logsAutoscroll'); if (logCard && logCard.classList.contains('open')) { renderAllLogs((autoEl && autoEl.checked) === true); } }
 function clearLogs() { if (typeof allLogsBuffer !== 'undefined') { allLogsBuffer.length = 0; } const box = document.getElementById('log-history'); if (box) box.innerHTML = ''; }
 function toggleAccordion(header) {
@@ -1946,12 +1946,7 @@ function executeNextSequenceStep() {
     sendBleMessage(command);
     if (['move_fwd', 'move_bwd', 'rotate_r', 'rotate_l'].includes(type)) { addPlannedPathSegment(type, parseFloat(value)); }
 }
-let pathCanvas, pathCtx; let robotPathX = 0, robotPathY = 0, robotPathHeading = 0; const CM_PER_PIXEL = 1.0; let plannedPath = [], actualPath = [];
-function initPathVisualization() { pathCanvas = document.getElementById('pathCanvas'); pathCtx = pathCanvas.getContext('2d'); pathCanvas.width = pathCanvas.clientWidth; pathCanvas.height = pathCanvas.clientHeight; resetPathVisualization(); }
-function drawPathVisualization() { if (!pathCtx) return; pathCtx.clearRect(0, 0, pathCanvas.width, pathCanvas.height); const drawPath = (path, color) => { pathCtx.strokeStyle = color; pathCtx.lineWidth = 2; pathCtx.beginPath(); if (path.length > 0) { pathCtx.moveTo(path[0].x, path[0].y); path.forEach(p => pathCtx.lineTo(p.x, p.y)); } pathCtx.stroke(); }; drawPath(plannedPath, '#61dafb'); drawPath(actualPath, '#a2f279'); if (actualPath.length > 0) { const lastPos = actualPath[actualPath.length - 1]; pathCtx.fillStyle = '#ff6347'; pathCtx.beginPath(); pathCtx.arc(lastPos.x, lastPos.y, 4, 0, Math.PI * 2); pathCtx.fill(); } }
-function addPlannedPathSegment(type, value) { let { x, y, heading } = plannedPath.length > 0 ? plannedPath[plannedPath.length - 1] : { x: robotPathX, y: robotPathY, heading: robotPathHeading }; let newX = x, newY = y, newHeading = heading; const angleRad = (heading - 90) * Math.PI / 180; if (type === 'move_fwd') { newX += Math.cos(angleRad) * value / CM_PER_PIXEL; newY += Math.sin(angleRad) * value / CM_PER_PIXEL; } else if (type === 'move_bwd') { newX -= Math.cos(angleRad) * value / CM_PER_PIXEL; newY -= Math.sin(angleRad) * value / CM_PER_PIXEL; } else if (type === 'rotate_r') { newHeading += value; } else if (type === 'rotate_l') { newHeading -= value; } plannedPath.push({ x: newX, y: newY, heading: newHeading }); drawPathVisualization(); }
-function updateActualPath(data) { if (data.pos_x_cm !== undefined && data.pos_y_cm !== undefined && data.yaw !== undefined) { const actualX = robotPathX + (data.pos_x_cm / CM_PER_PIXEL); const actualY = robotPathY - (data.pos_y_cm / CM_PER_PIXEL); actualPath.push({ x: actualX, y: actualY, heading: data.yaw }); drawPathVisualization(); } }
-function resetPathVisualization() { robotPathX = pathCanvas.width / 2; robotPathY = pathCanvas.height / 2; robotPathHeading = 0; plannedPath = [{ x: robotPathX, y: robotPathY, heading: robotPathHeading }]; actualPath = [{ x: robotPathX, y: robotPathY, heading: robotPathHeading }]; const ReportPanel = document.getElementById('sequenceReportPanel'); if (ReportPanel) { ReportPanel.style.display = 'none'; } drawPathVisualization(); }
+// Path visualization is centralized in RB.path (see js/path_visualization.js). Backwards-compatible globals are available (initPathVisualization, drawPathVisualization, addPlannedPathSegment, updateActualPath, resetPathVisualization)
 function showSequenceReport() { document.getElementById('sequence-report-panel').style.display = 'block'; document.getElementById('avgHeadingError').textContent = 'X.X °'; document.getElementById('maxHeadingError').textContent = 'Y.Y °'; document.getElementById('totalDistanceCovered').textContent = 'Z.Z cm'; }
 
 let autotuneTuningChart; let autotuneChartData = { labels: [], datasets: [] };

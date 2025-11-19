@@ -35,7 +35,7 @@ function mean(arr) {
     return arr.reduce((a, b) => a + b, 0) / arr.length;
 }
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Use RB.helpers.delay(ms) (provided by js/helpers.js) for delays to avoid redeclaration issues.
 
 function updateBestDisplay(params) {
     const elKp = document.getElementById('best-kp');
@@ -372,7 +372,7 @@ class GeneticAlgorithm {
         // Evaluate all individuals
         for (let i = 0; i < this.population.length; i++) {
             if (this.isPaused) {
-                await delay(100);
+                await RB.helpers.delay(100);
                 i--; // Repeat this iteration
                 continue;
             }
@@ -393,7 +393,7 @@ class GeneticAlgorithm {
 
                         // Wait for resume
                         while (this.isPaused && this.isRunning) {
-                            await delay(100);
+                            await RB.helpers.delay(100);
                         }
 
                         // Retry the same test after resume
@@ -508,7 +508,7 @@ class GeneticAlgorithm {
                 if (!this.isPaused) {
                     await this.runGeneration();
                 } else {
-                    await delay(100);
+                    await RB.helpers.delay(100);
                 }
             }
 
@@ -718,7 +718,7 @@ class ParticleSwarmOptimization {
         // Evaluate all particles
         for (let i = 0; i < this.particles.length; i++) {
             if (this.isPaused) {
-                await delay(100);
+                await RB.helpers.delay(100);
                 i--;
                 continue;
             }
@@ -738,7 +738,7 @@ class ParticleSwarmOptimization {
 
                     // Wait for resume
                     while (this.isPaused && this.isRunning) {
-                        await delay(100);
+                        await RB.helpers.delay(100);
                     }
 
                     // Retry the same test after resume
@@ -800,7 +800,7 @@ class ParticleSwarmOptimization {
                 if (!this.isPaused) {
                     await this.runIteration();
                 } else {
-                    await delay(100);
+                    await RB.helpers.delay(100);
                 }
             }
             this.isRunning = false;

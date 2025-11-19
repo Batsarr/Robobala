@@ -10,156 +10,166 @@
 // razem z 'js/main.js' (bundled), ponieważ skrypt 'main.js' zawiera te
 // same definicje i powoduje błąd: "Uncaught SyntaxError: redeclaration of let ...".
 
-function toggleAccordion(header) {
-    const content = header.nextElementSibling;
-    header.classList.toggle('active');
-    const isOpening = header.classList.contains('active');
-    if (!isOpening) {
-        content.classList.remove('auto-height');
-        content.style.maxHeight = '0px';
-        content.style.padding = '0px 15px';
-    } else {
-        // Specjalne traktowanie panelu strojenia: stała wysokość po otwarciu
-        if (content.classList.contains('autotune-pane')) {
-            const desktopH = 600; // px
-            const mobileVH = 70; // vh
-            const isMobile = window.matchMedia('(max-width: 768px)').matches;
-            if (isMobile) {
-                content.style.maxHeight = mobileVH + 'vh';
-            } else {
-                content.style.maxHeight = desktopH + 'px';
-            }
-            content.style.overflow = 'hidden';
+if (typeof window.toggleAccordion === 'undefined') {
+    window.toggleAccordion = function (header) {
+        const content = header.nextElementSibling;
+        header.classList.toggle('active');
+        const isOpening = header.classList.contains('active');
+        if (!isOpening) {
+            content.classList.remove('auto-height');
+            content.style.maxHeight = '0px';
+            content.style.padding = '0px 15px';
         } else {
-            content.style.maxHeight = content.scrollHeight + 40 + 'px';
-        }
-        content.style.padding = '15px';
-        setTimeout(() => {
-            if (header.classList.contains('active') && !content.classList.contains('autotune-pane')) content.classList.add('auto-height');
-        }, 450);
-    }
-}
-function initSignalAnalyzerChart() {
-    const ctx = document.getElementById('signalAnalyzerChart').getContext('2d');
-    signalAnalyzerChart = new Chart(ctx, {
-        type: 'line', data: { labels: Array(200).fill(''), datasets: [] },
-        options: {
-            animation: false, responsive: true, maintainAspectRatio: false,
-            scales: {
-                x: {
-                    display: true,
-                    title: { display: true, text: 'Czas', color: '#fff' },
-                    ticks: { color: '#fff' }
-                },
-                y: { type: 'linear', display: true, position: 'left', id: 'y-pitch', ticks: { color: availableTelemetry['pitch']?.color || '#61dafb' }, title: { display: true, text: 'Pitch (°)', color: availableTelemetry['pitch']?.color || '#61dafb' } },
-                y1: { type: 'linear', display: false, position: 'right', id: 'y-speed', ticks: { color: availableTelemetry['speed']?.color || '#f7b731' }, title: { display: true, text: 'Speed (imp/s)', color: availableTelemetry['speed']?.color || '#f7b731' }, grid: { drawOnChartArea: false } }
-            },
-            plugins: {
-                legend: { labels: { color: '#fff' } },
-                tooltip: { mode: 'index', intersect: false }
-            },
-            onClick: handleChartClick,
-            onHover: (event, activeElements, chart) => {
-                if (chartRangeSelection.isSelecting) {
-                    chart.canvas.style.cursor = 'crosshair';
+            // Specjalne traktowanie panelu strojenia: stała wysokość po otwarciu
+            if (content.classList.contains('autotune-pane')) {
+                const desktopH = 600; // px
+                const mobileVH = 70; // vh
+                const isMobile = window.matchMedia('(max-width: 768px)').matches;
+                if (isMobile) {
+                    content.style.maxHeight = mobileVH + 'vh';
                 } else {
-                    chart.canvas.style.cursor = 'default';
+                    content.style.maxHeight = desktopH + 'px';
                 }
-            }
-        }
-    });
-
-    // Add range selection functionality
-    const canvas = ctx.canvas;
-    let selectionStart = null;
-
-    canvas.addEventListener('mousedown', (e) => {
-        if (e.shiftKey) {
-            chartRangeSelection.isSelecting = true;
-            const rect = canvas.getBoundingClientRect();
-            selectionStart = e.clientX - rect.left;
-            chartRangeSelection.startIndex = getChartIndexFromX(selectionStart);
-        }
-    });
-
-    canvas.addEventListener('mousemove', (e) => {
-        if (chartRangeSelection.isSelecting && selectionStart !== null) {
-            const rect = canvas.getBoundingClientRect();
-            const currentX = e.clientX - rect.left;
-            chartRangeSelection.endIndex = getChartIndexFromX(currentX);
-            highlightSelectedRange();
-        }
-    });
-
-    canvas.addEventListener('mouseup', (e) => {
-        if (chartRangeSelection.isSelecting) {
-            chartRangeSelection.isSelecting = false;
-            selectionStart = null;
-            // Range is now selected and stored in chartRangeSelection
-            if (chartRangeSelection.startIndex !== null && chartRangeSelection.endIndex !== null) {
-                addLogMessage(`[UI] Zakres zaznaczony: ${chartRangeSelection.startIndex} - ${chartRangeSelection.endIndex}. Użyj "Eksport CSV (Zakres)" aby wyeksportować.`, 'info');
-            }
-        }
-    });
-}
-function setupSignalChartControls() {
-    const container = document.getElementById('signalChartControls'); container.innerHTML = '';
-    const defaultChecked = ['pitch', 'speed'];
-    Object.keys(availableTelemetry).forEach((key) => {
-        const label = document.createElement('label'); const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox'; checkbox.value = key; checkbox.checked = defaultChecked.includes(key);
-        checkbox.addEventListener('change', (e) => {
-            const varName = e.target.value, datasetLabel = availableTelemetry[varName].label, datasetColor = availableTelemetry[varName].color;
-            let dataset = signalAnalyzerChart.data.datasets.find(ds => ds.label === datasetLabel);
-            if (e.target.checked) {
-                if (!dataset) {
-                    let yAxisID = 'y-pitch';
-                    if (['speed', 'target_speed', 'output'].includes(varName)) { yAxisID = 'y-speed'; signalAnalyzerChart.options.scales['y1'].display = true; }
-                    signalAnalyzerChart.data.datasets.push({ label: datasetLabel, data: Array(signalAnalyzerChart.data.labels.length).fill(null), borderColor: datasetColor, fill: false, tension: 0.1, pointRadius: 0, yAxisID: yAxisID });
-                }
+                content.style.overflow = 'hidden';
             } else {
-                const datasetIndex = signalAnalyzerChart.data.datasets.findIndex(ds => ds.label === datasetLabel);
-                if (datasetIndex > -1) { signalAnalyzerChart.data.datasets.splice(datasetIndex, 1); }
-                if (!signalAnalyzerChart.data.datasets.some(ds => ds.yAxisID === 'y-speed')) { signalAnalyzerChart.options.scales['y1'].display = false; }
+                content.style.maxHeight = content.scrollHeight + 40 + 'px';
             }
-            signalAnalyzerChart.update(); updateCursorInfo();
+            content.style.padding = '15px';
+            setTimeout(() => {
+                if (header.classList.contains('active') && !content.classList.contains('autotune-pane')) content.classList.add('auto-height');
+            }, 450);
+        }
+    };
+}
+if (typeof window.initSignalAnalyzerChart === 'undefined') {
+    window.initSignalAnalyzerChart = function () {
+        const ctx = document.getElementById('signalAnalyzerChart').getContext('2d');
+        signalAnalyzerChart = new Chart(ctx, {
+            type: 'line', data: { labels: Array(200).fill(''), datasets: [] },
+            options: {
+                animation: false, responsive: true, maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        display: true,
+                        title: { display: true, text: 'Czas', color: '#fff' },
+                        ticks: { color: '#fff' }
+                    },
+                    y: { type: 'linear', display: true, position: 'left', id: 'y-pitch', ticks: { color: availableTelemetry['pitch']?.color || '#61dafb' }, title: { display: true, text: 'Pitch (°)', color: availableTelemetry['pitch']?.color || '#61dafb' } },
+                    y1: { type: 'linear', display: false, position: 'right', id: 'y-speed', ticks: { color: availableTelemetry['speed']?.color || '#f7b731' }, title: { display: true, text: 'Speed (imp/s)', color: availableTelemetry['speed']?.color || '#f7b731' }, grid: { drawOnChartArea: false } }
+                },
+                plugins: {
+                    legend: { labels: { color: '#fff' } },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                onClick: handleChartClick,
+                onHover: (event, activeElements, chart) => {
+                    if (chartRangeSelection.isSelecting) {
+                        chart.canvas.style.cursor = 'crosshair';
+                    } else {
+                        chart.canvas.style.cursor = 'default';
+                    }
+                }
+            }
         });
-        label.appendChild(checkbox); label.append(` ${availableTelemetry[key].label}`); container.appendChild(label);
-        if (checkbox.checked) checkbox.dispatchEvent(new Event('change'));
-    });
+
+        // Add range selection functionality
+        const canvas = ctx.canvas;
+        let selectionStart = null;
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.shiftKey) {
+                chartRangeSelection.isSelecting = true;
+                const rect = canvas.getBoundingClientRect();
+                selectionStart = e.clientX - rect.left;
+                chartRangeSelection.startIndex = getChartIndexFromX(selectionStart);
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (chartRangeSelection.isSelecting && selectionStart !== null) {
+                const rect = canvas.getBoundingClientRect();
+                const currentX = e.clientX - rect.left;
+                chartRangeSelection.endIndex = getChartIndexFromX(currentX);
+                highlightSelectedRange();
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (chartRangeSelection.isSelecting) {
+                chartRangeSelection.isSelecting = false;
+                selectionStart = null;
+                // Range is now selected and stored in chartRangeSelection
+                if (chartRangeSelection.startIndex !== null && chartRangeSelection.endIndex !== null) {
+                    addLogMessage(`[UI] Zakres zaznaczony: ${chartRangeSelection.startIndex} - ${chartRangeSelection.endIndex}. Użyj "Eksport CSV (Zakres)" aby wyeksportować.`, 'info');
+                }
+            }
+        });
+    };
 }
-function updateChart(data) {
-    if (isChartPaused) return;
-    const chartData = signalAnalyzerChart.data;
-    const currentTimeLabel = (Date.now() / 1000).toFixed(1);
-    if (chartData.labels.length >= 200) { chartData.labels.shift(); chartData.datasets.forEach(ds => ds.data.shift()); }
-    chartData.labels.push(currentTimeLabel);
-    chartData.datasets.forEach(ds => {
-        const key = Object.keys(availableTelemetry).find(k => availableTelemetry[k].label === ds.label);
-        const value = (key && data[key] !== undefined) ? data[key] : null;
-        ds.data.push(value);
-    });
-    signalAnalyzerChart.update('none');
+if (typeof window.setupSignalChartControls === 'undefined') {
+    window.setupSignalChartControls = function () {
+        const container = document.getElementById('signalChartControls'); container.innerHTML = '';
+        const defaultChecked = ['pitch', 'speed'];
+        Object.keys(availableTelemetry).forEach((key) => {
+            const label = document.createElement('label'); const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox'; checkbox.value = key; checkbox.checked = defaultChecked.includes(key);
+            checkbox.addEventListener('change', (e) => {
+                const varName = e.target.value, datasetLabel = availableTelemetry[varName].label, datasetColor = availableTelemetry[varName].color;
+                let dataset = signalAnalyzerChart.data.datasets.find(ds => ds.label === datasetLabel);
+                if (e.target.checked) {
+                    if (!dataset) {
+                        let yAxisID = 'y-pitch';
+                        if (['speed', 'target_speed', 'output'].includes(varName)) { yAxisID = 'y-speed'; signalAnalyzerChart.options.scales['y1'].display = true; }
+                        signalAnalyzerChart.data.datasets.push({ label: datasetLabel, data: Array(signalAnalyzerChart.data.labels.length).fill(null), borderColor: datasetColor, fill: false, tension: 0.1, pointRadius: 0, yAxisID: yAxisID });
+                    }
+                } else {
+                    const datasetIndex = signalAnalyzerChart.data.datasets.findIndex(ds => ds.label === datasetLabel);
+                    if (datasetIndex > -1) { signalAnalyzerChart.data.datasets.splice(datasetIndex, 1); }
+                    if (!signalAnalyzerChart.data.datasets.some(ds => ds.yAxisID === 'y-speed')) { signalAnalyzerChart.options.scales['y1'].display = false; }
+                }
+                signalAnalyzerChart.update(); updateCursorInfo();
+            });
+            label.appendChild(checkbox); label.append(` ${availableTelemetry[key].label}`); container.appendChild(label);
+            if (checkbox.checked) checkbox.dispatchEvent(new Event('change'));
+        });
+    };
 }
-function setupSignalAnalyzerControls() {
-    document.getElementById('pauseChartBtn').addEventListener('click', () => { isChartPaused = true; document.getElementById('pauseChartBtn').style.display = 'none'; document.getElementById('resumeChartBtn').style.display = 'inline-block'; addLogMessage('[UI] Wykres wstrzymany.', 'info'); });
-    document.getElementById('resumeChartBtn').addEventListener('click', () => { isChartPaused = false; document.getElementById('resumeChartBtn').style.display = 'none'; document.getElementById('pauseChartBtn').style.display = 'inline-block'; addLogMessage('[UI] Wykres wznowiony.', 'info'); });
-    document.getElementById('cursorABBtn').addEventListener('click', toggleCursors);
-    document.getElementById('exportCsvBtn').addEventListener('click', () => exportChartDataToCsv(false));
-    document.getElementById('exportRangeCsvBtn').addEventListener('click', () => {
-        if (chartRangeSelection.startIndex === null || chartRangeSelection.endIndex === null) {
-            addLogMessage('[UI] Najpierw zaznacz zakres! Przytrzymaj Shift i przeciągnij myszką po wykresie.', 'warn');
-            return;
-        }
-        exportChartDataToCsv(true);
-    });
-    document.getElementById('resetZoomBtn').addEventListener('click', () => {
-        if (signalAnalyzerChart.resetZoom) {
-            signalAnalyzerChart.resetZoom();
-            addLogMessage('[UI] Widok wykresu zresetowany.', 'info');
-        }
-    });
-    document.getElementById('exportPngBtn').addEventListener('click', exportChartToPng);
+if (typeof window.updateChart === 'undefined') {
+    window.updateChart = function (data) {
+        if (isChartPaused) return;
+        const chartData = signalAnalyzerChart.data;
+        const currentTimeLabel = (Date.now() / 1000).toFixed(1);
+        if (chartData.labels.length >= 200) { chartData.labels.shift(); chartData.datasets.forEach(ds => ds.data.shift()); }
+        chartData.labels.push(currentTimeLabel);
+        chartData.datasets.forEach(ds => {
+            const key = Object.keys(availableTelemetry).find(k => availableTelemetry[k].label === ds.label);
+            const value = (key && data[key] !== undefined) ? data[key] : null;
+            ds.data.push(value);
+        });
+        signalAnalyzerChart.update('none');
+    };
+}
+if (typeof window.setupSignalAnalyzerControls === 'undefined') {
+    window.setupSignalAnalyzerControls = function () {
+        document.getElementById('pauseChartBtn').addEventListener('click', () => { isChartPaused = true; document.getElementById('pauseChartBtn').style.display = 'none'; document.getElementById('resumeChartBtn').style.display = 'inline-block'; addLogMessage('[UI] Wykres wstrzymany.', 'info'); });
+        document.getElementById('resumeChartBtn').addEventListener('click', () => { isChartPaused = false; document.getElementById('resumeChartBtn').style.display = 'none'; document.getElementById('pauseChartBtn').style.display = 'inline-block'; addLogMessage('[UI] Wykres wznowiony.', 'info'); });
+        document.getElementById('cursorABBtn').addEventListener('click', toggleCursors);
+        document.getElementById('exportCsvBtn').addEventListener('click', () => exportChartDataToCsv(false));
+        document.getElementById('exportRangeCsvBtn').addEventListener('click', () => {
+            if (chartRangeSelection.startIndex === null || chartRangeSelection.endIndex === null) {
+                addLogMessage('[UI] Najpierw zaznacz zakres! Przytrzymaj Shift i przeciągnij myszką po wykresie.', 'warn');
+                return;
+            }
+            exportChartDataToCsv(true);
+        });
+        document.getElementById('resetZoomBtn').addEventListener('click', () => {
+            if (signalAnalyzerChart.resetZoom) {
+                signalAnalyzerChart.resetZoom();
+                addLogMessage('[UI] Widok wykresu zresetowany.', 'info');
+            }
+        });
+        document.getElementById('exportPngBtn').addEventListener('click', exportChartToPng);
+    };
 }
 function toggleCursors() { const cursorInfo = document.getElementById('cursorInfo'); if (cursorInfo.style.display === 'none') { cursorInfo.style.display = 'flex'; cursorA = { index: Math.floor(signalAnalyzerChart.data.labels.length * 0.25) }; cursorB = { index: Math.floor(signalAnalyzerChart.data.labels.length * 0.75) }; updateCursorInfo(); } else { cursorInfo.style.display = 'none'; cursorA = null; cursorB = null; } signalAnalyzerChart.update(); }
 function handleChartClick(event) { if (!cursorA && !cursorB) return; const activePoints = signalAnalyzerChart.getElementsAtEventForMode(event, 'index', { intersect: false }, true); if (activePoints.length > 0) { const clickedIndex = activePoints[0].index; if (cursorA && cursorB) { const distA = Math.abs(clickedIndex - cursorA.index); const distB = Math.abs(clickedIndex - cursorB.index); if (distA < distB) { cursorA.index = clickedIndex; } else { cursorB.index = clickedIndex; } } else if (cursorA) { cursorA.index = clickedIndex; } updateCursorInfo(); signalAnalyzerChart.update(); } }
@@ -375,25 +385,23 @@ function executeNextSequenceStep() {
     sendBleMessage(command);
     if (['move_fwd', 'move_bwd', 'rotate_r', 'rotate_l'].includes(type)) { addPlannedPathSegment(type, parseFloat(value)); }
 }
-let pathCanvas, pathCtx; let robotPathX = 0, robotPathY = 0, robotPathHeading = 0; const CM_PER_PIXEL = 1.0; let plannedPath = [], actualPath = [];
-function initPathVisualization() { pathCanvas = document.getElementById('pathCanvas'); pathCtx = pathCanvas.getContext('2d'); pathCanvas.width = pathCanvas.clientWidth; pathCanvas.height = pathCanvas.clientHeight; resetPathVisualization(); }
-function drawPathVisualization() { if (!pathCtx) return; pathCtx.clearRect(0, 0, pathCanvas.width, pathCanvas.height); const drawPath = (path, color) => { pathCtx.strokeStyle = color; pathCtx.lineWidth = 2; pathCtx.beginPath(); if (path.length > 0) { pathCtx.moveTo(path[0].x, path[0].y); path.forEach(p => pathCtx.lineTo(p.x, p.y)); } pathCtx.stroke(); }; drawPath(plannedPath, '#61dafb'); drawPath(actualPath, '#a2f279'); if (actualPath.length > 0) { const lastPos = actualPath[actualPath.length - 1]; pathCtx.fillStyle = '#ff6347'; pathCtx.beginPath(); pathCtx.arc(lastPos.x, lastPos.y, 4, 0, Math.PI * 2); pathCtx.fill(); } }
-function addPlannedPathSegment(type, value) { let { x, y, heading } = plannedPath.length > 0 ? plannedPath[plannedPath.length - 1] : { x: robotPathX, y: robotPathY, heading: robotPathHeading }; let newX = x, newY = y, newHeading = heading; const angleRad = (heading - 90) * Math.PI / 180; if (type === 'move_fwd') { newX += Math.cos(angleRad) * value / CM_PER_PIXEL; newY += Math.sin(angleRad) * value / CM_PER_PIXEL; } else if (type === 'move_bwd') { newX -= Math.cos(angleRad) * value / CM_PER_PIXEL; newY -= Math.sin(angleRad) * value / CM_PER_PIXEL; } else if (type === 'rotate_r') { newHeading += value; } else if (type === 'rotate_l') { newHeading -= value; } plannedPath.push({ x: newX, y: newY, heading: newHeading }); drawPathVisualization(); }
-function updateActualPath(data) { if (data.pos_x_cm !== undefined && data.pos_y_cm !== undefined && data.yaw !== undefined) { const actualX = robotPathX + (data.pos_x_cm / CM_PER_PIXEL); const actualY = robotPathY - (data.pos_y_cm / CM_PER_PIXEL); actualPath.push({ x: actualX, y: actualY, heading: data.yaw }); drawPathVisualization(); } }
-function resetPathVisualization() { robotPathX = pathCanvas.width / 2; robotPathY = pathCanvas.height / 2; robotPathHeading = 0; plannedPath = [{ x: robotPathX, y: robotPathY, heading: robotPathHeading }]; actualPath = [{ x: robotPathX, y: robotPathY, heading: robotPathHeading }]; const ReportPanel = document.getElementById('sequenceReportPanel'); if (ReportPanel) { ReportPanel.style.display = 'none'; } drawPathVisualization(); }
+// Path visualization and state are centralized in "RB.path" (see js/path_visualization.js).
+// Backwards-compatible global wrappers are available: initPathVisualization, drawPathVisualization, addPlannedPathSegment, updateActualPath, resetPathVisualization
 function showSequenceReport() { document.getElementById('sequence-report-panel').style.display = 'block'; document.getElementById('avgHeadingError').textContent = 'X.X °'; document.getElementById('maxHeadingError').textContent = 'Y.Y °'; document.getElementById('totalDistanceCovered').textContent = 'Z.Z cm'; }
 
-function initJoystick() {
-    const wrapper = document.getElementById('joystickWrapper');
-    const size = wrapper.clientWidth;
-    const joystickCanvas = document.getElementById('joystickCanvas');
-    const joystickCtx = joystickCanvas.getContext('2d');
-    joystickCanvas.width = size;
-    joystickCanvas.height = size;
-    joystickCenter = { x: size / 2, y: size / 2 };
-    joystickRadius = size / 2 * 0.75;
-    knobRadius = size / 2 * 0.25;
-    drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y);
+if (typeof window.initJoystick === 'undefined') {
+    window.initJoystick = function () {
+        const wrapper = document.getElementById('joystickWrapper');
+        const size = wrapper.clientWidth;
+        const joystickCanvas = document.getElementById('joystickCanvas');
+        const joystickCtx = joystickCanvas.getContext('2d');
+        joystickCanvas.width = size;
+        joystickCanvas.height = size;
+        joystickCenter = { x: size / 2, y: size / 2 };
+        joystickRadius = size / 2 * 0.75;
+        knobRadius = size / 2 * 0.25;
+        drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y);
+    };
 }
 function drawJoystick(ctx, x, y) {
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -415,7 +423,9 @@ window.addEventListener('gamepadconnected', (e) => { gamepadIndex = e.gamepad.in
 window.addEventListener('gamepaddisconnected', (e) => { gamepadIndex = null; document.getElementById('gamepadStatus').textContent = 'Brak'; document.getElementById('gamepadStatus').style.color = '#f7b731'; addLogMessage('[UI] Gamepad rozlaczony.', 'warn'); });
 function startMapping(action, buttonElement) { if (gamepadIndex === null) { addLogMessage("Podlacz gamepada, aby rozpoczac mapowanie!", "warn"); return; } isMappingButton = true; actionToMap = action; document.querySelectorAll('.mapping-button').forEach(btn => btn.textContent = "Przypisz"); buttonElement.textContent = "Czekam..."; addLogMessage(`[UI] Nasluchiwanie na przycisk dla akcji: ${availableActions[action].label}...`, "info"); }
 function renderMappingModal() { const list = document.getElementById('gamepad-mapping-list'); list.innerHTML = ''; for (const [action, config] of Object.entries(availableActions)) { const row = document.createElement('div'); row.className = 'mapping-row'; const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action); row.innerHTML = `<span class="mapping-label">${config.label}</span><span class="mapping-display">${buttonIndex !== undefined ? `Przycisk ${buttonIndex}` : 'Brak'}</span><button class="mapping-button" data-action="${action}">Przypisz</button>`; list.appendChild(row); } list.querySelectorAll('.mapping-button').forEach(button => { button.addEventListener('click', (e) => { const action = e.target.dataset.action; startMapping(action, e.target); }); }); }
-function init3DVisualization() { const container = document.getElementById('robot3d-container'); scene3D = new THREE.Scene(); camera3D = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 2000); camera3D.position.set(28, 22, 48); camera3D.lookAt(0, 8, 0); renderer3D = new THREE.WebGLRenderer({ antialias: true }); renderer3D.setSize(container.clientWidth, container.clientHeight); container.appendChild(renderer3D.domElement); controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement); controls3D.target.set(0, 8, 0); controls3D.maxPolarAngle = Math.PI / 2; const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); scene3D.add(ambientLight); const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9); directionalLight.position.set(10, 20, 15); scene3D.add(directionalLight); const PLANE_SIZE_CM = 2000; groundTexture = createCheckerTexture(40); const repeats = PLANE_SIZE_CM / 40; groundTexture.repeat.set(repeats, repeats); const groundMaterial = new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1.0, metalness: 0.0 }); const groundGeo = new THREE.PlaneGeometry(PLANE_SIZE_CM, PLANE_SIZE_CM, 1, 1); groundMesh = new THREE.Mesh(groundGeo, groundMaterial); groundMesh.rotation.x = -Math.PI / 2; groundMesh.position.y = 0; scene3D.add(groundMesh); robotPivot = createRobotModel3D(); robotPivot.position.y = 4.1; scene3D.add(robotPivot); skyDome = createSkyDome(); scene3D.add(skyDome); window.addEventListener('resize', () => { const width = container.clientWidth; const height = container.clientHeight; camera3D.aspect = width / height; camera3D.updateProjectionMatrix(); renderer3D.setSize(width, height); }); setupControls3D(); setupCalibrationModal(); }; // ZMIANA: Usunięto duplikację funkcji setupCalibrationModal()
+if (typeof window.init3DVisualization === 'undefined') {
+    window.init3DVisualization = function () { const container = document.getElementById('robot3d-container'); scene3D = new THREE.Scene(); camera3D = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 2000); camera3D.position.set(28, 22, 48); camera3D.lookAt(0, 8, 0); renderer3D = new THREE.WebGLRenderer({ antialias: true }); renderer3D.setSize(container.clientWidth, container.clientHeight); container.appendChild(renderer3D.domElement); controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement); controls3D.target.set(0, 8, 0); controls3D.maxPolarAngle = Math.PI / 2; const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); scene3D.add(ambientLight); const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9); directionalLight.position.set(10, 20, 15); scene3D.add(directionalLight); const PLANE_SIZE_CM = 2000; groundTexture = createCheckerTexture(40); const repeats = PLANE_SIZE_CM / 40; groundTexture.repeat.set(repeats, repeats); const groundMaterial = new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1.0, metalness: 0.0 }); const groundGeo = new THREE.PlaneGeometry(PLANE_SIZE_CM, PLANE_SIZE_CM, 1, 1); groundMesh = new THREE.Mesh(groundGeo, groundMaterial); groundMesh.rotation.x = -Math.PI / 2; groundMesh.position.y = 0; scene3D.add(groundMesh); robotPivot = createRobotModel3D(); robotPivot.position.y = 4.1; scene3D.add(robotPivot); skyDome = createSkyDome(); scene3D.add(skyDome); window.addEventListener('resize', () => { const width = container.clientWidth; const height = container.clientHeight; camera3D.aspect = width / height; camera3D.updateProjectionMatrix(); renderer3D.setSize(width, height); }); setupControls3D(); setupCalibrationModal(); };
+}
 function createCustomWheel(totalRadius, tireThickness, width) { const wheelGroup = new THREE.Group(); const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 }); const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.4 }); const rimRadius = totalRadius - tireThickness; const tire = new THREE.Mesh(new THREE.TorusGeometry(rimRadius + tireThickness / 2, tireThickness / 2, 16, 100), tireMaterial); wheelGroup.add(tire); const rimShape = new THREE.Shape(); rimShape.absarc(0, 0, rimRadius, 0, Math.PI * 2, false); const holePath = new THREE.Path(); holePath.absarc(0, 0, rimRadius * 0.85, 0, Math.PI * 2, true); rimShape.holes.push(holePath); const extrudeSettings = { depth: width * 0.4, bevelEnabled: false }; const outerRimGeometry = new THREE.ExtrudeGeometry(rimShape, extrudeSettings); outerRimGeometry.center(); const outerRim = new THREE.Mesh(outerRimGeometry, rimMaterial); wheelGroup.add(outerRim); const hubRadius = rimRadius * 0.2; const hub = new THREE.Mesh(new THREE.CylinderGeometry(hubRadius, hubRadius, width * 0.5, 24), rimMaterial); hub.rotateX(Math.PI / 2); wheelGroup.add(hub); const spokeLength = (rimRadius * 0.85) - hubRadius; const spokeGeometry = new THREE.BoxGeometry(spokeLength, rimRadius * 0.15, width * 0.4); spokeGeometry.translate(hubRadius + spokeLength / 2, 0, 0); for (let i = 0; i < 6; i++) { const spoke = new THREE.Mesh(spokeGeometry, rimMaterial); spoke.rotation.z = i * (Math.PI / 3); wheelGroup.add(spoke); } return wheelGroup; }
 function createRobotModel3D() { const BODY_WIDTH = 9.0, BODY_HEIGHT = 6.0, BODY_DEPTH = 3.5, WHEEL_GAP = 1.0; const MAST_HEIGHT = 14.5, MAST_THICKNESS = 1.5; const BATTERY_WIDTH = 6.0, BATTERY_HEIGHT = 1.0, BATTERY_DEPTH = 3.0; const TIRE_THICKNESS = 1.0, WHEEL_WIDTH = 2.0; const WHEEL_RADIUS_3D = 4.1; const pivot = new THREE.Object3D(); const model = new THREE.Group(); const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1C1C1C }); const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0x4169E1 }); const body = new THREE.Mesh(new THREE.BoxGeometry(BODY_WIDTH, BODY_HEIGHT, BODY_DEPTH), bodyMaterial); body.position.y = WHEEL_RADIUS_3D; model.add(body); const mast = new THREE.Mesh(new THREE.BoxGeometry(MAST_THICKNESS, MAST_HEIGHT, MAST_THICKNESS), bodyMaterial); mast.position.y = WHEEL_RADIUS_3D + BODY_HEIGHT / 2 + MAST_HEIGHT / 2; model.add(mast); const battery = new THREE.Mesh(new THREE.BoxGeometry(BATTERY_WIDTH, BATTERY_HEIGHT, BATTERY_DEPTH), batteryMaterial); battery.position.y = mast.position.y + MAST_HEIGHT / 2 + BATTERY_HEIGHT / 2; model.add(battery); leftWheel = createCustomWheel(WHEEL_RADIUS_3D, TIRE_THICKNESS, WHEEL_WIDTH); leftWheel.rotation.y = Math.PI / 2; leftWheel.position.set(-(BODY_WIDTH / 2 + WHEEL_GAP), WHEEL_RADIUS_3D, 0); model.add(leftWheel); rightWheel = createCustomWheel(WHEEL_RADIUS_3D, TIRE_THICKNESS, WHEEL_WIDTH); rightWheel.rotation.y = Math.PI / 2; rightWheel.position.set(BODY_WIDTH / 2 + WHEEL_GAP, WHEEL_RADIUS_3D, 0); model.add(rightWheel); model.position.y = -WHEEL_RADIUS_3D; pivot.add(model); return pivot; }
 function createCheckerTexture(squareSizeCm = 20, colorA = '#C8C8C8', colorB = '#787878') { const size = 256; const squares = 2; const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size; const ctx = canvas.getContext('2d'); const s = size / squares; for (let y = 0; y < squares; y++) { for (let x = 0; x < squares; x++) { ctx.fillStyle = ((x + y) % 2 === 0) ? colorA : colorB; ctx.fillRect(x * s, y * s, s, s); } } const tex = new THREE.CanvasTexture(canvas); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 8; tex.encoding = THREE.sRGBEncoding; return tex; }
