@@ -640,7 +640,11 @@
         </div>
     </div>
 
-    <!-- Production: include single bundled JS file to avoid duplicate global declarations -->
+    <!-- Required dependencies for main.js (must be loaded prior to main): -->
+    <script src="js/state_manager.js"></script>
+    <script src="js/communication_layer.js"></script>
+    <script src="js/tuning_algorithms.js"></script>
+    <!-- Production: include single bundled JS file (main.js) last -->
     <script src="js/main.js"></script>
 
 </body>
