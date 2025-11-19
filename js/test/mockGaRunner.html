@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Mock GA Runner</title>
+  <style>
+    body { font-family: Arial; background: #222; color: #eee; padding: 20px; }
+    .block { margin-bottom: 12px; padding: 10px; border: 1px solid #444; }
+  </style>
+</head>
+<body>
+  <h2>Mock GA Runner</h2>
+  <div class="block">Status: <span id="tuning-status-text">Idle</span></div>
+  <div class="block">Generation: <span id="current-generation">0</span> / <span id="ga-gen-total">0</span></div>
+  <div class="block">Individual: <span id="current-individual">0</span> / <span id="population-size">0</span></div>
+  <div class="block">Params: Kp:<span id="current-kp">---</span> Ki:<span id="current-ki">---</span> Kd:<span id="current-kd">---</span></div>
+  <div class="block">Fitness: <span id="current-fitness">---</span></div>
+  <div class="block">Best Kp: <span id="best-kp">---</span> Ki: <span id="best-ki">---</span> Kd: <span id="best-kd">---</span> F: <span id="best-fitness">---</span></div>
+
+  <div id="ga-results-blocks" style="margin-top: 16px;"></div>
+  <table class="autotune-results-table"><tbody id="results-table-body"></tbody></table>
+
+  <script src="../tuning_algorithms.js"></script>
+  <script>
+    // Minimal stubs to simulate the environment
+    window.AppState = { activeTuningMethod: 'ga' };
+    window.tuningHistory = [];
+    function refreshRecentList() { /* no-op for test */ }
+    window.updateCurrentTestDisplay = function(gen, totalGen, individualIdx, populationSize, kp, ki, kd, fitness) {
+      document.getElementById('current-generation').textContent = gen;
+      document.getElementById('ga-gen-total').textContent = totalGen;
+      document.getElementById('current-individual').textContent = individualIdx;
+      document.getElementById('population-size').textContent = populationSize;
+      document.getElementById('current-kp').textContent = (typeof kp === 'number') ? kp.toFixed(3) : '---';
+      document.getElementById('current-ki').textContent = (typeof ki === 'number') ? ki.toFixed(3) : '---';
+      document.getElementById('current-kd').textContent = (typeof kd === 'number') ? kd.toFixed(3) : '---';
+      document.getElementById('current-fitness').textContent = (isFinite(fitness) ? fitness.toFixed(4) : (fitness === Infinity ? '---' : '---'));
+      document.getElementById('tuning-status-text').textContent = `Pokolenie ${gen}/${totalGen} · Osobnik ${individualIdx}/${populationSize}`;
+      console.log('[MOCK UI] updateCurrentTestDisplay', gen, totalGen, individualIdx, populationSize, kp, ki, kd, fitness);
+    };
+    window.applyParameters = function(kp, ki, kd) { console.log('applyParameters', kp, ki, kd); };
+
+    // Simulated sendBleCommand - dispatch ack and then metrics_result
+    function sendBleCommand(msg) {
+      console.log('[MOCK] sendBleCommand', msg);
+      if (msg.type === 'run_metrics_test') {
+        // dispatch ack success
+        window.dispatchEvent(new CustomEvent('ble_message', { detail: { type: 'ack', command: 'run_metrics_test', success: true } }));
+        const testId = msg.testId;
+        const delay = 120 + Math.floor(Math.random() * 180);
+        setTimeout(() => {
+          const metrics = { type: 'metrics_result', testId: testId, kp: msg.kp, ki: msg.ki, kd: msg.kd, itae: Math.random() * 200, overshoot: Math.random() * 5, steady_state_error: Math.random() * 0.5, control_effort: Math.random() * 10 };
+          window.dispatchEvent(new CustomEvent('ble_message', { detail: metrics }));
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('ble_message', { detail: { type: 'test_complete', testId: testId, success: true } }));
+          }, 50);
+        }, delay);
+      }
+    }
+
+    // Provide helpers required by tuning algorithms
+    window.RB = window.RB || {};
+    RB.helpers = RB.helpers || {};
+    RB.helpers.delay = function(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); };
+
+    // Attach to window so tuning code finds it
+    window.sendBleCommand = sendBleCommand;
+
+    // Run a small GA as a dry-run
+    const ga = new GeneticAlgorithm({ populationSize: 5, generations: 3, mutationRate: 0.1, crossoverRate: 0.7, elitism: true, searchSpace: { kp_min: 40, kp_max: 200, ki_min: 0, ki_max: 1, kd_min: 0, kd_max: 10 } });
+    ga.initialize();
+    ga.run().then(() => {
+      console.log('[MOCK] GA run completed');
+    }).catch(err => {
+      console.error('[MOCK] GA run error:', err);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Symulator BLE — RoboBala</title>
+  <style>
+    body{font-family:system-ui,Arial;margin:20px}
+    .panel{border:1px solid #ddd;padding:12px;border-radius:6px;margin-bottom:10px}
+    .controls button{margin-right:8px}
+    .status{font-weight:600;margin-top:8px}
+    .field{margin:4px 0}
+    .field span{display:inline-block;min-width:120px}
+  </style>
+</head>
+<body>
+  <h2>Symulator BLE — sprawdź live update UI</h2>
+  <div class="panel">
+    <div class="controls">
+      <label>Generacja: <input id="gen" type="number" value="1" min="1" style="width:80px"></label>
+      <label>Rozmiar populacji: <input id="pop" type="number" value="6" min="1" style="width:80px"></label>
+      <label>Ilość testów: <input id="count" type="number" value="6" min="1" style="width:80px"></label>
+      <button id="runSeq">Uruchom sekwencję</button>
+      <button id="single">Symuluj pojedynczy test</button>
+    </div>
+    <div class="status" id="status">Gotowy</div>
+  </div>
+
+  <div class="panel" id="display">
+    <div class="field"><span>Pokolenie:</span> <span id="current-generation">-</span> / <span id="ga-gen-total">-</span></div>
+    <div class="field"><span>Osobnik:</span> <span id="current-individual">-</span> / <span id="population-size">-</span></div>
+    <div class="field"><span>Kp:</span> <span id="current-kp">-</span></div>
+    <div class="field"><span>Ki:</span> <span id="current-ki">-</span></div>
+    <div class="field"><span>Kd:</span> <span id="current-kd">-</span></div>
+    <div class="field"><span>Fitness:</span> <span id="current-fitness">-</span></div>
+    <div class="field"><span>tuning-status-text:</span> <span id="tuning-status-text">-</span></div>
+  </div>
+
+  <script>
+    // Helper: zbuduj przykładowe parametry dla testu i zwróć obiekt params
+    function makeParams(i){
+      // prosta wariacja Kp/Ki/Kd
+      const kp = (1 + i*0.1).toFixed(3);
+      const ki = (0.1 + i*0.01).toFixed(3);
+      const kd = (0.01 + i*0.005).toFixed(3);
+      return {kp: parseFloat(kp), ki: parseFloat(ki), kd: parseFloat(kd)};
+    }
+
+    function dispatchBleMessage(detail){
+      const ev = new CustomEvent('ble_message', {detail});
+      window.dispatchEvent(ev);
+    }
+
+    function updateLocalDisplay(gen,total,idx,pop,params,fitness){
+      const set = (id,v)=>{const el=document.getElementById(id); if(el) el.textContent = v}
+      set('current-generation', gen);
+      set('ga-gen-total', total);
+      set('current-individual', idx);
+      set('population-size', pop);
+      set('current-kp', params.kp);
+      set('current-ki', params.ki);
+      set('current-kd', params.kd);
+      set('current-fitness', (fitness==null)?'-':fitness.toFixed(4));
+      const ts = document.getElementById('tuning-status-text');
+      if(ts) ts.textContent = `Pokolenie ${gen}/${total} · Osobnik ${idx}/${pop}`;
+    }
+
+    document.getElementById('single').addEventListener('click', ()=>{
+      const gen = parseInt(document.getElementById('gen').value,10);
+      const pop = parseInt(document.getElementById('pop').value,10);
+      const idx = 1;
+      const params = makeParams(idx);
+      document.getElementById('status').textContent = 'Symuluję pojedynczy test...';
+      // Wywołaj updateCurrentTestDisplay jeśli jest dostępne
+      if(window.updateCurrentTestDisplay) window.updateCurrentTestDisplay(gen, 10, idx, pop, params.kp, params.ki, params.kd, null);
+      else updateLocalDisplay(gen,10,idx,pop,params,null);
+
+      // Wyślij metrics_result
+      setTimeout(()=>{
+        const metrics = {itae: Math.random()*100, overshoot: Math.random()*10, steady_state_error: Math.random()*0.1};
+        dispatchBleMessage({type:'metrics_result', testId:`test-${Date.now()}`, metrics});
+        // zaktualizuj fitness display
+        if(window.updateCurrentTestDisplay) window.updateCurrentTestDisplay(gen,10,idx,pop,params.kp,params.ki,params.kd, metrics.itae);
+        else updateLocalDisplay(gen,10,idx,pop,params,metrics.itae);
+
+        // wyślij test_complete
+        setTimeout(()=>{
+          dispatchBleMessage({type:'test_complete', testId:`test-${Date.now()}`, params});
+          document.getElementById('status').textContent = 'Gotowe';
+        }, 200);
+      }, 300);
+    });
+
+    document.getElementById('runSeq').addEventListener('click', async ()=>{
+      const gen = parseInt(document.getElementById('gen').value,10);
+      const pop = parseInt(document.getElementById('pop').value,10);
+      const count = parseInt(document.getElementById('count').value,10);
+      document.getElementById('status').textContent = 'Uruchamiam sekwencję...';
+      for(let i=1;i<=count;i++){
+        const params = makeParams(i);
+        // start
+        if(window.updateCurrentTestDisplay) window.updateCurrentTestDisplay(gen, 10, i, pop, params.kp, params.ki, params.kd, null);
+        else updateLocalDisplay(gen,10,i,pop,params,null);
+        // dispatch metrics_result
+        await new Promise(res=>setTimeout(res, 200 + Math.random()*300));
+        const metrics = {itae: Math.random()*100, overshoot: Math.random()*10, steady_state_error: Math.random()*0.1};
+        dispatchBleMessage({type:'metrics_result', testId:`sim-${gen}-${i}`, metrics});
+        // update fitness
+        if(window.updateCurrentTestDisplay) window.updateCurrentTestDisplay(gen,10,i,pop,params.kp,params.ki,params.kd, metrics.itae);
+        else updateLocalDisplay(gen,10,i,pop,params,metrics.itae);
+        // dispatch test_complete
+        await new Promise(res=>setTimeout(res, 150));
+        dispatchBleMessage({type:'test_complete', testId:`sim-${gen}-${i}`, params});
+      }
+      document.getElementById('status').textContent = 'Sekwencja zakończona';
+    });
+
+    // Jeśli aplikacja nie wystartowała, pokaż ostrzeżenie
+    setTimeout(()=>{
+      if(!window.updateCurrentTestDisplay){
+        const el=document.getElementById('status');
+        if(el) el.textContent = 'Uwaga: skrypt aplikacji nie wykryty. Ten symulator aktualizuje tylko lokalny widok.';
+      }
+    }, 500);
+  </script>
+</body>
+</html>

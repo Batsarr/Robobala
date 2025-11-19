@@ -119,7 +119,7 @@ function updateFitnessChart() {
     });
 }
 
-function addTestToResultsTable(testNum, params, fitness, itae, overshoot, testType = 'metrics_test') {
+function addTestToResultsTable(testNum, params, fitness, itae, overshoot, testType = 'metrics_test', meta = {}) {
     const tbody = document.getElementById('results-table-body');
     // Save to global tuning history if available
     try {
@@ -130,9 +130,10 @@ function addTestToResultsTable(testNum, params, fitness, itae, overshoot, testTy
     } catch (_) { /* ignore */ }
     if (!tbody) return;
 
+    const metaText = (meta && meta.gen && meta.individualIdx) ? ` (Gen ${meta.gen}/${meta.totalGen}, Osobnik ${meta.individualIdx}/${meta.pop})` : '';
     const row = tbody.insertRow(0); // Insert at top
     row.innerHTML = `
-        <td>${testNum}</td>
+        <td>${testNum}${metaText}</td>
         <td>${params.kp.toFixed(3)}</td>
         <td>${params.ki.toFixed(3)}</td>
         <td>${params.kd.toFixed(3)}</td>
@@ -141,6 +142,38 @@ function addTestToResultsTable(testNum, params, fitness, itae, overshoot, testTy
         <td>${isNaN(overshoot) ? '---' : overshoot.toFixed(2)}${(testType === 'metrics_test') ? '°' : '%'}</td>
         <td><button onclick="applyParameters(${params.kp}, ${params.ki}, ${params.kd})" class="btn-small">Zastosuj</button></td>
     `;
+    // Also add block entry (for mobile, include generation/individual meta if available)
+    const method = AppState.activeTuningMethod;
+    let blockContainer;
+    if (method && method.startsWith('ga')) blockContainer = document.getElementById('ga-results-blocks');
+    else if (method && method.startsWith('pso')) blockContainer = document.getElementById('pso-results-blocks');
+    if (blockContainer) {
+        const block = document.createElement('div');
+        block.className = 'result-entry';
+        const header = document.createElement('div');
+        header.className = 'result-header';
+        const genInfo = (meta.gen && meta.totalGen) ? `Gen ${meta.gen}/${meta.totalGen}` : '';
+        const indInfo = (meta.individualIdx && meta.pop) ? ` · Osobnik ${meta.individualIdx}/${meta.pop}` : '';
+        header.innerHTML = `<strong>Wynik #${testNum} ${genInfo}${indInfo}:</strong> Fitness = ${(fitness !== undefined && fitness !== Infinity) ? fitness.toFixed(4) : '---'}`;
+
+        const paramsDiv = document.createElement('div');
+        paramsDiv.className = 'result-params';
+        paramsDiv.textContent = `Kp: ${params.kp !== undefined ? params.kp.toFixed(4) : '---'}, Ki: ${params.ki !== undefined ? params.ki.toFixed(4) : '---'}, Kd: ${params.kd !== undefined ? params.kd.toFixed(4) : '---'}`;
+
+        const metricsDiv = document.createElement('div');
+        metricsDiv.className = 'result-metrics';
+        metricsDiv.textContent = `Overshoot: ${overshoot !== undefined ? overshoot.toFixed(2) + '%' : '---'}, ITAE: ${itae !== undefined ? itae.toFixed(2) : '---'}`;
+
+        const applyBtnBlock = document.createElement('button');
+        applyBtnBlock.textContent = 'Zastosuj';
+        applyBtnBlock.className = 'test-btn';
+        applyBtnBlock.addEventListener('click', () => { applyParameters(params.kp, params.ki, params.kd); addLogMessage('[UI] Zastosowano parametry z historii strojenia.', 'info'); });
+        block.appendChild(header);
+        block.appendChild(paramsDiv);
+        block.appendChild(metricsDiv);
+        block.appendChild(applyBtnBlock);
+        blockContainer.insertBefore(block, blockContainer.firstChild);
+    }
 }
 
 function applyParameters(kp, ki, kd) {
@@ -323,7 +356,11 @@ class GeneticAlgorithm {
                     const fitness = data.itae + data.overshoot * 10 + data.steady_state_error * 5;
                     individual.fitness = fitness;
 
-                    addTestToResultsTable(this.testCounter, individual, fitness, data.itae, data.overshoot, data.test_type || 'metrics_test');
+                    // Add incremental point for this individual to fitness chart (fractional X = generation + individual/population)
+                    try { fitnessChartData.push({ x: this.generation + (idx / Math.max(1, this.population.length)), y: fitness }); updateFitnessChart(); } catch (_) { }
+
+                    const meta = { gen: this.generation + 1, totalGen: this.generations, individualIdx: idx, pop: this.population.length };
+                    addTestToResultsTable(this.testCounter, individual, fitness, data.itae, data.overshoot, data.test_type || 'metrics_test', meta);
 
                     // Remove handlers
                     window.removeEventListener('ble_message', completeHandler);
@@ -371,22 +408,25 @@ class GeneticAlgorithm {
     async runGeneration() {
         // Evaluate all individuals
         for (let i = 0; i < this.population.length; i++) {
-            if (this.isPaused) {
+            // Pause handling - keep loop alive while paused
+            while (this.isPaused && this.isRunning) {
                 await RB.helpers.delay(100);
-                i--; // Repeat this iteration
-                continue;
             }
 
             if (!this.isRunning) break;
 
+            // Update UI about the currently tested candidate
+            try {
+                if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.generation + 1, this.generations, i + 1, this.population.length, this.population[i].kp, this.population[i].ki, this.population[i].kd, this.population[i].fitness);
+            } catch (_) { }
+
             if (this.population[i].fitness === Infinity) {
                 try {
-                    await this.evaluateFitness(this.population[i]);
+                    await this.evaluateFitness(this.population[i], i + 1);
                 } catch (error) {
                     console.error('Test failed:', error);
-
                     // Handle emergency stop - pause and wait for user to resume
-                    if (error.reason === 'interrupted_by_emergency') {
+                    if (error && error.reason === 'interrupted_by_emergency') {
                         console.log('[GA] Emergency stop detected, entering pause state');
                         this.isPaused = true;
                         sendBaselinePIDToRobot();
@@ -407,6 +447,9 @@ class GeneticAlgorithm {
                         this.population[i].fitness = Infinity;
                     }
                 }
+            } else {
+                // Already has a fitness; refresh UI with its fitness value
+                try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.generation + 1, this.generations, i + 1, this.population.length, this.population[i].kp, this.population[i].ki, this.population[i].kd, this.population[i].fitness); } catch (_) { }
             }
         }
 
@@ -610,14 +653,18 @@ class ParticleSwarmOptimization {
         };
     }
 
-    async evaluateFitness(particle) {
+    async evaluateFitness(particle, idx = 0) {
         const testId = Date.now() >>> 0;
         this.testCounter++;
 
         return new Promise((resolve, reject) => {
+            let done = false;
             const timeout = setTimeout(() => {
-                reject(new Error('Test timeout'));
-            }, 10000);
+                if (!done) {
+                    done = true;
+                    reject(new Error('Test timeout'));
+                }
+            }, 10000); // 10 second timeout
 
             // Handler for test completion (success or failure)
             const completeHandler = (evt) => {
@@ -636,12 +683,16 @@ class ParticleSwarmOptimization {
                 }
             };
 
+            // Update current test display (when starting)
+            try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, idx, this.particles.length, particle.position.kp, particle.position.ki, particle.position.kd, particle.fitness); } catch (_) { }
+
             // Handler for test metrics
             const metricsHandler = (evt) => {
                 const data = (evt && evt.detail) ? evt.detail : evt;
                 if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
                     clearTimeout(timeout);
                     const fitness = data.itae + data.overshoot * 10 + data.steady_state_error * 5;
+
                     particle.fitness = fitness;
 
                     if (fitness < particle.bestFitness) {
@@ -657,7 +708,9 @@ class ParticleSwarmOptimization {
                         updateBestDisplay(this.globalBest.position);
                     }
 
-                    addTestToResultsTable(this.testCounter, particle.position, fitness, data.itae, data.overshoot, data.test_type || 'metrics_test');
+                    const meta = { gen: this.iteration + 1, totalGen: this.iterations, individualIdx: idx, pop: this.particles.length };
+                    try { fitnessChartData.push({ x: this.iteration + (idx / Math.max(1, this.particles.length)), y: fitness }); updateFitnessChart(); } catch (_) { }
+                    addTestToResultsTable(this.testCounter, particle.position, fitness, data.itae, data.overshoot, data.test_type || 'metrics_test', meta);
 
                     // Remove handlers
                     window.removeEventListener('ble_message', completeHandler);
@@ -726,7 +779,8 @@ class ParticleSwarmOptimization {
             if (!this.isRunning) break;
 
             try {
-                await this.evaluateFitness(this.particles[i]);
+                try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, i + 1, this.particles.length, this.particles[i].position.kp, this.particles[i].position.ki, this.particles[i].position.kd, this.particles[i].fitness); } catch (_) { }
+                await this.evaluateFitness(this.particles[i], i + 1);
             } catch (error) {
                 console.error('Test failed:', error);
 
@@ -872,6 +926,9 @@ class ZieglerNicholsRelay {
             const znDisplay = document.getElementById('zn-oscillation-display');
             if (znDisplay) znDisplay.style.display = 'block';
 
+            // Notify UI that ZN test started
+            try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(1, 1, 1, 1, 0, 0, 0, null); } catch (_) { }
+
             return new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
                     reject(new Error('ZN test timeout'));
@@ -901,6 +958,8 @@ class ZieglerNicholsRelay {
 
                             const results = this.calculateZNParameters();
                             this.displayResults(results);
+                            // Update UI with derived parameters
+                            try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(1, 1, 1, 1, results.kp, results.ki, results.kd, 0); } catch (_) { }
                             resolve(results);
                         }
                     } else if (data.type === 'test_complete' && Number(data.testId) === testId) {
@@ -910,6 +969,7 @@ class ZieglerNicholsRelay {
                         if (this.peaks.length >= this.minCycles && this.valleys.length >= this.minCycles) {
                             const results = this.calculateZNParameters();
                             this.displayResults(results);
+                            try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(1, 1, 1, 1, results.kp, results.ki, results.kd, 0); } catch (_) { }
                             resolve(results);
                         } else {
                             reject(new Error('Not enough oscillation cycles detected'));
@@ -1262,12 +1322,18 @@ class BayesianOptimization {
                 }
             };
 
+            // Update UI about starting this sample (iteration, sample idx unknown here)
+            try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, null); } catch (_) { }
+
             // Handler for test metrics
             const metricsHandler = (evt) => {
                 const data = (evt && evt.detail) ? evt.detail : evt;
                 if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
                     clearTimeout(timeout);
                     const fitness = data.itae + data.overshoot * 10 + data.steady_state_error * 5;
+
+                    // Update UI with resulting fitness for this sample
+                    try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, fitness); } catch (_) { }
 
                     addTestToResultsTable(this.testCounter, sample, fitness, data.itae, data.overshoot, data.test_type || 'metrics_test');
 

@@ -425,9 +425,13 @@
                 <div id="tuning-progress-panel">
                     <h4>📊 Postęp Optymalizacji</h4>
                     <div class="progress-info">
-                        <p>Status: <span id="tuning-status-text">Oczekuje</span></p>
-                        <p>Iteracja: <span id="current-iteration">0</span> / <span id="total-iterations">0</span></p>
-                    </div>
+                            <p>Status: <span id="tuning-status-text">Oczekuje</span></p>
+                            <p>Iteracja: <span id="current-iteration">0</span> / <span id="total-iterations">0</span></p>
+                            <p>Pokolenie: <span id="current-generation">0</span> / <span id="ga-gen-total">0</span></p>
+                            <p>Osobnik: <span id="current-individual">0</span> / <span id="population-size">0</span></p>
+                            <p>Parametry: Kp: <span id="current-kp">---</span> Ki: <span id="current-ki">---</span> Kd: <span id="current-kd">---</span></p>
+                            <p>Fitness: <span id="current-fitness">---</span></p>
+                        </div>
                     <div id="fitness-chart-container"><canvas id="fitness-chart"></canvas></div>
                     <div class="current-best">
                         <h4>🏆 Najlepsze Znalezione Parametry</h4>

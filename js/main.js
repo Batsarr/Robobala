@@ -2181,6 +2181,33 @@ function setTuningUiLock(isLocked, method) {
         if (controlsBar) controlsBar.style.display = (isLocked ? 'flex' : (document.querySelector('.autotune-main-tab.active')?.dataset.tab === 'methods' ? 'flex' : 'none'));
     } catch (e) { /* ignore DOM errors */ }
 }
+
+// Update the UI details for the currently testing individual (visible in tuning-progress-panel)
+function updateCurrentTestDisplay(gen, totalGen, individualIdx, populationSize, kp, ki, kd, fitness) {
+    try {
+        const genEl = document.getElementById('current-generation');
+        const totGenEl = document.getElementById('ga-gen-total');
+        const indivEl = document.getElementById('current-individual');
+        const popEl = document.getElementById('population-size');
+        const kpEl = document.getElementById('current-kp');
+        const kiEl = document.getElementById('current-ki');
+        const kdEl = document.getElementById('current-kd');
+        const fitnessEl = document.getElementById('current-fitness');
+        const statusEl = document.getElementById('tuning-status-text');
+        if (genEl && gen !== undefined) genEl.textContent = gen;
+        if (totGenEl && totalGen !== undefined) totGenEl.textContent = totalGen;
+        if (indivEl && individualIdx !== undefined) indivEl.textContent = individualIdx;
+        if (popEl && populationSize !== undefined) popEl.textContent = populationSize;
+        if (kpEl && kp !== undefined) kpEl.textContent = (typeof kp === 'number' ? kp.toFixed(3) : '---');
+        if (kiEl && ki !== undefined) kiEl.textContent = (typeof ki === 'number' ? ki.toFixed(3) : '---');
+        if (kdEl && kd !== undefined) kdEl.textContent = (typeof kd === 'number' ? kd.toFixed(3) : '---');
+        if (fitnessEl) fitnessEl.textContent = (isFinite(fitness) ? Number(fitness).toFixed(4) : (fitness === Infinity ? '---' : (fitness === undefined ? '---' : fitness)));
+        if (statusEl) statusEl.textContent = `Pokolenie ${gen}/${totalGen} · Osobnik ${individualIdx}/${populationSize}`;
+    } catch (e) {
+        console.debug('[UI] updateCurrentTestDisplay error', e);
+    }
+}
+window.updateCurrentTestDisplay = updateCurrentTestDisplay;
 // Legacy handler wyników strojenia (serwerowych) został usunięty.
 // Wyniki algorytmów (GA/PSO/ZN/Bayesian) są obsługiwane wyłącznie po stronie klienta.
 
@@ -2739,7 +2766,12 @@ function createSkyDome() {
     const skyDome = new THREE.Mesh(skyGeo, skyMat);
     return skyDome;
 }
-function setupControls3D() { document.getElementById('reset3dViewBtn').addEventListener('click', () => { camera3D.position.set(28, 22, 48); controls3D.target.set(0, 8, 0); controls3D.update(); }); document.getElementById('toggle3dAnimationBtn').addEventListener('click', () => isAnimation3DEnabled = !isAnimation3DEnabled); document.getElementById('toggle3dMovementBtn').addEventListener('click', () => { isMovement3DEnabled = !isMovement3DEnabled; if (!isMovement3DEnabled) { lastEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2; } }); }
+function setupControls3D() {
+    document.getElementById('reset3dViewBtn').addEventListener('click', () => { camera3D.position.set(28, 22, 48); controls3D.target.set(0, 8, 0); controls3D.update(); }); document.getElementById('toggle3dAnimationBtn').addEventListener('click', () => isAnimation3DEnabled = !isAnimation3DEnabled); document.getElementById('toggle3dMovementBtn').addEventListener('click', () => {
+        isMovement3DEnabled = !isMovement3DEnabled; // Reset baseline to current encoder average to avoid jumps when toggling movement
+        lastEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
+    });
+}
 
 function update3DAnimation() {
     if (isAnimation3DEnabled && robotPivot) {
@@ -2822,7 +2854,9 @@ function update3DAnimation() {
         if (isMovement3DEnabled) {
             const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput').value) || 8.2;
             const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
-            const dist_cm = ((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * wheelDiameter;
+            // Some encoder setups count up in the opposite direction for "forward" motion.
+            // Invert the computed distance here so ground movement follows wheel rotation visually.
+            const dist_cm = -((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * wheelDiameter;
             if (groundTexture) {
                 // Uzyj juz ustawionej, bezpiecznej rotacji z samego modelu, aby uniknac bledu NaN
                 // Pobieramy rotację modelu wokół osi Y, która odpowiada za kurs (yaw)
@@ -2830,6 +2864,7 @@ function update3DAnimation() {
                 const dx = Math.sin(yawRad) * dist_cm;
                 const dz = Math.cos(yawRad) * dist_cm;
                 const squaresPerCm = 1 / 20;
+                if (window.DEBUG_3D) console.debug(`[3D] dist_cm=${dist_cm.toFixed(3)} dx=${dx.toFixed(3)} dz=${dz.toFixed(3)} yaw=${THREE.MathUtils.radToDeg(yawRad).toFixed(1)}`);
                 groundTexture.offset.x += dx * squaresPerCm;
                 groundTexture.offset.y -= dz * squaresPerCm;
                 groundTexture.needsUpdate = true;
