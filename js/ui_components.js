@@ -6,6 +6,10 @@
 // Sygnałów, Wizualizacja 3D, Wizualizacja Ścieżki, akordeony itp.)
 // ========================================================================
 
+// Uwaga: Ten plik jest częścią modularnej wersji UI. Nie należy go ładować
+// razem z 'js/main.js' (bundled), ponieważ skrypt 'main.js' zawiera te
+// same definicje i powoduje błąd: "Uncaught SyntaxError: redeclaration of let ...".
+
 function toggleAccordion(header) {
     const content = header.nextElementSibling;
     header.classList.toggle('active');

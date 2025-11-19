@@ -10,6 +10,12 @@
 // ========================================================================
 
 // ========================================================================
+// WARNING: This file is the bundled monolithic build containing all UI modules.
+// Do NOT include other modular scripts (e.g., state_manager.js, ui_components.js,
+// communication_layer.js, tuning_algorithms.js) together with this file in
+// the same HTML page. Combining the bundled and modular files will result in
+// duplicate global declarations and cause runtime SyntaxErrors such as
+// "Uncaught SyntaxError: redeclaration of let ...".
 // NEW: State Management & Communication Layer Integration
 // ========================================================================
 // Initialize communication layer
