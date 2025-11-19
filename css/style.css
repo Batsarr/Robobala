@@ -145,6 +145,14 @@ body.tuning-active #log-card {
     opacity: 1.0;
     pointer-events: auto;
 }
+
+/* STRONG OVERRIDE: Guarantee autotuning card and its children are not greyed out while tuning is active */
+body.tuning-active .main-grid > #autotuning-card,
+body.tuning-active .main-grid > #autotuning-card * {
+    opacity: 1.0 !important;
+    pointer-events: auto !important;
+    filter: none !important;
+}
 /* ukrywanie konfiguracji w panelu optymalizacji podczas trwania strojenia */
 body.tuning-active .autotune-config-hide { display: none !important; }
 body.tuning-active #tuning-progress-panel { display: block !important; }

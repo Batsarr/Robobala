@@ -1058,6 +1058,7 @@ function setupCommunicationHandlers() {
     appStore.subscribe('tuning.isActive', (value) => {
         // Update UI based on tuning state if needed
         setTuningUiLock(value, appStore.getState('tuning.activeMethod'));
+        if (value && typeof refreshRecentList === 'function') refreshRecentList();
     });
 }
 
@@ -1261,13 +1262,39 @@ function processCompleteMessage(data) {
 }
 
 // Historia prób strojenia + lista ostatnich 5
-const tuningHistory = [];
+// Export as window property so that modular scripts can safely push into the same array
+window.tuningHistory = window.tuningHistory || [];
+const tuningHistory = window.tuningHistory;
 function refreshRecentList() {
     const box = document.getElementById('recent-results-list');
     if (!box) return;
     const last5 = tuningHistory.slice(-5).reverse();
     if (!last5.length) { box.textContent = 'Brak danych.'; return; }
-    box.innerHTML = last5.map((r, idx) => `#${r.idx} | Kp=${r.kp.toFixed(3)} Ki=${r.ki.toFixed(3)} Kd=${r.kd.toFixed(3)} | fitness=${r.fitness.toFixed(4)} | ITAE=${(r.itae ?? NaN).toFixed?.(2) ?? '---'} | ov=${(r.overshoot ?? NaN).toFixed?.(2) ?? '---'}${r.testType === 'metrics_test' ? '°' : '%'}`).join('\n');
+    // Render as readable blocks (mobile friendly) with Apply actions
+    box.innerHTML = last5.map((r) => {
+        const itae = (r.itae !== undefined && !isNaN(r.itae)) ? r.itae.toFixed(2) : '---';
+        const ov = (r.overshoot !== undefined && !isNaN(r.overshoot)) ? r.overshoot.toFixed(2) : '---';
+        const fitness = (r.fitness !== undefined && isFinite(r.fitness)) ? r.fitness.toFixed(4) : '---';
+        return `
+            <div class="result-entry" data-idx="${r.idx}">
+                <div class="result-header">#${r.idx} · ${r.testType || 'test'} · Fitness: ${fitness}</div>
+                <div class="result-params">Kp: ${r.kp.toFixed(3)}, Ki: ${r.ki.toFixed(3)}, Kd: ${r.kd.toFixed(3)}</div>
+                <div class="result-metrics">ITAE: ${itae} · Overshoot: ${ov}${r.testType === 'metrics_test' ? '°' : '%'}</div>
+                <div style="margin-top:6px;"><button class="btn-small" data-apply-idx="${r.idx}">Zastosuj</button></div>
+            </div>`;
+    }).join('');
+    // Attach handlers for apply buttons
+    box.querySelectorAll('button[data-apply-idx]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const idx = parseInt(btn.getAttribute('data-apply-idx'));
+            const r = tuningHistory.find(t => t.idx === idx);
+            if (!r) return;
+            applyParameters(r.kp, r.ki, r.kd);
+            addLogMessage(`[UI] Zastosowano parametry z historii (#${idx})`, 'info');
+        });
+    });
+    // Auto-scroll to show most recent entries (friendly UX)
+    box.scrollTop = box.scrollHeight;
 }
 function refreshHistoryTable() {
     const tbody = document.getElementById('results-table-body');
@@ -1289,6 +1316,40 @@ function refreshHistoryTable() {
             applyParameters(r.kp, r.ki, r.kd);
         });
     });
+}
+// Handler for server-side 'tuning_result' message (and other session results)
+function handleTunerResult(data) {
+    if (!data) return;
+    const kp = (typeof data.kp === 'number') ? data.kp : (data.params && data.params.kp) || 0;
+    const ki = (typeof data.ki === 'number') ? data.ki : (data.params && data.params.ki) || 0;
+    const kd = (typeof data.kd === 'number') ? data.kd : (data.params && data.params.kd) || 0;
+    const idx = data.idx || (tuningHistory.length + 1);
+    const fitness = data.fitness ?? (data.metrics && data.metrics.fitness) ?? Infinity;
+    const itae = data.itae ?? (data.metrics && data.metrics.itae);
+    const overshoot = data.overshoot ?? (data.metrics && data.metrics.overshoot);
+    const testType = data.test_type || data.testType || (data.metrics && data.metrics.type) || 'metrics_test';
+
+    try {
+        tuningHistory.push({ idx, kp, ki, kd, fitness, itae, overshoot, testType });
+        if (typeof refreshRecentList === 'function') refreshRecentList();
+        if (typeof addTestToResultsTable === 'function') {
+            try { addTestToResultsTable(idx, { kp, ki, kd }, fitness, itae, overshoot, testType); } catch (_) { }
+        }
+    } catch (e) {
+        console.error('[UI] handleTunerResult error:', e);
+    }
+}
+
+// Handler for iteration updates from tuners (update progress display & best actor)
+function handleTuningIterationResult(data) {
+    if (!data) return;
+    const current = data.current ?? data.iteration ?? null;
+    const total = data.total ?? data.iterations ?? null;
+    const best = data.best ?? data.best_found;
+    if (current !== null) document.getElementById('current-iteration').textContent = String(current);
+    if (total !== null) document.getElementById('total-iterations').textContent = String(total);
+    if (best && typeof best.kp === 'number') updateBestDisplay(best);
+    try { if (typeof refreshRecentList === 'function') refreshRecentList(); } catch (e) { }
 }
 function exportHistoryCsv() {
     if (!tuningHistory.length) { showNotification('Brak danych historii'); return; }
@@ -2062,6 +2123,7 @@ function setupAutotuningTabs() {
 function setupMainAutotuneTabs() {
     const tabs = document.querySelectorAll('.autotune-main-tab');
     const panes = document.querySelectorAll('.autotune-main-content');
+    const controlsBar = document.getElementById('tuning-controls-bar');
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
             const target = tab.dataset.tab;
@@ -2069,15 +2131,13 @@ function setupMainAutotuneTabs() {
             panes.forEach(p => p.classList.remove('active'));
             tab.classList.add('active');
             document.querySelector(`.autotune-main-content[data-tab="${target}"]`)?.classList.add('active');
-            // Pokazuj przyciski sterujące tylko na zakładce 'methods'
-            const controlsBar = document.getElementById('tuning-controls-bar');
-            if (controlsBar) controlsBar.style.display = (target === 'methods') ? 'flex' : 'none';
+            // Pokaż przyciski sterujące na zakładce 'methods' lub zawsze, gdy sesja strojenia jest aktywna
+            if (controlsBar) controlsBar.style.display = (target === 'methods' || AppState.isTuningActive) ? 'flex' : 'none';
         });
     });
     // Ustaw widoczność kontrolek zgodnie z aktywną zakładką na starcie
     const activeMain = document.querySelector('.autotune-main-tab.active')?.dataset.tab || 'config';
-    const controlsBar = document.getElementById('tuning-controls-bar');
-    if (controlsBar) controlsBar.style.display = (activeMain === 'methods') ? 'flex' : 'none';
+    if (controlsBar) controlsBar.style.display = (activeMain === 'methods' || AppState.isTuningActive) ? 'flex' : 'none';
 }
 function updateSearchSpaceInputs() {
     const __loopEl = document.getElementById('tuning-loop-selector');
@@ -2099,8 +2159,12 @@ function setTuningUiLock(isLocked, method) {
     // Globalny tryb strojenia (odblokowane: Sterowanie, Optymalizacja, Logi)
     document.body.classList.toggle('tuning-active', isLocked);
 
-    // Wyłączamy przełączanie zakładek i testy UI
-    document.querySelectorAll('.run-test-btn').forEach(btn => btn.disabled = isLocked);
+    // Wyłączamy przełączanie zakładek. Disable run test buttons OUTSIDE of autotune card only
+    document.querySelectorAll('.run-test-btn').forEach(btn => {
+        try {
+            btn.disabled = isLocked && !btn.closest('#autotuning-card');
+        } catch (e) { btn.disabled = isLocked; }
+    });
     document.querySelectorAll('.method-tab').forEach(tab => tab.disabled = isLocked);
     // Dashboard legacy usunięty
 
@@ -2109,6 +2173,11 @@ function setTuningUiLock(isLocked, method) {
     const progress = document.getElementById('tuning-progress-panel');
     if (cfgPanel) cfgPanel.classList.toggle('autotune-config-hide', isLocked);
     if (progress) progress.style.display = isLocked ? 'block' : 'none';
+    // Keep controls bar visible during active tuning so user can Pause/Stop without switching tabs
+    const controlsBar = document.getElementById('tuning-controls-bar');
+    try {
+        if (controlsBar) controlsBar.style.display = (isLocked ? 'flex' : (document.querySelector('.autotune-main-tab.active')?.dataset.tab === 'methods' ? 'flex' : 'none'));
+    } catch (e) { /* ignore DOM errors */ }
 }
 // Legacy handler wyników strojenia (serwerowych) został usunięty.
 // Wyniki algorytmów (GA/PSO/ZN/Bayesian) są obsługiwane wyłącznie po stronie klienta.
@@ -2889,7 +2958,9 @@ async function startTuning() {
     };
 
     setTuningUiLock(true, method);
-    document.getElementById('tuning-status-text').textContent = 'Uruchamianie...';
+    // Ensure UI shows last attempts and current progress at start
+    try { if (typeof refreshRecentList === 'function') refreshRecentList(); } catch (e) { /* no-op */ }
+    document.getElementById('tuning-status-text').textContent = `Uruchamianie (${method || 'N/A'})...`;
     document.getElementById('current-iteration').textContent = '0';
     fitnessChartData = [];
     updateFitnessChart();
