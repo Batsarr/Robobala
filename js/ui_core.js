@@ -157,6 +157,19 @@
 
     // Inicjalizacja po DOM
     document.addEventListener('DOMContentLoaded', () => {
+        // Diagnostyka obecności przycisku i modala BLE
+        const dbgConnectBtn = document.getElementById('connectBleBtn');
+        const dbgExistingModal = document.getElementById('ble-connect-modal');
+        console.log('[UI_CORE] BLE connect button found:', !!dbgConnectBtn, 'modal present:', !!dbgExistingModal);
+        if (!dbgExistingModal) {
+            console.warn('[UI_CORE] #ble-connect-modal nie istnieje w HTML – tworzę fallback dynamicznie.');
+            const m = document.createElement('div');
+            m.id = 'ble-connect-modal';
+            m.className = 'modal-backdrop';
+            m.style.display = 'none';
+            m.innerHTML = '<div class="modal-content" style="max-width:420px;">\n                <h2>Połącz z Robotem (BLE)</h2>\n                <p style="text-align:left; font-size:0.9em; line-height:1.4;">Upewnij się, że robot jest włączony i widoczny pod nazwą <strong>RoboBala</strong>. Kliknij <em>Skanuj</em>, a następnie wybierz urządzenie.</p>\n                <div id="ble-status-line" style="margin:8px 0; color:#61dafb; font-family:monospace;">Status: Oczekuje...</div>\n                <div style="display:flex; gap:10px; margin-top:4px;">\n                    <button id="ble-scan-btn" style="flex:1; background:#61dafb;">Skanuj</button>\n                    <button id="ble-cancel-btn" style="flex:1; background:#ff6347;">Zamknij</button>\n                </div>\n                <div style="margin-top:12px; font-size:0.75em; color:#aaa; text-align:left;">Wymagana obsługa Web Bluetooth (Chrome / Edge). W środowisku bez HTTPS połączenie może być blokowane.</div>\n            </div>';
+            document.body.appendChild(m);
+        }
         // Joystick (funkcja initJoystick dostarczona przez ui_components.js)
         if (typeof window.initJoystick === 'function') {
             try { window.initJoystick(); } catch (e) { console.warn('initJoystick error', e); }
@@ -183,6 +196,7 @@
                 bleModal.style.display = 'flex';
                 const line = document.getElementById('ble-status-line');
                 if (line) line.textContent = 'Status: Oczekuje na akcję...';
+                console.log('[UI_CORE] Otwarto modal BLE.');
             });
             const scanBtn = document.getElementById('ble-scan-btn');
             const cancelBtn = document.getElementById('ble-cancel-btn');
@@ -197,6 +211,7 @@
                     }
                     if (line) line.textContent = ok ? 'Status: Połączono.' : 'Status: Błąd połączenia.';
                     if (ok) setTimeout(() => { bleModal.style.display = 'none'; }, 800);
+                    console.log('[UI_CORE] Wynik próby połączenia BLE:', ok);
                 });
             }
             if (cancelBtn && !cancelBtn.__rbBleBound) {
