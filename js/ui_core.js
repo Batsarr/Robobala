@@ -173,5 +173,36 @@
         if (typeof window.init3DVisualization === 'function') {
             try { window.init3DVisualization(); window.setupControls3D?.(); window.animate3D(); addLogMessage('[UI] 3D wizualizacja zainicjalizowana.', 'info'); } catch (e) { console.warn('init3DVisualization error', e); }
         }
+
+        // ==== Fallback modal BLE (otwieranie) ====
+        const bleBtn = document.getElementById('connectBleBtn');
+        const bleModal = document.getElementById('ble-connect-modal');
+        if (bleBtn && bleModal && !bleBtn.__rbBleBound) {
+            bleBtn.__rbBleBound = true;
+            bleBtn.addEventListener('click', () => {
+                bleModal.style.display = 'flex';
+                const line = document.getElementById('ble-status-line');
+                if (line) line.textContent = 'Status: Oczekuje na akcję...';
+            });
+            const scanBtn = document.getElementById('ble-scan-btn');
+            const cancelBtn = document.getElementById('ble-cancel-btn');
+            if (scanBtn && !scanBtn.__rbBleBound) {
+                scanBtn.__rbBleBound = true;
+                scanBtn.addEventListener('click', async () => {
+                    const line = document.getElementById('ble-status-line');
+                    if (line) line.textContent = 'Status: Łączenie...';
+                    let ok = false;
+                    if (typeof window.connectBLE === 'function') {
+                        try { ok = await window.connectBLE(); } catch (e) { console.warn('connectBLE error', e); }
+                    }
+                    if (line) line.textContent = ok ? 'Status: Połączono.' : 'Status: Błąd połączenia.';
+                    if (ok) setTimeout(() => { bleModal.style.display = 'none'; }, 800);
+                });
+            }
+            if (cancelBtn && !cancelBtn.__rbBleBound) {
+                cancelBtn.__rbBleBound = true;
+                cancelBtn.addEventListener('click', () => { bleModal.style.display = 'none'; });
+            }
+        }
     });
 })();

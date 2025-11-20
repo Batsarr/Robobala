@@ -661,6 +661,20 @@
     <!-- UWAGA: Usunięto produkcyjny bundle main.js w celu uniknięcia duplikacji klas (GA/PSO) podczas debugowania.
         Używamy modularnych plików źródłowych aby zapewnić poprawne oczekiwanie na wyniki testów (runMetricsTest gating). -->
     <!-- <script src="js/main.js"></script> -->
-
+    <!-- Fallback modal BLE (dynamiczne łączenie) -->
+    <div id="ble-connect-modal" class="modal-backdrop" style="display:none;">
+        <div class="modal-content" style="max-width:420px;">
+            <h2>Połącz z Robotem (BLE)</h2>
+            <p style="text-align:left; font-size:0.9em; line-height:1.4;">Upewnij się, że robot jest włączony i widoczny pod nazwą <strong>RoboBala</strong>. Kliknij <em>Skanuj</em>, a następnie wybierz urządzenie.</p>
+            <div id="ble-status-line" style="margin:8px 0; color:#61dafb; font-family:monospace;">Status: Oczekuje...</div>
+            <div style="display:flex; gap:10px; margin-top:4px;">
+                <button id="ble-scan-btn" style="flex:1; background:#61dafb;">Skanuj</button>
+                <button id="ble-cancel-btn" style="flex:1; background:#ff6347;">Zamknij</button>
+            </div>
+            <div style="margin-top:12px; font-size:0.75em; color:#aaa; text-align:left;">
+                Wymagana obsługa Web Bluetooth (Chrome / Edge). W środowisku bez HTTPS połączenie może być blokowane.
+            </div>
+        </div>
+    </div>
 </body>
 </html>
