@@ -652,8 +652,12 @@
     <script src="js/state_manager.js"></script>
     <script src="js/communication_layer.js"></script>
     <script src="js/helpers.js"></script>
+    <!-- Nowy moduł komponentów UI (wyodrębnione z dawnych części main.js) -->
+    <script src="js/ui_components.js"></script>
     <script src="js/path_visualization.js"></script>
     <script src="js/tuning_algorithms.js"></script>
+    <!-- Minimalny rdzeń inicjalizacji (joystick + 3D) po komponentach -->
+    <script src="js/ui_core.js"></script>
     <!-- UWAGA: Usunięto produkcyjny bundle main.js w celu uniknięcia duplikacji klas (GA/PSO) podczas debugowania.
         Używamy modularnych plików źródłowych aby zapewnić poprawne oczekiwanie na wyniki testów (runMetricsTest gating). -->
     <!-- <script src="js/main.js"></script> -->
