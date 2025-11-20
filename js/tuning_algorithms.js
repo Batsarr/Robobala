@@ -320,9 +320,15 @@ class GeneticAlgorithm {
                     window.removeEventListener('ble_message', completeHandler);
                     window.removeEventListener('ble_message', metricsHandler);
                     window.removeEventListener('ble_message', ackHandlerGA);
+                    // Log timeout with detailed information
+                    try { 
+                        addLogMessage(`[GA:${this._debugId}] Test timeout after 30s - testId=${testId}, Kp=${individual.kp.toFixed(3)}, Ki=${individual.ki.toFixed(3)}, Kd=${individual.kd.toFixed(3)}. Robot nie przesłał metrics_result. Test pominięty.`, 'error'); 
+                    } catch (e) { 
+                        console.error('[GA] Test timeout:', testId, individual); 
+                    }
                     reject(new Error('Test timeout'));
                 }
-            }, 10000); // 10 second timeout
+            }, 30000); // 30 second timeout (increased from 10s)
 
             // Handler for test completion (success or failure)
             const completeHandler = (evt) => {
@@ -353,6 +359,8 @@ class GeneticAlgorithm {
                 if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
                     if (done) return;
                     clearTimeout(timeout);
+                    
+                    try { addLogMessage(`[GA:${this._debugId}] Otrzymano metrics_result dla testId=${testId}`, 'info'); } catch (e) { console.debug('[GA] log failed', e); }
                     
                     // Validate and extract metrics with fallbacks
                     const itae = (typeof data.itae === 'number' && !isNaN(data.itae)) ? data.itae : 0;
@@ -670,9 +678,20 @@ class ParticleSwarmOptimization {
             const timeout = setTimeout(() => {
                 if (!done) {
                     done = true;
+                    // Best-effort cleanup
+                    window.removeEventListener('ble_message', completeHandler);
+                    window.removeEventListener('ble_message', metricsHandler);
+                    window.removeEventListener('ble_message', ackHandlerPSO);
+                    window.removeEventListener('ble_message', ackHandlerBayes);
+                    // Log timeout with detailed information
+                    try { 
+                        addLogMessage(`[PSO] Test timeout after 30s - testId=${testId}, Kp=${particle.position.kp.toFixed(3)}, Ki=${particle.position.ki.toFixed(3)}, Kd=${particle.position.kd.toFixed(3)}. Robot nie przesłał metrics_result. Test pominięty.`, 'error'); 
+                    } catch (e) { 
+                        console.error('[PSO] Test timeout:', testId, particle.position); 
+                    }
                     reject(new Error('Test timeout'));
                 }
-            }, 10000); // 10 second timeout
+            }, 30000); // 30 second timeout (increased from 10s)
 
             // Handler for test completion (success or failure)
             const completeHandler = (evt) => {
@@ -699,6 +718,8 @@ class ParticleSwarmOptimization {
                 const data = (evt && evt.detail) ? evt.detail : evt;
                 if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
                     clearTimeout(timeout);
+                    
+                    try { addLogMessage(`[PSO] Otrzymano metrics_result dla testId=${testId}`, 'info'); } catch (e) { console.debug('[PSO] log failed', e); }
                     
                     // Validate and extract metrics with fallbacks
                     const itae = (typeof data.itae === 'number' && !isNaN(data.itae)) ? data.itae : 0;
@@ -1318,8 +1339,17 @@ class BayesianOptimization {
 
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
+                // Best-effort cleanup
+                window.removeEventListener('ble_message', completeHandler);
+                window.removeEventListener('ble_message', metricsHandler);
+                // Log timeout with detailed information
+                try { 
+                    addLogMessage(`[Bayesian] Test timeout after 30s - testId=${testId}, Kp=${sample.kp.toFixed(3)}, Ki=${sample.ki.toFixed(3)}, Kd=${sample.kd.toFixed(3)}. Robot nie przesłał metrics_result. Test pominięty.`, 'error'); 
+                } catch (e) { 
+                    console.error('[Bayesian] Test timeout:', testId, sample); 
+                }
                 reject(new Error('Test timeout'));
-            }, 10000);
+            }, 30000); // 30 second timeout (increased from 10s)
 
             // Handler for test completion (success or failure)
             const completeHandler = (evt) => {
@@ -1345,6 +1375,8 @@ class BayesianOptimization {
                 const data = (evt && evt.detail) ? evt.detail : evt;
                 if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
                     clearTimeout(timeout);
+                    
+                    try { addLogMessage(`[Bayesian] Otrzymano metrics_result dla testId=${testId}`, 'info'); } catch (e) { console.debug('[Bayesian] log failed', e); }
                     
                     // Validate and extract metrics with fallbacks
                     const itae = (typeof data.itae === 'number' && !isNaN(data.itae)) ? data.itae : 0;
