@@ -3,6 +3,13 @@
 // Zawiera tylko brakujące globalne zmienne i funkcje animacji 3D + inicjalizację po DOMContentLoaded.
 
 (function () {
+    // ==== BRAKUJĄCE GLOBALNE ZMIENNE JOYSTICKA (unik ReferenceError) ====
+    if (typeof window.joystickCenter === 'undefined') window.joystickCenter = { x: 0, y: 0 };
+    if (typeof window.joystickRadius === 'undefined') window.joystickRadius = 0;
+    if (typeof window.knobRadius === 'undefined') window.knobRadius = 0;
+    if (typeof window.isDragging === 'undefined') window.isDragging = false;
+    if (typeof window.lastJoystickSendTime === 'undefined') window.lastJoystickSendTime = 0;
+
     // Jeśli istnieją już symbole (np. z wcześniejszego bundle), nie nadpisuj.
     if (typeof window.JOYSTICK_SEND_INTERVAL === 'undefined') {
         window.JOYSTICK_SEND_INTERVAL = 20;
@@ -104,6 +111,50 @@
         };
     }
 
+    // ==== IMPLEMENTACJA setupControls3D JEŚLI BRAK ====
+    if (typeof window.setupControls3D === 'undefined') {
+        window.setupControls3D = function () {
+            const resetBtn = document.getElementById('reset3dViewBtn');
+            const animBtn = document.getElementById('toggle3dAnimationBtn');
+            const moveBtn = document.getElementById('toggle3dMovementBtn');
+            if (resetBtn && !resetBtn.__rbBound) {
+                resetBtn.__rbBound = true;
+                resetBtn.addEventListener('click', () => {
+                    if (!window.camera3D || !window.controls3D) return;
+                    window.camera3D.position.set(28, 22, 48);
+                    window.controls3D.target.set(0, 8, 0);
+                    window.controls3D.update();
+                });
+            }
+            if (animBtn && !animBtn.__rbBound) {
+                animBtn.__rbBound = true;
+                animBtn.addEventListener('click', () => { window.isAnimation3DEnabled = !window.isAnimation3DEnabled; });
+            }
+            if (moveBtn && !moveBtn.__rbBound) {
+                moveBtn.__rbBound = true;
+                moveBtn.addEventListener('click', () => { window.isMovement3DEnabled = !window.isMovement3DEnabled; window.lastEncoderAvg = (window.currentEncoderLeft + window.currentEncoderRight) / 2; });
+            }
+        };
+    }
+
+    // ==== FALLBACK KOMUNIKACJI sendBleMessage / sendBleCommand / connectBLE JEŚLI BRAK ====
+    if (typeof window.sendBleMessage === 'undefined') {
+        window.sendBleMessage = function (msg) {
+            console.warn('[ui_core] sendBleMessage fallback (brak warstwy BLE). Message=', msg);
+        };
+    }
+    if (typeof window.sendBleCommand === 'undefined') {
+        window.sendBleCommand = function (type, payload) {
+            window.sendBleMessage(Object.assign({ type: type }, payload || {}));
+        };
+    }
+    if (typeof window.connectBLE === 'undefined') {
+        window.connectBLE = async function () {
+            addLogMessage('[UI] Fallback connectBLE: brak warstwy BLE.', 'warn');
+            return false;
+        };
+    }
+
     // Inicjalizacja po DOM
     document.addEventListener('DOMContentLoaded', () => {
         // Joystick (funkcja initJoystick dostarczona przez ui_components.js)
@@ -120,7 +171,7 @@
         }
         // Wizualizacja 3D
         if (typeof window.init3DVisualization === 'function') {
-            try { window.init3DVisualization(); window.animate3D(); addLogMessage('[UI] 3D wizualizacja zainicjalizowana.', 'info'); } catch (e) { console.warn('init3DVisualization error', e); }
+            try { window.init3DVisualization(); window.setupControls3D?.(); window.animate3D(); addLogMessage('[UI] 3D wizualizacja zainicjalizowana.', 'info'); } catch (e) { console.warn('init3DVisualization error', e); }
         }
     });
 })();
