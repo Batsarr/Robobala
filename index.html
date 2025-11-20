@@ -329,8 +329,9 @@
                         <div class="setting-container"> <label for="rotationToPwmScaleInput">Skala wyjścia PID -> PWM<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationToPwmScaleInput" min="0" max="1" step="0.001" value="0.01"><button>+</button></div> <div class="help-text">Konwertuje wyjście PID obrotu/kursu na komponent skrętu (PWM). Zwiększ jeśli korekty kierunku są za słabe, zmniejsz jeśli robot "przeostrza" lub oscyluje. Typowy zakres: 0.005 - 0.05.</div> </div>
                     </div>
                 </div>
-                
-        <!-- NOWY, ZINTEGROWANY PANEL OPTYMALIZACJI - PROSZĘ WSTAW TUTAJ -->
+            </div> <!-- koniec karty Konfiguracja -->
+
+        <!-- NOWY, ZINTEGROWANY PANEL OPTYMALIZACJI - przeniesiony poza kartę Konfiguracja aby uniknąć szarzenia -->
         <div class="card" id="autotuning-card">
             <button class="accordion-header" onclick="toggleAccordion(this)">6. Zaawansowana Optymalizacja PID</button>
             <div class="accordion-content autotune-pane" id="autotuning-card-content">
