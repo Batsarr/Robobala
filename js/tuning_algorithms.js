@@ -35,6 +35,96 @@ function mean(arr) {
     return arr.reduce((a, b) => a + b, 0) / arr.length;
 }
 
+// Dynamic timeout calc: clamp(trial+1500, 3000, 15000)
+function computeTestTimeout() {
+    const trialInput = document.getElementById('tuningTrialDurationInput'); // expect ms value in UI
+    let trialMs = 2000;
+    if (trialInput) {
+        const v = parseInt(trialInput.value, 10);
+        if (!isNaN(v)) trialMs = v;
+    }
+    let t = trialMs + 1500;
+    if (t < 3000) t = 3000;
+    if (t > 15000) t = 15000;
+    return t;
+}
+
+/**
+ * Unified runner dla pojedynczego testu metryk.
+ * Zwraca Promise z obiektem { fitness, itae, overshoot, steady_state_error, raw }
+ * Wysyła run_metrics_test, nasłuchuje status_update test_started, metrics_result i test_complete.
+ * Obsługuje ack NACK przez syntetyczne test_complete(success=false).
+ */
+function runMetricsTest(kp, ki, kd) {
+    return new Promise((resolve, reject) => {
+        const testId = (Date.now() ^ Math.floor(Math.random() * 0xFFFF)) >>> 0;
+        const timeoutMs = computeTestTimeout();
+        let resolved = false;
+        let metricsData = null;
+        let ackReceived = false;
+        let started = false;
+        let timeoutHandle = setTimeout(() => {
+            if (!resolved) {
+                cleanup();
+                resolved = true;
+                reject(new Error('test_timeout'));
+            }
+        }, timeoutMs);
+
+        function cleanup() {
+            window.removeEventListener('ble_message', handler);
+            clearTimeout(timeoutHandle);
+        }
+
+        function finishSuccess() {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            if (!metricsData) {
+                // No metrics -> penalize
+                resolve({ fitness: Infinity, itae: 0, overshoot: 0, steady_state_error: 0, raw: null });
+            } else {
+                const itae = Number(metricsData.itae) || 0;
+                const overshoot = Number(metricsData.overshoot) || 0;
+                const sse = Number(metricsData.steady_state_error) || 0;
+                const fitness = itae + overshoot * 10 + sse * 5;
+                resolve({ fitness, itae, overshoot, steady_state_error: sse, raw: metricsData });
+            }
+        }
+
+        function finishFailure(reason) {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            reject({ reason });
+        }
+
+        function handler(evt) {
+            const d = evt.detail || evt;
+            if (d.type === 'ack' && d.command === 'run_metrics_test' && Number(d.testId) === testId) {
+                ackReceived = true;
+                if (!d.success) {
+                    // Synthetic test_complete
+                    finishFailure('ack_failed');
+                }
+            }
+            else if (d.type === 'status_update' && d.message === 'test_started' && Number(d.testId) === testId) {
+                started = true;
+            }
+            else if ((d.type === 'metrics_result' || d.type === 'test_result') && Number(d.testId) === testId) {
+                metricsData = d;
+            }
+            else if (d.type === 'test_complete' && Number(d.testId) === testId) {
+                if (d.success) finishSuccess(); else finishFailure(d.reason || 'test_failed');
+            }
+        }
+
+        window.addEventListener('ble_message', handler);
+        // Wyślij komendę
+        sendBleCommand('run_metrics_test', { kp, ki, kd, testId });
+    });
+}
+
 // Use RB.helpers.delay(ms) (provided by js/helpers.js) for delays to avoid redeclaration issues.
 
 function updateBestDisplay(params) {
@@ -308,117 +398,24 @@ class GeneticAlgorithm {
     }
 
     async evaluateFitness(individual) {
-        const testId = Date.now() >>> 0;
         this.testCounter++;
-
-        return new Promise((resolve, reject) => {
-            let done = false;
-            const timeout = setTimeout(() => {
-                if (!done) {
-                    done = true;
-                    // Best-effort cleanup
-                    window.removeEventListener('ble_message', completeHandler);
-                    window.removeEventListener('ble_message', metricsHandler);
-                    window.removeEventListener('ble_message', ackHandlerGA);
-                    // Log timeout with detailed information
-                    try { 
-                        addLogMessage(`[GA:${this._debugId}] Test timeout after 30s - testId=${testId}, Kp=${individual.kp.toFixed(3)}, Ki=${individual.ki.toFixed(3)}, Kd=${individual.kd.toFixed(3)}. Robot nie przesłał metrics_result. Test pominięty.`, 'error'); 
-                    } catch (e) { 
-                        console.error('[GA] Test timeout:', testId, individual); 
-                    }
-                    reject(new Error('Test timeout'));
-                }
-            }, 30000); // 30 second timeout (increased from 10s)
-
-            // Handler for test completion (success or failure)
-            const completeHandler = (evt) => {
-                const data = (evt && evt.detail) ? evt.detail : evt;
-                if (data.type === 'test_complete' && Number(data.testId) === testId) {
-                    if (done) return;
-                    clearTimeout(timeout);
-                    window.removeEventListener('ble_message', completeHandler);
-                    window.removeEventListener('ble_message', metricsHandler);
-                    window.removeEventListener('ble_message', ackHandlerGA);
-
-                    // If test failed (e.g., emergency stop), reject with special reason
-                    if (!data.success) {
-                        done = true;
-                        reject({ reason: 'interrupted_by_emergency', testId: testId });
-                        return;
-                    }
-
-                    // If we reached here without receiving metrics (edge case), resolve with current fitness
-                    done = true;
-                    resolve(individual.fitness);
-                }
-            };
-
-            // Handler for test metrics
-            const metricsHandler = (evt) => {
-                const data = (evt && evt.detail) ? evt.detail : evt;
-                if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
-                    if (done) return;
-                    clearTimeout(timeout);
-                    
-                    try { addLogMessage(`[GA:${this._debugId}] Otrzymano metrics_result dla testId=${testId}`, 'info'); } catch (e) { console.debug('[GA] log failed', e); }
-                    
-                    // Validate and extract metrics with fallbacks
-                    const itae = (typeof data.itae === 'number' && !isNaN(data.itae)) ? data.itae : 0;
-                    const overshoot = (typeof data.overshoot === 'number' && !isNaN(data.overshoot)) ? data.overshoot : 0;
-                    const steadyStateError = (typeof data.steady_state_error === 'number' && !isNaN(data.steady_state_error)) ? data.steady_state_error : 0;
-                    
-                    const fitness = itae + overshoot * 10 + steadyStateError * 5;
-                    individual.fitness = fitness;
-                    
-                    try { addLogMessage(`[GA:${this._debugId}] Fitness calculated: ITAE=${itae.toFixed(4)}, Overshoot=${overshoot.toFixed(2)}, SSE=${steadyStateError.toFixed(2)}, Fitness=${fitness.toFixed(4)}`, 'info'); } catch (e) { console.debug('[GA] fitness log failed', e); }
-
-                    // Add incremental point for this individual to fitness chart (fractional X = generation + individual/population)
-                    try { fitnessChartData.push({ x: this.generation + (idx / Math.max(1, this.population.length)), y: fitness }); updateFitnessChart(); } catch (_) { }
-
-                    const meta = { gen: this.generation + 1, totalGen: this.generations, individualIdx: idx, pop: this.population.length };
-                    addTestToResultsTable(this.testCounter, individual, fitness, data.itae, data.overshoot, data.test_type || 'metrics_test', meta);
-
-                    // Remove handlers
-                    window.removeEventListener('ble_message', completeHandler);
-                    window.removeEventListener('ble_message', metricsHandler);
-                    window.removeEventListener('ble_message', ackHandlerGA);
-
-                    done = true;
-                    resolve(fitness);
-                }
-            };
-
-            // Listen for ACK failure (e.g., 'Kolejka pelna') and reject fast
-            const ackHandlerGA = (evt) => {
-                const d = (evt && evt.detail) ? evt.detail : evt;
-                if (d.type === 'ack' && d.command === 'run_metrics_test') {
-                    if (!d.success) {
-                        if (done) return;
-                        clearTimeout(timeout);
-                        window.removeEventListener('ble_message', completeHandler);
-                        window.removeEventListener('ble_message', metricsHandler);
-                        window.removeEventListener('ble_message', ackHandlerGA);
-                        try { addLogMessage(`[GA:${this._debugId}] run_metrics_test ACK failed: ${d.message || 'N/A'}`, 'error'); } catch (e) { console.debug('GA ack log failed', e); }
-                        done = true;
-                        reject({ reason: 'ack_failed', message: d.message });
-                        return;
-                    } else {
-                        window.removeEventListener('ble_message', ackHandlerGA);
-                    }
-                }
-            };
-
-            window.addEventListener('ble_message', completeHandler);
-            window.addEventListener('ble_message', ackHandlerGA);
-            window.addEventListener('ble_message', metricsHandler);
-            try { addLogMessage(`[GA:${this._debugId}] Sending run_metrics_test: testId=${testId} Kp=${individual.kp.toFixed(3)} Ki=${individual.ki.toFixed(3)} Kd=${individual.kd.toFixed(3)} testCounter=${this.testCounter}`, 'info'); } catch (e) { console.debug('[GA] log failed', e); }
-            sendBleCommand('run_metrics_test', {
-                kp: individual.kp,
-                ki: individual.ki,
-                kd: individual.kd,
-                testId: testId
-            });
-        });
+        try {
+            const res = await runMetricsTest(individual.kp, individual.ki, individual.kd);
+            individual.fitness = res.fitness;
+            // Wykres: X = generacja + indeks/populacja
+            try { fitnessChartData.push({ x: this.generation + (this.testCounter / Math.max(1, this.population.length)), y: res.fitness }); updateFitnessChart(); } catch (_) { }
+            const meta = { gen: this.generation + 1, totalGen: this.generations, individualIdx: this.testCounter, pop: this.population.length };
+            addTestToResultsTable(this.testCounter, individual, res.fitness, res.itae, res.overshoot, 'metrics_test', meta);
+            return res.fitness;
+        } catch (err) {
+            if (err && err.reason === 'interrupted_by_emergency') {
+                throw err; // obsługa w runGeneration
+            }
+            // Penalizuj i kontynuuj
+            individual.fitness = Infinity;
+            addTestToResultsTable(this.testCounter, individual, Infinity, 0, 0, 'metrics_test');
+            return Infinity;
+        }
     }
 
     async runGeneration() {
@@ -670,137 +667,28 @@ class ParticleSwarmOptimization {
     }
 
     async evaluateFitness(particle, idx = 0) {
-        const testId = Date.now() >>> 0;
         this.testCounter++;
-
-        return new Promise((resolve, reject) => {
-            let done = false;
-            const timeout = setTimeout(() => {
-                if (!done) {
-                    done = true;
-                    // Best-effort cleanup
-                    window.removeEventListener('ble_message', completeHandler);
-                    window.removeEventListener('ble_message', metricsHandler);
-                    window.removeEventListener('ble_message', ackHandlerPSO);
-                    window.removeEventListener('ble_message', ackHandlerBayes);
-                    // Log timeout with detailed information
-                    try { 
-                        addLogMessage(`[PSO] Test timeout after 30s - testId=${testId}, Kp=${particle.position.kp.toFixed(3)}, Ki=${particle.position.ki.toFixed(3)}, Kd=${particle.position.kd.toFixed(3)}. Robot nie przesłał metrics_result. Test pominięty.`, 'error'); 
-                    } catch (e) { 
-                        console.error('[PSO] Test timeout:', testId, particle.position); 
-                    }
-                    reject(new Error('Test timeout'));
-                }
-            }, 30000); // 30 second timeout (increased from 10s)
-
-            // Handler for test completion (success or failure)
-            const completeHandler = (evt) => {
-                const data = (evt && evt.detail) ? evt.detail : evt;
-                if (data.type === 'test_complete' && Number(data.testId) === testId) {
-                    clearTimeout(timeout);
-                    window.removeEventListener('ble_message', completeHandler);
-                    window.removeEventListener('ble_message', metricsHandler);
-                    window.removeEventListener('ble_message', ackHandlerBayes);
-
-                    // If test failed (e.g., emergency stop), reject with special reason
-                    if (!data.success) {
-                        reject({ reason: 'interrupted_by_emergency', testId: testId });
-                        return;
-                    }
-                }
-            };
-
-            // Update current test display (when starting)
-            try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, idx, this.particles.length, particle.position.kp, particle.position.ki, particle.position.kd, particle.fitness); } catch (_) { }
-
-            // Handler for test metrics
-            const metricsHandler = (evt) => {
-                const data = (evt && evt.detail) ? evt.detail : evt;
-                if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
-                    clearTimeout(timeout);
-                    
-                    try { addLogMessage(`[PSO] Otrzymano metrics_result dla testId=${testId}`, 'info'); } catch (e) { console.debug('[PSO] log failed', e); }
-                    
-                    // Validate and extract metrics with fallbacks
-                    const itae = (typeof data.itae === 'number' && !isNaN(data.itae)) ? data.itae : 0;
-                    const overshoot = (typeof data.overshoot === 'number' && !isNaN(data.overshoot)) ? data.overshoot : 0;
-                    const steadyStateError = (typeof data.steady_state_error === 'number' && !isNaN(data.steady_state_error)) ? data.steady_state_error : 0;
-                    
-                    const fitness = itae + overshoot * 10 + steadyStateError * 5;
-                    particle.fitness = fitness;
-                    
-                    try { addLogMessage(`[PSO] Fitness calculated: ITAE=${itae.toFixed(4)}, Overshoot=${overshoot.toFixed(2)}, SSE=${steadyStateError.toFixed(2)}, Fitness=${fitness.toFixed(4)}`, 'info'); } catch (e) { console.debug('[PSO] fitness log failed', e); }
-
-                    if (fitness < particle.bestFitness) {
-                        particle.bestFitness = fitness;
-                        particle.bestPosition = { ...particle.position };
-                    }
-
-                    if (!this.globalBest || fitness < this.globalBest.fitness) {
-                        this.globalBest = {
-                            position: { ...particle.position },
-                            fitness: fitness
-                        };
-                        updateBestDisplay(this.globalBest.position);
-                    }
-
-                    const meta = { gen: this.iteration + 1, totalGen: this.iterations, individualIdx: idx, pop: this.particles.length };
-                    try { fitnessChartData.push({ x: this.iteration + (idx / Math.max(1, this.particles.length)), y: fitness }); updateFitnessChart(); } catch (_) { }
-                    addTestToResultsTable(this.testCounter, particle.position, fitness, data.itae, data.overshoot, data.test_type || 'metrics_test', meta);
-
-                    // Remove handlers
-                    window.removeEventListener('ble_message', completeHandler);
-                    window.removeEventListener('ble_message', metricsHandler);
-                    resolve(fitness);
-                }
-            };
-
-            // Listen for ACK; reject early if firmware NACKs the run_metrics_test request
-            const ackHandlerPSO = (evt) => {
-                const d = (evt && evt.detail) ? evt.detail : evt;
-                if (d.type === 'ack' && d.command === 'run_metrics_test') {
-                    if (!d.success) {
-                        clearTimeout(timeout);
-                        window.removeEventListener('ble_message', completeHandler);
-                        window.removeEventListener('ble_message', metricsHandler);
-                        window.removeEventListener('ble_message', ackHandlerPSO);
-                        try { addLogMessage(`[PSO] run_metrics_test ACK failed: ${d.message || 'N/A'}`, 'error'); } catch (e) { console.debug('[PSO] ack log failed', e); }
-                        reject({ reason: 'ack_failed', message: d.message });
-                        return;
-                    } else {
-                        window.removeEventListener('ble_message', ackHandlerPSO);
-                    }
-                }
-            };
-            // Bayes: ack handler for run_metrics_test NACKs
-            const ackHandlerBayes = (evt) => {
-                const d = (evt && evt.detail) ? evt.detail : evt;
-                if (d.type === 'ack' && d.command === 'run_metrics_test') {
-                    if (!d.success) {
-                        clearTimeout(timeout);
-                        window.removeEventListener('ble_message', completeHandler);
-                        window.removeEventListener('ble_message', metricsHandler);
-                        window.removeEventListener('ble_message', ackHandlerBayes);
-                        try { addLogMessage(`[Bayes] run_metrics_test ACK failed: ${d.message || 'N/A'}`, 'error'); } catch (e) { console.debug('[Bayes] ack log failed', e); }
-                        reject({ reason: 'ack_failed', message: d.message });
-                        return;
-                    } else {
-                        window.removeEventListener('ble_message', ackHandlerBayes);
-                    }
-                }
-            };
-            window.addEventListener('ble_message', completeHandler);
-            window.addEventListener('ble_message', metricsHandler);
-            window.addEventListener('ble_message', ackHandlerBayes);
-            window.addEventListener('ble_message', ackHandlerPSO);
-            try { addLogMessage(`[PSO] Sending run_metrics_test: testId=${testId} Kp=${particle.position.kp.toFixed(3)} Ki=${particle.position.ki.toFixed(3)} Kd=${particle.position.kd.toFixed(3)} testCounter=${this.testCounter}`, 'info'); } catch (e) { console.debug('[PSO] log failed', e); }
-            sendBleCommand('run_metrics_test', {
-                kp: particle.position.kp,
-                ki: particle.position.ki,
-                kd: particle.position.kd,
-                testId: testId
-            });
-        });
+        try {
+            const res = await runMetricsTest(particle.position.kp, particle.position.ki, particle.position.kd);
+            particle.fitness = res.fitness;
+            if (res.fitness < particle.bestFitness) {
+                particle.bestFitness = res.fitness;
+                particle.bestPosition = { ...particle.position };
+            }
+            if (!this.globalBest || res.fitness < this.globalBest.fitness) {
+                this.globalBest = { position: { ...particle.position }, fitness: res.fitness };
+                updateBestDisplay(this.globalBest.position);
+            }
+            const meta = { gen: this.iteration + 1, totalGen: this.iterations, individualIdx: idx, pop: this.particles.length };
+            try { fitnessChartData.push({ x: this.iteration + (idx / Math.max(1, this.particles.length)), y: res.fitness }); updateFitnessChart(); } catch (_) { }
+            addTestToResultsTable(this.testCounter, particle.position, res.fitness, res.itae, res.overshoot, 'metrics_test', meta);
+            return res.fitness;
+        } catch (err) {
+            if (err && err.reason === 'interrupted_by_emergency') throw err;
+            particle.fitness = Infinity;
+            addTestToResultsTable(this.testCounter, particle.position, Infinity, 0, 0, 'metrics_test');
+            return Infinity;
+        }
     }
 
     async runIteration() {
@@ -1334,81 +1222,17 @@ class BayesianOptimization {
     }
 
     async evaluateSample(sample) {
-        const testId = Date.now() >>> 0;
         this.testCounter++;
-
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                // Best-effort cleanup
-                window.removeEventListener('ble_message', completeHandler);
-                window.removeEventListener('ble_message', metricsHandler);
-                // Log timeout with detailed information
-                try { 
-                    addLogMessage(`[Bayesian] Test timeout after 30s - testId=${testId}, Kp=${sample.kp.toFixed(3)}, Ki=${sample.ki.toFixed(3)}, Kd=${sample.kd.toFixed(3)}. Robot nie przesłał metrics_result. Test pominięty.`, 'error'); 
-                } catch (e) { 
-                    console.error('[Bayesian] Test timeout:', testId, sample); 
-                }
-                reject(new Error('Test timeout'));
-            }, 30000); // 30 second timeout (increased from 10s)
-
-            // Handler for test completion (success or failure)
-            const completeHandler = (evt) => {
-                const data = (evt && evt.detail) ? evt.detail : evt;
-                if (data.type === 'test_complete' && Number(data.testId) === testId) {
-                    clearTimeout(timeout);
-                    window.removeEventListener('ble_message', completeHandler);
-                    window.removeEventListener('ble_message', metricsHandler);
-
-                    // If test failed (e.g., emergency stop), reject with special reason
-                    if (!data.success) {
-                        reject({ reason: 'interrupted_by_emergency', testId: testId });
-                        return;
-                    }
-                }
-            };
-
-            // Update UI about starting this sample (iteration, sample idx unknown here)
-            try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, null); } catch (_) { }
-
-            // Handler for test metrics
-            const metricsHandler = (evt) => {
-                const data = (evt && evt.detail) ? evt.detail : evt;
-                if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
-                    clearTimeout(timeout);
-                    
-                    try { addLogMessage(`[Bayesian] Otrzymano metrics_result dla testId=${testId}`, 'info'); } catch (e) { console.debug('[Bayesian] log failed', e); }
-                    
-                    // Validate and extract metrics with fallbacks
-                    const itae = (typeof data.itae === 'number' && !isNaN(data.itae)) ? data.itae : 0;
-                    const overshoot = (typeof data.overshoot === 'number' && !isNaN(data.overshoot)) ? data.overshoot : 0;
-                    const steadyStateError = (typeof data.steady_state_error === 'number' && !isNaN(data.steady_state_error)) ? data.steady_state_error : 0;
-                    
-                    const fitness = itae + overshoot * 10 + steadyStateError * 5;
-                    
-                    try { addLogMessage(`[Bayesian] Fitness calculated: ITAE=${itae.toFixed(4)}, Overshoot=${overshoot.toFixed(2)}, SSE=${steadyStateError.toFixed(2)}, Fitness=${fitness.toFixed(4)}`, 'info'); } catch (e) { console.debug('[Bayesian] fitness log failed', e); }
-
-                    // Update UI with resulting fitness for this sample
-                    try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, fitness); } catch (_) { }
-
-                    addTestToResultsTable(this.testCounter, sample, fitness, data.itae, data.overshoot, data.test_type || 'metrics_test');
-
-                    // Remove handlers
-                    window.removeEventListener('ble_message', completeHandler);
-                    window.removeEventListener('ble_message', metricsHandler);
-                    resolve(fitness);
-                }
-            };
-
-            window.addEventListener('ble_message', completeHandler);
-            window.addEventListener('ble_message', metricsHandler);
-
-            sendBleCommand('run_metrics_test', {
-                kp: sample.kp,
-                ki: sample.ki,
-                kd: sample.kd,
-                testId: testId
-            });
-        });
+        try {
+            const res = await runMetricsTest(sample.kp, sample.ki, sample.kd);
+            try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, res.fitness); } catch (_) { }
+            addTestToResultsTable(this.testCounter, sample, res.fitness, res.itae, res.overshoot, 'metrics_test');
+            return res.fitness;
+        } catch (err) {
+            if (err && err.reason === 'interrupted_by_emergency') throw err;
+            addTestToResultsTable(this.testCounter, sample, Infinity, 0, 0, 'metrics_test');
+            return Infinity;
+        }
     }
 
     sampleRandom() {
