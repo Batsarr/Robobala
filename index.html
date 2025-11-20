@@ -654,8 +654,9 @@
     <script src="js/helpers.js"></script>
     <script src="js/path_visualization.js"></script>
     <script src="js/tuning_algorithms.js"></script>
-    <!-- Production: include single bundled JS file (main.js) last -->
-    <script src="js/main.js"></script>
+    <!-- UWAGA: Usunięto produkcyjny bundle main.js w celu uniknięcia duplikacji klas (GA/PSO) podczas debugowania.
+        Używamy modularnych plików źródłowych aby zapewnić poprawne oczekiwanie na wyniki testów (runMetricsTest gating). -->
+    <!-- <script src="js/main.js"></script> -->
 
 </body>
 </html>

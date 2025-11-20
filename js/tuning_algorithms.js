@@ -55,25 +55,35 @@ function computeTestTimeout() {
  * Wysyła run_metrics_test, nasłuchuje status_update test_started, metrics_result i test_complete.
  * Obsługuje ack NACK przez syntetyczne test_complete(success=false).
  */
+// GLOBALNY ŁAŃCUCH PROMISÓW DLA TESTÓW – zapewnia, że tylko jedna komenda run_metrics_test jest aktywna naraz
+let __metricsTestChain = Promise.resolve();
+let __activeTestId = null;
+
 function runMetricsTest(kp, ki, kd) {
+    // Doklej do kolejki aby uniknąć równoległych testów (spam "Test w toku")
+    __metricsTestChain = __metricsTestChain.then(() => internalRunMetricsTest(kp, ki, kd));
+    return __metricsTestChain;
+}
+
+function internalRunMetricsTest(kp, ki, kd) {
     return new Promise((resolve, reject) => {
         const testId = (Date.now() ^ Math.floor(Math.random() * 0xFFFF)) >>> 0;
         const timeoutMs = computeTestTimeout();
         let resolved = false;
         let metricsData = null;
-        let ackReceived = false;
         let started = false;
         let timeoutHandle = setTimeout(() => {
             if (!resolved) {
                 cleanup();
                 resolved = true;
-                reject(new Error('test_timeout'));
+                reject({ reason: 'test_timeout' });
             }
         }, timeoutMs);
 
         function cleanup() {
             window.removeEventListener('ble_message', handler);
             clearTimeout(timeoutHandle);
+            __activeTestId = null;
         }
 
         function finishSuccess() {
@@ -81,7 +91,6 @@ function runMetricsTest(kp, ki, kd) {
             resolved = true;
             cleanup();
             if (!metricsData) {
-                // No metrics -> penalize
                 resolve({ fitness: Infinity, itae: 0, overshoot: 0, steady_state_error: 0, raw: null });
             } else {
                 const itae = Number(metricsData.itae) || 0;
@@ -101,10 +110,10 @@ function runMetricsTest(kp, ki, kd) {
 
         function handler(evt) {
             const d = evt.detail || evt;
-            if (d.type === 'ack' && d.command === 'run_metrics_test' && Number(d.testId) === testId) {
-                ackReceived = true;
+            if (!d || !d.type) return;
+            // Ack nie zawiera testId – wystarczy sprawdzić powodzenie
+            if (d.type === 'ack' && d.command === 'run_metrics_test') {
                 if (!d.success) {
-                    // Synthetic test_complete
                     finishFailure('ack_failed');
                 }
             }
@@ -119,10 +128,26 @@ function runMetricsTest(kp, ki, kd) {
             }
         }
 
-        window.addEventListener('ble_message', handler);
-        // Wyślij komendę
-        sendBleCommand('run_metrics_test', { kp, ki, kd, testId });
-    });
+        // Jeśli poprzedni test jeszcze się nie zakończył (brak test_complete), poczekaj krótko aktywnie (maks 2s)
+        const waitForIdle = () => new Promise((res) => {
+            if (!__activeTestId) return res();
+            let waited = 0;
+            const iv = setInterval(() => {
+                if (!__activeTestId) { clearInterval(iv); res(); }
+                else if (waited > 2000) { clearInterval(iv); res(); }
+                waited += 50;
+            }, 50);
+        });
+
+        waitForIdle().then(() => {
+            window.addEventListener('ble_message', handler);
+            __activeTestId = testId;
+            sendBleCommand('run_metrics_test', { kp, ki, kd, testId });
+        });
+    })
+        // Krótkie opóźnienie bezpieczeństwa po każdym teście aby firmware zdążył przywrócić parametry
+        .then(async (res) => { try { await RB.helpers.delay(150); } catch (_) { } return res; })
+        .catch(async (err) => { try { await RB.helpers.delay(150); } catch (_) { } throw err; });
 }
 
 // Use RB.helpers.delay(ms) (provided by js/helpers.js) for delays to avoid redeclaration issues.
