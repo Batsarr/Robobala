@@ -3826,10 +3826,15 @@ async function startTuning() {
             throw new Error(`Nieznana metoda: ${method}`);
         }
 
-        const runStartTime = Date.now();
         try { addLogMessage(`[UI] currentTuningSession: ${currentTuningSession.constructor.name} debugId=${currentTuningSession._debugId || 'N/A'} config=${JSON.stringify(config)}`, 'info'); } catch (e) { console.debug('[UI] tuning session log failed', e); }
         
-        currentTuningSession.run();
+        // Start the tuning session
+        currentTuningSession.run().catch((err) => {
+            console.error('[UI] Autostrojenie error:', err);
+            addLogMessage(`[UI] Błąd podczas sesji strojenia: ${err && err.message ? err.message : String(err)}`, 'error');
+        }).finally(() => {
+            stopTuning(false);
+        });
 
     } catch (error) {
         console.error('Błąd inicjalizacji strojenia:', error);
