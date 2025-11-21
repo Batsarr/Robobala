@@ -145,20 +145,24 @@ body.tuning-active #log-card {
     opacity: 1.0;
     pointer-events: auto;
 }
-/* DODANE: upewnij się że panel #autotuning-card nie dziedziczy wygaszenia z rodzica #allSettings */
-body.tuning-active #autotuning-card .accordion-header,
-body.tuning-active #autotuning-card .accordion-content {
-    opacity: 1.0 !important;
+
+/* STRONG OVERRIDE: Guarantee autotuning card and its children are not greyed out while tuning is active */
+/* OVERRIDE (stabilizacja akordeonu 6): zapewnij pełną interaktywność panelu
+   optymalizacji PID (#autotuning-card) nawet gdy body ma klasę .tuning-active.
+   Usunięto zależność od selektora dziecka (.main-grid > ...) aby działało
+   również gdy karta jest zagnieżdżona w innym kontenerze. */
+body.tuning-active #autotuning-card,
+body.tuning-active #autotuning-card * {
+    opacity: 1 !important;
     pointer-events: auto !important;
     filter: none !important;
 }
-
-/* STRONG OVERRIDE: Guarantee autotuning card and its children are not greyed out while tuning is active */
-body.tuning-active .main-grid > #autotuning-card,
-body.tuning-active .main-grid > #autotuning-card * {
-    opacity: 1.0 !important;
+/* Precyzyjne odblokowanie nagłówka i treści akordeonu 6 (gdy reguły globalne
+   #allSettings .accordion-header/.accordion-content nadpisują interakcję) */
+body.tuning-active #autotuning-card .accordion-header,
+body.tuning-active #autotuning-card .accordion-content {
+    opacity: 1 !important;
     pointer-events: auto !important;
-    filter: none !important;
 }
 /* ukrywanie konfiguracji w panelu optymalizacji podczas trwania strojenia */
 body.tuning-active .autotune-config-hide { display: none !important; }
