@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>RoboBala - Test: Disable Magnetometer Switch Sync</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>body{font-family:Arial,Helvetica,sans-serif;padding:20px;} .row{margin:8px 0;} .btn{padding:6px 10px;border-radius:4px;background:#61dafb;border:none;cursor:pointer;}</style>
+</head>
+<body>
+  <h2>Test: disableMagnetometerSwitch sync</h2>
+  <div class="row">
+    <label><input type="checkbox" id="disableMagnetometerSwitch"> Wylacz Magnetometr</label>
+  </div>
+  <div class="row">
+    <button id="set1" class="btn">Apply applySingleParam(disable_magnetometer=1)</button>
+    <button id="set0" class="btn">Apply applySingleParam(disable_magnetometer=0)</button>
+  </div>
+  <div class="row">
+    <button id="sendSetParamMsg" class="btn">Simulate set_param message (via commLayer)</button>
+  </div>
+  <pre id="log"></pre>
+  <script>
+    // Minimal stubs for BLE send to avoid missing functions
+    window.sendBleMessage = function(msg) { console.log('sendBleMessage ->', msg); };
+    window.addLogMessage = function(m, level) { console.log('[UI LOG]', level||'info', m); document.getElementById('log').textContent += (m + '\n'); };
+  </script>
+  <script src="../main.js"></script>
+  <script>
+  function appendLog(msg){ document.getElementById('log').textContent += msg + '\n'; }
+    document.getElementById('set1').addEventListener('click', ()=>{
+      if(typeof applySingleParam === 'function'){ applySingleParam('disable_magnetometer', 1.0); appendLog('applySingleParam disable_magnetometer=1 -> checkbox.checked=' + document.getElementById('disableMagnetometerSwitch').checked); }
+      else appendLog('applySingleParam not available');
+    });
+    document.getElementById('set0').addEventListener('click', ()=>{
+      if(typeof applySingleParam === 'function'){ applySingleParam('disable_magnetometer', 0.0); appendLog('applySingleParam disable_magnetometer=0 -> checkbox.checked=' + document.getElementById('disableMagnetometerSwitch').checked); }
+      else appendLog('applySingleParam not available');
+    });
+    document.getElementById('sendSetParamMsg').addEventListener('click', () => {
+      if (window.commLayer && typeof commLayer.notifyHandlers === 'function') {
+        commLayer.notifyHandlers('set_param', { key: 'disable_magnetometer', value: 1.0 });
+        appendLog('commLayer.notifyHandlers set_param disable_magnetometer=1');
+      } else {
+        appendLog('commLayer.notifyHandlers not available; calling applySingleParam fallback');
+        if(typeof applySingleParam === 'function'){ applySingleParam('disable_magnetometer', 1.0); appendLog('applySingleParam fallback done'); }
+      }
+    });
+  </script>
+  <script>
+    // Auto-run small sanity checks after main.js has loaded, update log
+    setTimeout(() => {
+      if (typeof applySingleParam === 'function') {
+        applySingleParam('disable_magnetometer', 1.0);
+        appendLog('[auto] applySingleParam disable_magnetometer=1 => checked=' + document.getElementById('disableMagnetometerSwitch').checked);
+        setTimeout(()=>{
+          applySingleParam('disable_magnetometer', 0.0);
+          appendLog('[auto] applySingleParam disable_magnetometer=0 => checked=' + document.getElementById('disableMagnetometerSwitch').checked);
+        }, 500);
+      } else {
+        appendLog('[auto] applySingleParam not found');
+      }
+    }, 200);
+  </script>
+</body>
+</html>

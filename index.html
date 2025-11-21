@@ -647,8 +647,9 @@
     <!-- WARNING: Do NOT include both the production bundle and modular JS files in the same page.
         For development, use 'index-dev.html' which loads the modular scripts in dependency order.
         The bundler is available as a single file 'js/main.js' for production. -->
-    <!-- Required dependencies for main.js (must be loaded prior to main): -->
-    <!-- Production: include single bundled JS file (main.js) last -->
+    <!-- Production mode: używamy wyłącznie zbudowanego pakietu 'main.js'.
+        NIE ładujemy jednocześnie modularnych plików aby uniknąć
+        redeklaracji zmiennych (patrz komentarz w main.js). -->
     <script src="js/main.js"></script>
 
 </body>
