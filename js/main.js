@@ -3831,7 +3831,7 @@ async function startTuning() {
         // Start the tuning session
         currentTuningSession.run().catch((err) => {
             console.error('[UI] Autostrojenie error:', err);
-            addLogMessage(`[UI] Błąd podczas sesji strojenia: ${err && err.message ? err.message : String(err)}`, 'error');
+            addLogMessage(`[UI] Błąd podczas sesji strojenia: ${err?.message ?? String(err)}`, 'error');
         }).finally(() => {
             stopTuning(false);
         });
