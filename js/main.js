@@ -1066,7 +1066,11 @@ document.addEventListener('DOMContentLoaded', () => {
     initSignalAnalyzerChart();
     setupSignalChartControls();
     setupSignalAnalyzerControls();
-    populatePresetSelect();
+    if (typeof window.populatePresetSelect === 'function') {
+        try { populatePresetSelect(); } catch (e) { console.warn('[UI] populatePresetSelect failed:', e); }
+    } else {
+        console.info('[UI] populatePresetSelect not defined - skipping');
+    }
     setupNumericInputs();
     // Zamiana legacy: wywołujemy nowy zestaw listenerów parametrów zamiast usuniętej funkcji.
     if (typeof setupParameterListeners === 'function') {
@@ -1634,7 +1638,7 @@ function updateModelMappingUI() {
     setSignButtons('modelYawSign', modelMapping.yaw.sign);
     setSignButtons('modelRollSign', modelMapping.roll.sign);
     // Podgląd
-    
+
     const cur = document.getElementById('model-mapping-current');
     if (cur) { cur.textContent = `pitch: src=${modelMapping.pitch.source} sign=${modelMapping.pitch.sign} | yaw: src=${modelMapping.yaw.source} sign=${modelMapping.yaw.sign} | roll: src=${modelMapping.roll.source} sign=${modelMapping.roll.sign}`; }
 }
@@ -3345,7 +3349,7 @@ function initJoystick() {
             }
         }
         joystickInitRetryAttempts = 0;
-    const joystickCanvas = document.getElementById('joystickCanvas');
+        const joystickCanvas = document.getElementById('joystickCanvas');
         if (!joystickCanvas) { console.warn('[UI] initJoystick: joystickCanvas element not found'); createJoystickFallback(wrapper, 'Joystick canvas missing'); return; }
         const joystickCtx = joystickCanvas.getContext('2d');
         if (!joystickCtx) { console.warn('[UI] initJoystick: 2D context is not available'); createJoystickFallback(wrapper, 'Joystick canvas unavailable (2D context)'); return; }
@@ -3354,10 +3358,10 @@ function initJoystick() {
         joystickCenter = { x: size / 2, y: size / 2 };
         joystickRadius = size / 2 * 0.75;
         knobRadius = size / 2 * 0.25;
-    drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y);
-    console.info('[UI] joystickCanvas size:', joystickCanvas.width, joystickCanvas.height);
-    joystickInitialized = true;
-    try { updateDebugOverlay(); } catch (_) { }
+        drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y);
+        console.info('[UI] joystickCanvas size:', joystickCanvas.width, joystickCanvas.height);
+        joystickInitialized = true;
+        try { updateDebugOverlay(); } catch (_) { }
     } catch (e) {
         console.error('[UI] initJoystick error', e);
     }
@@ -3739,11 +3743,11 @@ function init3DVisualization() {
         }
         threeDInitRetryAttempts = 0;
         scene3D = new THREE.Scene();
-    camera3D = new THREE.PerspectiveCamera(50, width / height, 0.1, 2000);
+        camera3D = new THREE.PerspectiveCamera(50, width / height, 0.1, 2000);
         camera3D.position.set(28, 22, 48);
         camera3D.lookAt(0, 8, 0);
         renderer3D = new THREE.WebGLRenderer({ antialias: true });
-    renderer3D.setSize(width, height);
+        renderer3D.setSize(width, height);
         // Verify the created canvas has a valid WebGL context
         try {
             const gl = renderer3D.domElement.getContext('webgl') || renderer3D.domElement.getContext('experimental-webgl');
@@ -3758,7 +3762,7 @@ function init3DVisualization() {
             return;
         }
         container.appendChild(renderer3D.domElement);
-    controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
+        controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
         controls3D.target.set(0, 8, 0);
         controls3D.maxPolarAngle = Math.PI / 2;
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
@@ -3788,11 +3792,11 @@ function init3DVisualization() {
             camera3D.updateProjectionMatrix();
             renderer3D.setSize(width, height);
         });
-    setupControls3D();
-    setupCalibrationModal();
-    console.info('[UI] 3D renderer size:', renderer3D.domElement.clientWidth, renderer3D.domElement.clientHeight);
-    threeInitialized = true;
-    try { updateDebugOverlay(); } catch (_) { }
+        setupControls3D();
+        setupCalibrationModal();
+        console.info('[UI] 3D renderer size:', renderer3D.domElement.clientWidth, renderer3D.domElement.clientHeight);
+        threeInitialized = true;
+        try { updateDebugOverlay(); } catch (_) { }
     } catch (e) {
         console.error('[UI] init3DVisualization error', e);
     }
