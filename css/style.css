@@ -341,6 +341,29 @@ body.ui-locked #connectBleBtn, body.ui-locked #emergencyStopBtn {
     margin-right: 5px;
 }
 
+/* Debug overlay: lightweight, non-invasive diagnostic panel */
+.ui-debug {
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    background: rgba(20, 21, 24, 0.95);
+    color: #fff;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    z-index: 2001;
+    min-width: 180px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+}
+.ui-debug .row { display:flex; justify-content:space-between; gap:8px; align-items:center; margin-bottom:6px; }
+.ui-debug .row .label { color: #a2f279; font-weight: 600; }
+.ui-debug .row .value { color: #ffffff; opacity: 0.9; }
+.ui-debug button { background: #4a4f58; color: #61dafb; border: 1px solid #4a4f58; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+.ui-debug button:hover { background: #61dafb; color: #282c34; }
+.ui-debug .error { color: #ff6347; font-weight: 700; }
+.ui-debug .warn { color: #f7b731; font-weight: 700; }
+.ui-debug .ok { color: #a2f279; font-weight: 700; }
+
 /* Responsive design for mobile */
 @media (min-width: 769px) {
     /* Show table on larger screens */
@@ -399,6 +422,21 @@ body.ui-locked #connectBleBtn, body.ui-locked #emergencyStopBtn {
 .method-theory li { margin:4px 0; }
 /* Modal mapowania modelu 3D */
 .model-mapping-row { display:grid; grid-template-columns: 100px 1fr 1fr; gap:8px; align-items:center; margin-bottom:8px; }
+
+/* Fallback placeholder for missing 3D visualization or joystick canvas */
+.three-fallback, .joystick-fallback {
+    color: #fff;
+    background: rgba(0,0,0,0.38);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.95em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    box-sizing: border-box;
+    text-align: center;
+}
 .model-mapping-row select { width:100%; background:#20232a; color:#fff; border:1px solid #61dafb; border-radius:4px; padding:4px; }
 .model-mapping-row .sign-toggle { display:flex; gap:6px; }
 .sign-toggle button { flex:1; background:#4a4f58; color:#61dafb; }

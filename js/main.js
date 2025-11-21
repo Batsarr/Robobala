@@ -16,6 +16,15 @@
         };
     }
 })();
+// Global runtime error hooks to help debugging initialization failures
+if (typeof window !== 'undefined') {
+    window.addEventListener('error', (e) => {
+        console.error('[UI] Window error:', e.message, 'at', e.filename + ':' + e.lineno + ':' + e.colno);
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+        console.error('[UI] Unhandled promise rejection:', e.reason);
+    });
+}
 // ========================================================================
 // STATE MANAGER - Centralized State Management
 // ========================================================================
@@ -873,6 +882,7 @@ let skyDome;
 let scene3D, camera3D, renderer3D, controls3D, robotPivot, leftWheel, rightWheel, groundMesh, groundTexture, robotPerspectiveZoom = 40;
 let currentEncoderLeft = 0, currentEncoderRight = 0;
 let isAnimation3DEnabled = true, isMovement3DEnabled = false, lastEncoderAvg = 0;
+let threeAnimationStarted = false;
 window.telemetryData = {};
 let isCalibrationModalShown = false;
 // UI base for 'Set Zero' feature — apparent trim is actualTrim - uiTrimZeroBase
@@ -888,11 +898,171 @@ const HISTORY_LENGTH = 600;
 let lastTelemetryUpdateTime = 0;
 const TELEMETRY_UPDATE_INTERVAL = 1000;
 
+// Robustness: retry counters and fallback sizes for layout-dependent initialization
+let joystickInitRetryAttempts = 0;
+const MAX_JOYSTICK_INIT_RETRIES = 3;
+const JOYSTICK_FALLBACK_SIZE = 180;
+
+let threeDInitRetryAttempts = 0;
+const MAX_3D_INIT_RETRIES = 3;
+const THREE_D_FALLBACK_WIDTH = 640;
+const THREE_D_FALLBACK_HEIGHT = 400;
+// ResizeObserver-based deferral state (mitigates layout timing / hidden tab issues)
+let joystickInitObserver = null;
+let threeDInitObserver = null;
+let joystickResizeHandlerAdded = false;
+let threeDResizeHandlerAdded = false;
+
+// Ensure an element is initialized when it becomes visible/has a non-zero size.
+function ensureJoystickInitialized() {
+    try {
+        const wrapper = document.getElementById('joystickWrapper');
+        if (!wrapper) { console.warn('[UI] ensureJoystickInitialized: joystickWrapper not found'); return; }
+        if (wrapper.clientWidth > 8 && wrapper.clientHeight > 8) {
+            initJoystick();
+            if (!joystickResizeHandlerAdded) {
+                window.addEventListener('resize', () => setTimeout(initJoystick, 150));
+                joystickResizeHandlerAdded = true;
+            }
+            return;
+        }
+        if (typeof ResizeObserver === 'function') {
+            if (joystickInitObserver) joystickInitObserver.disconnect();
+            joystickInitObserver = new ResizeObserver(entries => {
+                for (const entry of entries) {
+                    const cr = entry.contentRect || {};
+                    if (cr.width > 8 && cr.height > 8) {
+                        joystickInitObserver.disconnect();
+                        joystickInitObserver = null;
+                        initJoystick();
+                        if (!joystickResizeHandlerAdded) {
+                            window.addEventListener('resize', () => setTimeout(initJoystick, 150));
+                            joystickResizeHandlerAdded = true;
+                        }
+                        return;
+                    }
+                }
+            });
+            joystickInitObserver.observe(wrapper, { box: 'content-box' });
+            // Safety fallback if observed size never changes
+            setTimeout(() => {
+                if (joystickInitObserver) {
+                    joystickInitObserver.disconnect();
+                    joystickInitObserver = null;
+                    initJoystick();
+                }
+            }, 2400);
+        } else {
+            // Fallback to short polling
+            let tries = 0;
+            const poll = setInterval(() => {
+                tries++;
+                if (!wrapper) { clearInterval(poll); return; }
+                if (wrapper.clientWidth > 8 && wrapper.clientHeight > 8) {
+                    clearInterval(poll);
+                    initJoystick();
+                    if (!joystickResizeHandlerAdded) {
+                        window.addEventListener('resize', () => setTimeout(initJoystick, 150));
+                        joystickResizeHandlerAdded = true;
+                    }
+                    return;
+                }
+                if (tries > 10) {
+                    clearInterval(poll);
+                    initJoystick();
+                }
+            }, 200);
+        }
+    } catch (err) { console.warn('[UI] ensureJoystickInitialized error', err); initJoystick(); }
+}
+
+function ensure3DInitialized() {
+    try {
+        const container = document.getElementById('robot3d-container');
+        if (!container) { console.warn('[UI] ensure3DInitialized: robot3d-container not found'); return; }
+        if (container.clientWidth > 16 && container.clientHeight > 16) { init3DVisualization(); if (!threeDResizeHandlerAdded) { window.addEventListener('resize', () => setTimeout(() => { try { if (renderer3D && camera3D) { const w = container.clientWidth || THREE_D_FALLBACK_WIDTH; const h = container.clientHeight || THREE_D_FALLBACK_HEIGHT; camera3D.aspect = w / h; camera3D.updateProjectionMatrix(); renderer3D.setSize(w, h); } } catch (_) { } }, 150)); threeDResizeHandlerAdded = true; } return; }
+        if (typeof ResizeObserver === 'function') {
+            if (threeDInitObserver) threeDInitObserver.disconnect();
+            threeDInitObserver = new ResizeObserver(entries => {
+                for (const entry of entries) {
+                    const cr = entry.contentRect || {};
+                    if (cr.width > 16 && cr.height > 16) {
+                        threeDInitObserver.disconnect();
+                        threeDInitObserver = null;
+                        init3DVisualization();
+                        return;
+                    }
+                }
+            });
+            threeDInitObserver.observe(container, { box: 'content-box' });
+            setTimeout(() => {
+                if (threeDInitObserver) { threeDInitObserver.disconnect(); threeDInitObserver = null; init3DVisualization(); }
+            }, 2400);
+        } else {
+            let tries = 0; const poll = setInterval(() => {
+                tries++;
+                if (!container) { clearInterval(poll); return; }
+                if (container.clientWidth > 16 && container.clientHeight > 16) { clearInterval(poll); init3DVisualization(); return; }
+                if (tries > 12) { clearInterval(poll); init3DVisualization(); }
+            }, 250);
+        }
+    } catch (err) { console.warn('[UI] ensure3DInitialized error', err); init3DVisualization(); }
+}
+
+// Helper to create a fallback message in the 3D container so we can see a visible
+// indication if Three.js or WebGL is not available at runtime.
+function create3DFallback(container, message) {
+    try {
+        if (!container) return;
+        container.innerHTML = '';
+        const el = document.createElement('div');
+        el.className = 'three-fallback';
+        el.textContent = message || '3D visualization unavailable';
+        el.setAttribute('aria-hidden', 'false');
+        el.style.display = 'flex';
+        el.style.alignItems = 'center';
+        el.style.justifyContent = 'center';
+        el.style.height = '100%';
+        el.style.color = '#ffffff';
+        el.style.background = 'rgba(0,0,0,0.25)';
+        el.style.fontSize = '14px';
+        el.style.textAlign = 'center';
+        container.appendChild(el);
+    } catch (_) { /* best effort */ }
+}
+
+function createJoystickFallback(wrapper, message) {
+    try {
+        if (!wrapper) return;
+        wrapper.innerHTML = '';
+        const el = document.createElement('div');
+        el.className = 'joystick-fallback';
+        el.textContent = message || 'Joystick unavailable';
+        el.style.display = 'flex';
+        el.style.alignItems = 'center';
+        el.style.justifyContent = 'center';
+        el.style.height = '100%';
+        el.style.color = '#ffffff';
+        el.style.background = 'rgba(0,0,0,0.15)';
+        el.style.fontSize = '13px';
+        wrapper.appendChild(el);
+    } catch (_) { /* best effort */ }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    console.info('[UI] DOMContentLoaded main handler starting');
+    console.info('[UI] document.readyState:', document.readyState);
+    console.info('[UI] joystickWrapper present:', !!document.getElementById('joystickWrapper'));
+    console.info('[UI] robot3d-container present:', !!document.getElementById('robot3d-container'));
+    // Additional environment checks for 3D diagnostics
+    console.info('[UI] THREE defined:', !!window.THREE);
+    console.info('[UI] OrbitControls available:', !!(window.THREE && window.THREE.OrbitControls));
+    try { const __tc = document.createElement('canvas'); const __gl = __tc.getContext('webgl') || __tc.getContext('experimental-webgl'); console.info('[UI] WebGL available:', !!__gl); } catch (_) { console.info('[UI] WebGL available: false'); }
     // Setup communication layer message handlers
     setupCommunicationHandlers();
 
-    initJoystick();
+    // Robustly initialize joystick and 3D — defer until element sizes are known
+    ensureJoystickInitialized();
     initSignalAnalyzerChart();
     setupSignalChartControls();
     setupSignalAnalyzerControls();
@@ -1045,7 +1215,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     pollGamepad();
     window.addEventListener('resize', initJoystick);
-    init3DVisualization();
+    ensure3DInitialized();
     animate3D();
     setTuningUiLock(false, '');
     // Initialize sensor mapping preview (Three.js cube) and controls
@@ -1095,6 +1265,14 @@ document.addEventListener('DOMContentLoaded', () => {
             sendBleMessage({ type: 'set_tuning_config_param', key: 'search_ki', value: kiChk.checked });
         });
     }
+    // Quick debug overlay for troubleshooting 3D/Joystick issues
+    try {
+        createDebugOverlay();
+        updateDebugOverlay();
+        startInitWatchdog();
+    } catch (err) {
+        console.warn('[UI] createDebugOverlay error', err);
+    }
 
     // Obsługa modala historii prób
     const openHistBtn = document.getElementById('open-tuning-history-btn');
@@ -1105,6 +1283,85 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('closeHistoryBtn')?.addEventListener('click', () => { histModal.style.display = 'none'; });
     document.getElementById('exportHistoryCsvBtn')?.addEventListener('click', exportHistoryCsv);
 });
+
+// --- Debug overlay & helper wiring ---------------------------------------------------------
+let __debugOverlayRoot = null;
+let __lastUiError = null;
+
+function createDebugOverlay() {
+    try {
+        if (__debugOverlayRoot) return;
+        const d = document.createElement('div');
+        d.className = 'ui-debug';
+        d.setAttribute('aria-hidden', 'false');
+        d.innerHTML = `
+            <div class="row"><div class="label">THREE</div><div id="dbg-three" class="value">?</div></div>
+            <div class="row"><div class="label">OrbitControls</div><div id="dbg-orbit" class="value">?</div></div>
+            <div class="row"><div class="label">WebGL</div><div id="dbg-webgl" class="value">?</div></div>
+            <div class="row"><div class="label">3D size</div><div id="dbg-3d-size" class="value">?</div></div>
+            <div class="row"><div class="label">Joystick size</div><div id="dbg-joy-size" class="value">?</div></div>
+            <div class="row"><div class="label">Last error</div><div id="dbg-error" class="value">-</div></div>
+            <div style="display:flex; gap:8px; margin-top:6px;"><button id="dbg-reinit-3d">Re-init 3D</button><button id="dbg-reinit-joy">Re-init Joy</button></div>
+        `;
+        document.body.appendChild(d);
+        __debugOverlayRoot = d;
+        d.querySelector('#dbg-reinit-3d').addEventListener('click', () => {
+            console.info('[UI][DBG] Force reinit 3D requested');
+            try { init3DVisualization(); ensure3DInitialized(); animate3D(); } catch (e) { console.warn('[UI][DBG] reinit3d error', e); }
+            setTimeout(updateDebugOverlay, 250);
+        });
+        d.querySelector('#dbg-reinit-joy').addEventListener('click', () => {
+            console.info('[UI][DBG] Force reinit Joystick requested');
+            try { initJoystick(); ensureJoystickInitialized(); } catch (e) { console.warn('[UI][DBG] reinitJoy error', e); }
+            setTimeout(updateDebugOverlay, 150);
+        });
+
+        // Attach global error handlers
+        window.addEventListener('error', (ev) => {
+            __lastUiError = `${ev.message || ev.type} at ${ev.filename || '?'}:${ev.lineno || '?'}:${ev.colno || '?'} `;
+            updateDebugOverlay();
+        });
+        window.addEventListener('unhandledrejection', (ev) => {
+            __lastUiError = `UnhandledRejection: ${ev.reason ? (ev.reason.message || ev.reason) : 'unknown'}`;
+            updateDebugOverlay();
+        });
+
+        // Re-check sizes when page becomes visible or focused (navigate back to tab)
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { ensureJoystickInitialized(); ensure3DInitialized(); setTimeout(updateDebugOverlay, 400); } });
+        window.addEventListener('focus', () => { ensureJoystickInitialized(); ensure3DInitialized(); setTimeout(updateDebugOverlay, 400); });
+        window.addEventListener('resize', () => { setTimeout(updateDebugOverlay, 150); });
+
+        // Observe layout / style changes on relevant containers
+        try {
+            const observeTargets = [];
+            const c3d = document.getElementById('robot3d-container'); if (c3d) observeTargets.push(c3d);
+            const wj = document.getElementById('joystickWrapper'); if (wj) observeTargets.push(wj);
+            if (observeTargets.length) {
+                const mo = new MutationObserver(muts => { muts.forEach(m => { ensureJoystickInitialized(); ensure3DInitialized(); setTimeout(updateDebugOverlay, 200); }); });
+                observeTargets.forEach(t => mo.observe(t, { attributes: true, attributeFilter: ['style', 'class'] }));
+            }
+        } catch (_) { /** best effort */ }
+    } catch (err) { console.warn('[UI] createDebugOverlay failure', err); }
+}
+
+function updateDebugOverlay() {
+    if (!__debugOverlayRoot) return;
+    try {
+        const threeEl = __debugOverlayRoot.querySelector('#dbg-three');
+        const orbitEl = __debugOverlayRoot.querySelector('#dbg-orbit');
+        const webglEl = __debugOverlayRoot.querySelector('#dbg-webgl');
+        const size3dEl = __debugOverlayRoot.querySelector('#dbg-3d-size');
+        const sizeJoyEl = __debugOverlayRoot.querySelector('#dbg-joy-size');
+        const errEl = __debugOverlayRoot.querySelector('#dbg-error');
+        if (threeEl) threeEl.textContent = !!window.THREE ? 'OK' : 'MISSING';
+        if (orbitEl) orbitEl.textContent = !!(window.THREE && window.THREE.OrbitControls) ? 'OK' : 'MISSING';
+        try { const __tc = document.createElement('canvas'); const __gl = __tc.getContext('webgl') || __tc.getContext('experimental-webgl'); if (webglEl) webglEl.textContent = !!__gl ? 'OK' : 'NO'; } catch (_) { if (webglEl) webglEl.textContent = 'NO'; }
+        const c3d = document.getElementById('robot3d-container'); if (size3dEl) size3dEl.textContent = c3d ? `${c3d.clientWidth}x${c3d.clientHeight}` : 'N/A';
+        const wj = document.getElementById('joystickWrapper'); if (sizeJoyEl) sizeJoyEl.textContent = wj ? `${wj.clientWidth}x${wj.clientHeight}` : 'N/A';
+        if (errEl) errEl.textContent = __lastUiError || '-';
+    } catch (err) { console.warn('[UI] updateDebugOverlay error', err); }
+}
+
 // Osobny bufor logów systemowych (kanał 'log' z robota i ważne wpisy UI)
 // Pojedynczy, scalony bufor logów
 const allLogsBuffer = [];
@@ -1337,7 +1594,6 @@ function updateSensorMappingDisplays() {
 
 function updateModalTelemetryDisplay() {
     const e = getRawEuler();
-    const pd = document.getElementById('modal-pitch-telemetry');
     const rd = document.getElementById('modal-roll-telemetry');
     const yd = document.getElementById('modal-yaw-telemetry');
     if (pd) pd.textContent = (e.pitch || 0).toFixed(2) + '°';
@@ -1378,6 +1634,7 @@ function updateModelMappingUI() {
     setSignButtons('modelYawSign', modelMapping.yaw.sign);
     setSignButtons('modelRollSign', modelMapping.roll.sign);
     // Podgląd
+    
     const cur = document.getElementById('model-mapping-current');
     if (cur) { cur.textContent = `pitch: src=${modelMapping.pitch.source} sign=${modelMapping.pitch.sign} | yaw: src=${modelMapping.yaw.source} sign=${modelMapping.yaw.sign} | roll: src=${modelMapping.roll.source} sign=${modelMapping.roll.sign}`; }
 }
@@ -1581,6 +1838,31 @@ const debounce = (func, delay) => { let timeout; return function (...args) { con
 // delay helper is provided by RB.helpers.delay (see js/helpers.js)
 function addLogMessage(message, level = 'info') { pushLog(message, level); const logCard = document.getElementById('log-card'); const autoEl = document.getElementById('logsAutoscroll'); if (logCard && logCard.classList.contains('open')) { renderAllLogs((autoEl && autoEl.checked) === true); } }
 function clearLogs() { if (typeof allLogsBuffer !== 'undefined') { allLogsBuffer.length = 0; } const box = document.getElementById('log-history'); if (box) box.innerHTML = ''; }
+
+function toggleAccordion(header) {
+    try {
+        const content = header.nextElementSibling;
+        header.classList.toggle('active');
+        const isOpening = header.classList.contains('active');
+        if (!isOpening) {
+            content.classList.remove('auto-height');
+            content.style.maxHeight = '0px';
+            content.style.padding = '0px 15px';
+        } else {
+            if (content.classList.contains('autotune-pane')) {
+                const desktopH = 600;
+                const mobileVH = 70;
+                const isMobile = window.matchMedia('(max-width: 768px)').matches;
+                if (isMobile) content.style.maxHeight = mobileVH + 'vh'; else content.style.maxHeight = desktopH + 'px';
+            } else {
+                content.style.maxHeight = content.scrollHeight + 'px';
+                content.style.padding = '15px';
+                content.classList.add('auto-height');
+            }
+        }
+        setTimeout(() => { ensure3DInitialized(); ensureJoystickInitialized(); try { updateDebugOverlay(); } catch (_) { } }, 120);
+    } catch (_) { /* Best-effort */ }
+}
 function updateAccordionHeight(content) {
     if (content && content.classList.contains('active')) {
         content.classList.remove('auto-height');
@@ -3044,16 +3326,41 @@ function handleDynamicTestResult(raw) {
     addLogMessage(`[Test] Wyniki: ITAE=${data.itae?.toFixed?.(4) ?? '---'}, Overshoot=${data.overshoot?.toFixed?.(2) ?? '---'}%`, 'info');
 }
 function initJoystick() {
-    const wrapper = document.getElementById('joystickWrapper');
-    const size = wrapper.clientWidth;
+    console.info('[UI] initJoystick called');
+    try {
+        const wrapper = document.getElementById('joystickWrapper');
+        if (!wrapper) { console.warn('[UI] initJoystick: joystickWrapper element not found'); return; }
+        let size = wrapper.clientWidth || 0;
+        if (size === 0) {
+            const cs = getComputedStyle(wrapper);
+            console.warn('[UI] joystick wrapper size is 0. display:', cs.display, 'visibility:', cs.visibility, 'height:', cs.height, 'width:', cs.width);
+            if (joystickInitRetryAttempts < MAX_JOYSTICK_INIT_RETRIES) {
+                joystickInitRetryAttempts++;
+                console.info('[UI] initJoystick: scheduling retry', joystickInitRetryAttempts);
+                setTimeout(initJoystick, 200);
+                return;
+            } else {
+                console.warn('[UI] initJoystick: using fallback size', JOYSTICK_FALLBACK_SIZE);
+                size = JOYSTICK_FALLBACK_SIZE;
+            }
+        }
+        joystickInitRetryAttempts = 0;
     const joystickCanvas = document.getElementById('joystickCanvas');
-    const joystickCtx = joystickCanvas.getContext('2d');
-    joystickCanvas.width = size;
-    joystickCanvas.height = size;
-    joystickCenter = { x: size / 2, y: size / 2 };
-    joystickRadius = size / 2 * 0.75;
-    knobRadius = size / 2 * 0.25;
+        if (!joystickCanvas) { console.warn('[UI] initJoystick: joystickCanvas element not found'); createJoystickFallback(wrapper, 'Joystick canvas missing'); return; }
+        const joystickCtx = joystickCanvas.getContext('2d');
+        if (!joystickCtx) { console.warn('[UI] initJoystick: 2D context is not available'); createJoystickFallback(wrapper, 'Joystick canvas unavailable (2D context)'); return; }
+        joystickCanvas.width = size;
+        joystickCanvas.height = size;
+        joystickCenter = { x: size / 2, y: size / 2 };
+        joystickRadius = size / 2 * 0.75;
+        knobRadius = size / 2 * 0.25;
     drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y);
+    console.info('[UI] joystickCanvas size:', joystickCanvas.width, joystickCanvas.height);
+    joystickInitialized = true;
+    try { updateDebugOverlay(); } catch (_) { }
+    } catch (e) {
+        console.error('[UI] initJoystick error', e);
+    }
 }
 function drawJoystick(ctx, x, y) {
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -3403,7 +3710,93 @@ function updateCalibrationProgress(axis, value) {
         }
     }
 }; // ZMIANA: Usunięto duplikację funkcji setupCalibrationModal()
-function init3DVisualization() { const container = document.getElementById('robot3d-container'); scene3D = new THREE.Scene(); camera3D = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 2000); camera3D.position.set(28, 22, 48); camera3D.lookAt(0, 8, 0); renderer3D = new THREE.WebGLRenderer({ antialias: true }); renderer3D.setSize(container.clientWidth, container.clientHeight); container.appendChild(renderer3D.domElement); controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement); controls3D.target.set(0, 8, 0); controls3D.maxPolarAngle = Math.PI / 2; const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); scene3D.add(ambientLight); const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9); directionalLight.position.set(10, 20, 15); scene3D.add(directionalLight); const PLANE_SIZE_CM = 2000; groundTexture = createCheckerTexture(40); const repeats = PLANE_SIZE_CM / 40; groundTexture.repeat.set(repeats, repeats); const groundMaterial = new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1.0, metalness: 0.0 }); const groundGeo = new THREE.PlaneGeometry(PLANE_SIZE_CM, PLANE_SIZE_CM, 1, 1); groundMesh = new THREE.Mesh(groundGeo, groundMaterial); groundMesh.rotation.x = -Math.PI / 2; groundMesh.position.y = 0; scene3D.add(groundMesh); robotPivot = createRobotModel3D(); robotPivot.position.y = 4.1; scene3D.add(robotPivot); skyDome = createSkyDome(); scene3D.add(skyDome); window.addEventListener('resize', () => { const width = container.clientWidth; const height = container.clientHeight; camera3D.aspect = width / height; camera3D.updateProjectionMatrix(); renderer3D.setSize(width, height); }); setupControls3D(); setupCalibrationModal(); }; // ZMIANA: Usunięto duplikację funkcji setupCalibrationModal()
+function init3DVisualization() {
+    console.info('[UI] init3DVisualization called');
+    try {
+        const container = document.getElementById('robot3d-container');
+        if (!container) { console.warn('[UI] init3DVisualization: robot3d-container not found'); return; }
+        // If Three.js is not present, create a fallback so the UI doesn't fail silently.
+        if (typeof window.THREE === 'undefined') {
+            console.error('[UI] init3DVisualization: THREE not available. Skipping 3D init.');
+            create3DFallback(container, '3D visualization unavailable: library missing');
+            return;
+        }
+        let width = container.clientWidth || 0;
+        let height = container.clientHeight || 0;
+        if (width === 0 || height === 0) {
+            const cs = getComputedStyle(container);
+            console.warn('[UI] 3D container has zero size. display:', cs.display, 'visibility:', cs.visibility, 'width:', cs.width, 'height:', cs.height);
+            if (threeDInitRetryAttempts < MAX_3D_INIT_RETRIES) {
+                threeDInitRetryAttempts++;
+                console.info('[UI] init3DVisualization: scheduling retry', threeDInitRetryAttempts);
+                setTimeout(init3DVisualization, 250);
+                return;
+            } else {
+                console.warn('[UI] init3DVisualization: using fallback size', THREE_D_FALLBACK_WIDTH, 'x', THREE_D_FALLBACK_HEIGHT);
+                width = THREE_D_FALLBACK_WIDTH;
+                height = THREE_D_FALLBACK_HEIGHT;
+            }
+        }
+        threeDInitRetryAttempts = 0;
+        scene3D = new THREE.Scene();
+    camera3D = new THREE.PerspectiveCamera(50, width / height, 0.1, 2000);
+        camera3D.position.set(28, 22, 48);
+        camera3D.lookAt(0, 8, 0);
+        renderer3D = new THREE.WebGLRenderer({ antialias: true });
+    renderer3D.setSize(width, height);
+        // Verify the created canvas has a valid WebGL context
+        try {
+            const gl = renderer3D.domElement.getContext('webgl') || renderer3D.domElement.getContext('experimental-webgl');
+            if (!gl) {
+                console.warn('[UI] init3DVisualization: WebGL context not available on renderer element');
+                create3DFallback(container, '3D visualization unavailable: WebGL not supported');
+                return;
+            }
+        } catch (err) {
+            console.warn('[UI] init3DVisualization: error testing WebGL context', err);
+            create3DFallback(container, '3D visualization unavailable: WebGL test failure');
+            return;
+        }
+        container.appendChild(renderer3D.domElement);
+    controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
+        controls3D.target.set(0, 8, 0);
+        controls3D.maxPolarAngle = Math.PI / 2;
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene3D.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        directionalLight.position.set(10, 20, 15);
+        scene3D.add(directionalLight);
+        const PLANE_SIZE_CM = 2000;
+        groundTexture = createCheckerTexture(40);
+        const repeats = PLANE_SIZE_CM / 40;
+        groundTexture.repeat.set(repeats, repeats);
+        const groundMaterial = new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1.0, metalness: 0.0 });
+        const groundGeo = new THREE.PlaneGeometry(PLANE_SIZE_CM, PLANE_SIZE_CM, 1, 1);
+        groundMesh = new THREE.Mesh(groundGeo, groundMaterial);
+        groundMesh.rotation.x = -Math.PI / 2;
+        groundMesh.position.y = 0;
+        scene3D.add(groundMesh);
+        robotPivot = createRobotModel3D();
+        robotPivot.position.y = 4.1;
+        scene3D.add(robotPivot);
+        skyDome = createSkyDome();
+        scene3D.add(skyDome);
+        window.addEventListener('resize', () => {
+            const width = container.clientWidth || THREE_D_FALLBACK_WIDTH;
+            const height = container.clientHeight || THREE_D_FALLBACK_HEIGHT;
+            camera3D.aspect = width / height;
+            camera3D.updateProjectionMatrix();
+            renderer3D.setSize(width, height);
+        });
+    setupControls3D();
+    setupCalibrationModal();
+    console.info('[UI] 3D renderer size:', renderer3D.domElement.clientWidth, renderer3D.domElement.clientHeight);
+    threeInitialized = true;
+    try { updateDebugOverlay(); } catch (_) { }
+    } catch (e) {
+        console.error('[UI] init3DVisualization error', e);
+    }
+}; // ZMIANA: Usunięto duplikację funkcji setupCalibrationModal()
 function createCustomWheel(totalRadius, tireThickness, width) { const wheelGroup = new THREE.Group(); const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 }); const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.4 }); const rimRadius = totalRadius - tireThickness; const tire = new THREE.Mesh(new THREE.TorusGeometry(rimRadius + tireThickness / 2, tireThickness / 2, 16, 100), tireMaterial); wheelGroup.add(tire); const rimShape = new THREE.Shape(); rimShape.absarc(0, 0, rimRadius, 0, Math.PI * 2, false); const holePath = new THREE.Path(); holePath.absarc(0, 0, rimRadius * 0.85, 0, Math.PI * 2, true); rimShape.holes.push(holePath); const extrudeSettings = { depth: width * 0.4, bevelEnabled: false }; const outerRimGeometry = new THREE.ExtrudeGeometry(rimShape, extrudeSettings); outerRimGeometry.center(); const outerRim = new THREE.Mesh(outerRimGeometry, rimMaterial); wheelGroup.add(outerRim); const hubRadius = rimRadius * 0.2; const hub = new THREE.Mesh(new THREE.CylinderGeometry(hubRadius, hubRadius, width * 0.5, 24), rimMaterial); hub.rotateX(Math.PI / 2); wheelGroup.add(hub); const spokeLength = (rimRadius * 0.85) - hubRadius; const spokeGeometry = new THREE.BoxGeometry(spokeLength, rimRadius * 0.15, width * 0.4); spokeGeometry.translate(hubRadius + spokeLength / 2, 0, 0); for (let i = 0; i < 6; i++) { const spoke = new THREE.Mesh(spokeGeometry, rimMaterial); spoke.rotation.z = i * (Math.PI / 3); wheelGroup.add(spoke); } return wheelGroup; }
 function createRobotModel3D() { const BODY_WIDTH = 9.0, BODY_HEIGHT = 6.0, BODY_DEPTH = 3.5, WHEEL_GAP = 1.0; const MAST_HEIGHT = 14.5, MAST_THICKNESS = 1.5; const BATTERY_WIDTH = 6.0, BATTERY_HEIGHT = 1.0, BATTERY_DEPTH = 3.0; const TIRE_THICKNESS = 1.0, WHEEL_WIDTH = 2.0; const WHEEL_RADIUS_3D = 4.1; const pivot = new THREE.Object3D(); const model = new THREE.Group(); const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1C1C1C }); const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0x4169E1 }); const body = new THREE.Mesh(new THREE.BoxGeometry(BODY_WIDTH, BODY_HEIGHT, BODY_DEPTH), bodyMaterial); body.position.y = WHEEL_RADIUS_3D; model.add(body); const mast = new THREE.Mesh(new THREE.BoxGeometry(MAST_THICKNESS, MAST_HEIGHT, MAST_THICKNESS), bodyMaterial); mast.position.y = WHEEL_RADIUS_3D + BODY_HEIGHT / 2 + MAST_HEIGHT / 2; model.add(mast); const battery = new THREE.Mesh(new THREE.BoxGeometry(BATTERY_WIDTH, BATTERY_HEIGHT, BATTERY_DEPTH), batteryMaterial); battery.position.y = mast.position.y + MAST_HEIGHT / 2 + BATTERY_HEIGHT / 2; model.add(battery); leftWheel = createCustomWheel(WHEEL_RADIUS_3D, TIRE_THICKNESS, WHEEL_WIDTH); leftWheel.rotation.y = Math.PI / 2; leftWheel.position.set(-(BODY_WIDTH / 2 + WHEEL_GAP), WHEEL_RADIUS_3D, 0); model.add(leftWheel); rightWheel = createCustomWheel(WHEEL_RADIUS_3D, TIRE_THICKNESS, WHEEL_WIDTH); rightWheel.rotation.y = Math.PI / 2; rightWheel.position.set(BODY_WIDTH / 2 + WHEEL_GAP, WHEEL_RADIUS_3D, 0); model.add(rightWheel); model.position.y = -WHEEL_RADIUS_3D; pivot.add(model); return pivot; }
 function createCheckerTexture(squareSizeCm = 20, colorA = '#C8C8C8', colorB = '#787878') { const size = 256; const squares = 2; const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size; const ctx = canvas.getContext('2d'); const s = size / squares; for (let y = 0; y < squares; y++) { for (let x = 0; x < squares; x++) { ctx.fillStyle = ((x + y) % 2 === 0) ? colorA : colorB; ctx.fillRect(x * s, y * s, s, s); } } const tex = new THREE.CanvasTexture(canvas); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 8; tex.encoding = THREE.sRGBEncoding; return tex; }
@@ -3576,6 +3969,7 @@ function update3DAnimation() {
 
 function animate3D() {
     requestAnimationFrame(animate3D);
+    if (!threeAnimationStarted) { console.info('[UI] animate3D loop started'); threeAnimationStarted = true; }
 
     update3DAnimation();
 
@@ -3651,6 +4045,18 @@ async function requestFullConfigAndSync(timeoutMs = 20000) {
                 }
             }
         };
+
+        function startInitWatchdog() {
+            if (initWatchdogInterval) return;
+            let tries = 0;
+            initWatchdogInterval = setInterval(() => {
+                tries++;
+                try { if (!joystickInitialized) ensureJoystickInitialized(); } catch (_) { }
+                try { if (!threeInitialized) ensure3DInitialized(); } catch (_) { }
+                try { updateDebugOverlay(); } catch (_) { }
+                if ((joystickInitialized && threeInitialized) || tries > 40) { clearInterval(initWatchdogInterval); initWatchdogInterval = null; }
+            }, 1000);
+        }
         window.addEventListener('ble_message', onSync);
         // Send a request for full configuration
         sendBleCommand('request_full_config', {});
