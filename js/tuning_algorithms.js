@@ -127,6 +127,222 @@ function runMetricsTest(kp, ki, kd) {
 
 // Use RB.helpers.delay(ms) (provided by js/helpers.js) for delays to avoid redeclaration issues.
 
+/**
+ * NEW APPROACH: Telemetry-based fitness evaluation
+ * 
+ * Instead of asking the robot to run a test and calculate fitness,
+ * the interface now:
+ * 1. Sets PID parameters via set_param commands
+ * 2. Waits for parameters to be applied (small settling delay)
+ * 3. Monitors telemetry stream for test duration
+ * 4. Calculates fitness based on telemetry data (pitch stability, overshoot, etc.)
+ * 
+ * The robot is now a "dumb executor" - it doesn't know it's being tested.
+ * It just executes commands and reports telemetry.
+ * 
+ * @param {number} kp - Proportional gain
+ * @param {number} ki - Integral gain  
+ * @param {number} kd - Derivative gain
+ * @returns {Promise<{fitness, itae, overshoot, steady_state_error, raw}>}
+ */
+function runTelemetryBasedTest(kp, ki, kd) {
+    return new Promise((resolve, reject) => {
+        const testStartTime = Date.now();
+        const telemetrySamples = [];
+        let resolved = false;
+        
+        // Get test duration from UI (default 2000ms)
+        const trialInput = document.getElementById('tuningTrialDurationInput');
+        let testDurationMs = 2000;
+        if (trialInput) {
+            const v = parseInt(trialInput.value, 10);
+            if (!isNaN(v) && v > 0) testDurationMs = v;
+        }
+        
+        // Add parameter settling time (time for robot to apply new PID values)
+        const settlingTimeMs = 300; // 300ms for parameters to take effect
+        const totalDurationMs = testDurationMs + settlingTimeMs;
+        
+        // Timeout safety (2x expected duration)
+        const timeoutMs = totalDurationMs * 2;
+        let timeoutHandle = setTimeout(() => {
+            if (!resolved) {
+                cleanup();
+                resolved = true;
+                reject(new Error('test_timeout'));
+            }
+        }, timeoutMs);
+        
+        function cleanup() {
+            window.removeEventListener('ble_message', telemetryHandler);
+            clearTimeout(timeoutHandle);
+        }
+        
+        function telemetryHandler(evt) {
+            const d = evt.detail || evt;
+            
+            // Only collect telemetry messages
+            if (d.type !== 'telemetry') return;
+            
+            const elapsedTime = Date.now() - testStartTime;
+            
+            // Skip samples during settling period
+            if (elapsedTime < settlingTimeMs) return;
+            
+            // Collect telemetry sample
+            const sample = {
+                timestamp: elapsedTime - settlingTimeMs, // Relative to test start (after settling)
+                pitch: Number(d.pitch) || 0,
+                roll: Number(d.roll) || 0,
+                speed: Number(d.speed || d.sp) || 0,
+                loopTime: Number(d.loop_time || d.lt) || 0
+            };
+            
+            telemetrySamples.push(sample);
+            
+            // Check if test duration reached
+            if (elapsedTime >= totalDurationMs) {
+                finishTest();
+            }
+        }
+        
+        function finishTest() {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            
+            // Calculate fitness from collected telemetry
+            if (telemetrySamples.length < 5) {
+                // Not enough data - penalize
+                resolve({ 
+                    fitness: Infinity, 
+                    itae: 0, 
+                    overshoot: 0, 
+                    steady_state_error: 0, 
+                    raw: { samples: telemetrySamples.length, reason: 'insufficient_data' }
+                });
+                return;
+            }
+            
+            const metrics = calculateFitnessFromTelemetry(telemetrySamples);
+            resolve(metrics);
+        }
+        
+        // Start listening to telemetry
+        window.addEventListener('ble_message', telemetryHandler);
+        
+        // Apply PID parameters to robot using set_param commands
+        const loop = document.getElementById('tuning-loop-selector')?.value || 'balance';
+        let prefix = '';
+        if (loop === 'balance') prefix = 'kp_b';
+        else if (loop === 'speed') prefix = 'kp_s';
+        else if (loop === 'position') prefix = 'kp_p';
+        
+        // Send parameters (robot applies them immediately)
+        sendBleCommand('set_param', { key: prefix.replace('kp', 'kp'), value: kp });
+        sendBleCommand('set_param', { key: prefix.replace('kp', 'ki'), value: ki });
+        sendBleCommand('set_param', { key: prefix.replace('kp', 'kd'), value: kd });
+        
+        try {
+            addLogMessage(`[TelemetryTest] Started test with Kp=${kp.toFixed(3)}, Ki=${ki.toFixed(3)}, Kd=${kd.toFixed(3)}, duration=${testDurationMs}ms`, 'info');
+        } catch (_) {}
+    });
+}
+
+/**
+ * Calculate fitness metrics from collected telemetry samples
+ * 
+ * Metrics calculated:
+ * - ITAE (Integral of Time-weighted Absolute Error)
+ * - Overshoot (maximum deviation from target)
+ * - Steady State Error (average error in final portion)
+ * 
+ * @param {Array} samples - Array of telemetry samples
+ * @returns {Object} Fitness metrics
+ */
+function calculateFitnessFromTelemetry(samples) {
+    if (!samples || samples.length === 0) {
+        return {
+            fitness: Infinity,
+            itae: 0,
+            overshoot: 0,
+            steady_state_error: 0,
+            raw: { samples: 0 }
+        };
+    }
+    
+    // Target angle for balancing is 0 degrees
+    const targetAngle = 0;
+    
+    // Calculate ITAE (Integral of Time-weighted Absolute Error)
+    let itae = 0;
+    for (let i = 0; i < samples.length; i++) {
+        const error = Math.abs(samples[i].pitch - targetAngle);
+        const timeWeight = samples[i].timestamp / 1000; // Convert to seconds
+        itae += error * timeWeight;
+    }
+    // Normalize by number of samples
+    itae = itae / samples.length;
+    
+    // Calculate overshoot (maximum absolute deviation from target)
+    let maxDeviation = 0;
+    for (let i = 0; i < samples.length; i++) {
+        const deviation = Math.abs(samples[i].pitch - targetAngle);
+        if (deviation > maxDeviation) {
+            maxDeviation = deviation;
+        }
+    }
+    const overshoot = maxDeviation;
+    
+    // Calculate steady state error (average error in final 30% of test)
+    const steadyStateStart = Math.floor(samples.length * 0.7);
+    let sseSum = 0;
+    let sseCount = 0;
+    for (let i = steadyStateStart; i < samples.length; i++) {
+        sseSum += Math.abs(samples[i].pitch - targetAngle);
+        sseCount++;
+    }
+    const steadyStateError = sseCount > 0 ? (sseSum / sseCount) : 0;
+    
+    // Calculate fitness (same formula as before)
+    const fitness = itae + (overshoot * 10) + (steadyStateError * 5);
+    
+    // Add stability penalty for oscillations
+    let oscillationPenalty = 0;
+    if (samples.length > 3) {
+        let signChanges = 0;
+        for (let i = 1; i < samples.length; i++) {
+            const prevError = samples[i-1].pitch - targetAngle;
+            const currError = samples[i].pitch - targetAngle;
+            if ((prevError > 0 && currError < 0) || (prevError < 0 && currError > 0)) {
+                signChanges++;
+            }
+        }
+        // Penalize excessive oscillations
+        const oscillationRate = signChanges / samples.length;
+        if (oscillationRate > 0.3) { // More than 30% sign changes
+            oscillationPenalty = oscillationRate * 20;
+        }
+    }
+    
+    const finalFitness = fitness + oscillationPenalty;
+    
+    try {
+        addLogMessage(`[TelemetryTest] Calculated fitness: ITAE=${itae.toFixed(2)}, Overshoot=${overshoot.toFixed(2)}°, SSE=${steadyStateError.toFixed(2)}°, Fitness=${finalFitness.toFixed(2)}`, 'info');
+    } catch (_) {}
+    
+    return {
+        fitness: finalFitness,
+        itae: itae,
+        overshoot: overshoot,
+        steady_state_error: steadyStateError,
+        raw: {
+            samples: samples.length,
+            oscillationPenalty: oscillationPenalty
+        }
+    };
+}
+
 function updateBestDisplay(params) {
     const elKp = document.getElementById('best-kp');
     const elKi = document.getElementById('best-ki');
@@ -400,12 +616,13 @@ class GeneticAlgorithm {
     async evaluateFitness(individual) {
         this.testCounter++;
         try {
-            const res = await runMetricsTest(individual.kp, individual.ki, individual.kd);
+            // NEW: Use telemetry-based test instead of run_metrics_test command
+            const res = await runTelemetryBasedTest(individual.kp, individual.ki, individual.kd);
             individual.fitness = res.fitness;
             // Wykres: X = generacja + indeks/populacja
             try { fitnessChartData.push({ x: this.generation + (this.testCounter / Math.max(1, this.population.length)), y: res.fitness }); updateFitnessChart(); } catch (_) { }
             const meta = { gen: this.generation + 1, totalGen: this.generations, individualIdx: this.testCounter, pop: this.population.length };
-            addTestToResultsTable(this.testCounter, individual, res.fitness, res.itae, res.overshoot, 'metrics_test', meta);
+            addTestToResultsTable(this.testCounter, individual, res.fitness, res.itae, res.overshoot, 'telemetry_test', meta);
             return res.fitness;
         } catch (err) {
             if (err && err.reason === 'interrupted_by_emergency') {
@@ -413,7 +630,7 @@ class GeneticAlgorithm {
             }
             // Penalizuj i kontynuuj
             individual.fitness = Infinity;
-            addTestToResultsTable(this.testCounter, individual, Infinity, 0, 0, 'metrics_test');
+            addTestToResultsTable(this.testCounter, individual, Infinity, 0, 0, 'telemetry_test');
             return Infinity;
         }
     }
@@ -667,137 +884,50 @@ class ParticleSwarmOptimization {
     }
 
     async evaluateFitness(particle, idx = 0) {
-        const testId = Date.now() >>> 0;
         this.testCounter++;
+        
+        // Update current test display (when starting)
+        try { 
+            if (typeof updateCurrentTestDisplay === 'function') {
+                updateCurrentTestDisplay(this.iteration + 1, this.iterations, idx, this.particles.length, particle.position.kp, particle.position.ki, particle.position.kd, particle.fitness);
+            }
+        } catch (_) { }
 
-        return new Promise((resolve, reject) => {
-            let done = false;
-            const timeout = setTimeout(() => {
-                if (!done) {
-                    done = true;
-                    // Best-effort cleanup
-                    window.removeEventListener('ble_message', completeHandler);
-                    window.removeEventListener('ble_message', metricsHandler);
-                    window.removeEventListener('ble_message', ackHandlerPSO);
-                    window.removeEventListener('ble_message', ackHandlerBayes);
-                    // Log timeout with detailed information
-                    try {
-                        addLogMessage(`[PSO] Test timeout after 30s - testId=${testId}, Kp=${particle.position.kp.toFixed(3)}, Ki=${particle.position.ki.toFixed(3)}, Kd=${particle.position.kd.toFixed(3)}. Robot nie przesłał metrics_result. Test pominięty.`, 'error');
-                    } catch (e) {
-                        console.error('[PSO] Test timeout:', testId, particle.position);
-                    }
-                    reject(new Error('Test timeout'));
-                }
-            }, 30000); // 30 second timeout (increased from 10s)
+        try {
+            // NEW: Use telemetry-based test instead of run_metrics_test command
+            const res = await runTelemetryBasedTest(particle.position.kp, particle.position.ki, particle.position.kd);
+            
+            const fitness = res.fitness;
+            particle.fitness = fitness;
 
-            // Handler for test completion (success or failure)
-            const completeHandler = (evt) => {
-                const data = (evt && evt.detail) ? evt.detail : evt;
-                if (data.type === 'test_complete' && Number(data.testId) === testId) {
-                    clearTimeout(timeout);
-                    window.removeEventListener('ble_message', completeHandler);
-                    window.removeEventListener('ble_message', metricsHandler);
-                    window.removeEventListener('ble_message', ackHandlerBayes);
+            if (fitness < particle.bestFitness) {
+                particle.bestFitness = fitness;
+                particle.bestPosition = { ...particle.position };
+            }
 
-                    // If test failed (e.g., emergency stop), reject with special reason
-                    if (!data.success) {
-                        reject({ reason: 'interrupted_by_emergency', testId: testId });
-                        return;
-                    }
-                }
-            };
+            if (!this.globalBest || fitness < this.globalBest.fitness) {
+                this.globalBest = {
+                    position: { ...particle.position },
+                    fitness: fitness
+                };
+                updateBestDisplay(this.globalBest.position);
+            }
 
-            // Update current test display (when starting)
-            try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, idx, this.particles.length, particle.position.kp, particle.position.ki, particle.position.kd, particle.fitness); } catch (_) { }
+            const meta = { gen: this.iteration + 1, totalGen: this.iterations, individualIdx: idx, pop: this.particles.length };
+            try { 
+                fitnessChartData.push({ x: this.iteration + (idx / Math.max(1, this.particles.length)), y: fitness }); 
+                updateFitnessChart(); 
+            } catch (_) { }
+            
+            addTestToResultsTable(this.testCounter, particle.position, fitness, res.itae, res.overshoot, 'telemetry_test', meta);
 
-            // Handler for test metrics
-            const metricsHandler = (evt) => {
-                const data = (evt && evt.detail) ? evt.detail : evt;
-                if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
-                    clearTimeout(timeout);
-
-                    try { addLogMessage(`[PSO] Otrzymano metrics_result dla testId=${testId}`, 'info'); } catch (e) { console.debug('[PSO] log failed', e); }
-
-                    // Validate and extract metrics with fallbacks
-                    const itae = (typeof data.itae === 'number' && !isNaN(data.itae)) ? data.itae : 0;
-                    const overshoot = (typeof data.overshoot === 'number' && !isNaN(data.overshoot)) ? data.overshoot : 0;
-                    const steadyStateError = (typeof data.steady_state_error === 'number' && !isNaN(data.steady_state_error)) ? data.steady_state_error : 0;
-
-                    const fitness = itae + overshoot * 10 + steadyStateError * 5;
-                    particle.fitness = fitness;
-
-                    try { addLogMessage(`[PSO] Fitness calculated: ITAE=${itae.toFixed(4)}, Overshoot=${overshoot.toFixed(2)}, SSE=${steadyStateError.toFixed(2)}, Fitness=${fitness.toFixed(4)}`, 'info'); } catch (e) { console.debug('[PSO] fitness log failed', e); }
-
-                    if (fitness < particle.bestFitness) {
-                        particle.bestFitness = fitness;
-                        particle.bestPosition = { ...particle.position };
-                    }
-
-                    if (!this.globalBest || fitness < this.globalBest.fitness) {
-                        this.globalBest = {
-                            position: { ...particle.position },
-                            fitness: fitness
-                        };
-                        updateBestDisplay(this.globalBest.position);
-                    }
-
-                    const meta = { gen: this.iteration + 1, totalGen: this.iterations, individualIdx: idx, pop: this.particles.length };
-                    try { fitnessChartData.push({ x: this.iteration + (idx / Math.max(1, this.particles.length)), y: fitness }); updateFitnessChart(); } catch (_) { }
-                    addTestToResultsTable(this.testCounter, particle.position, fitness, data.itae, data.overshoot, data.test_type || 'metrics_test', meta);
-
-                    // Remove handlers
-                    window.removeEventListener('ble_message', completeHandler);
-                    window.removeEventListener('ble_message', metricsHandler);
-                    resolve(fitness);
-                }
-            };
-
-            // Listen for ACK; reject early if firmware NACKs the run_metrics_test request
-            const ackHandlerPSO = (evt) => {
-                const d = (evt && evt.detail) ? evt.detail : evt;
-                if (d.type === 'ack' && d.command === 'run_metrics_test') {
-                    if (!d.success) {
-                        clearTimeout(timeout);
-                        window.removeEventListener('ble_message', completeHandler);
-                        window.removeEventListener('ble_message', metricsHandler);
-                        window.removeEventListener('ble_message', ackHandlerPSO);
-                        try { addLogMessage(`[PSO] run_metrics_test ACK failed: ${d.message || 'N/A'}`, 'error'); } catch (e) { console.debug('[PSO] ack log failed', e); }
-                        reject({ reason: 'ack_failed', message: d.message });
-                        return;
-                    } else {
-                        window.removeEventListener('ble_message', ackHandlerPSO);
-                    }
-                }
-            };
-            // Bayes: ack handler for run_metrics_test NACKs
-            const ackHandlerBayes = (evt) => {
-                const d = (evt && evt.detail) ? evt.detail : evt;
-                if (d.type === 'ack' && d.command === 'run_metrics_test') {
-                    if (!d.success) {
-                        clearTimeout(timeout);
-                        window.removeEventListener('ble_message', completeHandler);
-                        window.removeEventListener('ble_message', metricsHandler);
-                        window.removeEventListener('ble_message', ackHandlerBayes);
-                        try { addLogMessage(`[Bayes] run_metrics_test ACK failed: ${d.message || 'N/A'}`, 'error'); } catch (e) { console.debug('[Bayes] ack log failed', e); }
-                        reject({ reason: 'ack_failed', message: d.message });
-                        return;
-                    } else {
-                        window.removeEventListener('ble_message', ackHandlerBayes);
-                    }
-                }
-            };
-            window.addEventListener('ble_message', completeHandler);
-            window.addEventListener('ble_message', metricsHandler);
-            window.addEventListener('ble_message', ackHandlerBayes);
-            window.addEventListener('ble_message', ackHandlerPSO);
-            try { addLogMessage(`[PSO] Sending run_metrics_test: testId=${testId} Kp=${particle.position.kp.toFixed(3)} Ki=${particle.position.ki.toFixed(3)} Kd=${particle.position.kd.toFixed(3)} testCounter=${this.testCounter}`, 'info'); } catch (e) { console.debug('[PSO] log failed', e); }
-            sendBleCommand('run_metrics_test', {
-                kp: particle.position.kp,
-                ki: particle.position.ki,
-                kd: particle.position.kd,
-                testId: testId
-            });
-        });
+            return fitness;
+        } catch (error) {
+            console.error('[PSO] Test failed:', error);
+            particle.fitness = Infinity;
+            addTestToResultsTable(this.testCounter, particle.position, Infinity, 0, 0, 'telemetry_test');
+            throw error;
+        }
     }
 
     async runIteration() {
@@ -1331,81 +1461,36 @@ class BayesianOptimization {
     }
 
     async evaluateSample(sample) {
-        const testId = Date.now() >>> 0;
         this.testCounter++;
+        
+        // Update UI about starting this sample
+        try { 
+            if (typeof updateCurrentTestDisplay === 'function') {
+                updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, null);
+            }
+        } catch (_) { }
 
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                // Best-effort cleanup
-                window.removeEventListener('ble_message', completeHandler);
-                window.removeEventListener('ble_message', metricsHandler);
-                // Log timeout with detailed information
-                try {
-                    addLogMessage(`[Bayesian] Test timeout after 30s - testId=${testId}, Kp=${sample.kp.toFixed(3)}, Ki=${sample.ki.toFixed(3)}, Kd=${sample.kd.toFixed(3)}. Robot nie przesłał metrics_result. Test pominięty.`, 'error');
-                } catch (e) {
-                    console.error('[Bayesian] Test timeout:', testId, sample);
+        try {
+            // NEW: Use telemetry-based test instead of run_metrics_test command
+            const res = await runTelemetryBasedTest(sample.kp, sample.ki, sample.kd);
+            
+            const fitness = res.fitness;
+
+            // Update UI with resulting fitness for this sample
+            try { 
+                if (typeof updateCurrentTestDisplay === 'function') {
+                    updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, fitness);
                 }
-                reject(new Error('Test timeout'));
-            }, 30000); // 30 second timeout (increased from 10s)
+            } catch (_) { }
 
-            // Handler for test completion (success or failure)
-            const completeHandler = (evt) => {
-                const data = (evt && evt.detail) ? evt.detail : evt;
-                if (data.type === 'test_complete' && Number(data.testId) === testId) {
-                    clearTimeout(timeout);
-                    window.removeEventListener('ble_message', completeHandler);
-                    window.removeEventListener('ble_message', metricsHandler);
+            addTestToResultsTable(this.testCounter, sample, fitness, res.itae, res.overshoot, 'telemetry_test');
 
-                    // If test failed (e.g., emergency stop), reject with special reason
-                    if (!data.success) {
-                        reject({ reason: 'interrupted_by_emergency', testId: testId });
-                        return;
-                    }
-                }
-            };
-
-            // Update UI about starting this sample (iteration, sample idx unknown here)
-            try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, null); } catch (_) { }
-
-            // Handler for test metrics
-            const metricsHandler = (evt) => {
-                const data = (evt && evt.detail) ? evt.detail : evt;
-                if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
-                    clearTimeout(timeout);
-
-                    try { addLogMessage(`[Bayesian] Otrzymano metrics_result dla testId=${testId}`, 'info'); } catch (e) { console.debug('[Bayesian] log failed', e); }
-
-                    // Validate and extract metrics with fallbacks
-                    const itae = (typeof data.itae === 'number' && !isNaN(data.itae)) ? data.itae : 0;
-                    const overshoot = (typeof data.overshoot === 'number' && !isNaN(data.overshoot)) ? data.overshoot : 0;
-                    const steadyStateError = (typeof data.steady_state_error === 'number' && !isNaN(data.steady_state_error)) ? data.steady_state_error : 0;
-
-                    const fitness = itae + overshoot * 10 + steadyStateError * 5;
-
-                    try { addLogMessage(`[Bayesian] Fitness calculated: ITAE=${itae.toFixed(4)}, Overshoot=${overshoot.toFixed(2)}, SSE=${steadyStateError.toFixed(2)}, Fitness=${fitness.toFixed(4)}`, 'info'); } catch (e) { console.debug('[Bayesian] fitness log failed', e); }
-
-                    // Update UI with resulting fitness for this sample
-                    try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, fitness); } catch (_) { }
-
-                    addTestToResultsTable(this.testCounter, sample, fitness, data.itae, data.overshoot, data.test_type || 'metrics_test');
-
-                    // Remove handlers
-                    window.removeEventListener('ble_message', completeHandler);
-                    window.removeEventListener('ble_message', metricsHandler);
-                    resolve(fitness);
-                }
-            };
-
-            window.addEventListener('ble_message', completeHandler);
-            window.addEventListener('ble_message', metricsHandler);
-
-            sendBleCommand('run_metrics_test', {
-                kp: sample.kp,
-                ki: sample.ki,
-                kd: sample.kd,
-                testId: testId
-            });
-        });
+            return fitness;
+        } catch (error) {
+            console.error('[Bayesian] Test failed:', error);
+            addTestToResultsTable(this.testCounter, sample, Infinity, 0, 0, 'telemetry_test');
+            throw error;
+        }
     }
 
     sampleRandom() {
