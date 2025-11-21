@@ -50,10 +50,24 @@ function computeTestTimeout() {
 }
 
 /**
- * Unified runner dla pojedynczego testu metryk.
- * Zwraca Promise z obiektem { fitness, itae, overshoot, steady_state_error, raw }
- * Wysyła run_metrics_test, nasłuchuje status_update test_started, metrics_result i test_complete.
- * Obsługuje ack NACK przez syntetyczne test_complete(success=false).
+ * OLD APPROACH (DEPRECATED): Robot-managed test with fitness calculation on robot side
+ * 
+ * This function is DEPRECATED and kept only for backward compatibility.
+ * New code should use runTelemetryBasedTest() instead.
+ * 
+ * OLD METHOD:
+ * - Sends run_metrics_test command to robot
+ * - Robot manages entire test internally
+ * - Robot calculates fitness metrics
+ * - Robot sends back final metrics_result
+ * 
+ * This approach made the robot a "smart manager" that knew it was being tested.
+ * 
+ * @deprecated Use runTelemetryBasedTest() instead
+ * @param {number} kp - Proportional gain
+ * @param {number} ki - Integral gain
+ * @param {number} kd - Derivative gain
+ * @returns {Promise<{fitness, itae, overshoot, steady_state_error, raw}>}
  */
 function runMetricsTest(kp, ki, kd) {
     return new Promise((resolve, reject) => {
