@@ -16,6 +16,377 @@
         };
     }
 })();
+// ========================================================================
+// STATE MANAGER - Centralized State Management
+// ========================================================================
+// This module provides a centralized store for application state with
+// observer pattern for reactive updates. It replaces scattered global
+// variables with a single source of truth.
+// ========================================================================
+
+/**
+ * AppStore - Centralized application state manager
+ * Implements observer pattern for reactive state updates
+ */
+class AppStore {
+    constructor() {
+        this.state = {
+            // Connection state
+            connection: {
+                isConnected: false,
+                isSynced: false,
+                deviceName: null,
+                syncTimeout: null
+            },
+            
+            // Robot state
+            robot: {
+                state: 'IDLE', // IDLE, BALANCING, EMERGENCY_STOP, etc.
+                balancing: false,
+                holdingPosition: false,
+                speedMode: false
+            },
+            
+            // Telemetry data
+            telemetry: {
+                pitch: 0,
+                roll: 0,
+                yaw: 0,
+                speed: 0,
+                encoderLeft: 0,
+                encoderRight: 0,
+                loopTime: 0,
+                qw: 0,
+                qx: 0,
+                qy: 0,
+                qz: 0
+            },
+            
+            // UI state
+            ui: {
+                isApplyingConfig: false,
+                isSyncingConfig: false,
+                isLocked: true
+            },
+            
+            // Tuning state
+            tuning: {
+                isActive: false,
+                activeMethod: '',
+                isPaused: false
+            },
+            
+            // Sequence state
+            sequence: {
+                isRunning: false,
+                currentStep: 0
+            },
+            
+            // Temporary sync data
+            sync: {
+                tempParams: {},
+                tempTuningParams: {},
+                tempStates: {}
+            },
+            
+            // Joystick state
+            joystick: {
+                isDragging: false,
+                lastSendTime: 0
+            },
+            
+            // Gamepad state
+            gamepad: {
+                index: null,
+                lastState: [],
+                mappings: {},
+                isMappingButton: false,
+                actionToMap: null
+            }
+        };
+        
+        this.listeners = new Map();
+        this.nextListenerId = 0;
+    }
+    
+    /**
+     * Get current state or a specific path in the state
+     * @param {string} path - Optional dot-notation path (e.g., 'connection.isConnected')
+     * @returns {any} State value
+     */
+    getState(path = null) {
+        if (!path) return this.state;
+        
+        const keys = path.split('.');
+        let value = this.state;
+        for (const key of keys) {
+            if (value && typeof value === 'object' && key in value) {
+                value = value[key];
+            } else {
+                return undefined;
+            }
+        }
+        return value;
+    }
+    
+    /**
+     * Update state and notify listeners
+     * @param {string} path - Dot-notation path or object with updates
+     * @param {any} value - New value (if path is string)
+     */
+    setState(path, value = undefined) {
+        let updates = {};
+        
+        if (typeof path === 'object' && value === undefined) {
+            // Direct object update: setState({ 'connection.isConnected': true })
+            updates = path;
+        } else {
+            // Path update: setState('connection.isConnected', true)
+            updates[path] = value;
+        }
+        
+        // Apply updates
+        const changedPaths = [];
+        for (const [updatePath, updateValue] of Object.entries(updates)) {
+            const keys = updatePath.split('.');
+            let current = this.state;
+            
+            for (let i = 0; i < keys.length - 1; i++) {
+                const key = keys[i];
+                if (!(key in current)) {
+                    current[key] = {};
+                }
+                current = current[key];
+            }
+            
+            const lastKey = keys[keys.length - 1];
+            if (current[lastKey] !== updateValue) {
+                current[lastKey] = updateValue;
+                changedPaths.push(updatePath);
+            }
+        }
+        
+        // Notify listeners for changed paths
+        if (changedPaths.length > 0) {
+            this.notifyListeners(changedPaths);
+        }
+    }
+    
+    /**
+     * Subscribe to state changes
+     * @param {string|Array<string>} paths - Path(s) to watch (e.g., 'connection.isConnected')
+     * @param {Function} callback - Callback function(newValue, oldValue, path)
+     * @returns {number} Listener ID for unsubscribing
+     */
+    subscribe(paths, callback) {
+        const id = this.nextListenerId++;
+        const pathArray = Array.isArray(paths) ? paths : [paths];
+        
+        this.listeners.set(id, {
+            paths: pathArray,
+            callback
+        });
+        
+        return id;
+    }
+    
+    /**
+     * Unsubscribe from state changes
+     * @param {number} id - Listener ID returned from subscribe()
+     */
+    unsubscribe(id) {
+        this.listeners.delete(id);
+    }
+    
+    /**
+     * Notify listeners about state changes
+     * @param {Array<string>} changedPaths - Paths that changed
+     */
+    notifyListeners(changedPaths) {
+        for (const [id, listener] of this.listeners.entries()) {
+            const { paths, callback } = listener;
+            
+            // Check if any watched path was changed
+            for (const watchPath of paths) {
+                for (const changedPath of changedPaths) {
+                    // Match exact path or parent path (e.g., 'connection' matches 'connection.isConnected')
+                    if (changedPath === watchPath || 
+                        changedPath.startsWith(watchPath + '.') ||
+                        watchPath.startsWith(changedPath + '.')) {
+                        try {
+                            const newValue = this.getState(changedPath);
+                            callback(newValue, changedPath);
+                        } catch (error) {
+                            console.error(`Error in state listener ${id}:`, error);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * Reset state to initial values
+     */
+    reset() {
+        this.setState({
+            'connection.isConnected': false,
+            'connection.isSynced': false,
+            'connection.deviceName': null,
+            'robot.state': 'IDLE',
+            'robot.balancing': false,
+            'robot.holdingPosition': false,
+            'robot.speedMode': false,
+            'ui.isLocked': true,
+            'tuning.isActive': false,
+            'tuning.activeMethod': '',
+            'tuning.isPaused': false,
+            'sequence.isRunning': false,
+            'sequence.currentStep': 0
+        });
+    }
+    
+    /**
+     * Batch update multiple state values
+     * More efficient than multiple setState calls
+     * @param {Object} updates - Object with path: value pairs
+     */
+    batchUpdate(updates) {
+        this.setState(updates);
+    }
+}
+
+// Create singleton instance
+const appStore = new AppStore();
+
+// Export for use in other modules
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { AppStore, appStore };
+}
+// ========================================================================
+// COMMUNICATION LAYER - Abstract Communication Interface
+// ========================================================================
+// This module provides an abstract layer for robot communication,
+// decoupling the application from specific communication protocols (BLE).
+// This makes the code more testable and allows easier protocol changes.
+// ========================================================================
+
+/**
+ * Abstract base class for communication
+ * All communication implementations should extend this class
+ */
+class CommunicationLayer {
+    constructor() {
+        this.messageHandlers = new Map();
+        this.isConnected = false;
+    }
+    
+    /**
+     * Connect to the device
+     * @returns {Promise<boolean>} Success status
+     */
+    async connect() {
+        throw new Error('connect() must be implemented by subclass');
+    }
+    
+    /**
+     * Disconnect from the device
+     */
+    async disconnect() {
+        throw new Error('disconnect() must be implemented by subclass');
+    }
+    
+    /**
+     * Send a message to the device
+     * @param {Object} message - Message object to send
+     * @returns {Promise<void>}
+     */
+    async send(message) {
+        throw new Error('send() must be implemented by subclass');
+    }
+    
+    /**
+     * Register a handler for incoming messages
+     * @param {string} type - Message type to handle
+     * @param {Function} handler - Handler function(data)
+     */
+    onMessage(type, handler) {
+        if (!this.messageHandlers.has(type)) {
+            this.messageHandlers.set(type, []);
+        }
+        this.messageHandlers.get(type).push(handler);
+    }
+    
+    /**
+     * Remove a message handler
+     * @param {string} type - Message type
+     * @param {Function} handler - Handler function to remove
+     */
+    offMessage(type, handler) {
+        if (this.messageHandlers.has(type)) {
+            const handlers = this.messageHandlers.get(type);
+            const index = handlers.indexOf(handler);
+            if (index !== -1) {
+                handlers.splice(index, 1);
+            }
+        }
+    }
+    
+    /**
+     * Notify all handlers for a message type
+     * @param {string} type - Message type
+     * @param {Object} data - Message data
+     */
+    notifyHandlers(type, data) {
+        if (this.messageHandlers.has(type)) {
+            for (const handler of this.messageHandlers.get(type)) {
+                try {
+                    handler(data);
+                } catch (error) {
+                    console.error(`Error in message handler for ${type}:`, error);
+                }
+            }
+        }
+        
+        // Also notify wildcard handlers (type '*')
+        if (this.messageHandlers.has('*')) {
+            for (const handler of this.messageHandlers.get('*')) {
+                try {
+                    handler(type, data);
+                } catch (error) {
+                    console.error('Error in wildcard message handler:', error);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Get connection status
+     * @returns {boolean}
+     */
+    getConnectionStatus() {
+        return this.isConnected;
+    }
+}
+*** End Patch// Central helper namespace to avoid duplicate global functions. Safe to include in both dev and prod.
+(function () {
+    window.RB = window.RB || {};
+    window.RB.helpers = window.RB.helpers || {};
+
+    if (!window.RB.helpers.delay) {
+        window.RB.helpers.delay = function (ms) {
+            return new Promise((resolve) => setTimeout(resolve, ms));
+        };
+    }
+
+    // Expose a global delay function if not already present (backwards compatibility)
+    if (typeof window.delay === 'undefined') {
+        window.delay = function (ms) {
+            return window.RB.helpers.delay(ms);
+        };
+    }
+})();
 // Global runtime error hooks to help debugging initialization failures
 if (typeof window !== 'undefined') {
     window.addEventListener('error', (e) => {
@@ -883,6 +1254,9 @@ let scene3D, camera3D, renderer3D, controls3D, robotPivot, leftWheel, rightWheel
 let currentEncoderLeft = 0, currentEncoderRight = 0;
 let isAnimation3DEnabled = true, isMovement3DEnabled = false, lastEncoderAvg = 0;
 let threeAnimationStarted = false;
+let joystickInitialized = false;
+let threeInitialized = false;
+let initWatchdogInterval = null;
 window.telemetryData = {};
 let isCalibrationModalShown = false;
 // UI base for 'Set Zero' feature — apparent trim is actualTrim - uiTrimZeroBase
@@ -1031,6 +1405,19 @@ function ensureUiComponentsLoaded(scriptPath = 'js/ui_components.js') {
             document.head.appendChild(s);
         } catch (err) { reject(err); }
     });
+}
+
+// Global watchdog that retries initializations until joystick & 3D are ready
+function startInitWatchdog() {
+    if (initWatchdogInterval) return;
+    let tries = 0;
+    initWatchdogInterval = setInterval(() => {
+        tries++;
+        try { if (!joystickInitialized) ensureJoystickInitialized(); } catch (_) { }
+        try { if (!threeInitialized) ensure3DInitialized(); } catch (_) { }
+        try { updateDebugOverlay(); } catch (_) { }
+        if ((joystickInitialized && threeInitialized) || tries > 40) { clearInterval(initWatchdogInterval); initWatchdogInterval = null; }
+    }, 1000);
 }
 
 // Helper to create a fallback message in the 3D container so we can see a visible
@@ -4085,17 +4472,7 @@ async function requestFullConfigAndSync(timeoutMs = 20000) {
             }
         };
 
-        function startInitWatchdog() {
-            if (initWatchdogInterval) return;
-            let tries = 0;
-            initWatchdogInterval = setInterval(() => {
-                tries++;
-                try { if (!joystickInitialized) ensureJoystickInitialized(); } catch (_) { }
-                try { if (!threeInitialized) ensure3DInitialized(); } catch (_) { }
-                try { updateDebugOverlay(); } catch (_) { }
-                if ((joystickInitialized && threeInitialized) || tries > 40) { clearInterval(initWatchdogInterval); initWatchdogInterval = null; }
-            }, 1000);
-        }
+        // (the watchdog is implemented globally; body moved to top-level startInitWatchdog function)
         window.addEventListener('ble_message', onSync);
         // Send a request for full configuration
         sendBleCommand('request_full_config', {});
