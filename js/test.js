@@ -1,744 +1,3 @@
-// Central helper namespace to avoid duplicate global functions. Safe to include in both dev and prod.
-(function () {
-    window.RB = window.RB || {};
-    window.RB.helpers = window.RB.helpers || {};
-
-    if (!window.RB.helpers.delay) {
-        window.RB.helpers.delay = function (ms) {
-            return new Promise((resolve) => setTimeout(resolve, ms));
-        };
-    }
-
-    // Expose a global delay function if not already present (backwards compatibility)
-    if (typeof window.delay === 'undefined') {
-        window.delay = function (ms) {
-            return window.RB.helpers.delay(ms);
-        };
-    }
-})();
-// ========================================================================
-// STATE MANAGER - Centralized State Management
-// ========================================================================
-// This module provides a centralized store for application state with
-// observer pattern for reactive updates. It replaces scattered global
-// variables with a single source of truth.
-// ========================================================================
-
-/**
- * AppStore - Centralized application state manager
- * Implements observer pattern for reactive state updates
- */
-class AppStore {
-    constructor() {
-        this.state = {
-            // Connection state
-            connection: {
-                isConnected: false,
-                isSynced: false,
-                deviceName: null,
-                syncTimeout: null
-            },
-
-            // Robot state
-            robot: {
-                state: 'IDLE', // IDLE, BALANCING, EMERGENCY_STOP, etc.
-                balancing: false,
-                holdingPosition: false,
-                speedMode: false
-            },
-
-            // Telemetry data
-            telemetry: {
-                pitch: 0,
-                roll: 0,
-                yaw: 0,
-                speed: 0,
-                encoderLeft: 0,
-                encoderRight: 0,
-                loopTime: 0,
-                qw: 0,
-                qx: 0,
-                qy: 0,
-                qz: 0
-            },
-
-            // UI state
-            ui: {
-                isApplyingConfig: false,
-                isSyncingConfig: false,
-                isLocked: true
-            },
-
-            // Tuning state
-            tuning: {
-                isActive: false,
-                activeMethod: '',
-                isPaused: false
-            },
-
-            // Sequence state
-            sequence: {
-                isRunning: false,
-                currentStep: 0
-            },
-
-            // Temporary sync data
-            sync: {
-                tempParams: {},
-                tempTuningParams: {},
-                tempStates: {}
-            },
-
-            // Joystick state
-            joystick: {
-                isDragging: false,
-                lastSendTime: 0
-            },
-
-            // Gamepad state
-            gamepad: {
-                index: null,
-                lastState: [],
-                mappings: {},
-                isMappingButton: false,
-                actionToMap: null
-            }
-        };
-
-        this.listeners = new Map();
-        this.nextListenerId = 0;
-    }
-
-    /**
-     * Get current state or a specific path in the state
-     * @param {string} path - Optional dot-notation path (e.g., 'connection.isConnected')
-     * @returns {any} State value
-     */
-    getState(path = null) {
-        if (!path) return this.state;
-
-        const keys = path.split('.');
-        let value = this.state;
-        for (const key of keys) {
-            if (value && typeof value === 'object' && key in value) {
-                value = value[key];
-            } else {
-                return undefined;
-            }
-        }
-        return value;
-    }
-
-    /**
-     * Update state and notify listeners
-     * @param {string} path - Dot-notation path or object with updates
-     * @param {any} value - New value (if path is string)
-     */
-    setState(path, value = undefined) {
-        let updates = {};
-
-        if (typeof path === 'object' && value === undefined) {
-            // Direct object update: setState({ 'connection.isConnected': true })
-            updates = path;
-        } else {
-            // Path update: setState('connection.isConnected', true)
-            updates[path] = value;
-        }
-
-        // Apply updates
-        const changedPaths = [];
-        for (const [updatePath, updateValue] of Object.entries(updates)) {
-            const keys = updatePath.split('.');
-            let current = this.state;
-
-            for (let i = 0; i < keys.length - 1; i++) {
-                const key = keys[i];
-                if (!(key in current)) {
-                    current[key] = {};
-                }
-                current = current[key];
-            }
-
-            const lastKey = keys[keys.length - 1];
-            if (current[lastKey] !== updateValue) {
-                current[lastKey] = updateValue;
-                changedPaths.push(updatePath);
-            }
-        }
-
-        // Notify listeners for changed paths
-        if (changedPaths.length > 0) {
-            this.notifyListeners(changedPaths);
-        }
-    }
-
-    /**
-     * Subscribe to state changes
-     * @param {string|Array<string>} paths - Path(s) to watch (e.g., 'connection.isConnected')
-     * @param {Function} callback - Callback function(newValue, oldValue, path)
-     * @returns {number} Listener ID for unsubscribing
-     */
-    subscribe(paths, callback) {
-        const id = this.nextListenerId++;
-        const pathArray = Array.isArray(paths) ? paths : [paths];
-
-        this.listeners.set(id, {
-            paths: pathArray,
-            callback
-        });
-
-        return id;
-    }
-
-    /**
-     * Unsubscribe from state changes
-     * @param {number} id - Listener ID returned from subscribe()
-     */
-    unsubscribe(id) {
-        this.listeners.delete(id);
-    }
-
-    /**
-     * Notify listeners about state changes
-     * @param {Array<string>} changedPaths - Paths that changed
-     */
-    notifyListeners(changedPaths) {
-        for (const [id, listener] of this.listeners.entries()) {
-            const { paths, callback } = listener;
-
-            // Check if any watched path was changed
-            for (const watchPath of paths) {
-                for (const changedPath of changedPaths) {
-                    // Match exact path or parent path (e.g., 'connection' matches 'connection.isConnected')
-                    if (changedPath === watchPath ||
-                        changedPath.startsWith(watchPath + '.') ||
-                        watchPath.startsWith(changedPath + '.')) {
-                        try {
-                            const newValue = this.getState(changedPath);
-                            callback(newValue, changedPath);
-                        } catch (error) {
-                            console.error(`Error in state listener ${id}:`, error);
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Reset state to initial values
-     */
-    reset() {
-        this.setState({
-            'connection.isConnected': false,
-            'connection.isSynced': false,
-            'connection.deviceName': null,
-            'robot.state': 'IDLE',
-            'robot.balancing': false,
-            'robot.holdingPosition': false,
-            'robot.speedMode': false,
-            'ui.isLocked': true,
-            'tuning.isActive': false,
-            'tuning.activeMethod': '',
-            'tuning.isPaused': false,
-            'sequence.isRunning': false,
-            'sequence.currentStep': 0
-        });
-    }
-
-    /**
-     * Batch update multiple state values
-     * More efficient than multiple setState calls
-     * @param {Object} updates - Object with path: value pairs
-     */
-    batchUpdate(updates) {
-        this.setState(updates);
-    }
-}
-
-// Create singleton instance
-const appStore = new AppStore();
-
-// Export for use in other modules
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { AppStore, appStore };
-}
-// ========================================================================
-// COMMUNICATION LAYER - Abstract Communication Interface
-// ========================================================================
-// This module provides an abstract layer for robot communication,
-// decoupling the application from specific communication protocols (BLE).
-// This makes the code more testable and allows easier protocol changes.
-// ========================================================================
-
-/**
- * Abstract base class for communication
- * All communication implementations should extend this class
- */
-class CommunicationLayer {
-    constructor() {
-        this.messageHandlers = new Map();
-        this.isConnected = false;
-    }
-
-    /**
-     * Connect to the device
-     * @returns {Promise<boolean>} Success status
-     */
-    async connect() {
-        throw new Error('connect() must be implemented by subclass');
-    }
-
-    /**
-     * Disconnect from the device
-     */
-    async disconnect() {
-        throw new Error('disconnect() must be implemented by subclass');
-    }
-
-    /**
-     * Send a message to the device
-     * @param {Object} message - Message object to send
-     * @returns {Promise<void>}
-     */
-    async send(message) {
-        throw new Error('send() must be implemented by subclass');
-    }
-
-    /**
-     * Register a handler for incoming messages
-     * @param {string} type - Message type to handle
-     * @param {Function} handler - Handler function(data)
-     */
-    onMessage(type, handler) {
-        if (!this.messageHandlers.has(type)) {
-            this.messageHandlers.set(type, []);
-        }
-        this.messageHandlers.get(type).push(handler);
-    }
-
-    /**
-     * Remove a message handler
-     * @param {string} type - Message type
-     * @param {Function} handler - Handler function to remove
-     */
-    offMessage(type, handler) {
-        if (this.messageHandlers.has(type)) {
-            const handlers = this.messageHandlers.get(type);
-            const index = handlers.indexOf(handler);
-            if (index !== -1) {
-                handlers.splice(index, 1);
-            }
-        }
-    }
-
-    /**
-     * Notify all handlers for a message type
-     * @param {string} type - Message type
-     * @param {Object} data - Message data
-     */
-    notifyHandlers(type, data) {
-        if (this.messageHandlers.has(type)) {
-            for (const handler of this.messageHandlers.get(type)) {
-                try {
-                    handler(data);
-                } catch (error) {
-                    console.error(`Error in message handler for ${type}:`, error);
-                }
-            }
-        }
-
-        // Also notify wildcard handlers (type '*')
-        if (this.messageHandlers.has('*')) {
-            for (const handler of this.messageHandlers.get('*')) {
-                try {
-                    handler(type, data);
-                } catch (error) {
-                    console.error('Error in wildcard message handler:', error);
-                }
-            }
-        }
-    }
-
-    /**
-     * Get connection status
-     * @returns {boolean}
-     */
-    getConnectionStatus() {
-        return this.isConnected;
-    }
-}
-
-/**
- * Bluetooth Low Energy (BLE) implementation of CommunicationLayer
- */
-class BLECommunication extends CommunicationLayer {
-    constructor(serviceUuid, rxUuid, txUuid) {
-        super();
-        this.serviceUuid = serviceUuid;
-        this.rxUuid = rxUuid;
-        this.txUuid = txUuid;
-
-        this.device = null;
-        this.rxCharacteristic = null;
-        this.txCharacteristic = null;
-
-        this.buffer = '';
-        this.messageQueue = [];
-        this.isSending = false;
-        this.sendInterval = 20; // ms between messages
-
-        // Chunked message handling
-        this.chunks = new Map();
-    }
-
-    /**
-     * Connect to BLE device
-     * @returns {Promise<boolean>}
-     */
-    async connect() {
-        try {
-            // Request device
-            this.device = await navigator.bluetooth.requestDevice({
-                filters: [{ name: 'RoboBala' }],
-                optionalServices: [this.serviceUuid]
-            });
-
-            // Listen for disconnection
-            this.device.addEventListener('gattserverdisconnected', () => {
-                this.handleDisconnection();
-            });
-
-            // Connect to GATT server
-            const server = await this.device.gatt.connect();
-            const service = await server.getPrimaryService(this.serviceUuid);
-
-            // Get characteristics
-            this.rxCharacteristic = await service.getCharacteristic(this.rxUuid);
-            this.txCharacteristic = await service.getCharacteristic(this.txUuid);
-
-            // Start receiving notifications
-            await this.txCharacteristic.startNotifications();
-            this.txCharacteristic.addEventListener('characteristicvaluechanged',
-                (event) => this.handleNotification(event));
-
-            this.isConnected = true;
-            return true;
-        } catch (error) {
-            console.error('BLE connection error:', error);
-            this.isConnected = false;
-            return false;
-        }
-    }
-
-    /**
-     * Disconnect from BLE device
-     */
-    async disconnect() {
-        if (this.device && this.device.gatt.connected) {
-            await this.device.gatt.disconnect();
-        }
-        this.handleDisconnection();
-    }
-
-    /**
-     * Handle disconnection event
-     */
-    handleDisconnection() {
-        this.isConnected = false;
-        this.device = null;
-        this.rxCharacteristic = null;
-        this.txCharacteristic = null;
-        this.messageQueue = [];
-        this.buffer = '';
-        this.chunks.clear();
-
-        // Notify handlers about disconnection
-        this.notifyHandlers('disconnected', {});
-    }
-
-    /**
-     * Handle incoming BLE notification
-     * @param {Event} event - Characteristic value changed event
-     */
-    handleNotification(event) {
-        const value = event.target.value;
-        const decoder = new TextDecoder('utf-8');
-        this.buffer += decoder.decode(value);
-
-        // Process complete lines
-        let newlineIndex;
-        while ((newlineIndex = this.buffer.indexOf('\n')) !== -1) {
-            const line = this.buffer.substring(0, newlineIndex).trim();
-            this.buffer = this.buffer.substring(newlineIndex + 1);
-
-            if (line) {
-                try {
-                    const data = JSON.parse(line);
-
-                    // Handle chunked messages (legacy 'chunk') or new firmware 'chunk_stream')
-                    if ((data.type === 'chunk' || data.type === 'chunk_stream') && data.id !== undefined) {
-                        this.handleChunk({
-                            id: data.id,
-                            i: data.i,
-                            total: data.total,
-                            data: data.data
-                        });
-                    } else {
-                        // Regular message
-                        this.notifyHandlers(data.type, data);
-                    }
-                } catch (error) {
-                    console.error('JSON parse error:', error, 'Data:', line);
-                }
-            }
-        }
-    }
-
-    /**
-     * Handle chunked message assembly
-     * @param {Object} chunk - Chunk data
-     */
-    handleChunk(chunk) {
-        const { id, i, total, data } = chunk;
-
-        // Get or create chunk entry
-        let entry = this.chunks.get(id);
-        if (!entry) {
-            entry = {
-                total: total || 0,
-                parts: new Map(),
-                timer: setTimeout(() => {
-                    if (this.chunks.has(id)) {
-                        this.chunks.delete(id);
-                        console.error(`Chunk assembly timeout for ID: ${id}`);
-                    }
-                }, 5000)
-            };
-            this.chunks.set(id, entry);
-        }
-
-        // Store chunk part
-        entry.parts.set(i, data || '');
-        if (total) entry.total = total;
-
-        // Check if all chunks received
-        if (entry.parts.size === entry.total && entry.total > 0) {
-            clearTimeout(entry.timer);
-
-            // Combine chunks
-            let combined = '';
-            for (let idx = 0; idx < entry.total; idx++) {
-                combined += entry.parts.get(idx) || '';
-            }
-
-            this.chunks.delete(id);
-
-            // Parse and notify
-            try {
-                const fullMessage = JSON.parse(combined);
-                this.notifyHandlers(fullMessage.type, fullMessage);
-            } catch (error) {
-                console.error('Error assembling chunks:', error, 'Data:', combined);
-            }
-        }
-    }
-
-    /**
-     * Send message to device
-     * @param {Object} message - Message to send
-     */
-    async send(message) {
-        this.messageQueue.push(message);
-        this.processQueue();
-    }
-
-    /**
-     * Process message queue
-     */
-    async processQueue() {
-        if (this.isSending || this.messageQueue.length === 0 || !this.rxCharacteristic) {
-            return;
-        }
-
-        this.isSending = true;
-        const message = this.messageQueue.shift();
-
-        try {
-            const encoder = new TextEncoder();
-            const data = JSON.stringify(message) + '\n';
-            await this.rxCharacteristic.writeValueWithoutResponse(encoder.encode(data));
-        } catch (error) {
-            console.error('BLE send error:', error);
-        }
-
-        // Schedule next message
-        setTimeout(() => {
-            this.isSending = false;
-            this.processQueue();
-        }, this.sendInterval);
-    }
-
-    /**
-     * Get device name
-     * @returns {string|null}
-     */
-    getDeviceName() {
-        return this.device ? this.device.name : null;
-    }
-}
-
-/**
- * Mock communication for testing
- */
-class MockCommunication extends CommunicationLayer {
-    constructor() {
-        super();
-        this.mockDelay = 50; // Simulate network delay
-    }
-
-    async connect() {
-        await this.delay(this.mockDelay);
-        this.isConnected = true;
-        return true;
-    }
-
-    async disconnect() {
-        await this.delay(this.mockDelay);
-        this.isConnected = false;
-        this.notifyHandlers('disconnected', {});
-    }
-
-    async send(message) {
-        if (!this.isConnected) {
-            throw new Error('Not connected');
-        }
-
-        // Simulate sending and echo back (for testing)
-        await this.delay(this.mockDelay);
-        console.log('Mock send:', message);
-
-        // Simulate some responses
-        if (message.type === 'request_full_config') {
-            setTimeout(() => {
-                this.notifyHandlers('sync_begin', {});
-                this.notifyHandlers('set_param', { key: 'kp_b', value: 95.0 });
-                this.notifyHandlers('sync_end', {});
-            }, 100);
-        }
-    }
-
-    delay(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    getDeviceName() {
-        return 'MockRoboBala';
-    }
-}
-
-// Export classes
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { CommunicationLayer, BLECommunication, MockCommunication };
-}
-// Central path visualization module
-(function () {
-    window.RB = window.RB || {};
-    window.RB.path = window.RB.path || {};
-
-    const P = window.RB.path;
-
-    P.CM_PER_PIXEL = 1.0;
-    P.pathCanvas = null;
-    P.pathCtx = null;
-    P.robotPathX = 0;
-    P.robotPathY = 0;
-    P.robotPathHeading = 0;
-    P.plannedPath = [];
-    P.actualPath = [];
-
-    P.initPathVisualization = function initPathVisualization() {
-        P.pathCanvas = document.getElementById('pathCanvas');
-        if (!P.pathCanvas) return;
-        P.pathCtx = P.pathCanvas.getContext('2d');
-        P.pathCanvas.width = P.pathCanvas.clientWidth;
-        P.pathCanvas.height = P.pathCanvas.clientHeight;
-        P.resetPathVisualization();
-    };
-
-    P.drawPathVisualization = function drawPathVisualization() {
-        if (!P.pathCtx) return;
-        P.pathCtx.clearRect(0, 0, P.pathCanvas.width, P.pathCanvas.height);
-        const drawPath = (path, color) => {
-            P.pathCtx.strokeStyle = color;
-            P.pathCtx.lineWidth = 2;
-            P.pathCtx.beginPath();
-            if (path.length > 0) {
-                P.pathCtx.moveTo(path[0].x, path[0].y);
-                path.forEach(p => P.pathCtx.lineTo(p.x, p.y));
-            }
-            P.pathCtx.stroke();
-        };
-        drawPath(P.plannedPath, '#61dafb');
-        drawPath(P.actualPath, '#a2f279');
-        if (P.actualPath.length > 0) {
-            const lastPos = P.actualPath[P.actualPath.length - 1];
-            P.pathCtx.fillStyle = '#ff6347';
-            P.pathCtx.beginPath();
-            P.pathCtx.arc(lastPos.x, lastPos.y, 4, 0, Math.PI * 2);
-            P.pathCtx.fill();
-        }
-    };
-
-    P.addPlannedPathSegment = function addPlannedPathSegment(type, value) {
-        let { x, y, heading } = P.plannedPath.length > 0 ? P.plannedPath[P.plannedPath.length - 1] : { x: P.robotPathX, y: P.robotPathY, heading: P.robotPathHeading };
-        let newX = x, newY = y, newHeading = heading;
-        const angleRad = (heading - 90) * Math.PI / 180;
-        if (type === 'move_fwd') {
-            newX += Math.cos(angleRad) * value / P.CM_PER_PIXEL;
-            newY += Math.sin(angleRad) * value / P.CM_PER_PIXEL;
-        } else if (type === 'move_bwd') {
-            newX -= Math.cos(angleRad) * value / P.CM_PER_PIXEL;
-            newY -= Math.sin(angleRad) * value / P.CM_PER_PIXEL;
-        } else if (type === 'rotate_r') {
-            newHeading += value;
-        } else if (type === 'rotate_l') {
-            newHeading -= value;
-        }
-        P.plannedPath.push({ x: newX, y: newY, heading: newHeading });
-        P.drawPathVisualization();
-    };
-
-    P.updateActualPath = function updateActualPath(data) {
-        if (data.pos_x_cm !== undefined && data.pos_y_cm !== undefined && data.yaw !== undefined) {
-            const actualX = P.robotPathX + (data.pos_x_cm / P.CM_PER_PIXEL);
-            const actualY = P.robotPathY - (data.pos_y_cm / P.CM_PER_PIXEL);
-            P.actualPath.push({ x: actualX, y: actualY, heading: data.yaw });
-            P.drawPathVisualization();
-        }
-    };
-
-    P.resetPathVisualization = function resetPathVisualization() {
-        if (!P.pathCanvas) return;
-        P.robotPathX = P.pathCanvas.width / 2;
-        P.robotPathY = P.pathCanvas.height / 2;
-        P.robotPathHeading = 0;
-        P.plannedPath = [{ x: P.robotPathX, y: P.robotPathY, heading: P.robotPathHeading }];
-        P.actualPath = [{ x: P.robotPathX, y: P.robotPathY, heading: P.robotPathHeading }];
-        const ReportPanel = document.getElementById('sequenceReportPanel');
-        if (ReportPanel) { ReportPanel.style.display = 'none'; }
-        P.drawPathVisualization();
-    };
-
-    // Backwards-compatible global wrappers (do not re-declare existing globals)
-    if (typeof window.initPathVisualization === 'undefined') window.initPathVisualization = function () { P.initPathVisualization(); };
-    if (typeof window.drawPathVisualization === 'undefined') window.drawPathVisualization = function () { P.drawPathVisualization(); };
-    if (typeof window.addPlannedPathSegment === 'undefined') window.addPlannedPathSegment = function (type, value) { P.addPlannedPathSegment(type, value); };
-    if (typeof window.updateActualPath === 'undefined') window.updateActualPath = function (data) { P.updateActualPath(data); };
-    if (typeof window.resetPathVisualization === 'undefined') window.resetPathVisualization = function () { P.resetPathVisualization(); };
-
-})();
 // ========================================================================
 // MAIN APPLICATION - Logika główna aplikacji
 // ========================================================================
@@ -1581,6 +840,35 @@ const debounce = (func, delay) => { let timeout; return function (...args) { con
 // delay helper is provided by RB.helpers.delay (see js/helpers.js)
 function addLogMessage(message, level = 'info') { pushLog(message, level); const logCard = document.getElementById('log-card'); const autoEl = document.getElementById('logsAutoscroll'); if (logCard && logCard.classList.contains('open')) { renderAllLogs((autoEl && autoEl.checked) === true); } }
 function clearLogs() { if (typeof allLogsBuffer !== 'undefined') { allLogsBuffer.length = 0; } const box = document.getElementById('log-history'); if (box) box.innerHTML = ''; }
+function toggleAccordion(header) {
+    const content = header.nextElementSibling;
+    header.classList.toggle('active');
+    const isOpening = header.classList.contains('active');
+    if (!isOpening) {
+        content.classList.remove('auto-height');
+        content.style.maxHeight = '0px';
+        content.style.padding = '0px 15px';
+    } else {
+        // Specjalne traktowanie panelu strojenia: stała wysokość po otwarciu
+        if (content.classList.contains('autotune-pane')) {
+            const desktopH = 600; // px
+            const mobileVH = 70; // vh
+            const isMobile = window.matchMedia('(max-width: 768px)').matches;
+            if (isMobile) {
+                content.style.maxHeight = mobileVH + 'vh';
+            } else {
+                content.style.maxHeight = desktopH + 'px';
+            }
+            content.style.overflow = 'hidden';
+        } else {
+            content.style.maxHeight = content.scrollHeight + 40 + 'px';
+        }
+        content.style.padding = '15px';
+        setTimeout(() => {
+            if (header.classList.contains('active') && !content.classList.contains('autotune-pane')) content.classList.add('auto-height');
+        }, 450);
+    }
+}
 function updateAccordionHeight(content) {
     if (content && content.classList.contains('active')) {
         content.classList.remove('auto-height');
@@ -2595,6 +1883,38 @@ function exportChartDataToCsv(exportRange = false) {
     addLogMessage(message, 'info');
 }
 function exportChartToPng() { const link = document.createElement('a'); link.download = 'telemetry_chart.png'; link.href = signalAnalyzerChart.toBase64Image(); link.click(); addLogMessage('[UI] Wykres wyeksportowany do PNG.', 'info'); }
+
+function saveCurrentAsPreset() {
+    const presetName = prompt("Podaj nazwe dla nowego presetu:", "");
+    if (presetName && presetName.trim() !== "") {
+        const presetData = {};
+        for (const [inputId, snakeKey] of Object.entries(parameterMapping)) {
+            const input = document.getElementById(inputId); if (input) { presetData[inputId] = parseFloat(input.value); }
+        }
+        presetData['balanceSwitch'] = document.getElementById('balanceSwitch').checked;
+        presetData['holdPositionSwitch'] = document.getElementById('holdPositionSwitch').checked;
+        presetData['speedModeSwitch'] = document.getElementById('speedModeSwitch').checked;
+        localStorage.setItem(CUSTOM_PRESET_PREFIX + presetName.trim(), JSON.stringify(presetData));
+        addLogMessage(`[UI] Zapisano wlasny preset '${presetName.trim()}'.`, 'success');
+        populatePresetSelect();
+    }
+}
+async function applySelectedPreset() {
+    const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; let presetData;
+    if (selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { presetData = JSON.parse(localStorage.getItem(selectedValue)); } else { presetData = builtInPresetsData[selectedValue]?.params; }
+    if (presetData) {
+        AppState.isApplyingConfig = true;
+        for (const [key, value] of Object.entries(presetData)) {
+            const input = document.getElementById(key);
+            if (input) { let actualValue = value; if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(parameterMapping[key])) { actualValue = (value * 100); } input.value = actualValue; }
+            else if (['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].includes(key)) { document.getElementById(key).checked = value; }
+        }
+        AppState.isApplyingConfig = false; addLogMessage('[UI] Zastosowano wartosci presetu. Zapisz na robocie, aby wyslac.', 'info');
+        for (const [key, value] of Object.entries(presetData)) { const input = document.getElementById(key); if (input) { input.dispatchEvent(new Event('change', { bubbles: true })); } }
+    }
+}
+function populatePresetSelect() { const select = document.getElementById('pidPresetSelect'); select.innerHTML = ''; for (const [index, preset] of Object.entries(builtInPresetsData)) { const option = document.createElement('option'); option.value = index; option.textContent = preset.name; select.appendChild(option); } for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key.startsWith(CUSTOM_PRESET_PREFIX)) { const presetName = key.substring(CUSTOM_PRESET_PREFIX.length); const option = document.createElement('option'); option.value = key; option.textContent = `Wlasny: ${presetName}`; select.appendChild(option); } } }
+function deleteSelectedPreset() { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; if (!selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { addLogMessage('[UI] Nie mozna usunac wbudowanego presetu.', 'warn'); return; } if (confirm(`Czy na pewno chcesz usunac preset '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'?`)) { localStorage.removeItem(selectedValue); addLogMessage(`[UI] Usunieto preset.`, 'info'); populatePresetSelect(); } }
 
 function setupSequenceControls() { document.getElementById('add-sequence-step-btn').addEventListener('click', addSequenceStep); document.getElementById('run-sequence-btn').addEventListener('click', runSequence); document.getElementById('stop-sequence-btn').addEventListener('click', stopSequenceExecution); document.getElementById('clear-sequence-btn').addEventListener('click', clearSequence); }
 function addSequenceStep() {
@@ -3765,13 +3085,15 @@ async function startTuning() {
             throw new Error(`Nieznana metoda: ${method}`);
         }
 
+        const runStartTime = Date.now();
         try { addLogMessage(`[UI] currentTuningSession: ${currentTuningSession.constructor.name} debugId=${currentTuningSession._debugId || 'N/A'} config=${JSON.stringify(config)}`, 'info'); } catch (e) { console.debug('[UI] tuning session log failed', e); }
-
-        // Start the tuning session
-        currentTuningSession.run().catch((err) => {
+        currentTuningSession.run().then(() => {
+            addLogMessage(`[UI] Autostrojenie zakonczone (metoda: ${method.toUpperCase()}) po ${Date.now() - runStartTime}ms`, 'success');
+        }).catch((err) => {
             console.error('[UI] Autostrojenie error:', err);
-            addLogMessage(`[UI] Błąd podczas sesji strojenia: ${err?.message ?? String(err)}`, 'error');
+            addLogMessage(`[UI] Błąd podczas sesji strojenia: ${(err && err.message) ? err.message : String(err)} (after ${Date.now() - runStartTime}ms)`, 'error');
         }).finally(() => {
+            addLogMessage(`[UI] finalizing run() after ${Date.now() - runStartTime}ms (method ${method})`, 'debug');
             stopTuning(false);
         });
 

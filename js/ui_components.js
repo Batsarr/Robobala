@@ -267,6 +267,22 @@ if (typeof window.populatePresetSelect === 'undefined') {
 if (typeof window.deleteSelectedPreset === 'undefined') {
     window.deleteSelectedPreset = function () { const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; if (!selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { addLogMessage('[UI] Nie mozna usunac wbudowanego presetu.', 'warn'); return; } if (confirm(`Czy na pewno chcesz usunac preset '${selectedValue.substring(CUSTOM_PRESET_PREFIX.length)}'?`)) { localStorage.removeItem(selectedValue); addLogMessage(`[UI] Usunieto preset.`, 'info'); populatePresetSelect(); } };
 }
+if (typeof window.applySelectedPreset === 'undefined') {
+    window.applySelectedPreset = async function () {
+        const select = document.getElementById('pidPresetSelect'); const selectedValue = select.value; let presetData;
+        if (selectedValue.startsWith(CUSTOM_PRESET_PREFIX)) { presetData = JSON.parse(localStorage.getItem(selectedValue)); } else { presetData = builtInPresetsData[selectedValue]?.params; }
+        if (presetData) {
+            AppState.isApplyingConfig = true;
+            for (const [key, value] of Object.entries(presetData)) {
+                const input = document.getElementById(key);
+                if (input) { let actualValue = value; if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha'].includes(parameterMapping[key])) { actualValue = (value * 100); } input.value = actualValue; }
+                else if (['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].includes(key)) { document.getElementById(key).checked = value; }
+            }
+            AppState.isApplyingConfig = false; addLogMessage('[UI] Zastosowano wartosci presetu. Zapisz na robocie, aby wyslac.', 'info');
+            for (const [key, value] of Object.entries(presetData)) { const input = document.getElementById(key); if (input) { input.dispatchEvent(new Event('change', { bubbles: true })); } }
+        }
+    };
+}
 
 // ========================================================================
 // SEKWENCJE - Funkcje odpowiedzialne za tworzenie, edytowanie i wykonywanie sekwencji
@@ -512,3 +528,4 @@ if (typeof window.executeNextSequenceStep === 'undefined') {
             }
         };
     }
+}
