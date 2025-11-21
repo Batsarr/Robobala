@@ -10,6 +10,9 @@
 // razem z 'js/main.js' (bundled), ponieważ skrypt 'main.js' zawiera te
 // same definicje i powoduje błąd: "Uncaught SyntaxError: redeclaration of let ...".
 
+// Mark the modular UI as loaded for runtime checks (used by main.js debug overlay)
+if (!window.__uiComponentsLoaded) window.__uiComponentsLoaded = true;
+
 if (typeof window.toggleAccordion === 'undefined') {
     window.toggleAccordion = function (header) {
         const content = header.nextElementSibling;

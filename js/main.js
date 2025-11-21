@@ -1009,6 +1009,30 @@ function ensure3DInitialized() {
     } catch (err) { console.warn('[UI] ensure3DInitialized error', err); init3DVisualization(); }
 }
 
+// Ensure ui_components.js is loaded (useful when production bundle omits some modulary UI helpers)
+function ensureUiComponentsLoaded(scriptPath = 'js/ui_components.js') {
+    return new Promise((resolve, reject) => {
+        try {
+            if (typeof window.populatePresetSelect === 'function') { window.__uiComponentsLoaded = true; resolve(true); return; }
+            // Try to find an existing script tag (robust match for relative paths)
+            const existing = Array.from(document.querySelectorAll('script')).find(s => (s.src || '').endsWith('/ui_components.js') || (s.src || '').endsWith('js/ui_components.js'));
+            if (existing) {
+                // If already executed or loaded, resolve.
+                if (typeof window.populatePresetSelect === 'function' || existing.readyState === 'complete' || existing.dataset?.loaded === 'true') { window.__uiComponentsLoaded = true; resolve(true); return; }
+                existing.addEventListener('load', () => { window.__uiComponentsLoaded = true; resolve(true); });
+                existing.addEventListener('error', (e) => { reject(new Error('existing script load error')); });
+                return;
+            }
+            const s = document.createElement('script');
+            s.src = scriptPath;
+            s.async = false;
+            s.onload = () => { s.dataset.loaded = 'true'; window.__uiComponentsLoaded = true; console.info('[UI] ui_components.js dynamically loaded'); resolve(true); };
+            s.onerror = (e) => { reject(new Error('Failed to load ' + scriptPath)); };
+            document.head.appendChild(s);
+        } catch (err) { reject(err); }
+    });
+}
+
 // Helper to create a fallback message in the 3D container so we can see a visible
 // indication if Three.js or WebGL is not available at runtime.
 function create3DFallback(container, message) {
@@ -1066,11 +1090,15 @@ document.addEventListener('DOMContentLoaded', () => {
     initSignalAnalyzerChart();
     setupSignalChartControls();
     setupSignalAnalyzerControls();
-    if (typeof window.populatePresetSelect === 'function') {
-        try { populatePresetSelect(); } catch (e) { console.warn('[UI] populatePresetSelect failed:', e); }
-    } else {
-        console.info('[UI] populatePresetSelect not defined - skipping');
-    }
+    ensureUiComponentsLoaded().then(() => {
+        if (typeof window.populatePresetSelect === 'function') {
+            try { populatePresetSelect(); } catch (e) { console.warn('[UI] populatePresetSelect failed after ensureUiComponentsLoaded:', e); }
+        } else {
+            console.info('[UI] populatePresetSelect not defined even after ui_components script');
+        }
+    }).catch(err => {
+        console.warn('[UI] Failed to load ui_components.js:', err);
+    });
     setupNumericInputs();
     // Zamiana legacy: wywołujemy nowy zestaw listenerów parametrów zamiast usuniętej funkcji.
     if (typeof setupParameterListeners === 'function') {
@@ -1304,8 +1332,9 @@ function createDebugOverlay() {
             <div class="row"><div class="label">WebGL</div><div id="dbg-webgl" class="value">?</div></div>
             <div class="row"><div class="label">3D size</div><div id="dbg-3d-size" class="value">?</div></div>
             <div class="row"><div class="label">Joystick size</div><div id="dbg-joy-size" class="value">?</div></div>
+            <div class="row"><div class="label">UI Components</div><div id="dbg-ui-components" class="value">?</div></div>
             <div class="row"><div class="label">Last error</div><div id="dbg-error" class="value">-</div></div>
-            <div style="display:flex; gap:8px; margin-top:6px;"><button id="dbg-reinit-3d">Re-init 3D</button><button id="dbg-reinit-joy">Re-init Joy</button></div>
+            <div style="display:flex; gap:8px; margin-top:6px;"><button id="dbg-reinit-3d">Re-init 3D</button><button id="dbg-reinit-joy">Re-init Joy</button><button id="dbg-load-ui-components">Load UI Components</button></div>
         `;
         document.body.appendChild(d);
         __debugOverlayRoot = d;
@@ -1318,6 +1347,10 @@ function createDebugOverlay() {
             console.info('[UI][DBG] Force reinit Joystick requested');
             try { initJoystick(); ensureJoystickInitialized(); } catch (e) { console.warn('[UI][DBG] reinitJoy error', e); }
             setTimeout(updateDebugOverlay, 150);
+        });
+        d.querySelector('#dbg-load-ui-components')?.addEventListener('click', () => {
+            console.info('[UI][DBG] Force load ui_components.js requested');
+            ensureUiComponentsLoaded().then(() => { updateDebugOverlay(); try { addLogMessage('[UI] ui_components.js loaded via debug overlay', 'info'); } catch (_) { } }).catch((e) => { try { addLogMessage('[UI] Failed to load ui_components.js via debug overlay: ' + e.message, 'error'); } catch (_) { } });
         });
 
         // Attach global error handlers
@@ -1363,6 +1396,8 @@ function updateDebugOverlay() {
         const c3d = document.getElementById('robot3d-container'); if (size3dEl) size3dEl.textContent = c3d ? `${c3d.clientWidth}x${c3d.clientHeight}` : 'N/A';
         const wj = document.getElementById('joystickWrapper'); if (sizeJoyEl) sizeJoyEl.textContent = wj ? `${wj.clientWidth}x${wj.clientHeight}` : 'N/A';
         if (errEl) errEl.textContent = __lastUiError || '-';
+        const uiEl = __debugOverlayRoot.querySelector('#dbg-ui-components');
+        if (uiEl) uiEl.textContent = (typeof window.populatePresetSelect === 'function' || !!window.__uiComponentsLoaded) ? 'OK' : 'MISSING';
     } catch (err) { console.warn('[UI] updateDebugOverlay error', err); }
 }
 

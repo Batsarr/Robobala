@@ -649,6 +649,8 @@
         The bundler is available as a single file 'js/main.js' for production. -->
     <!-- Required dependencies for main.js (must be loaded prior to main): -->
     <!-- Production: include single bundled JS file (main.js) last -->
+    <!-- Hotfix: include modular ui_components.js when bundle omits some UI helpers (e.g., populatePresetSelect) -->
+    <script src="js/ui_components.js"></script>
     <script src="js/main.js"></script>
 
 </body>
