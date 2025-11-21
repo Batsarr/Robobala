@@ -3826,15 +3826,13 @@ async function startTuning() {
             throw new Error(`Nieznana metoda: ${method}`);
         }
 
-        const runStartTime = Date.now();
         try { addLogMessage(`[UI] currentTuningSession: ${currentTuningSession.constructor.name} debugId=${currentTuningSession._debugId || 'N/A'} config=${JSON.stringify(config)}`, 'info'); } catch (e) { console.debug('[UI] tuning session log failed', e); }
-        currentTuningSession.run().then(() => {
-            addLogMessage(`[UI] Autostrojenie zakonczone (metoda: ${method.toUpperCase()}) po ${Date.now() - runStartTime}ms`, 'success');
-        }).catch((err) => {
+        
+        // Start the tuning session
+        currentTuningSession.run().catch((err) => {
             console.error('[UI] Autostrojenie error:', err);
-            addLogMessage(`[UI] Błąd podczas sesji strojenia: ${(err && err.message) ? err.message : String(err)} (after ${Date.now() - runStartTime}ms)`, 'error');
+            addLogMessage(`[UI] Błąd podczas sesji strojenia: ${err?.message ?? String(err)}`, 'error');
         }).finally(() => {
-            addLogMessage(`[UI] finalizing run() after ${Date.now() - runStartTime}ms (method ${method})`, 'debug');
             stopTuning(false);
         });
 
