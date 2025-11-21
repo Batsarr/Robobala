@@ -3828,15 +3828,8 @@ async function startTuning() {
 
         const runStartTime = Date.now();
         try { addLogMessage(`[UI] currentTuningSession: ${currentTuningSession.constructor.name} debugId=${currentTuningSession._debugId || 'N/A'} config=${JSON.stringify(config)}`, 'info'); } catch (e) { console.debug('[UI] tuning session log failed', e); }
-        currentTuningSession.run().then(() => {
-            addLogMessage(`[UI] Autostrojenie zakonczone (metoda: ${method.toUpperCase()}) po ${Date.now() - runStartTime}ms`, 'success');
-        }).catch((err) => {
-            console.error('[UI] Autostrojenie error:', err);
-            addLogMessage(`[UI] Błąd podczas sesji strojenia: ${(err && err.message) ? err.message : String(err)} (after ${Date.now() - runStartTime}ms)`, 'error');
-        }).finally(() => {
-            addLogMessage(`[UI] finalizing run() after ${Date.now() - runStartTime}ms (method ${method})`, 'debug');
-            stopTuning(false);
-        });
+        
+        currentTuningSession.run();
 
     } catch (error) {
         console.error('Błąd inicjalizacji strojenia:', error);
