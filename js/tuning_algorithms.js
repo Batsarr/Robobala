@@ -142,6 +142,25 @@ function runMetricsTest(kp, ki, kd) {
 // Use RB.helpers.delay(ms) (provided by js/helpers.js) for delays to avoid redeclaration issues.
 
 /**
+ * Helper function to get parameter key names for a given loop type
+ * @param {string} loop - Loop type ('balance', 'speed', or 'position')
+ * @returns {Object} Object with kp, ki, kd parameter keys
+ */
+function getPIDParamKeys(loop) {
+    let suffix = '';
+    if (loop === 'balance') suffix = 'b';
+    else if (loop === 'speed') suffix = 's';
+    else if (loop === 'position') suffix = 'p';
+    else suffix = 'b'; // default to balance
+    
+    return {
+        kp: `kp_${suffix}`,
+        ki: `ki_${suffix}`,
+        kd: `kd_${suffix}`
+    };
+}
+
+/**
  * NEW APPROACH: Telemetry-based fitness evaluation
  * 
  * Instead of asking the robot to run a test and calculate fitness,
@@ -247,15 +266,12 @@ function runTelemetryBasedTest(kp, ki, kd) {
         
         // Apply PID parameters to robot using set_param commands
         const loop = document.getElementById('tuning-loop-selector')?.value || 'balance';
-        let prefix = '';
-        if (loop === 'balance') prefix = 'kp_b';
-        else if (loop === 'speed') prefix = 'kp_s';
-        else if (loop === 'position') prefix = 'kp_p';
+        const paramKeys = getPIDParamKeys(loop);
         
         // Send parameters (robot applies them immediately)
-        sendBleCommand('set_param', { key: prefix.replace('kp', 'kp'), value: kp });
-        sendBleCommand('set_param', { key: prefix.replace('kp', 'ki'), value: ki });
-        sendBleCommand('set_param', { key: prefix.replace('kp', 'kd'), value: kd });
+        sendBleCommand('set_param', { key: paramKeys.kp, value: kp });
+        sendBleCommand('set_param', { key: paramKeys.ki, value: ki });
+        sendBleCommand('set_param', { key: paramKeys.kd, value: kd });
         
         try {
             addLogMessage(`[TelemetryTest] Started test with Kp=${kp.toFixed(3)}, Ki=${ki.toFixed(3)}, Kd=${kd.toFixed(3)}, duration=${testDurationMs}ms`, 'info');
@@ -498,15 +514,12 @@ function addTestToResultsTable(testNum, params, fitness, itae, overshoot, testTy
 
 function applyParameters(kp, ki, kd) {
     const loop = document.getElementById('tuning-loop-selector').value;
-    let prefix = '';
-    if (loop === 'balance') prefix = 'kp_b';
-    else if (loop === 'speed') prefix = 'kp_s';
-    else if (loop === 'position') prefix = 'kp_p';
+    const paramKeys = getPIDParamKeys(loop);
 
     // Send parameters to robot
-    sendBleCommand('set_param', { key: prefix.replace('kp', 'kp'), value: kp });
-    sendBleCommand('set_param', { key: prefix.replace('kp', 'ki'), value: ki });
-    sendBleCommand('set_param', { key: prefix.replace('kp', 'kd'), value: kd });
+    sendBleCommand('set_param', { key: paramKeys.kp, value: kp });
+    sendBleCommand('set_param', { key: paramKeys.ki, value: ki });
+    sendBleCommand('set_param', { key: paramKeys.kd, value: kd });
 
     showNotification(`Zastosowano parametry: Kp=${kp.toFixed(3)}, Ki=${ki.toFixed(3)}, Kd=${kd.toFixed(3)}`);
 }
@@ -517,15 +530,12 @@ function applyParameters(kp, ki, kd) {
  */
 function sendBaselinePIDToRobot() {
     const loop = document.getElementById('tuning-loop-selector')?.value || 'balance';
-    let prefix = '';
-    if (loop === 'balance') prefix = 'kp_b';
-    else if (loop === 'speed') prefix = 'kp_s';
-    else if (loop === 'position') prefix = 'kp_p';
+    const paramKeys = getPIDParamKeys(loop);
 
     // Send baseline parameters to robot
-    sendBleCommand('set_param', { key: prefix.replace('kp', 'kp'), value: baselinePID.kp });
-    sendBleCommand('set_param', { key: prefix.replace('kp', 'ki'), value: baselinePID.ki });
-    sendBleCommand('set_param', { key: prefix.replace('kp', 'kd'), value: baselinePID.kd });
+    sendBleCommand('set_param', { key: paramKeys.kp, value: baselinePID.kp });
+    sendBleCommand('set_param', { key: paramKeys.ki, value: baselinePID.ki });
+    sendBleCommand('set_param', { key: paramKeys.kd, value: baselinePID.kd });
 
     console.log(`[Tuning] Restored baseline PID: Kp=${baselinePID.kp.toFixed(3)}, Ki=${baselinePID.ki.toFixed(3)}, Kd=${baselinePID.kd.toFixed(3)}`);
 }
