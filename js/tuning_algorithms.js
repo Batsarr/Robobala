@@ -15,6 +15,13 @@ let baselinePID = {
 };
 
 // ========================================================================
+// CONSTANTS
+// ========================================================================
+
+// Time to wait for new PID parameters to take effect in the robot (milliseconds)
+const PARAMETER_SETTLING_TIME_MS = 300;
+
+// ========================================================================
 // HELPER FUNCTIONS
 // ========================================================================
 
@@ -174,7 +181,7 @@ function getPIDParamKeys(loop) {
  * It just executes commands and reports telemetry.
  * 
  * @param {number} kp - Proportional gain
- * @param {number} ki - Integral gain  
+ * @param {number} ki - Integral gain
  * @param {number} kd - Derivative gain
  * @returns {Promise<{fitness, itae, overshoot, steady_state_error, raw}>}
  */
@@ -193,7 +200,7 @@ function runTelemetryBasedTest(kp, ki, kd) {
         }
         
         // Add parameter settling time (time for robot to apply new PID values)
-        const settlingTimeMs = 300; // 300ms for parameters to take effect
+        const settlingTimeMs = PARAMETER_SETTLING_TIME_MS;
         const totalDurationMs = testDurationMs + settlingTimeMs;
         
         // Timeout safety (2x expected duration)
@@ -275,7 +282,9 @@ function runTelemetryBasedTest(kp, ki, kd) {
         
         try {
             addLogMessage(`[TelemetryTest] Started test with Kp=${kp.toFixed(3)}, Ki=${ki.toFixed(3)}, Kd=${kd.toFixed(3)}, duration=${testDurationMs}ms`, 'info');
-        } catch (_) {}
+        } catch (_) {
+            // Logging is optional - don't fail test if addLogMessage not available
+        }
     });
 }
 
@@ -359,7 +368,9 @@ function calculateFitnessFromTelemetry(samples) {
     
     try {
         addLogMessage(`[TelemetryTest] Calculated fitness: ITAE=${itae.toFixed(2)}, Overshoot=${overshoot.toFixed(2)}°, SSE=${steadyStateError.toFixed(2)}°, Fitness=${finalFitness.toFixed(2)}`, 'info');
-    } catch (_) {}
+    } catch (_) {
+        // Logging is optional - calculation continues even if logging fails
+    }
     
     return {
         fitness: finalFitness,
