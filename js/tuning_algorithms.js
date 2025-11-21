@@ -55,35 +55,25 @@ function computeTestTimeout() {
  * Wysyła run_metrics_test, nasłuchuje status_update test_started, metrics_result i test_complete.
  * Obsługuje ack NACK przez syntetyczne test_complete(success=false).
  */
-// GLOBALNY ŁAŃCUCH PROMISÓW DLA TESTÓW – zapewnia, że tylko jedna komenda run_metrics_test jest aktywna naraz
-let __metricsTestChain = Promise.resolve();
-let __activeTestId = null;
-
 function runMetricsTest(kp, ki, kd) {
-    // Doklej do kolejki aby uniknąć równoległych testów (spam "Test w toku")
-    __metricsTestChain = __metricsTestChain.then(() => internalRunMetricsTest(kp, ki, kd));
-    return __metricsTestChain;
-}
-
-function internalRunMetricsTest(kp, ki, kd) {
     return new Promise((resolve, reject) => {
         const testId = (Date.now() ^ Math.floor(Math.random() * 0xFFFF)) >>> 0;
         const timeoutMs = computeTestTimeout();
         let resolved = false;
         let metricsData = null;
+        let ackReceived = false;
         let started = false;
         let timeoutHandle = setTimeout(() => {
             if (!resolved) {
                 cleanup();
                 resolved = true;
-                reject({ reason: 'test_timeout' });
+                reject(new Error('test_timeout'));
             }
         }, timeoutMs);
 
         function cleanup() {
             window.removeEventListener('ble_message', handler);
             clearTimeout(timeoutHandle);
-            __activeTestId = null;
         }
 
         function finishSuccess() {
@@ -91,6 +81,7 @@ function internalRunMetricsTest(kp, ki, kd) {
             resolved = true;
             cleanup();
             if (!metricsData) {
+                // No metrics -> penalize
                 resolve({ fitness: Infinity, itae: 0, overshoot: 0, steady_state_error: 0, raw: null });
             } else {
                 const itae = Number(metricsData.itae) || 0;
@@ -110,10 +101,10 @@ function internalRunMetricsTest(kp, ki, kd) {
 
         function handler(evt) {
             const d = evt.detail || evt;
-            if (!d || !d.type) return;
-            // Ack nie zawiera testId – wystarczy sprawdzić powodzenie
-            if (d.type === 'ack' && d.command === 'run_metrics_test') {
+            if (d.type === 'ack' && d.command === 'run_metrics_test' && Number(d.testId) === testId) {
+                ackReceived = true;
                 if (!d.success) {
+                    // Synthetic test_complete
                     finishFailure('ack_failed');
                 }
             }
@@ -128,26 +119,10 @@ function internalRunMetricsTest(kp, ki, kd) {
             }
         }
 
-        // Jeśli poprzedni test jeszcze się nie zakończył (brak test_complete), poczekaj krótko aktywnie (maks 2s)
-        const waitForIdle = () => new Promise((res) => {
-            if (!__activeTestId) return res();
-            let waited = 0;
-            const iv = setInterval(() => {
-                if (!__activeTestId) { clearInterval(iv); res(); }
-                else if (waited > 2000) { clearInterval(iv); res(); }
-                waited += 50;
-            }, 50);
-        });
-
-        waitForIdle().then(() => {
-            window.addEventListener('ble_message', handler);
-            __activeTestId = testId;
-            sendBleCommand('run_metrics_test', { kp, ki, kd, testId });
-        });
-    })
-        // Krótkie opóźnienie bezpieczeństwa po każdym teście aby firmware zdążył przywrócić parametry
-        .then(async (res) => { try { await RB.helpers.delay(150); } catch (_) { } return res; })
-        .catch(async (err) => { try { await RB.helpers.delay(150); } catch (_) { } throw err; });
+        window.addEventListener('ble_message', handler);
+        // Wyślij komendę
+        sendBleCommand('run_metrics_test', { kp, ki, kd, testId });
+    });
 }
 
 // Use RB.helpers.delay(ms) (provided by js/helpers.js) for delays to avoid redeclaration issues.
@@ -692,28 +667,137 @@ class ParticleSwarmOptimization {
     }
 
     async evaluateFitness(particle, idx = 0) {
+        const testId = Date.now() >>> 0;
         this.testCounter++;
-        try {
-            const res = await runMetricsTest(particle.position.kp, particle.position.ki, particle.position.kd);
-            particle.fitness = res.fitness;
-            if (res.fitness < particle.bestFitness) {
-                particle.bestFitness = res.fitness;
-                particle.bestPosition = { ...particle.position };
-            }
-            if (!this.globalBest || res.fitness < this.globalBest.fitness) {
-                this.globalBest = { position: { ...particle.position }, fitness: res.fitness };
-                updateBestDisplay(this.globalBest.position);
-            }
-            const meta = { gen: this.iteration + 1, totalGen: this.iterations, individualIdx: idx, pop: this.particles.length };
-            try { fitnessChartData.push({ x: this.iteration + (idx / Math.max(1, this.particles.length)), y: res.fitness }); updateFitnessChart(); } catch (_) { }
-            addTestToResultsTable(this.testCounter, particle.position, res.fitness, res.itae, res.overshoot, 'metrics_test', meta);
-            return res.fitness;
-        } catch (err) {
-            if (err && err.reason === 'interrupted_by_emergency') throw err;
-            particle.fitness = Infinity;
-            addTestToResultsTable(this.testCounter, particle.position, Infinity, 0, 0, 'metrics_test');
-            return Infinity;
-        }
+
+        return new Promise((resolve, reject) => {
+            let done = false;
+            const timeout = setTimeout(() => {
+                if (!done) {
+                    done = true;
+                    // Best-effort cleanup
+                    window.removeEventListener('ble_message', completeHandler);
+                    window.removeEventListener('ble_message', metricsHandler);
+                    window.removeEventListener('ble_message', ackHandlerPSO);
+                    window.removeEventListener('ble_message', ackHandlerBayes);
+                    // Log timeout with detailed information
+                    try {
+                        addLogMessage(`[PSO] Test timeout after 30s - testId=${testId}, Kp=${particle.position.kp.toFixed(3)}, Ki=${particle.position.ki.toFixed(3)}, Kd=${particle.position.kd.toFixed(3)}. Robot nie przesłał metrics_result. Test pominięty.`, 'error');
+                    } catch (e) {
+                        console.error('[PSO] Test timeout:', testId, particle.position);
+                    }
+                    reject(new Error('Test timeout'));
+                }
+            }, 30000); // 30 second timeout (increased from 10s)
+
+            // Handler for test completion (success or failure)
+            const completeHandler = (evt) => {
+                const data = (evt && evt.detail) ? evt.detail : evt;
+                if (data.type === 'test_complete' && Number(data.testId) === testId) {
+                    clearTimeout(timeout);
+                    window.removeEventListener('ble_message', completeHandler);
+                    window.removeEventListener('ble_message', metricsHandler);
+                    window.removeEventListener('ble_message', ackHandlerBayes);
+
+                    // If test failed (e.g., emergency stop), reject with special reason
+                    if (!data.success) {
+                        reject({ reason: 'interrupted_by_emergency', testId: testId });
+                        return;
+                    }
+                }
+            };
+
+            // Update current test display (when starting)
+            try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, idx, this.particles.length, particle.position.kp, particle.position.ki, particle.position.kd, particle.fitness); } catch (_) { }
+
+            // Handler for test metrics
+            const metricsHandler = (evt) => {
+                const data = (evt && evt.detail) ? evt.detail : evt;
+                if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
+                    clearTimeout(timeout);
+
+                    try { addLogMessage(`[PSO] Otrzymano metrics_result dla testId=${testId}`, 'info'); } catch (e) { console.debug('[PSO] log failed', e); }
+
+                    // Validate and extract metrics with fallbacks
+                    const itae = (typeof data.itae === 'number' && !isNaN(data.itae)) ? data.itae : 0;
+                    const overshoot = (typeof data.overshoot === 'number' && !isNaN(data.overshoot)) ? data.overshoot : 0;
+                    const steadyStateError = (typeof data.steady_state_error === 'number' && !isNaN(data.steady_state_error)) ? data.steady_state_error : 0;
+
+                    const fitness = itae + overshoot * 10 + steadyStateError * 5;
+                    particle.fitness = fitness;
+
+                    try { addLogMessage(`[PSO] Fitness calculated: ITAE=${itae.toFixed(4)}, Overshoot=${overshoot.toFixed(2)}, SSE=${steadyStateError.toFixed(2)}, Fitness=${fitness.toFixed(4)}`, 'info'); } catch (e) { console.debug('[PSO] fitness log failed', e); }
+
+                    if (fitness < particle.bestFitness) {
+                        particle.bestFitness = fitness;
+                        particle.bestPosition = { ...particle.position };
+                    }
+
+                    if (!this.globalBest || fitness < this.globalBest.fitness) {
+                        this.globalBest = {
+                            position: { ...particle.position },
+                            fitness: fitness
+                        };
+                        updateBestDisplay(this.globalBest.position);
+                    }
+
+                    const meta = { gen: this.iteration + 1, totalGen: this.iterations, individualIdx: idx, pop: this.particles.length };
+                    try { fitnessChartData.push({ x: this.iteration + (idx / Math.max(1, this.particles.length)), y: fitness }); updateFitnessChart(); } catch (_) { }
+                    addTestToResultsTable(this.testCounter, particle.position, fitness, data.itae, data.overshoot, data.test_type || 'metrics_test', meta);
+
+                    // Remove handlers
+                    window.removeEventListener('ble_message', completeHandler);
+                    window.removeEventListener('ble_message', metricsHandler);
+                    resolve(fitness);
+                }
+            };
+
+            // Listen for ACK; reject early if firmware NACKs the run_metrics_test request
+            const ackHandlerPSO = (evt) => {
+                const d = (evt && evt.detail) ? evt.detail : evt;
+                if (d.type === 'ack' && d.command === 'run_metrics_test') {
+                    if (!d.success) {
+                        clearTimeout(timeout);
+                        window.removeEventListener('ble_message', completeHandler);
+                        window.removeEventListener('ble_message', metricsHandler);
+                        window.removeEventListener('ble_message', ackHandlerPSO);
+                        try { addLogMessage(`[PSO] run_metrics_test ACK failed: ${d.message || 'N/A'}`, 'error'); } catch (e) { console.debug('[PSO] ack log failed', e); }
+                        reject({ reason: 'ack_failed', message: d.message });
+                        return;
+                    } else {
+                        window.removeEventListener('ble_message', ackHandlerPSO);
+                    }
+                }
+            };
+            // Bayes: ack handler for run_metrics_test NACKs
+            const ackHandlerBayes = (evt) => {
+                const d = (evt && evt.detail) ? evt.detail : evt;
+                if (d.type === 'ack' && d.command === 'run_metrics_test') {
+                    if (!d.success) {
+                        clearTimeout(timeout);
+                        window.removeEventListener('ble_message', completeHandler);
+                        window.removeEventListener('ble_message', metricsHandler);
+                        window.removeEventListener('ble_message', ackHandlerBayes);
+                        try { addLogMessage(`[Bayes] run_metrics_test ACK failed: ${d.message || 'N/A'}`, 'error'); } catch (e) { console.debug('[Bayes] ack log failed', e); }
+                        reject({ reason: 'ack_failed', message: d.message });
+                        return;
+                    } else {
+                        window.removeEventListener('ble_message', ackHandlerBayes);
+                    }
+                }
+            };
+            window.addEventListener('ble_message', completeHandler);
+            window.addEventListener('ble_message', metricsHandler);
+            window.addEventListener('ble_message', ackHandlerBayes);
+            window.addEventListener('ble_message', ackHandlerPSO);
+            try { addLogMessage(`[PSO] Sending run_metrics_test: testId=${testId} Kp=${particle.position.kp.toFixed(3)} Ki=${particle.position.ki.toFixed(3)} Kd=${particle.position.kd.toFixed(3)} testCounter=${this.testCounter}`, 'info'); } catch (e) { console.debug('[PSO] log failed', e); }
+            sendBleCommand('run_metrics_test', {
+                kp: particle.position.kp,
+                ki: particle.position.ki,
+                kd: particle.position.kd,
+                testId: testId
+            });
+        });
     }
 
     async runIteration() {
@@ -1247,17 +1331,81 @@ class BayesianOptimization {
     }
 
     async evaluateSample(sample) {
+        const testId = Date.now() >>> 0;
         this.testCounter++;
-        try {
-            const res = await runMetricsTest(sample.kp, sample.ki, sample.kd);
-            try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, res.fitness); } catch (_) { }
-            addTestToResultsTable(this.testCounter, sample, res.fitness, res.itae, res.overshoot, 'metrics_test');
-            return res.fitness;
-        } catch (err) {
-            if (err && err.reason === 'interrupted_by_emergency') throw err;
-            addTestToResultsTable(this.testCounter, sample, Infinity, 0, 0, 'metrics_test');
-            return Infinity;
-        }
+
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                // Best-effort cleanup
+                window.removeEventListener('ble_message', completeHandler);
+                window.removeEventListener('ble_message', metricsHandler);
+                // Log timeout with detailed information
+                try {
+                    addLogMessage(`[Bayesian] Test timeout after 30s - testId=${testId}, Kp=${sample.kp.toFixed(3)}, Ki=${sample.ki.toFixed(3)}, Kd=${sample.kd.toFixed(3)}. Robot nie przesłał metrics_result. Test pominięty.`, 'error');
+                } catch (e) {
+                    console.error('[Bayesian] Test timeout:', testId, sample);
+                }
+                reject(new Error('Test timeout'));
+            }, 30000); // 30 second timeout (increased from 10s)
+
+            // Handler for test completion (success or failure)
+            const completeHandler = (evt) => {
+                const data = (evt && evt.detail) ? evt.detail : evt;
+                if (data.type === 'test_complete' && Number(data.testId) === testId) {
+                    clearTimeout(timeout);
+                    window.removeEventListener('ble_message', completeHandler);
+                    window.removeEventListener('ble_message', metricsHandler);
+
+                    // If test failed (e.g., emergency stop), reject with special reason
+                    if (!data.success) {
+                        reject({ reason: 'interrupted_by_emergency', testId: testId });
+                        return;
+                    }
+                }
+            };
+
+            // Update UI about starting this sample (iteration, sample idx unknown here)
+            try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, null); } catch (_) { }
+
+            // Handler for test metrics
+            const metricsHandler = (evt) => {
+                const data = (evt && evt.detail) ? evt.detail : evt;
+                if ((data.type === 'metrics_result' || data.type === 'test_result') && Number(data.testId) === testId) {
+                    clearTimeout(timeout);
+
+                    try { addLogMessage(`[Bayesian] Otrzymano metrics_result dla testId=${testId}`, 'info'); } catch (e) { console.debug('[Bayesian] log failed', e); }
+
+                    // Validate and extract metrics with fallbacks
+                    const itae = (typeof data.itae === 'number' && !isNaN(data.itae)) ? data.itae : 0;
+                    const overshoot = (typeof data.overshoot === 'number' && !isNaN(data.overshoot)) ? data.overshoot : 0;
+                    const steadyStateError = (typeof data.steady_state_error === 'number' && !isNaN(data.steady_state_error)) ? data.steady_state_error : 0;
+
+                    const fitness = itae + overshoot * 10 + steadyStateError * 5;
+
+                    try { addLogMessage(`[Bayesian] Fitness calculated: ITAE=${itae.toFixed(4)}, Overshoot=${overshoot.toFixed(2)}, SSE=${steadyStateError.toFixed(2)}, Fitness=${fitness.toFixed(4)}`, 'info'); } catch (e) { console.debug('[Bayesian] fitness log failed', e); }
+
+                    // Update UI with resulting fitness for this sample
+                    try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, fitness); } catch (_) { }
+
+                    addTestToResultsTable(this.testCounter, sample, fitness, data.itae, data.overshoot, data.test_type || 'metrics_test');
+
+                    // Remove handlers
+                    window.removeEventListener('ble_message', completeHandler);
+                    window.removeEventListener('ble_message', metricsHandler);
+                    resolve(fitness);
+                }
+            };
+
+            window.addEventListener('ble_message', completeHandler);
+            window.addEventListener('ble_message', metricsHandler);
+
+            sendBleCommand('run_metrics_test', {
+                kp: sample.kp,
+                ki: sample.ki,
+                kd: sample.kd,
+                testId: testId
+            });
+        });
     }
 
     sampleRandom() {
