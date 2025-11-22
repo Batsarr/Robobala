@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RoboBala - Test: Joystick continuous send</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    body { background: #101218; color: #eaeaea; font-family: Arial, sans-serif; }
+    #joystickCanvas { background: #222; border: 1px solid #333; display:block; margin: 18px 0; }
+  </style>
+</head>
+<body>
+  <h2>Automated test: Pointer joystick continuous sending</h2>
+  <p>This page programmatically calls the joystick handlers to verify continuous message sending.</p>
+  <select id="joystickModeSelect"><option value="drive">Drive</option><option value="adjust_pitch">Adjust Pitch</option><option value="adjust_roll">Adjust Roll</option></select>
+  <input id="joystickTrimRateInput" type="number" value="10" min="0.1" step="0.1">
+  <canvas id="joystickCanvas" width="200" height="200"></canvas>
+  <div>
+    <button id="startDriveTest">Start Drive Test</button>
+    <button id="startAdjustPitchTest">Start Adjust Pitch Test</button>
+    <button id="startAdjustRollTest">Start Adjust Roll Test</button>
+  </div>
+  <pre id="log"></pre>
+  <script>
+    window.sentMessages = [];
+    window.sendBleMessage = function(msg) {
+      window.sentMessages.push(msg);
+      const l = document.getElementById('log');
+      l.textContent += '\n-> ' + JSON.stringify(msg);
+    };
+  </script>
+  <script src="../main.js"></script>
+  <script>
+    function simulateDragAt(dx, dy, testName, mode='drive', durationMs=200) {
+      return new Promise((resolve) => {
+        window.joystickMode = mode; // global used in main.js
+        const canvas = document.getElementById('joystickCanvas');
+        const rect = canvas.getBoundingClientRect();
+        const centerX = rect.left + rect.width/2;
+        const centerY = rect.top + rect.height/2;
+        const startEvent = { clientX: centerX + dx, clientY: centerY + dy };
+        // start
+        if (typeof handleJoystickStart === 'function') handleJoystickStart(startEvent);
+        // hold for durationMs
+        setTimeout(() => {
+          const messagesDuring = window.sentMessages.slice();
+          if (typeof handleJoystickEnd === 'function') handleJoystickEnd(startEvent);
+          // allow some time for any pending sends
+          setTimeout(() => {
+            const messagesAfter = window.sentMessages.slice();
+            resolve({ messagesDuring, messagesAfter });
+          }, 100);
+        }, durationMs);
+      });
+    }
+
+    document.getElementById('startDriveTest').addEventListener('click', async () => {
+      document.getElementById('log').textContent = '';
+      window.sentMessages.length = 0;
+      const result = await simulateDragAt(0, -40, 'drive', 'drive', 300);
+      document.getElementById('log').textContent += '\nDrive test: messages during: ' + result.messagesDuring.length + ', after: ' + (window.sentMessages.length - result.messagesDuring.length);
+      console.log('Drive', result);
+    });
+
+    document.getElementById('startAdjustPitchTest').addEventListener('click', async () => {
+      document.getElementById('log').textContent = '';
+      window.sentMessages.length = 0;
+      const result = await simulateDragAt(0, -40, 'adjust_pitch', 'adjust_pitch', 300);
+      document.getElementById('log').textContent += '\nAdjust-Pitch test: messages during: ' + result.messagesDuring.length + ', after: ' + (window.sentMessages.length - result.messagesDuring.length);
+      console.log('AdjustPitch', result);
+    });
+
+    document.getElementById('startAdjustRollTest').addEventListener('click', async () => {
+      document.getElementById('log').textContent = '';
+      window.sentMessages.length = 0;
+      const result = await simulateDragAt(40, 0, 'adjust_roll', 'adjust_roll', 300);
+      document.getElementById('log').textContent += '\nAdjust-Roll test: messages during: ' + result.messagesDuring.length + ', after: ' + (window.sentMessages.length - result.messagesDuring.length);
+      console.log('AdjustRoll', result);
+    });
+  </script>
+</body>
+</html>
