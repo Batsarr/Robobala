@@ -483,6 +483,8 @@ let scene3D, camera3D, renderer3D, controls3D, robotPivot, leftWheel, rightWheel
 let currentEncoderLeft = 0, currentEncoderRight = 0;
 let isAnimation3DEnabled = true, isMovement3DEnabled = false, lastEncoderAvg = 0;
 window.telemetryData = {};
+window.pendingSetZeroPitch = false;
+window.pendingSetZeroRoll = false;
 let isCalibrationModalShown = false;
 // UI base for 'Set Zero' feature — apparent trim is actualTrim - uiTrimZeroBase
 // Prosty model trymów:
@@ -1180,6 +1182,8 @@ function setPitchZero() {
         return;
     }
     const delta = -rawPitch; // obróć montaż o -pitch aby uzyskać 0°
+    console.debug('[UI] setPitchZero -> sensorPitch=', sensorEul.pitch, 'currentTrim=', currentTrim, 'rawPitch=', rawPitch, 'delta=', delta, 'lastMountCorr=', window.lastMountCorr);
+    window.pendingSetZeroPitch = true;
     sendBleMessage({ type: 'adjust_zero', value: delta });
     const span = document.getElementById('trimValueDisplay');
     if (span) span.textContent = '0.00';
@@ -1214,6 +1218,8 @@ function setRollZero() {
         return;
     }
     const delta = -rawRoll;
+    console.debug('[UI] setRollZero -> sensorRoll=', sensorEul.roll, 'currentTrim=', currentRollTrim, 'rawRoll=', rawRoll, 'delta=', delta, 'lastMountCorr=', window.lastMountCorr);
+    window.pendingSetZeroRoll = true;
     sendBleMessage({ type: 'adjust_roll', value: delta });
     const span = document.getElementById('rollTrimValueDisplay');
     if (span) span.textContent = '0.00';
@@ -1500,6 +1506,18 @@ function processCompleteMessage(data) {
             if (data.message === 'mount_corr_set' && typeof data.qw === 'number') {
                 window.lastMountCorr = { qw: data.qw, qx: data.qx, qy: data.qy, qz: data.qz };
                 addLogMessage(`[UI] Korekcja montażu zastosowana: w=${data.qw.toFixed(3)} x=${data.qx.toFixed(3)} y=${data.qy.toFixed(3)} z=${data.qz.toFixed(3)}`, 'success');
+                // If we awaited a confirmation of set-zero, update UI angles
+                if (window.pendingSetZeroPitch) {
+                    const span = document.getElementById('trimValueDisplay'); if (span) span.textContent = '0.00';
+                    const val = document.getElementById('angleVal'); if (val) val.textContent = '0.0 °';
+                    window.pendingSetZeroPitch = false;
+                }
+                if (window.pendingSetZeroRoll) {
+                    const span = document.getElementById('rollTrimValueDisplay'); if (span) span.textContent = '0.00';
+                    const val = document.getElementById('rollVal'); if (val) val.textContent = '0.0 °';
+                    window.pendingSetZeroRoll = false;
+                }
+                console.debug('[UI] status_update mount_corr_set received:', { qw: data.qw, qx: data.qx, qy: data.qy, qz: data.qz });
                 // Jeśli modal nadal otwarty a zapis jeszcze nie zaznaczony, odśwież postęp
                 if (document.getElementById('sensor-mapping-modal')?.style.display === 'flex') {
                     sensorWizard.progress.saved = true; setWizardProgress(); updateSensorWizardUI();

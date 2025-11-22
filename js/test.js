@@ -816,6 +816,7 @@ function setPitchZero() {
         return;
     }
     const delta = -rawPitch; // obróć montaż o -pitch aby uzyskać 0°
+    console.debug('[UI-test] setPitchZero -> sensorPitch=', sensorEul.pitch, 'currentTrim=', currentTrim, 'rawPitch=', rawPitch, 'delta=', delta, 'lastMountCorr=', window.lastMountCorr);
     sendBleMessage({ type: 'adjust_zero', value: delta });
     const span = document.getElementById('trimValueDisplay');
     if (span) span.textContent = '0.00';
@@ -850,6 +851,7 @@ function setRollZero() {
         return;
     }
     const delta = -rawRoll;
+    console.debug('[UI-test] setRollZero -> sensorRoll=', sensorEul.roll, 'currentTrim=', currentRollTrim, 'rawRoll=', rawRoll, 'delta=', delta, 'lastMountCorr=', window.lastMountCorr);
     sendBleMessage({ type: 'adjust_roll', value: delta });
     const span = document.getElementById('rollTrimValueDisplay');
     if (span) span.textContent = '0.00';
