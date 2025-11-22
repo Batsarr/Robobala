@@ -112,8 +112,6 @@ let joystickCenter, joystickRadius, knobRadius, isDragging = false, lastJoystick
 let joystickSendIntervalId = null;
 let lastJoystickX = 0.0;
 let lastJoystickY = 0.0;
-let joystickMode = 'drive'; // options: drive, adjust_pitch, adjust_roll
-let joystickTrimRate = 10.0; // deg/s when full deflection
 const JOYSTICK_SEND_INTERVAL = 20;
 
 let gamepadIndex = null, lastGamepadState = [], gamepadMappings = {}; const GAMEPAD_MAPPING_KEY = 'pid_gamepad_mappings_v3';
@@ -2432,16 +2430,7 @@ function initJoystick() {
     joystickRadius = size / 2 * 0.75;
     knobRadius = size / 2 * 0.25;
     drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y);
-    const jm = document.getElementById('joystickModeSelect');
-    if (jm) {
-        jm.value = joystickMode;
-        jm.addEventListener('change', (e) => { joystickMode = e.target.value; });
-    }
-    const jr = document.getElementById('joystickTrimRateInput');
-    if (jr) {
-        joystickTrimRate = parseFloat(jr.value) || joystickTrimRate;
-        jr.addEventListener('change', (e) => { joystickTrimRate = parseFloat(e.target.value) || joystickTrimRate; });
-    }
+    // Joystick mode selector removed; pointer joystick sends joystick drive messages
 }
 function drawJoystick(ctx, x, y) {
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -2454,10 +2443,46 @@ function drawJoystick(ctx, x, y) {
     ctx.fillStyle = '#61dafb';
     ctx.fill();
 }
-function handleJoystickStart(event) { event.preventDefault(); isDragging = true; const joystickCanvas = document.getElementById('joystickCanvas'); let { x, y } = getJoystickPosition(event); const dx = x - joystickCenter.x; const dy = y - joystickCenter.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; } drawJoystick(joystickCanvas.getContext('2d'), x, y); lastJoystickX = (x - joystickCenter.x) / joystickRadius; lastJoystickY = -(y - joystickCenter.y) / joystickRadius; if (joystickMode === 'drive') sendBleMessage({ type: 'joystick', x: lastJoystickX, y: lastJoystickY }); else if (joystickMode === 'adjust_pitch') sendBleMessage({ type: 'adjust_zero', value: lastJoystickY * joystickTrimRate * (JOYSTICK_SEND_INTERVAL / 1000.0) }); else if (joystickMode === 'adjust_roll') sendBleMessage({ type: 'adjust_roll', value: lastJoystickX * joystickTrimRate * (JOYSTICK_SEND_INTERVAL / 1000.0) }); if (joystickSendIntervalId === null) { joystickSendIntervalId = setInterval(() => { if (!isDragging) return; if (joystickMode === 'drive') { sendBleMessage({ type: 'joystick', x: lastJoystickX, y: lastJoystickY }); } else if (joystickMode === 'adjust_pitch') { const delta = lastJoystickY * joystickTrimRate * (JOYSTICK_SEND_INTERVAL / 1000.0); if (Math.abs(delta) > 1e-6) sendBleMessage({ type: 'adjust_zero', value: delta }); } else if (joystickMode === 'adjust_roll') { const delta = lastJoystickX * joystickTrimRate * (JOYSTICK_SEND_INTERVAL / 1000.0); if (Math.abs(delta) > 1e-6) sendBleMessage({ type: 'adjust_roll', value: delta }); } }, JOYSTICK_SEND_INTERVAL); } }
-function handleJoystickMove(event) { if (!isDragging) return; event.preventDefault(); const joystickCanvas = document.getElementById('joystickCanvas'); let { x, y } = getJoystickPosition(event); const dx = x - joystickCenter.x; const dy = y - joystickCenter.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; } drawJoystick(joystickCanvas.getContext('2d'), x, y); lastJoystickX = (x - joystickCenter.x) / joystickRadius; lastJoystickY = -(y - joystickCenter.y) / joystickRadius; const now = Date.now(); if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) { if (joystickMode === 'drive') { sendBleMessage({ type: 'joystick', x: lastJoystickX, y: lastJoystickY }); } else if (joystickMode === 'adjust_pitch') { const delta = lastJoystickY * joystickTrimRate * (JOYSTICK_SEND_INTERVAL / 1000.0); if (Math.abs(delta) > 1e-6) sendBleMessage({ type: 'adjust_zero', value: delta }); } else if (joystickMode === 'adjust_roll') { const delta = lastJoystickX * joystickTrimRate * (JOYSTICK_SEND_INTERVAL / 1000.0); if (Math.abs(delta) > 1e-6) sendBleMessage({ type: 'adjust_roll', value: delta }); } lastJoystickSendTime = now; } }
+function handleJoystickStart(event) {
+    event.preventDefault();
+    isDragging = true;
+    const joystickCanvas = document.getElementById('joystickCanvas');
+    let { x, y } = getJoystickPosition(event);
+    const dx = x - joystickCenter.x;
+    const dy = y - joystickCenter.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; }
+    drawJoystick(joystickCanvas.getContext('2d'), x, y);
+    lastJoystickX = (x - joystickCenter.x) / joystickRadius;
+    lastJoystickY = -(y - joystickCenter.y) / joystickRadius;
+    sendBleMessage({ type: 'joystick', x: lastJoystickX, y: lastJoystickY });
+    if (joystickSendIntervalId === null) {
+        joystickSendIntervalId = setInterval(() => {
+            if (!isDragging) return;
+            sendBleMessage({ type: 'joystick', x: lastJoystickX, y: lastJoystickY });
+        }, JOYSTICK_SEND_INTERVAL);
+    }
+}
+function handleJoystickMove(event) {
+    if (!isDragging) return;
+    event.preventDefault();
+    const joystickCanvas = document.getElementById('joystickCanvas');
+    let { x, y } = getJoystickPosition(event);
+    const dx = x - joystickCenter.x;
+    const dy = y - joystickCenter.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; }
+    drawJoystick(joystickCanvas.getContext('2d'), x, y);
+    lastJoystickX = (x - joystickCenter.x) / joystickRadius;
+    lastJoystickY = -(y - joystickCenter.y) / joystickRadius;
+    const now = Date.now();
+    if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) {
+        sendBleMessage({ type: 'joystick', x: lastJoystickX, y: lastJoystickY });
+        lastJoystickSendTime = now;
+    }
+}
 function getJoystickPosition(event) { const rect = document.getElementById('joystickCanvas').getBoundingClientRect(); const touch = event.touches ? event.touches[0] : event; return { x: touch.clientX - rect.left, y: touch.clientY - rect.top }; }
-function handleJoystickEnd(event) { if (!isDragging) return; event.preventDefault(); isDragging = false; if (joystickSendIntervalId !== null) { clearInterval(joystickSendIntervalId); joystickSendIntervalId = null; } drawJoystick(document.getElementById('joystickCanvas').getContext('2d'), joystickCenter.x, joystickCenter.y); if (joystickMode === 'drive') sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
+function handleJoystickEnd(event) { if (!isDragging) return; event.preventDefault(); isDragging = false; if (joystickSendIntervalId !== null) { clearInterval(joystickSendIntervalId); joystickSendIntervalId = null; } drawJoystick(document.getElementById('joystickCanvas').getContext('2d'), joystickCenter.x, joystickCenter.y); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
 function pollGamepad() { if (gamepadIndex !== null) { const gp = navigator.getGamepads()[gamepadIndex]; if (!gp) return; if (isMappingButton && actionToMap) { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { Object.keys(gamepadMappings).forEach(key => { if (gamepadMappings[key] === actionToMap) delete gamepadMappings[key]; }); gamepadMappings[i] = actionToMap; saveGamepadMappings(); addLogMessage(`[UI] Akcja '${availableActions[actionToMap].label}' przypisana do przycisku ${i}.`, 'success'); isMappingButton = false; actionToMap = null; renderMappingModal(); } }); } else { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { const action = gamepadMappings[i]; if (action && availableActions[action]) { const element = document.getElementById(availableActions[action].elementId); if (element && !element.disabled) { element.click(); flashElement(element); } } } }); } lastGamepadState = gp.buttons.map(b => b.pressed); let x = gp.axes[0] || 0; let y = gp.axes[1] || 0; if (Math.abs(x) < 0.15) x = 0; if (Math.abs(y) < 0.15) y = 0; sendBleMessage({ type: 'joystick', x: x, y: -y }); } requestAnimationFrame(pollGamepad); }
 window.addEventListener('gamepadconnected', (e) => { gamepadIndex = e.gamepad.index; document.getElementById('gamepadStatus').textContent = 'Polaczony'; document.getElementById('gamepadStatus').style.color = '#a2f279'; addLogMessage(`[UI] Gamepad polaczony: ${e.gamepad.id}`, 'success'); });
 window.addEventListener('gamepaddisconnected', (e) => { gamepadIndex = null; document.getElementById('gamepadStatus').textContent = 'Brak'; document.getElementById('gamepadStatus').style.color = '#f7b731'; addLogMessage('[UI] Gamepad rozlaczony.', 'warn'); });

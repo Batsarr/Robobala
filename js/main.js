@@ -44,9 +44,9 @@ class AppStore {
                 state: 'IDLE', // IDLE, BALANCING, EMERGENCY_STOP, etc.
                 balancing: false,
                 holdingPosition: false,
-                speedMode: false
+                speedMode: false,
+                lastCommand: null // Added lastCommand to track the last command sent to the robot
             },
-
             // Telemetry data
             telemetry: {
                 pitch: 0,
@@ -217,145 +217,9 @@ class AppStore {
                             const newValue = this.getState(changedPath);
                             callback(newValue, changedPath);
                         } catch (error) {
-                            console.error(`Error in state listener ${id}:`, error);
+                            // ignore listener errors
                         }
-                        break;
                     }
-                }
-            }
-        }
-    }
-
-    /**
-     * Reset state to initial values
-     */
-    reset() {
-        this.setState({
-            'connection.isConnected': false,
-            'connection.isSynced': false,
-            'connection.deviceName': null,
-            'robot.state': 'IDLE',
-            'robot.balancing': false,
-            'robot.holdingPosition': false,
-            'robot.speedMode': false,
-            'ui.isLocked': true,
-            'tuning.isActive': false,
-            'tuning.activeMethod': '',
-            'tuning.isPaused': false,
-            'sequence.isRunning': false,
-            'sequence.currentStep': 0
-        });
-    }
-
-    /**
-     * Batch update multiple state values
-     * More efficient than multiple setState calls
-     * @param {Object} updates - Object with path: value pairs
-     */
-    batchUpdate(updates) {
-        this.setState(updates);
-    }
-}
-
-// Create singleton instance
-const appStore = new AppStore();
-
-// Export for use in other modules
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { AppStore, appStore };
-}
-// ========================================================================
-// COMMUNICATION LAYER - Abstract Communication Interface
-// ========================================================================
-// This module provides an abstract layer for robot communication,
-// decoupling the application from specific communication protocols (BLE).
-// This makes the code more testable and allows easier protocol changes.
-// ========================================================================
-
-/**
- * Abstract base class for communication
- * All communication implementations should extend this class
- */
-class CommunicationLayer {
-    constructor() {
-        this.messageHandlers = new Map();
-        this.isConnected = false;
-    }
-
-    /**
-     * Connect to the device
-     * @returns {Promise<boolean>} Success status
-     */
-    async connect() {
-        throw new Error('connect() must be implemented by subclass');
-    }
-
-    /**
-     * Disconnect from the device
-     */
-    async disconnect() {
-        throw new Error('disconnect() must be implemented by subclass');
-    }
-
-    /**
-     * Send a message to the device
-     * @param {Object} message - Message object to send
-     * @returns {Promise<void>}
-     */
-    async send(message) {
-        throw new Error('send() must be implemented by subclass');
-    }
-
-    /**
-     * Register a handler for incoming messages
-     * @param {string} type - Message type to handle
-     * @param {Function} handler - Handler function(data)
-     */
-    onMessage(type, handler) {
-        if (!this.messageHandlers.has(type)) {
-            this.messageHandlers.set(type, []);
-        }
-        this.messageHandlers.get(type).push(handler);
-    }
-
-    /**
-     * Remove a message handler
-     * @param {string} type - Message type
-     * @param {Function} handler - Handler function to remove
-     */
-    offMessage(type, handler) {
-        if (this.messageHandlers.has(type)) {
-            const handlers = this.messageHandlers.get(type);
-            const index = handlers.indexOf(handler);
-            if (index !== -1) {
-                handlers.splice(index, 1);
-            }
-        }
-    }
-
-    /**
-     * Notify all handlers for a message type
-     * @param {string} type - Message type
-     * @param {Object} data - Message data
-     */
-    notifyHandlers(type, data) {
-        if (this.messageHandlers.has(type)) {
-            for (const handler of this.messageHandlers.get(type)) {
-                try {
-                    handler(data);
-                } catch (error) {
-                    console.error(`Error in message handler for ${type}:`, error);
-                }
-            }
-        }
-
-        // Also notify wildcard handlers (type '*')
-        if (this.messageHandlers.has('*')) {
-            for (const handler of this.messageHandlers.get('*')) {
-                try {
-                    handler(type, data);
-                } catch (error) {
-                    console.error('Error in wildcard message handler:', error);
                 }
             }
         }
@@ -853,8 +717,7 @@ let joystickCenter, joystickRadius, knobRadius, isDragging = false, lastJoystick
 if (typeof window.joystickSendIntervalId === 'undefined') window.joystickSendIntervalId = null;
 if (typeof window.lastJoystickX === 'undefined') window.lastJoystickX = 0.0;
 if (typeof window.lastJoystickY === 'undefined') window.lastJoystickY = 0.0;
-if (typeof window.joystickMode === 'undefined') window.joystickMode = 'drive'; // options: drive, adjust_pitch, adjust_roll
-if (typeof window.joystickTrimRate === 'undefined') window.joystickTrimRate = 10.0; // deg/s when full deflection
+// Joystick mode/trim globals removed - legacy buttons remain
 const JOYSTICK_SEND_INTERVAL = 20;
 
 let gamepadIndex = null, lastGamepadState = [], gamepadMappings = {}; const GAMEPAD_MAPPING_KEY = 'pid_gamepad_mappings_v3';
@@ -2990,101 +2853,13 @@ if (!window.__tuning_algos_inlined) {
         return { kp: `kp_${suffix}`, ki: `ki_${suffix}`, kd: `kd_${suffix}` };
     }
 
-    async function runTelemetryBasedTest(kp, ki, kd) {
-        return new Promise((resolve, reject) => {
-            const testStartTime = Date.now();
-            const telemetrySamples = [];
-            let resolved = false;
+    // runTelemetryBasedTest is now defined in js/tuning_algorithms.js. The UI relies on that implementation.
 
-            const trialInput = document.getElementById('tuningTrialDurationInput');
-            let testDurationMs = 2000;
-            if (trialInput) {
-                const v = parseInt(trialInput.value, 10);
-                if (!isNaN(v) && v > 0) testDurationMs = v;
-            }
+    // calculateFitnessFromTelemetry implemented in tuning_algorithms.js
 
-            const settlingTimeMs = PARAMETER_SETTLING_TIME_MS;
-            const totalDurationMs = testDurationMs + settlingTimeMs;
-            const timeoutMs = totalDurationMs * 2;
+    // UI helpers are implemented further below in the file (kept in main UI block).
 
-            let timeoutHandle = setTimeout(() => {
-                if (!resolved) { cleanup(); resolved = true; reject(new Error('test_timeout')); }
-            }, timeoutMs);
-
-            function cleanup() { window.removeEventListener('ble_message', telemetryHandler); clearTimeout(timeoutHandle); }
-
-            function telemetryHandler(evt) {
-                const d = evt.detail || evt;
-                if (d.type !== 'telemetry') return;
-                const elapsedTime = Date.now() - testStartTime;
-                if (elapsedTime < settlingTimeMs) return;
-                const sample = { timestamp: elapsedTime - settlingTimeMs, pitch: Number(d.pitch) || 0, roll: Number(d.roll) || 0, speed: Number(d.speed || d.sp) || 0, loopTime: Number(d.loop_time || d.lt) || 0 };
-                telemetrySamples.push(sample);
-                if (telemetrySamples.length % 12 === 0 && typeof updateCurrentTelemetryPlot === 'function') { try { updateCurrentTelemetryPlot(telemetrySamples); } catch (_) { } }
-                if (elapsedTime >= totalDurationMs) finishTest();
-            }
-
-            function finishTest() {
-                if (resolved) return; resolved = true; cleanup();
-                if (telemetrySamples.length < 5) { resolve({ fitness: Infinity, itae: 0, overshoot: 0, steady_state_error: 0, raw: { samples: telemetrySamples.length, reason: 'insufficient_data' } }); return; }
-                const metrics = calculateFitnessFromTelemetry(telemetrySamples);
-                resolve(metrics);
-            }
-
-            window.addEventListener('ble_message', telemetryHandler);
-            const loop = document.getElementById('tuning-loop-selector')?.value || 'balance';
-            const paramKeys = getPIDParamKeys(loop);
-            sendBleCommand('set_param', { key: paramKeys.kp, value: kp });
-            sendBleCommand('set_param', { key: paramKeys.ki, value: ki });
-            sendBleCommand('set_param', { key: paramKeys.kd, value: kd });
-            try { addLogMessage(`[TelemetryTest] Started test with Kp=${kp.toFixed(3)}, Ki=${ki.toFixed(3)}, Kd=${kd.toFixed(3)}, duration=${testDurationMs}ms`, 'info'); } catch (_) { }
-        });
-    }
-
-    function calculateFitnessFromTelemetry(samples) {
-        if (!samples || samples.length === 0) return { fitness: Infinity, itae: 0, overshoot: 0, steady_state_error: 0, raw: { samples: 0 } };
-        const targetAngle = 0; let itae = 0;
-        for (let i = 0; i < samples.length; i++) { const error = Math.abs(samples[i].pitch - targetAngle); const timeWeight = samples[i].timestamp / 1000; itae += error * timeWeight; }
-        itae = itae / samples.length;
-        let maxDeviation = 0; for (let i = 0; i < samples.length; i++) { const deviation = Math.abs(samples[i].pitch - targetAngle); if (deviation > maxDeviation) maxDeviation = deviation; }
-        const overshoot = maxDeviation;
-        const steadyStateStart = Math.floor(samples.length * 0.7); let sseSum = 0; let sseCount = 0;
-        for (let i = steadyStateStart; i < samples.length; i++) { sseSum += Math.abs(samples[i].pitch - targetAngle); sseCount++; }
-        const steadyStateError = sseCount > 0 ? (sseSum / sseCount) : 0;
-        let oscillationPenalty = 0;
-        if (samples.length > 3) { let signChanges = 0; for (let i = 1; i < samples.length; i++) { const prevError = samples[i - 1].pitch - targetAngle; const currError = samples[i].pitch - targetAngle; if ((prevError > 0 && currError < 0) || (prevError < 0 && currError > 0)) signChanges++; } const oscillationRate = signChanges / samples.length; if (oscillationRate > 0.3) oscillationPenalty = oscillationRate * 20; }
-
-        const weightsState = appStore.getState('tuning.weights') || { itae: 50, overshoot: 30, sse: 20 };
-        const totalPoints = (weightsState.itae || 0) + (weightsState.overshoot || 0) + (weightsState.sse || 0) || 100;
-        const wItae = (weightsState.itae || 0) / totalPoints; const wOvershoot = (weightsState.overshoot || 0) / totalPoints; const wSse = (weightsState.sse || 0) / totalPoints;
-        const compItae = itae; const compOvershoot = overshoot * 10; const compSse = steadyStateError * 5;
-        const weighted = wItae * compItae + wOvershoot * compOvershoot + wSse * compSse; const finalFitness = weighted + oscillationPenalty;
-        try { addLogMessage(`[TelemetryTest] Calculated fitness: ITAE=${itae.toFixed(2)}, Overshoot=${overshoot.toFixed(2)}°, SSE=${steadyStateError.toFixed(2)}°, Fitness=${finalFitness.toFixed(2)} (weights:${wItae.toFixed(2)},${wOvershoot.toFixed(2)},${wSse.toFixed(2)})`, 'info'); } catch (_) { }
-        return { fitness: finalFitness, itae: itae, overshoot: overshoot, steady_state_error: steadyStateError, raw: { samples: samples.length, oscillationPenalty: oscillationPenalty } };
-    }
-
-    function updateBestDisplay(params) {
-        const elKp = document.getElementById('best-kp'); const elKi = document.getElementById('best-ki'); const elKd = document.getElementById('best-kd'); const elF = document.getElementById('best-fitness');
-        if (elKp) elKp.textContent = params.kp.toFixed(3); if (elKi) elKi.textContent = params.ki.toFixed(3); if (elKd) elKd.textContent = params.kd.toFixed(3);
-        if (elF && params.fitness !== undefined && params.fitness !== Infinity) elF.textContent = params.fitness.toFixed(4);
-        const applyBtn = document.getElementById('apply-best-btn'); if (applyBtn) applyBtn.disabled = false;
-    }
-
-    function updateProgressDisplay(current, total, bestFitness) {
-        const itEl = document.getElementById('current-iteration'); const totEl = document.getElementById('total-iterations'); const fEl = document.getElementById('best-fitness');
-        if (itEl) itEl.textContent = current; if (totEl) totEl.textContent = total; if (fEl && bestFitness !== undefined && bestFitness !== Infinity) fEl.textContent = bestFitness.toFixed(4);
-        fitnessChartData.push({ x: current, y: bestFitness }); try { updateFitnessChart(); } catch (_) { }
-    }
-
-    function updateFitnessChart() {
-        const canvas = document.getElementById('fitness-chart'); if (!canvas) return; const ctx = canvas.getContext('2d'); if (!ctx) return; ctx.clearRect(0, 0, canvas.width, canvas.height); if (!Array.isArray(fitnessChartData) || fitnessChartData.length === 0) return; const minFitness = Math.min(...fitnessChartData.map(d => d.y)); const maxFitness = Math.max(...fitnessChartData.map(d => d.y)); const maxIteration = Math.max(...fitnessChartData.map(d => d.x)); const padding = 40; const width = canvas.width - 2 * padding; const height = canvas.height - 2 * padding; ctx.strokeStyle = '#61dafb'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(padding, padding); ctx.lineTo(padding, canvas.height - padding); ctx.lineTo(canvas.width - padding, canvas.height - padding); ctx.stroke(); ctx.fillStyle = '#ffffff'; ctx.font = '12px Arial'; ctx.fillText('Fitness', 5, padding); ctx.fillText('Iteracja', canvas.width - padding, canvas.height - padding + 20); ctx.strokeStyle = '#a2f279'; ctx.lineWidth = 2; ctx.beginPath(); fitnessChartData.forEach((p, i) => { const x = padding + (p.x / (maxIteration || 1)) * width; const y = canvas.height - padding - ((p.y - minFitness) / ((maxFitness - minFitness) || 0.0001)) * height; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.stroke(); ctx.fillStyle = '#a2f279'; fitnessChartData.forEach((p) => { const x = padding + (p.x / (maxIteration || 1)) * width; const y = canvas.height - padding - ((p.y - minFitness) / ((maxFitness - minFitness) || 0.0001)) * height; ctx.beginPath(); ctx.arc(x, y, 3, 0, 2 * Math.PI); ctx.fill(); });
-    }
-
-    function addTestToResultsTable(testNum, params, fitness, itae, overshoot, testType = 'metrics_test', meta = {}) {
-        const tbody = document.getElementById('results-table-body'); try { if (Array.isArray(tuningHistory)) { tuningHistory.push({ idx: testNum, kp: params.kp, ki: params.ki, kd: params.kd, fitness, itae, overshoot, testType }); if (typeof refreshRecentList === 'function') refreshRecentList(); } } catch (_) { }
-        if (!tbody) return; const metaText = (meta && meta.gen && meta.individualIdx) ? ` (Gen ${meta.gen}/${meta.totalGen}, Osobnik ${meta.individualIdx}/${meta.pop})` : ''; const row = tbody.insertRow(0); row.innerHTML = `<td>${testNum}${metaText}</td><td>${params.kp.toFixed(3)}</td><td>${params.ki.toFixed(3)}</td><td>${params.kd.toFixed(3)}</td><td>${(fitness === Infinity || isNaN(fitness)) ? '---' : fitness.toFixed(4)}</td><td>${(isNaN(itae) ? '---' : itae.toFixed(2))}</td><td>${isNaN(overshoot) ? '---' : overshoot.toFixed(2)}${(testType === 'metrics_test') ? '°' : '%'}</td><td><button onclick="applyParameters(${params.kp}, ${params.ki}, ${params.kd})" class="btn-small">Zastosuj</button></td>`;
-        const method = AppState.activeTuningMethod; let blockContainer; if (method && method.startsWith('ga')) blockContainer = document.getElementById('ga-results-blocks'); else if (method && method.startsWith('pso')) blockContainer = document.getElementById('pso-results-blocks'); if (blockContainer) { const block = document.createElement('div'); block.className = 'result-entry'; const header = document.createElement('div'); header.className = 'result-header'; const genInfo = (meta.gen && meta.totalGen) ? `Gen ${meta.gen}/${meta.totalGen}` : ''; const indInfo = (meta.individualIdx && meta.pop) ? ` · Osobnik ${meta.individualIdx}/${meta.pop}` : ''; header.innerHTML = `<strong>Wynik #${testNum} ${genInfo}${indInfo}:</strong> Fitness = ${(fitness !== undefined && fitness !== Infinity) ? fitness.toFixed(4) : '---'}`; const paramsDiv = document.createElement('div'); paramsDiv.className = 'result-params'; paramsDiv.textContent = `Kp: ${params.kp !== undefined ? params.kp.toFixed(4) : '---'}, Ki: ${params.ki !== undefined ? params.ki.toFixed(4) : '---'}, Kd: ${params.kd !== undefined ? params.kd.toFixed(4) : '---'}`; const metricsDiv = document.createElement('div'); metricsDiv.className = 'result-metrics'; metricsDiv.textContent = `Overshoot: ${overshoot !== undefined ? overshoot.toFixed(2) + '%' : '---'}, ITAE: ${itae !== undefined ? itae.toFixed(2) : '---'}`; const applyBtnBlock = document.createElement('button'); applyBtnBlock.textContent = 'Zastosuj'; applyBtnBlock.className = 'test-btn'; applyBtnBlock.addEventListener('click', () => { applyParameters(params.kp, params.ki, params.kd); addLogMessage('[UI] Zastosowano parametry z historii strojenia.', 'info'); }); block.appendChild(header); block.appendChild(paramsDiv); block.appendChild(metricsDiv); block.appendChild(applyBtnBlock); blockContainer.insertBefore(block, blockContainer.firstChild); }
-    }
+    // addTestToResultsTable implemented below in a full version
 
 
 
@@ -3104,6 +2879,32 @@ function applyParameters(kp, ki, kd) {
     sendBleCommand('set_param', { key: paramKeys.kp, value: kp }); sendBleCommand('set_param', { key: paramKeys.ki, value: ki }); sendBleCommand('set_param', { key: paramKeys.kd, value: kd }); showNotification(`Zastosowano parametry: Kp=${kp.toFixed(3)}, Ki=${ki.toFixed(3)}, Kd=${kd.toFixed(3)}`);
 }
 
+/*
+ UI helpers used by tuning_algorithms.js - kept here in main UI scope
+*/
+function updateBestDisplay(params) {
+    const elKp = document.getElementById('best-kp'); const elKi = document.getElementById('best-ki'); const elKd = document.getElementById('best-kd'); const elF = document.getElementById('best-fitness');
+    if (elKp) elKp.textContent = params.kp.toFixed(3); if (elKi) elKi.textContent = params.ki.toFixed(3); if (elKd) elKd.textContent = params.kd.toFixed(3);
+    if (elF && params.fitness !== undefined && params.fitness !== Infinity) elF.textContent = params.fitness.toFixed(4);
+    const applyBtn = document.getElementById('apply-best-btn'); if (applyBtn) applyBtn.disabled = false;
+}
+
+function updateProgressDisplay(current, total, bestFitness) {
+    const itEl = document.getElementById('current-iteration'); const totEl = document.getElementById('total-iterations'); const fEl = document.getElementById('best-fitness');
+    if (itEl) itEl.textContent = current; if (totEl) totEl.textContent = total; if (fEl && bestFitness !== undefined && bestFitness !== Infinity) fEl.textContent = bestFitness.toFixed(4);
+    fitnessChartData.push({ x: current, y: bestFitness }); try { updateFitnessChart(); } catch (_) { }
+}
+
+function updateFitnessChart() {
+    const canvas = document.getElementById('fitness-chart'); if (!canvas) return; const ctx = canvas.getContext('2d'); if (!ctx) return; ctx.clearRect(0, 0, canvas.width, canvas.height); if (!Array.isArray(fitnessChartData) || fitnessChartData.length === 0) return; const minFitness = Math.min(...fitnessChartData.map(d => d.y)); const maxFitness = Math.max(...fitnessChartData.map(d => d.y)); const maxIteration = Math.max(...fitnessChartData.map(d => d.x)); const padding = 40; const width = canvas.width - 2 * padding; const height = canvas.height - 2 * padding; ctx.strokeStyle = '#61dafb'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(padding, padding); ctx.lineTo(padding, canvas.height - padding); ctx.lineTo(canvas.width - padding, canvas.height - padding); ctx.stroke(); ctx.fillStyle = '#ffffff'; ctx.font = '12px Arial'; ctx.fillText('Fitness', 5, padding); ctx.fillText('Iteracja', canvas.width - padding, canvas.height - padding + 20); ctx.strokeStyle = '#a2f279'; ctx.lineWidth = 2; ctx.beginPath(); fitnessChartData.forEach((p, i) => { const x = padding + (p.x / (maxIteration || 1)) * width; const y = canvas.height - padding - ((p.y - minFitness) / ((maxFitness - minFitness) || 0.0001)) * height; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.stroke(); ctx.fillStyle = '#a2f279'; fitnessChartData.forEach((p) => { const x = padding + (p.x / (maxIteration || 1)) * width; const y = canvas.height - padding - ((p.y - minFitness) / ((maxFitness - minFitness) || 0.0001)) * height; ctx.beginPath(); ctx.arc(x, y, 3, 0, 2 * Math.PI); ctx.fill(); });
+}
+
+function addTestToResultsTable(testNum, params, fitness, itae, overshoot, testType = 'metrics_test', meta = {}) {
+    const tbody = document.getElementById('results-table-body'); try { if (Array.isArray(tuningHistory)) { tuningHistory.push({ idx: testNum, kp: params.kp, ki: params.ki, kd: params.kd, fitness, itae, overshoot, testType }); if (typeof refreshRecentList === 'function') refreshRecentList(); } } catch (_) { }
+    if (!tbody) return; const metaText = (meta && meta.gen && meta.individualIdx) ? ` (Gen ${meta.gen}/${meta.totalGen}, Osobnik ${meta.individualIdx}/${meta.pop})` : ''; const row = tbody.insertRow(0); row.innerHTML = `<td>${testNum}${metaText}</td><td>${params.kp.toFixed(3)}</td><td>${params.ki.toFixed(3)}</td><td>${params.kd.toFixed(3)}</td><td>${(fitness === Infinity || isNaN(fitness)) ? '---' : fitness.toFixed(4)}</td><td>${(isNaN(itae) ? '---' : itae.toFixed(2))}</td><td>${isNaN(overshoot) ? '---' : overshoot.toFixed(2)}${(testType === 'metrics_test') ? '°' : '%'}</td><td><button onclick="applyParameters(${params.kp}, ${params.ki}, ${params.kd})" class="btn-small">Zastosuj</button></td>`;
+    const method = AppState.activeTuningMethod; let blockContainer; if (method && method.startsWith('ga')) blockContainer = document.getElementById('ga-results-blocks'); else if (method && method.startsWith('pso')) blockContainer = document.getElementById('pso-results-blocks'); if (blockContainer) { const block = document.createElement('div'); block.className = 'result-entry'; const header = document.createElement('div'); header.className = 'result-header'; const genInfo = (meta.gen && meta.totalGen) ? `Gen ${meta.gen}/${meta.totalGen}` : ''; const indInfo = (meta.individualIdx && meta.pop) ? ` · Osobnik ${meta.individualIdx}/${meta.pop}` : ''; header.innerHTML = `<strong>Wynik #${testNum} ${genInfo}${indInfo}:</strong> Fitness = ${(fitness !== undefined && fitness !== Infinity) ? fitness.toFixed(4) : '---'}`; const paramsDiv = document.createElement('div'); paramsDiv.className = 'result-params'; paramsDiv.textContent = `Kp: ${params.kp !== undefined ? params.kp.toFixed(4) : '---'}, Ki: ${params.ki !== undefined ? params.ki.toFixed(4) : '---'}, Kd: ${params.kd !== undefined ? params.kd.toFixed(4) : '---'}`; const metricsDiv = document.createElement('div'); metricsDiv.className = 'result-metrics'; metricsDiv.textContent = `Overshoot: ${overshoot !== undefined ? overshoot.toFixed(2) + '%' : '---'}, ITAE: ${itae !== undefined ? itae.toFixed(2) : '---'}`; const applyBtnBlock = document.createElement('button'); applyBtnBlock.textContent = 'Zastosuj'; applyBtnBlock.className = 'test-btn'; applyBtnBlock.addEventListener('click', () => { applyParameters(params.kp, params.ki, params.kd); addLogMessage('[UI] Zastosowano parametry z historii strojenia.', 'info'); }); block.appendChild(header); block.appendChild(paramsDiv); block.appendChild(metricsDiv); block.appendChild(applyBtnBlock); blockContainer.insertBefore(block, blockContainer.firstChild); }
+}
+
 function sendBaselinePIDToRobot() {
     const loop = document.getElementById('tuning-loop-selector')?.value || 'balance';
     const paramKeys = getPIDParamKeys(loop);
@@ -3118,367 +2919,12 @@ function captureBaselinePID() {
     if (kpElement && kiElement && kdElement) { baselinePID.kp = parseFloat(kpElement.value) || 0; baselinePID.ki = parseFloat(kiElement.value) || 0; baselinePID.kd = parseFloat(kdElement.value) || 0; console.log(`[Tuning] Captured baseline PID: Kp=${baselinePID.kp.toFixed(3)}, Ki=${baselinePID.ki.toFixed(3)}, Kd=${baselinePID.kd.toFixed(3)}`); } else { console.warn('[Tuning] Could not capture baseline PID - input elements not found'); }
 
 }
-// Inserted original, well-formatted GeneticAlgorithm class
-class GeneticAlgorithm {
-    constructor(config) {
-        this.populationSize = config.populationSize || 20;
-        this.generations = config.generations || 30;
-        this.mutationRate = config.mutationRate || 0.1;
-        this.crossoverRate = config.crossoverRate || 0.7;
-        this.elitism = config.elitism !== false;
-        this.searchSpace = config.searchSpace;
+// GeneticAlgorithm implementation moved to js/tuning_algorithms.js; kept UI helpers in main.js
 
-        this.population = [];
-        this.generation = 0;
-        this.bestIndividual = null;
-        this.isRunning = false;
-        this.isPaused = false;
-        this.testCounter = 0;
-        // Debug id to correlate logs for multiple sessions
-        this._debugId = (Date.now() >>> 0) & 0xFFFF;
-        try { addLogMessage(`[GA:${this._debugId}] Constructed GA session: pop=${this.populationSize} gen=${this.generations}`, 'info'); } catch (e) { console.debug('[GA] log failed', e); }
-    }
+// Particle Swarm Optimization (PSO) implementation is provided by js/tuning_algorithms.js
 
-    initialize() {
-        this.population = [];
-        for (let i = 0; i < this.populationSize; i++) {
-            this.population.push(this.createRandomIndividual());
-        }
-        // Seed first individual with baseline PID captured from UI (if available)
-        if (typeof baselinePID !== 'undefined' && baselinePID && typeof baselinePID.kp === 'number') {
-            this.population[0] = { kp: baselinePID.kp, ki: baselinePID.ki, kd: baselinePID.kd, fitness: Infinity };
-        }
-        this.generation = 0;
-        this.testCounter = 0;
-        fitnessChartData = [];
-        try { addLogMessage(`[GA:${this._debugId}] initialize: population length = ${this.population.length}`, 'info'); } catch (e) { console.debug('GA init log failed', e); }
-        // Safety: if population ended up empty for some reason, repopulate with at least 1
-        if (!this.population || this.population.length === 0) {
-            const fallbackSize = Math.max(1, this.populationSize || 20);
-            for (let i = 0; i < fallbackSize; i++) {
-                this.population.push(this.createRandomIndividual());
-            }
-            try { addLogMessage(`[GA:${this._debugId}] Warning: population was empty, repopulated to ${this.population.length}`, 'warn'); } catch (e) { console.debug('GA repopulate warn', e); }
-        }
-    }
-
-    createRandomIndividual() {
-        const includeKi = !!document.getElementById('include-ki-checkbox')?.checked;
-        const getRandom = (min, max) => Math.random() * (max - min) + min;
-        return {
-            kp: getRandom(this.searchSpace.kp_min, this.searchSpace.kp_max),
-            ki: includeKi ? getRandom(this.searchSpace.ki_min, this.searchSpace.ki_max) : (baselinePID?.ki ?? ((this.searchSpace.ki_min + this.searchSpace.ki_max) / 2)),
-            kd: getRandom(this.searchSpace.kd_min, this.searchSpace.kd_max),
-            fitness: Infinity
-        };
-    }
-
-    async evaluateFitness(individual) {
-        this.testCounter++;
-        try {
-            const res = await runTelemetryBasedTest(individual.kp, individual.ki, individual.kd);
-            individual.fitness = res.fitness;
-            // Wykres: X = generacja + indeks/populacja
-            try { fitnessChartData.push({ x: this.generation + (this.testCounter / Math.max(1, this.population.length)), y: res.fitness }); updateFitnessChart(); } catch (_) { }
-            const meta = { gen: this.generation + 1, totalGen: this.generations, individualIdx: this.testCounter, pop: this.population.length };
-            addTestToResultsTable(this.testCounter, individual, res.fitness, res.itae, res.overshoot, 'telemetry_test', meta);
-            return res.fitness;
-        } catch (err) {
-            if (err && err.reason === 'interrupted_by_emergency') {
-                throw err; // obsługa w runGeneration
-            }
-            // Penalizuj i kontynuuj
-            individual.fitness = Infinity;
-            addTestToResultsTable(this.testCounter, individual, Infinity, 0, 0, 'telemetry_test');
-            return Infinity;
-        }
-    }
-
-    async runGeneration() {
-        // Evaluate all individuals
-        for (let i = 0; i < this.population.length; i++) {
-            // Pause handling - keep loop alive while paused
-            while (this.isPaused && this.isRunning) {
-                await RB.helpers.delay(100);
-            }
-
-            if (!this.isRunning) break;
-
-            // Update UI about the currently tested candidate
-            try {
-                if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.generation + 1, this.generations, i + 1, this.population.length, this.population[i].kp, this.population[i].ki, this.population[i].kd, this.population[i].fitness);
-            } catch (_) { }
-
-            if (this.population[i].fitness === Infinity) {
-                try {
-                    await this.evaluateFitness(this.population[i], i + 1);
-                } catch (error) {
-                    console.error('Test failed:', error);
-                    // Handle emergency stop - pause and wait for user to resume
-                    if (error && error.reason === 'interrupted_by_emergency') {
-                        console.log('[GA] Emergency stop detected, entering pause state');
-                        this.isPaused = true;
-                        sendBaselinePIDToRobot();
-
-                        // Wait for resume
-                        while (this.isPaused && this.isRunning) {
-                            await RB.helpers.delay(100);
-                        }
-
-                        // Retry the same test after resume
-                        if (this.isRunning) {
-                            console.log('[GA] Retrying interrupted test after resume');
-                            i--; // Retry this individual
-                            continue;
-                        }
-                    } else {
-                        // Other errors - mark as failed
-                        this.population[i].fitness = Infinity;
-                    }
-                }
-            } else {
-                // Already has a fitness; refresh UI with its fitness value
-                try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.generation + 1, this.generations, i + 1, this.population.length, this.population[i].kp, this.population[i].ki, this.population[i].kd, this.population[i].fitness); } catch (_) { }
-            }
-        }
-
-        // Sort by fitness
-        this.population.sort((a, b) => a.fitness - b.fitness);
-
-        // Update best
-        if (!this.bestIndividual || this.population[0].fitness < this.bestIndividual.fitness) {
-            this.bestIndividual = { ...this.population[0] };
-            updateBestDisplay(this.bestIndividual);
-        }
-
-        // Create new population
-        const newPopulation = [];
-
-        // Elitism
-        if (this.elitism) {
-            newPopulation.push({ ...this.population[0] });
-        }
-
-        // Selection, crossover, mutation
-        while (newPopulation.length < this.populationSize) {
-            const parent1 = this.tournamentSelection();
-            const parent2 = this.tournamentSelection();
-
-            let offspring;
-            if (Math.random() < this.crossoverRate) {
-                offspring = this.crossover(parent1, parent2);
-            } else {
-                offspring = { ...parent1 };
-            }
-
-            offspring = this.mutate(offspring);
-            offspring.fitness = Infinity;
-            newPopulation.push(offspring);
-        }
-
-        this.population = newPopulation;
-        this.generation++;
-
-        updateProgressDisplay(this.generation, this.generations, this.bestIndividual.fitness);
-    }
-
-    tournamentSelection() {
-        const tournamentSize = 3;
-        let best = null;
-
-        for (let i = 0; i < tournamentSize; i++) {
-            const candidate = this.population[Math.floor(Math.random() * this.population.length)];
-            if (!best || candidate.fitness < best.fitness) {
-                best = candidate;
-            }
-        }
-
-        return best;
-    }
-
-    crossover(parent1, parent2) {
-        const alpha = Math.random();
-        return {
-            kp: alpha * parent1.kp + (1 - alpha) * parent2.kp,
-            ki: alpha * parent1.ki + (1 - alpha) * parent2.ki,
-            kd: alpha * parent1.kd + (1 - alpha) * parent2.kd,
-            fitness: Infinity
-        };
-    }
-
-    mutate(individual) {
-        const mutated = { ...individual };
-
-        if (Math.random() < this.mutationRate) {
-            mutated.kp += (Math.random() - 0.5) * (this.searchSpace.kp_max - this.searchSpace.kp_min) * 0.1;
-            mutated.kp = Math.max(this.searchSpace.kp_min, Math.min(this.searchSpace.kp_max, mutated.kp));
-        }
-
-        const includeKi = !!document.getElementById('include-ki-checkbox')?.checked;
-        if (includeKi && Math.random() < this.mutationRate) {
-            mutated.ki += (Math.random() - 0.5) * (this.searchSpace.ki_max - this.searchSpace.ki_min) * 0.1;
-            mutated.ki = Math.max(this.searchSpace.ki_min, Math.min(this.searchSpace.ki_max, mutated.ki));
-        }
-
-        if (Math.random() < this.mutationRate) {
-            mutated.kd += (Math.random() - 0.5) * (this.searchSpace.kd_max - this.searchSpace.kd_min) * 0.1;
-            mutated.kd = Math.max(this.searchSpace.kd_min, Math.min(this.searchSpace.kd_max, mutated.kd));
-        }
-
-        return mutated;
-    }
-
-    async run() {
-        this.isRunning = true;
-        try {
-            this.initialize();
-            const progressEl = document.getElementById('tuning-progress-panel');
-            if (progressEl) progressEl.style.display = 'block';
-            try { addLogMessage(`[GA:${this._debugId}] run() started: generations=${this.generations} population=${this.population.length}`, 'info'); } catch (e) { console.debug('[GA] run start log failed', e); }
-
-            while (this.generation < this.generations && this.isRunning) {
-                if (!this.isPaused) {
-                    await this.runGeneration();
-                } else {
-                    await RB.helpers.delay(100);
-                }
-            }
-
-            this.isRunning = false;
-            // Be defensive: bestIndividual might be null if initialization failed or no population
-            try {
-                if (this.bestIndividual && typeof this.bestIndividual.fitness === 'number' && isFinite(this.bestIndividual.fitness)) {
-                    showNotification(`Optymalizacja GA zakończona! Najlepsze fitness: ${this.bestIndividual.fitness.toFixed(4)}`);
-                } else {
-                    showNotification(`Optymalizacja GA zakończona: brak wyników`);
-                }
-            } catch (err) {
-                console.error('[GA] showNotification error:', err);
-            }
-            try { addLogMessage(`[GA:${this._debugId}] run() finished: generation=${this.generation} population=${this.population.length} best=${this.bestIndividual ? JSON.stringify(this.bestIndividual) : 'null'}`, 'info'); } catch (e) { console.debug('[GA] run finish log failed', e); }
-        } catch (err) {
-            this.isRunning = false;
-            console.error(`[GA:${this._debugId}] run() error:`, err);
-            try { addLogMessage(`[GA:${this._debugId}] run() error: ${err && err.message ? err.message : String(err)}`, 'error'); } catch (e) { console.debug('[GA] log failed', e); }
-            throw err;
-        }
-    }
-
-    pause() {
-        this.isPaused = true;
-        setTimeout(() => {
-            if (this.isPaused) {
-                sendBaselinePIDToRobot();
-            }
-        }, 100);
-    }
-
-    resume() {
-        this.isPaused = false;
-    }
-
-    stop() {
-        this.isRunning = false;
-        sendBaselinePIDToRobot();
-    }
-}
-
-// ========================================================================
-// PSO ALGORITHM
-// ========================================================================
-
-class ParticleSwarmOptimization {
-    constructor(config) {
-        this.numParticles = config.numParticles || 20;
-        this.iterations = config.iterations || 30;
-        this.inertiaWeight = config.inertiaWeight || 0.7;
-        this.cognitiveWeight = config.cognitiveWeight || 1.5;
-        this.socialWeight = config.socialWeight || 1.5;
-        this.searchSpace = config.searchSpace;
-        this.particles = []; this.globalBest = null; this.iteration = 0; this.isRunning = false; this.isPaused = false; this.testCounter = 0; this._debugId = (Date.now() >>> 0) & 0xFFFF; try { addLogMessage(`[PSO:${this._debugId}] Constructed PSO: particles=${this.numParticles} iterations=${this.iterations}`, 'info'); } catch (e) { console.debug('[PSO] log failed', e); }
-    }
-
-    initialize() { this.particles = []; for (let i = 0; i < this.numParticles; i++) this.particles.push(this.createRandomParticle()); if (typeof baselinePID !== 'undefined' && baselinePID && typeof baselinePID.kp === 'number') this.particles[0] = { position: { kp: baselinePID.kp, ki: baselinePID.ki, kd: baselinePID.kd }, velocity: { kp: 0, ki: 0, kd: 0 }, bestPosition: { kp: baselinePID.kp, ki: baselinePID.ki, kd: baselinePID.kd }, bestFitness: Infinity, fitness: Infinity }; this.globalBest = null; this.iteration = 0; this.testCounter = 0; fitnessChartData = []; }
-
-    createRandomParticle() { const includeKi = !!document.getElementById('include-ki-checkbox')?.checked; const getRandom = (min, max) => Math.random() * (max - min) + min; const position = { kp: getRandom(this.searchSpace.kp_min, this.searchSpace.kp_max), ki: includeKi ? getRandom(this.searchSpace.ki_min, this.searchSpace.ki_max) : (baselinePID?.ki ?? ((this.searchSpace.ki_min + this.searchSpace.ki_max) / 2)), kd: getRandom(this.searchSpace.kd_min, this.searchSpace.kd_max) }; return { position: position, velocity: { kp: 0, ki: 0, kd: 0 }, bestPosition: { ...position }, bestFitness: Infinity, fitness: Infinity }; }
-
-    async evaluateFitness(particle, idx = 0) { this.testCounter++; try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, idx, this.particles.length, particle.position.kp, particle.position.ki, particle.position.kd, particle.fitness); } catch (_) { } try { const res = await runTelemetryBasedTest(particle.position.kp, particle.position.ki, particle.position.kd); const fitness = res.fitness; particle.fitness = fitness; if (fitness < particle.bestFitness) { particle.bestFitness = fitness; particle.bestPosition = { ...particle.position }; } if (!this.globalBest || fitness < this.globalBest.fitness) { this.globalBest = { position: { ...particle.position }, fitness: fitness }; updateBestDisplay(this.globalBest.position); } const meta = { gen: this.iteration + 1, totalGen: this.iterations, individualIdx: idx, pop: this.particles.length }; try { fitnessChartData.push({ x: this.iteration + (idx / Math.max(1, this.particles.length)), y: fitness }); updateFitnessChart(); } catch (_) { } addTestToResultsTable(this.testCounter, particle.position, fitness, res.itae, res.overshoot, 'telemetry_test', meta); return fitness; } catch (error) { console.error('[PSO] Test failed:', error); particle.fitness = Infinity; addTestToResultsTable(this.testCounter, particle.position, Infinity, 0, 0, 'telemetry_test'); throw error; } }
-
-    async runIteration() { for (let i = 0; i < this.particles.length; i++) { if (this.isPaused) { await RB.helpers.delay(100); i--; continue; } if (!this.isRunning) break; try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, i + 1, this.particles.length, this.particles[i].position.kp, this.particles[i].position.ki, this.particles[i].position.kd, this.particles[i].fitness); await this.evaluateFitness(this.particles[i], i + 1); } catch (error) { console.error('Test failed:', error); if (error.reason === 'interrupted_by_emergency') { console.log('[PSO] Emergency stop detected, entering pause state'); this.isPaused = true; sendBaselinePIDToRobot(); while (this.isPaused && this.isRunning) await RB.helpers.delay(100); if (this.isRunning) { console.log('[PSO] Retrying interrupted test after resume'); i--; continue; } } else { this.particles[i].fitness = Infinity; } } } for (let particle of this.particles) { this.updateVelocity(particle); this.updatePosition(particle); } this.iteration++; updateProgressDisplay(this.iteration, this.iterations, this.globalBest ? this.globalBest.fitness : Infinity); }
-
-    updateVelocity(particle) { const r1 = Math.random(); const r2 = Math.random(); for (let dim of ['kp', 'ki', 'kd']) { const cognitive = this.cognitiveWeight * r1 * (particle.bestPosition[dim] - particle.position[dim]); const social = this.socialWeight * r2 * (this.globalBest.position[dim] - particle.position[dim]); particle.velocity[dim] = this.inertiaWeight * particle.velocity[dim] + cognitive + social; const maxVel = (this.searchSpace[dim + '_max'] - this.searchSpace[dim + '_min']) * 0.2; particle.velocity[dim] = Math.max(-maxVel, Math.min(maxVel, particle.velocity[dim])); } }
-
-    updatePosition(particle) { for (let dim of ['kp', 'ki', 'kd']) { particle.position[dim] += particle.velocity[dim]; particle.position[dim] = Math.max(this.searchSpace[dim + '_min'], Math.min(this.searchSpace[dim + '_max'], particle.position[dim])); } }
-
-    async run() { this.isRunning = true; try { this.initialize(); const progressEl = document.getElementById('tuning-progress-panel'); if (progressEl) progressEl.style.display = 'block'; while (this.iteration < this.iterations && this.isRunning) { if (!this.isPaused) await this.runIteration(); else await RB.helpers.delay(100); } this.isRunning = false; try { if (this.globalBest && typeof this.globalBest.fitness === 'number' && isFinite(this.globalBest.fitness)) showNotification(`Optymalizacja PSO zakończona! Najlepsze fitness: ${this.globalBest.fitness.toFixed(4)}`); else showNotification(`Optymalizacja PSO zakonczona: brak wynikow`); } catch (err) { console.error('[PSO] showNotification error:', err); } try { addLogMessage(`[PSO] run finished: iteration=${this.iteration} particles=${this.particles.length} globalBest=${this.globalBest ? JSON.stringify(this.globalBest) : 'null'}`, 'info'); } catch (e) { console.debug('[PSO] log failed', e); } } catch (err) { this.isRunning = false; console.error('[PSO] run() error:', err); try { addLogMessage(`[PSO] run() error: ${err && err.message ? err.message : String(err)}`, 'error'); } catch (e) { console.debug('[PSO] log failed', e); } throw err; } }
-
-    pause() { this.isPaused = true; setTimeout(() => { if (this.isPaused) sendBaselinePIDToRobot(); }, 100); }
-    resume() { this.isPaused = false; }
-    stop() { this.isRunning = false; sendBaselinePIDToRobot(); }
-}
-
-// ========================================================================
-// ZIEGLER-NICHOLS RELAY METHOD
-// ========================================================================
-
-class ZieglerNicholsRelay {
-    constructor(config) { this.amplitude = config.amplitude || 2.0; this.minCycles = config.minCycles || 3; this.isRunning = false; this.oscillationData = []; this.peaks = []; this.valleys = []; this._debugId = (Date.now() >>> 0) & 0xFFFF; try { addLogMessage(`[ZN:${this._debugId}] Constructed ZN: amplitude=${this.amplitude} minCycles=${this.minCycles}`, 'info'); } catch (e) { console.debug('[ZN] log failed', e); } }
-
-    async run() {
-        this.isRunning = true;
-        const testId = Date.now() >>> 0;
-        this.oscillationData = []; this.peaks = []; this.valleys = [];
-        try {
-            const znDisplay = document.getElementById('zn-oscillation-display'); if (znDisplay) znDisplay.style.display = 'block'; try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(1, 1, 1, 1, 0, 0, 0, null); } catch (_) { }
-            return new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => { reject(new Error('ZN test timeout')); }, 30000);
-                const handler = (evt) => { const data = (evt && evt.detail) ? evt.detail : evt; if (data.type === 'relay_state' && Number(data.testId) === testId) { this.oscillationData.push({ time: data.time, angle: data.angle, relayOutput: data.relay_output }); this.detectPeaksValleys(); this.updateRelayChart(); const znCyclesEl = document.getElementById('zn-detected-cycles'); if (znCyclesEl) znCyclesEl.textContent = Math.min(this.peaks.length, this.valleys.length); if (this.peaks.length >= this.minCycles && this.valleys.length >= this.minCycles) { clearTimeout(timeout); window.removeEventListener('ble_message', handler); const results = this.calculateZNParameters(); this.displayResults(results); try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(1, 1, 1, 1, results.kp, results.ki, results.kd, 0); } catch (_) { } resolve(results); } } else if (data.type === 'test_complete' && Number(data.testId) === testId) { clearTimeout(timeout); window.removeEventListener('ble_message', handler); if (this.peaks.length >= this.minCycles && this.valleys.length >= this.minCycles) { const results = this.calculateZNParameters(); this.displayResults(results); try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(1, 1, 1, 1, results.kp, results.ki, results.kd, 0); } catch (_) { } resolve(results); } else { reject(new Error('Not enough oscillation cycles detected')); } } };
-                window.addEventListener('ble_message', handler);
-                const ackHandlerZN = (evt) => { const d = (evt && evt.detail) ? evt.detail : evt; if (d.type === 'ack' && d.command === 'run_relay_test') { if (!d.success) { clearTimeout(timeout); window.removeEventListener('ble_message', handler); window.removeEventListener('ble_message', ackHandlerZN); try { addLogMessage(`[ZN] run_relay_test ACK failed: ${d.message || 'N/A'}`, 'error'); } catch (e) { console.debug('[ZN] ack log failed', e); } reject({ reason: 'ack_failed', message: d.message }); return; } else { window.removeEventListener('ble_message', ackHandlerZN); } } };
-                window.addEventListener('ble_message', ackHandlerZN);
-                try { addLogMessage(`[ZN] Sending run_relay_test: testId=${testId} amplitude=${this.amplitude}`, 'info'); } catch (e) { console.debug('[ZN] log failed', e); }
-                sendBleCommand('run_relay_test', { amplitude: this.amplitude, testId: testId });
-            });
-        } catch (err) { this.isRunning = false; console.error('[ZN] run() error:', err); try { addLogMessage(`[ZN] run() error: ${err && err.message ? err.message : String(err)}`, 'error'); } catch (e) { console.debug('[ZN] log failed', e); } throw err; }
-    }
-
-    detectPeaksValleys() { const data = this.oscillationData; const n = data.length; if (n < 3) return; const last = data[n - 1]; const prev = data[n - 2]; const prevPrev = data[n - 3]; if (prev.angle > prevPrev.angle && prev.angle > last.angle) { if (this.peaks.length === 0 || prev.time - this.peaks[this.peaks.length - 1].time > 0.1) this.peaks.push({ time: prev.time, value: prev.angle }); } if (prev.angle < prevPrev.angle && prev.angle < last.angle) { if (this.valleys.length === 0 || prev.time - this.valleys[this.valleys.length - 1].time > 0.1) this.valleys.push({ time: prev.time, value: prev.angle }); } }
-
-    calculateZNParameters() { const peakValues = this.peaks.slice(-this.minCycles).map(p => p.value); const valleyValues = this.valleys.slice(-this.minCycles).map(v => v.value); const avgAmplitude = (mean(peakValues) - mean(valleyValues)) / 2; const ku = (4 * this.amplitude) / (Math.PI * avgAmplitude); const periods = []; for (let i = 1; i < this.peaks.length; i++) periods.push(this.peaks[i].time - this.peaks[i - 1].time); const tu = mean(periods); return { ku: ku, tu: tu, kp: 0.6 * ku, ki: 1.2 * ku / tu, kd: 0.075 * ku * tu }; }
-
-    displayResults(results) { updateBestDisplay({ kp: results.kp, ki: results.ki, kd: results.kd, fitness: 0 }); showNotification(`ZN: Ku=${results.ku.toFixed(3)}, Tu=${results.tu.toFixed(3)}s`); }
-
-    updateRelayChart() { const canvas = document.getElementById('zn-oscillation-chart'); if (!canvas) return; const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height); if (this.oscillationData.length === 0) return; const times = this.oscillationData.map(d => d.time); const angles = this.oscillationData.map(d => d.angle); const minTime = Math.min(...times); const maxTime = Math.max(...times); const minAngle = Math.min(...angles); const maxAngle = Math.max(...angles); const padding = 30; const width = canvas.width - 2 * padding; const height = canvas.height - 2 * padding; ctx.strokeStyle = '#61dafb'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(padding, padding); ctx.lineTo(padding, canvas.height - padding); ctx.lineTo(canvas.width - padding, canvas.height - padding); ctx.stroke(); ctx.strokeStyle = '#a2f279'; ctx.lineWidth = 2; ctx.beginPath(); this.oscillationData.forEach((point, i) => { const x = padding + ((point.time - minTime) / (maxTime - minTime + 0.001)) * width; const y = canvas.height - padding - ((point.angle - minAngle) / (maxAngle - minAngle + 0.001)) * height; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.stroke(); ctx.fillStyle = '#ff6b6b'; this.peaks.forEach(peak => { const x = padding + ((peak.time - minTime) / (maxTime - minTime + 0.001)) * width; const y = canvas.height - padding - ((peak.value - minAngle) / (maxAngle - minAngle + 0.001)) * height; ctx.beginPath(); ctx.arc(x, y, 4, 0, 2 * Math.PI); ctx.fill(); }); ctx.fillStyle = '#4ecdc4'; this.valleys.forEach(valley => { const x = padding + ((valley.time - minTime) / (maxTime - minTime + 0.001)) * width; const y = canvas.height - padding - ((valley.value - minAngle) / (maxAngle - minAngle + 0.001)) * height; ctx.beginPath(); ctx.arc(x, y, 4, 0, 2 * Math.PI); ctx.fill(); }); }
-
-    stop() { this.isRunning = false; sendBleCommand('cancel_test', {}); sendBaselinePIDToRobot(); }
-}
-
-// ========================================================================
-// BAYESIAN OPTIMIZATION
-// ========================================================================
-
-class BayesianOptimization {
-    constructor(config) { this.iterations = config.iterations || 25; this.initialSamples = config.initialSamples || 5; this.searchSpace = config.searchSpace; this.acquisitionFunction = config.acquisitionFunction || 'ei'; this.xi = config.xi || 0.01; this.samples = []; this.iteration = 0; this.isRunning = false; this.neuralNetwork = null; this.testCounter = 0; }
-
-    async initialize() { this.samples = []; this.iteration = 0; this.testCounter = 0; fitnessChartData = []; for (let i = 0; i < this.initialSamples; i++) { const sample = this.sampleRandom(); try { const fitness = await this.evaluateSample(sample); this.samples.push({ ...sample, fitness }); } catch (error) { console.error('Initial sample failed:', error); this.samples.push({ ...sample, fitness: Infinity }); } } if (typeof baselinePID !== 'undefined' && baselinePID && typeof baselinePID.kp === 'number') { const baseSample = { kp: baselinePID.kp, ki: baselinePID.ki, kd: baselinePID.kd }; try { const fitness = await this.evaluateSample(baseSample); this.samples.push({ ...baseSample, fitness }); } catch (error) { console.warn('Baseline sample evaluation failed:', error); this.samples.push({ ...baseSample, fitness: Infinity }); } } await this.trainSurrogate(); document.getElementById('bayesian-visualization').style.display = 'block'; this.updateVisualization(); }
-
-    async trainSurrogate() { if (!this.neuralNetwork) { this.neuralNetwork = ml5.neuralNetwork({ inputs: 3, outputs: 1, task: 'regression', layers: [{ type: 'dense', units: 32, activation: 'relu' }, { type: 'dense', units: 16, activation: 'relu' }] }); } this.neuralNetwork.data.data.raw = []; const validSamples = this.samples.filter(s => s.fitness !== Infinity); validSamples.forEach(sample => { this.neuralNetwork.addData({ kp: sample.kp, ki: sample.ki, kd: sample.kd }, { fitness: sample.fitness }); }); if (validSamples.length < 2) { console.warn('Not enough valid samples to train surrogate'); return; } await this.neuralNetwork.normalizeData(); const trainingOptions = { epochs: 30, batchSize: Math.min(8, validSamples.length), validationSplit: 0.1 }; await this.neuralNetwork.train(trainingOptions); }
-
-    async acquireNext() { let bestAcquisition = -Infinity; let bestSample = null; const gridSize = 8; for (let i = 0; i < gridSize; i++) { for (let j = 0; j < gridSize; j++) { for (let k = 0; k < gridSize; k++) { const kp = this.searchSpace.kp_min + (i / (gridSize - 1)) * (this.searchSpace.kp_max - this.searchSpace.kp_min); const ki = this.searchSpace.ki_min + (j / (gridSize - 1)) * (this.searchSpace.ki_max - this.searchSpace.ki_min); const kd = this.searchSpace.kd_min + (k / (gridSize - 1)) * (this.searchSpace.kd_max - this.searchSpace.kd_min); const acquisition = await this.calculateAcquisition({ kp, ki, kd }); if (acquisition > bestAcquisition) { bestAcquisition = acquisition; bestSample = { kp, ki, kd }; } } } } return bestSample; }
-
-    async calculateAcquisition(sample) { const prediction = await this.neuralNetwork.predict({ kp: sample.kp, ki: sample.ki, kd: sample.kd }); const predictedFitness = prediction[0].fitness; const validSamples = this.samples.filter(s => s.fitness !== Infinity); if (validSamples.length === 0) return 0; const currentBest = Math.min(...validSamples.map(s => s.fitness)); if (this.acquisitionFunction === 'ei') { const improvement = currentBest - predictedFitness; return Math.max(0, improvement + this.xi); } else if (this.acquisitionFunction === 'ucb') { const uncertainty = 1.0; return -predictedFitness + 2.0 * uncertainty; } else if (this.acquisitionFunction === 'pi') { const improvement = currentBest - predictedFitness; return improvement > 0 ? 1 : 0; } return -predictedFitness; }
-
-    async evaluateSample(sample) { this.testCounter++; try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, null); } catch (_) { } try { const res = await runTelemetryBasedTest(sample.kp, sample.ki, sample.kd); const fitness = res.fitness; try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, fitness); } catch (_) { } addTestToResultsTable(this.testCounter, sample, fitness, res.itae, res.overshoot, 'telemetry_test'); return fitness; } catch (error) { console.error('[Bayesian] Test failed:', error); addTestToResultsTable(this.testCounter, sample, Infinity, 0, 0, 'telemetry_test'); throw error; } }
-
-    sampleRandom() { const includeKi = !!document.getElementById('include-ki-checkbox')?.checked; const getRandom = (min, max) => Math.random() * (max - min) + min; return { kp: getRandom(this.searchSpace.kp_min, this.searchSpace.kp_max), ki: includeKi ? getRandom(this.searchSpace.ki_min, this.searchSpace.ki_max) : (baselinePID?.ki ?? ((this.searchSpace.ki_min + this.searchSpace.ki_max) / 2)), kd: getRandom(this.searchSpace.kd_min, this.searchSpace.kd_max) }; }
-
-    updateVisualization() { const canvas = document.getElementById('bayesian-space-chart'); const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height); if (this.samples.length === 0) return; const padding = 40; const width = canvas.width - 2 * padding; const height = canvas.height - 2 * padding; ctx.strokeStyle = '#61dafb'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(padding, padding); ctx.lineTo(padding, canvas.height - padding); ctx.lineTo(canvas.width - padding, canvas.height - padding); ctx.stroke(); ctx.fillStyle = '#ffffff'; ctx.font = '12px Arial'; ctx.fillText('Kp', canvas.width - padding + 5, canvas.height - padding + 5); ctx.fillText('Kd', padding - 30, padding); const validSamples = this.samples.filter(s => s.fitness !== Infinity); const bestSample = validSamples.length > 0 ? validSamples.reduce((a, b) => a.fitness < b.fitness ? a : b) : null; this.samples.forEach(sample => { if (sample.fitness === Infinity) return; const x = padding + ((sample.kp - this.searchSpace.kp_min) / (this.searchSpace.kp_max - this.searchSpace.kp_min)) * width; const y = canvas.height - padding - ((sample.kd - this.searchSpace.kd_min) / (this.searchSpace.kd_max - this.searchSpace.kd_min)) * height; const minFitness = Math.min(...validSamples.map(s => s.fitness)); const maxFitness = Math.max(...validSamples.map(s => s.fitness)); const normalized = (sample.fitness - minFitness) / (maxFitness - minFitness + 0.001); const hue = (1 - normalized) * 240; ctx.fillStyle = `hsl(${hue}, 70%, 50%)`; ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.fill(); }); if (bestSample) { const x = padding + ((bestSample.kp - this.searchSpace.kp_min) / (this.searchSpace.kp_max - this.searchSpace.kp_min)) * width; const y = canvas.height - padding - ((bestSample.kd - this.searchSpace.kd_min) / (this.searchSpace.kd_max - this.searchSpace.kd_min)) * height; ctx.strokeStyle = '#a2f279'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 8, 0, 2 * Math.PI); ctx.stroke(); } }
-
-    async run() { this.isRunning = true; try { const progressEl = document.getElementById('tuning-progress-panel'); if (progressEl) progressEl.style.display = 'block'; try { showNotification('Inicjalizacja Bayesian Optimization...'); } catch (e) { console.debug('[Bayes] notify init failed', e); } await this.initialize(); while (this.iteration < this.iterations && this.isRunning) { const nextSample = await this.acquireNext(); if (!nextSample) { console.error('Failed to acquire next sample'); break; } try { const fitness = await this.evaluateSample(nextSample); this.samples.push({ ...nextSample, fitness }); } catch (error) { console.error('Sample evaluation failed:', error); this.samples.push({ ...nextSample, fitness: Infinity }); } await this.trainSurrogate(); const validSamples = this.samples.filter(s => s.fitness !== Infinity); const best = validSamples.length > 0 ? validSamples.reduce((a, b) => a.fitness < b.fitness ? a : b) : null; if (best) { updateBestDisplay(best); updateProgressDisplay(this.iteration + 1, this.iterations, best.fitness); } this.updateVisualization(); this.iteration++; } this.isRunning = false; const validSamples = this.samples.filter(s => s.fitness !== Infinity); const best = validSamples.length > 0 ? validSamples.reduce((a, b) => a.fitness < b.fitness ? a : b) : null; if (best) { try { if (best && typeof best.fitness === 'number' && isFinite(best.fitness)) { showNotification(`Bayesian Optimization zakończona! Najlepsze fitness: ${best.fitness.toFixed(4)}`); } else { showNotification('Bayesian Optimization zakończona - brak udanych testów'); } } catch (err) { console.error('[Bayes] showNotification error:', err); } } else { showNotification('Bayesian Optimization zakończona - brak udanych testów'); } } catch (err) { this.isRunning = false; console.error('[Bayes] run() error:', err); try { addLogMessage(`[Bayes] run() error: ${err && err.message ? err.message : String(err)}`, 'error'); } catch (e) { console.debug('[Bayes] log failed', e); } throw err; } }
-
-    stop() { this.isRunning = false; sendBaselinePIDToRobot(); }
-}
-
+// Ziegler-Nichols Relay method is implemented in js/tuning_algorithms.js
+// Bayesian Optimization implementation is provided by js/tuning_algorithms.js
 // Expose relevant functions globally so existing code paths still work
 if (typeof window.GeneticAlgorithm === 'undefined') window.GeneticAlgorithm = GeneticAlgorithm;
 if (typeof window.ParticleSwarmOptimization === 'undefined') window.ParticleSwarmOptimization = ParticleSwarmOptimization;
@@ -3894,16 +3340,7 @@ function initJoystick() {
     joystickRadius = size / 2 * 0.75;
     knobRadius = size / 2 * 0.25;
     drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y);
-    const jm = document.getElementById('joystickModeSelect');
-    if (jm) {
-        jm.value = joystickMode;
-        jm.addEventListener('change', (e) => { joystickMode = e.target.value; });
-    }
-    const jr = document.getElementById('joystickTrimRateInput');
-    if (jr) {
-        joystickTrimRate = parseFloat(jr.value) || joystickTrimRate;
-        jr.addEventListener('change', (e) => { joystickTrimRate = parseFloat(e.target.value) || joystickTrimRate; });
-    }
+    // Joystick mode selector and trim rate inputs removed - legacy joystick settings remain
 }
 function drawJoystick(ctx, x, y) {
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -3932,22 +3369,38 @@ function handleJoystickStart(event) {
     drawJoystick(joystickCanvas.getContext('2d'), x, y);
     lastJoystickX = (x - joystickCenter.x) / joystickRadius;
     lastJoystickY = -(y - joystickCenter.y) / joystickRadius;
-    if (joystickMode === 'drive') { sendBleMessage({ type: 'joystick', x: lastJoystickX, y: lastJoystickY }); }
-    else if (joystickMode === 'adjust_pitch') { sendBleMessage({ type: 'adjust_zero', value: lastJoystickY * joystickTrimRate * (JOYSTICK_SEND_INTERVAL / 1000.0) }); }
-    else if (joystickMode === 'adjust_roll') { sendBleMessage({ type: 'adjust_roll', value: lastJoystickX * joystickTrimRate * (JOYSTICK_SEND_INTERVAL / 1000.0) }); }
+    sendBleMessage({ type: 'joystick', x: lastJoystickX, y: lastJoystickY });
     // start periodic sender to keep values alive
     if (joystickSendIntervalId === null) {
         joystickSendIntervalId = setInterval(() => {
             if (!isDragging) return; // guard
-            if (joystickMode === 'drive') { sendBleMessage({ type: 'joystick', x: lastJoystickX, y: lastJoystickY }); }
-            else if (joystickMode === 'adjust_pitch') { const delta = lastJoystickY * joystickTrimRate * (JOYSTICK_SEND_INTERVAL / 1000.0); if (Math.abs(delta) > 1e-6) sendBleMessage({ type: 'adjust_zero', value: delta }); }
-            else if (joystickMode === 'adjust_roll') { const delta = lastJoystickX * joystickTrimRate * (JOYSTICK_SEND_INTERVAL / 1000.0); if (Math.abs(delta) > 1e-6) sendBleMessage({ type: 'adjust_roll', value: delta }); }
+            sendBleMessage({ type: 'joystick', x: lastJoystickX, y: lastJoystickY });
         }, JOYSTICK_SEND_INTERVAL);
     }
 }
-function handleJoystickMove(event) { if (!isDragging) return; event.preventDefault(); const joystickCanvas = document.getElementById('joystickCanvas'); let { x, y } = getJoystickPosition(event); const dx = x - joystickCenter.x; const dy = y - joystickCenter.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; } drawJoystick(joystickCanvas.getContext('2d'), x, y); lastJoystickX = (x - joystickCenter.x) / joystickRadius; lastJoystickY = -(y - joystickCenter.y) / joystickRadius; const now = Date.now(); if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) { if (joystickMode === 'drive') { sendBleMessage({ type: 'joystick', x: lastJoystickX, y: lastJoystickY }); } else if (joystickMode === 'adjust_pitch') { const delta = lastJoystickY * joystickTrimRate * (JOYSTICK_SEND_INTERVAL / 1000.0); if (Math.abs(delta) > 1e-6) sendBleMessage({ type: 'adjust_zero', value: delta }); } else if (joystickMode === 'adjust_roll') { const delta = lastJoystickX * joystickTrimRate * (JOYSTICK_SEND_INTERVAL / 1000.0); if (Math.abs(delta) > 1e-6) sendBleMessage({ type: 'adjust_roll', value: delta }); } lastJoystickSendTime = now; } }
+function handleJoystickMove(event) {
+    if (!isDragging) return;
+    event.preventDefault();
+    const joystickCanvas = document.getElementById('joystickCanvas');
+    let { x, y } = getJoystickPosition(event);
+    const dx = x - joystickCenter.x;
+    const dy = y - joystickCenter.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance > joystickRadius) {
+        x = joystickCenter.x + (dx / distance) * joystickRadius;
+        y = joystickCenter.y + (dy / distance) * joystickRadius;
+    }
+    drawJoystick(joystickCanvas.getContext('2d'), x, y);
+    lastJoystickX = (x - joystickCenter.x) / joystickRadius;
+    lastJoystickY = -(y - joystickCenter.y) / joystickRadius;
+    const now = Date.now();
+    if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) {
+        sendBleMessage({ type: 'joystick', x: lastJoystickX, y: lastJoystickY });
+        lastJoystickSendTime = now;
+    }
+}
 function getJoystickPosition(event) { const rect = document.getElementById('joystickCanvas').getBoundingClientRect(); const touch = event.touches ? event.touches[0] : event; return { x: touch.clientX - rect.left, y: touch.clientY - rect.top }; }
-function handleJoystickEnd(event) { if (!isDragging) return; event.preventDefault(); isDragging = false; if (joystickSendIntervalId !== null) { clearInterval(joystickSendIntervalId); joystickSendIntervalId = null; } drawJoystick(document.getElementById('joystickCanvas').getContext('2d'), joystickCenter.x, joystickCenter.y); if (joystickMode === 'drive') sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
+function handleJoystickEnd(event) { if (!isDragging) return; event.preventDefault(); isDragging = false; if (joystickSendIntervalId !== null) { clearInterval(joystickSendIntervalId); joystickSendIntervalId = null; } drawJoystick(document.getElementById('joystickCanvas').getContext('2d'), joystickCenter.x, joystickCenter.y); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
 function pollGamepad() { if (gamepadIndex !== null) { const gp = navigator.getGamepads()[gamepadIndex]; if (!gp) return; if (isMappingButton && actionToMap) { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { Object.keys(gamepadMappings).forEach(key => { if (gamepadMappings[key] === actionToMap) delete gamepadMappings[key]; }); gamepadMappings[i] = actionToMap; saveGamepadMappings(); addLogMessage(`[UI] Akcja '${availableActions[actionToMap].label}' przypisana do przycisku ${i}.`, 'success'); isMappingButton = false; actionToMap = null; renderMappingModal(); } }); } else { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { const action = gamepadMappings[i]; if (action && availableActions[action]) { const element = document.getElementById(availableActions[action].elementId); if (element && !element.disabled) { element.click(); flashElement(element); } } } }); } lastGamepadState = gp.buttons.map(b => b.pressed); let x = gp.axes[0] || 0; let y = gp.axes[1] || 0; if (Math.abs(x) < 0.15) x = 0; if (Math.abs(y) < 0.15) y = 0; sendBleMessage({ type: 'joystick', x: x, y: -y }); } requestAnimationFrame(pollGamepad); }
 window.addEventListener('gamepadconnected', (e) => { gamepadIndex = e.gamepad.index; document.getElementById('gamepadStatus').textContent = 'Polaczony'; document.getElementById('gamepadStatus').style.color = '#a2f279'; addLogMessage(`[UI] Gamepad polaczony: ${e.gamepad.id}`, 'success'); });
 window.addEventListener('gamepaddisconnected', (e) => { gamepadIndex = null; document.getElementById('gamepadStatus').textContent = 'Brak'; document.getElementById('gamepadStatus').style.color = '#f7b731'; addLogMessage('[UI] Gamepad rozlaczony.', 'warn'); });

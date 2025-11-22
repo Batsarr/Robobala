@@ -50,16 +50,7 @@
         <div class="card" id="controls-card">
             <h2>Sterowanie</h2>
             <div id="joystickWrapper"><canvas id="joystickCanvas"></canvas></div>
-            <div class="control-row" style="margin-top:8px; display:flex; gap:6px; align-items:center;">
-                <label for="joystickModeSelect" style="min-width: 120px;">Tryb Joysticka</label>
-                <select id="joystickModeSelect" style="padding:6px; background:#20232a; color:#fff; border-radius:4px;">
-                    <option value="drive">Jazda</option>
-                    <option value="adjust_pitch">Korekta Pitch</option>
-                    <option value="adjust_roll">Korekta Roll</option>
-                </select>
-                <label for="joystickTrimRateInput" style="margin-left: 12px;">Predkosc Trimu (deg/s)</label>
-                <input id="joystickTrimRateInput" type="number" value="10" min="0.1" step="0.1" style="width:80px; padding:6px; background:#101218; color:#fff; border-radius:4px;">
-            </div>
+            <!-- Joystick mode selector removed; legacy buttons and joystick settings are used instead -->
             <div class="control-row"><span class="control-label">Balansowanie</span><label class="switch"><input type="checkbox" id="balanceSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">Trzymaj Pozycje</span><label class="switch"><input type="checkbox" id="holdPositionSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
@@ -692,6 +683,7 @@
     <!-- Production mode: używamy wyłącznie zbudowanego pakietu 'main.js'.
         NIE ładujemy jednocześnie modularnych plików aby uniknąć
         redeklaracji zmiennych (patrz komentarz w main.js). -->
+    <script src="js/tuning_algorithms.js"></script>
     <script src="js/main.js"></script>
 
 </body>
