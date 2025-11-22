@@ -770,6 +770,24 @@ function getRawEuler() {
     return eul || { pitch: 0, yaw: 0, roll: 0 };
 }
 
+// Compute Euler of raw sensor quaternion (q_sensor) by removing mount correction (qcorr)
+function computeSensorEulerFromTelemetry() {
+    if (!window.telemetryData || typeof window.telemetryData.qw !== 'number') return { pitch: 0, yaw: 0, roll: 0 };
+    try {
+        const qf = new THREE.Quaternion(window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz, window.telemetryData.qw);
+        if (window.lastMountCorr && typeof window.lastMountCorr.qw === 'number') {
+            const lc = window.lastMountCorr;
+            const qc = new THREE.Quaternion(lc.qx, lc.qy, lc.qz, lc.qw);
+            const qcInv = qc.clone().invert();
+            const qSensor = qcInv.multiply(qf);
+            return computeEulerFromQuaternion(qSensor.w, qSensor.x, qSensor.y, qSensor.z) || { pitch: 0, yaw: 0, roll: 0 };
+        }
+        return computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz) || { pitch: 0, yaw: 0, roll: 0 };
+    } catch (e) {
+        return { pitch: 0, yaw: 0, roll: 0 };
+    }
+}
+
 // GLOBALNE: ustawianie punktu 0 dla Pitch i Roll.
 // UWAGA: Kwaternion z telemetrii ma już zastosowane trymy (firmware wysyła q_final),
 // więc aby uzyskać surowy fizyczny kąt przed trybem, odejmujemy aktualny trim.
@@ -778,8 +796,9 @@ function setPitchZero() {
         addLogMessage('[UI] Brak danych telemetrii (pitch).', 'warn');
         return;
     }
-    // Oblicz skorygowany kąt bezpośrednio z kwaternionu (q_final z firmware)
-    let correctedPitch = Number(window.telemetryData.pitch);
+    // Oblicz surowy kąty sensora (q_sensor) wyjmując korekcję montażu
+    const sensorEul = computeSensorEulerFromTelemetry();
+    let correctedPitch = Number(sensorEul.pitch);
     if (typeof correctedPitch !== 'number' || isNaN(correctedPitch)) {
         if (typeof window.telemetryData.qw === 'number') {
             const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
@@ -791,7 +810,7 @@ function setPitchZero() {
     const currentTrim = Number(window.telemetryData.trim_angle || 0);
     // Zaokrąglij lekko, by uniknąć flipa znaku przy ±0.00x
     correctedPitch = Math.round(correctedPitch * 100) / 100;
-    const rawPitch = correctedPitch - currentTrim; // surowy kąt przed trimem
+    const rawPitch = correctedPitch - currentTrim;
     if (isNaN(rawPitch)) {
         addLogMessage('[UI] Nieprawidlowy odczyt pitch.', 'error');
         return;
@@ -813,7 +832,8 @@ function setRollZero() {
         addLogMessage('[UI] Brak danych telemetrii (roll).', 'warn');
         return;
     }
-    let correctedRoll = Number(window.telemetryData.roll);
+    const sensorEul = computeSensorEulerFromTelemetry();
+    let correctedRoll = Number(sensorEul.roll);
     if (typeof correctedRoll !== 'number' || isNaN(correctedRoll)) {
         if (typeof window.telemetryData.qw === 'number') {
             const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
