@@ -89,8 +89,6 @@ const parameterMapping = {
     'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b', 'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 'balanceIntegralLimitInput': 'balance_pid_integral_limit', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s', 'speedFilterAlphaInput': 'speed_pid_filter_alpha', 'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedIntegralLimitInput': 'speed_pid_integral_limit', 'speedDeadbandInput': 'speed_pid_deadband', 'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p', 'positionFilterAlphaInput': 'position_pid_filter_alpha', 'maxTargetSpeedInput': 'max_target_speed_from_pos_pid', 'positionIntegralLimitInput': 'position_pid_integral_limit', 'positionDeadbandInput': 'position_pid_deadband', 'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r', 'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h', 'rotationToPwmScaleInput': 'rotation_to_pwm_scale',
     // Joystick and mechanical parameters
     'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd',
-    // Trim parameters
-    'trimValueDisplay': 'trim_angle', 'rollTrimValueDisplay': 'roll_trim',
     // Auto-tuning parameters (safety, space, weights, GA, PSO, ZN)
     'safetyMaxAngle': 'safety_max_angle', 'safetyMaxSpeed': 'safety_max_speed', 'safetyMaxPwm': 'safety_max_pwm',
     'ga-kp-min': 'space_kp_min', 'ga-kp-max': 'space_kp_max', 'ga-ki-min': 'space_ki_min', 'ga-ki-max': 'space_ki_max', 'ga-kd-min': 'space_kd_min', 'ga-kd-max': 'space_kd_max',
@@ -795,8 +793,6 @@ function setPitchZero() {
     }
     const delta = -rawPitch; // obróć montaż o -pitch aby uzyskać 0°
     sendBleMessage({ type: 'adjust_zero', value: delta });
-    const span = document.getElementById('trimValueDisplay');
-    if (span) span.textContent = '0.00';
     const val = document.getElementById('angleVal');
     if (val) val.textContent = '0.0 °';
     pitchHistory.push(0);
@@ -828,8 +824,6 @@ function setRollZero() {
     }
     const delta = -rawRoll;
     sendBleMessage({ type: 'adjust_roll', value: delta });
-    const span = document.getElementById('rollTrimValueDisplay');
-    if (span) span.textContent = '0.00';
     const val = document.getElementById('rollVal');
     if (val) val.textContent = '0.0 °';
     updateChart({ roll: 0 });
@@ -1406,11 +1400,9 @@ function applySingleParam(snakeKey, value) {
     }
     // Trim fields są wygaszone runtime – pozostawiamy UI jak jest lub ustawiamy 0.00
     if (snakeKey === 'trim_angle') {
-        const span = document.getElementById('trimValueDisplay');
-        if (span) span.textContent = (Number(value) || 0).toFixed(2);
+        // Removed: UI element deleted
     } else if (snakeKey === 'roll_trim') {
-        const span = document.getElementById('rollTrimValueDisplay');
-        if (span) span.textContent = (Number(value) || 0).toFixed(2);
+        // Removed: UI element deleted
     }
     // Feedback sign params - special handling: update sign buttons
     if (snakeKey === 'balance_feedback_sign') {
@@ -1554,11 +1546,6 @@ function updateTelemetryUI(data) {
         document.getElementById('angleVal').textContent = correctedPitch.toFixed(1) + ' \u00B0';
         const vizPitchVal = (data.viz_pitch !== undefined) ? data.viz_pitch : correctedPitch || 0;
         document.getElementById('robot3d-pitch').textContent = vizPitchVal.toFixed(1) + '°';
-        const span = document.getElementById('trimValueDisplay');
-        if (span) {
-            const t = (data.trim_angle !== undefined) ? Number(data.trim_angle) : Number((window.telemetryData && window.telemetryData.trim_angle) || 0);
-            span.textContent = (isNaN(t) ? 0 : t).toFixed(2);
-        }
         pitchHistory.push(correctedPitch);
         if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
     }
@@ -1567,11 +1554,6 @@ function updateTelemetryUI(data) {
         const vizRollVal = (data.viz_roll !== undefined) ? data.viz_roll : correctedRoll || 0;
         document.getElementById('robot3d-roll').textContent = vizRollVal.toFixed(1) + '°';
         document.getElementById('rollVal').textContent = correctedRoll.toFixed(1) + ' \u00B0';
-        const rollSpan = document.getElementById('rollTrimValueDisplay');
-        if (rollSpan) {
-            const rt = (data.roll_trim !== undefined) ? Number(data.roll_trim) : Number((window.telemetryData && window.telemetryData.roll_trim) || 0);
-            rollSpan.textContent = (isNaN(rt) ? 0 : rt).toFixed(2);
-        }
     }
     if (data.yaw !== undefined) {
         document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' °';
@@ -1632,42 +1614,6 @@ function updateTelemetryUI(data) {
     if (calibGyro !== undefined) { document.getElementById('calibGyroVal').textContent = calibGyro; updateCalibrationProgress('gyro', calibGyro); }
     const calibMag = (data.calib_mag !== undefined) ? data.calib_mag : data.cm;
     if (calibMag !== undefined) { document.getElementById('calibMagVal').textContent = calibMag; updateCalibrationProgress('mag', calibMag); }
-    const trimAngle = (data.trim_angle !== undefined)
-        ? Number(data.trim_angle)
-        : (typeof data.ta !== 'undefined' ? Number(data.ta) : undefined);
-
-    if (typeof trimAngle !== 'undefined' && !isNaN(trimAngle)) {
-        if (originalFirmwareTrimPitch === null) originalFirmwareTrimPitch = trimAngle;
-        // Aparantna wartość trima to teraz bezpośrednio wartość firmware
-        const apparentTrim = trimAngle;
-
-        const span = document.getElementById('trimValueDisplay');
-        if (span) span.textContent = apparentTrim.toFixed(2);
-
-        const origSpan = document.getElementById('trimOriginalDisplay');
-        if (origSpan) origSpan.textContent = originalFirmwareTrimPitch.toFixed(2);
-
-        const deltaSpan = document.getElementById('trimDeltaDisplay');
-        if (deltaSpan) deltaSpan.textContent = (trimAngle - (originalFirmwareTrimPitch || 0)).toFixed(2);
-    }
-
-    const rollTrim = (data.roll_trim !== undefined)
-        ? Number(data.roll_trim)
-        : (typeof data.rt !== 'undefined' ? Number(data.rt) : undefined);
-
-    if (typeof rollTrim !== 'undefined' && !isNaN(rollTrim)) {
-        if (originalFirmwareTrimRoll === null) originalFirmwareTrimRoll = rollTrim;
-        const apparentRollTrim = rollTrim;
-
-        const rollSpan = document.getElementById('rollTrimValueDisplay');
-        if (rollSpan) rollSpan.textContent = apparentRollTrim.toFixed(2);
-
-        const origRollSpan = document.getElementById('rollTrimOriginalDisplay');
-        if (origRollSpan) origRollSpan.textContent = originalFirmwareTrimRoll.toFixed(2);
-
-        const rollDeltaSpan = document.getElementById('rollTrimDeltaDisplay');
-        if (rollDeltaSpan) rollDeltaSpan.textContent = (rollTrim - (originalFirmwareTrimRoll || 0)).toFixed(2);
-    }
     if (data.states && !AppState.isApplyingConfig) {
         AppState.isApplyingConfig = true;
         // states short keys fallback
@@ -2537,8 +2483,8 @@ function sendFullConfigToRobot() {
         params[snakeKey] = value;
     }
     // Add trim parameters from displays
-    params['trim_angle'] = parseFloat(document.getElementById('trimValueDisplay').textContent) || 0;
-    params['roll_trim'] = parseFloat(document.getElementById('rollTrimValueDisplay').textContent) || 0;
+    params['trim_angle'] = 0;
+    params['roll_trim'] = 0;
     addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info');
     sendBleMessage({ type: 'full_config', params });
 }
@@ -2613,35 +2559,12 @@ function setupParameterListeners() {
     // POPRAWKA: Trymy zmieniają fizyczny montaż (qcorr). Wysyłamy DELTY przez adjust_zero/adjust_roll.
     const toolButtons = { 'resetZeroBtn': { type: 'set_pitch_zero' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
     // Trim (pitch): wysyłka als delta (deg) -> adjust_zero (obrót wokół Y)
-    function updateAndSendTrim(delta) {
-        const span = document.getElementById('trimValueDisplay');
-        if (!span) return;
-        // Aktualizuj jedynie wskaźnik UI (nie jest już odczytem firmware)
-        const preview = (parseFloat(span.textContent) || 0) + delta;
-        span.textContent = preview.toFixed(2);
-        sendBleMessage({ type: 'adjust_zero', value: delta });
-        addLogMessage(`[UI] Montaż: Pitch Y+=${delta.toFixed(2)}° (persist)`, 'info');
-    }
-    document.getElementById('trimMinus01Btn')?.addEventListener('click', () => updateAndSendTrim(-0.1));
-    document.getElementById('trimMinus001Btn')?.addEventListener('click', () => updateAndSendTrim(-0.01));
-    document.getElementById('trimPlus001Btn')?.addEventListener('click', () => updateAndSendTrim(0.01));
-    document.getElementById('trimPlus01Btn')?.addEventListener('click', () => updateAndSendTrim(0.1));
+    // Removed: trim buttons deleted from HTML
     // Roll trim: aktualizacja + wysyłka set_param
+    // Removed: roll trim buttons deleted from HTML
     document.getElementById('resetRollZeroBtn')?.addEventListener('click', () => setRollZero());
     // Reset korekty pionu (pitch trim) - ustawia trim tak, by skorygowany kąt wynosił 0
     document.getElementById('resetZeroBtn')?.addEventListener('click', () => setPitchZero());
-    function updateAndSendRollTrim(delta) {
-        const span = document.getElementById('rollTrimValueDisplay');
-        if (!span) return;
-        const preview = (parseFloat(span.textContent) || 0) + delta;
-        span.textContent = preview.toFixed(2);
-        sendBleMessage({ type: 'adjust_roll', value: delta });
-        addLogMessage(`[UI] Montaż: Roll X+=${delta.toFixed(2)}° (persist)`, 'info');
-    }
-    document.getElementById('rollTrimMinus01Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.1));
-    document.getElementById('rollTrimMinus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.01));
-    document.getElementById('rollTrimPlus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.01));
-    document.getElementById('rollTrimPlus01Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.1));
 
 
     document.getElementById('saveBtn')?.addEventListener('click', () => {

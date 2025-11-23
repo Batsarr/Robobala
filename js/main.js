@@ -830,8 +830,6 @@ const parameterMapping = {
     'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b', 'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 'balanceIntegralLimitInput': 'balance_pid_integral_limit', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s', 'speedFilterAlphaInput': 'speed_pid_filter_alpha', 'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedIntegralLimitInput': 'speed_pid_integral_limit', 'speedDeadbandInput': 'speed_pid_deadband', 'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p', 'positionFilterAlphaInput': 'position_pid_filter_alpha', 'maxTargetSpeedInput': 'max_target_speed_from_pos_pid', 'positionIntegralLimitInput': 'position_pid_integral_limit', 'positionDeadbandInput': 'position_pid_deadband', 'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r', 'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h', 'rotationToPwmScaleInput': 'rotation_to_pwm_scale',
     // Joystick and mechanical parameters
     'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd',
-    // Trim parameters
-    'trimValueDisplay': 'trim_angle', 'rollTrimValueDisplay': 'roll_trim',
     // Auto-tuning parameters (safety, space, weights, GA, PSO, ZN)
     'safetyMaxAngle': 'safety_max_angle', 'safetyMaxSpeed': 'safety_max_speed', 'safetyMaxPwm': 'safety_max_pwm',
     'ga-kp-min': 'space_kp_min', 'ga-kp-max': 'space_kp_max', 'ga-ki-min': 'space_ki_min', 'ga-ki-max': 'space_ki_max', 'ga-kd-min': 'space_kd_min', 'ga-kd-max': 'space_kd_max',
@@ -978,9 +976,29 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('imuMappingSaveBtn')?.addEventListener('click', () => {
         if (!AppState.isConnected) { addLogMessage('[UI] Musisz być połączony z robotem aby zapisać mapowanie IMU.', 'warn'); return; }
         if (!confirm('Zapisz mapowanie IMU do pamięci EEPROM robota?')) return;
-        const mapping = gatherIMUMappingFromUI();
-        sendBleMessage({ type: 'set_imu_mapping', mapping });
-        addLogMessage('[UI] Wysłano mapowanie IMU do robota (set_imu_mapping).', 'info');
+        // Oblicz obroty z sensorPreview.cube.quaternion
+        const q = sensorPreview.cube.quaternion;
+        const eul = new THREE.Euler().setFromQuaternion(q, 'ZYX');
+        const yawDeg = THREE.MathUtils.radToDeg(eul.x);
+        const pitchDeg = THREE.MathUtils.radToDeg(eul.y);
+        const rollDeg = THREE.MathUtils.radToDeg(eul.z);
+        // Wyślij rotate_mount_90 dla każdej osi z niezerowym obrotem
+        if (Math.abs(pitchDeg) >= 45) { // tolerancja dla błędów zaokrąglenia
+            const steps = Math.round(pitchDeg / 90);
+            sendBleMessage({ type: 'rotate_mount_90', axis: 'x', steps });
+            addLogMessage(`[UI] Obrót montażu X: steps=${steps}`, 'info');
+        }
+        if (Math.abs(yawDeg) >= 45) {
+            const steps = Math.round(yawDeg / 90);
+            sendBleMessage({ type: 'rotate_mount_90', axis: 'y', steps });
+            addLogMessage(`[UI] Obrót montażu Y: steps=${steps}`, 'info');
+        }
+        if (Math.abs(rollDeg) >= 45) {
+            const steps = Math.round(rollDeg / 90);
+            sendBleMessage({ type: 'rotate_mount_90', axis: 'z', steps });
+            addLogMessage(`[UI] Obrót montażu Z: steps=${steps}`, 'info');
+        }
+        addLogMessage('[UI] Wysłano obroty montażu do robota (rotate_mount_90).', 'info');
     });
     // Add change handler for selects to apply runtime mapping for immediate feedback (no EEPROM save)
     ['imuPitchSource', 'imuYawSource', 'imuRollSource'].forEach(selectId => {
@@ -1550,8 +1568,6 @@ function setPitchZero() {
     }
     const delta = -rawPitch; // obróć montaż o -pitch aby uzyskać 0°
     sendBleMessage({ type: 'adjust_zero', value: delta });
-    const span = document.getElementById('trimValueDisplay');
-    if (span) span.textContent = '0.00';
     const val = document.getElementById('angleVal');
     if (val) val.textContent = '0.0 °';
     pitchHistory.push(0);
@@ -1583,8 +1599,6 @@ function setRollZero() {
     }
     const delta = -rawRoll;
     sendBleMessage({ type: 'adjust_roll', value: delta });
-    const span = document.getElementById('rollTrimValueDisplay');
-    if (span) span.textContent = '0.00';
     const val = document.getElementById('rollVal');
     if (val) val.textContent = '0.0 °';
     updateChart({ roll: 0 });
@@ -2159,14 +2173,6 @@ function applySingleParam(snakeKey, value) {
             }
         }
     }
-    // Trim fields są wygaszone runtime – pozostawiamy UI jak jest lub ustawiamy 0.00
-    if (snakeKey === 'trim_angle') {
-        const span = document.getElementById('trimValueDisplay');
-        if (span) span.textContent = (Number(value) || 0).toFixed(2);
-    } else if (snakeKey === 'roll_trim') {
-        const span = document.getElementById('rollTrimValueDisplay');
-        if (span) span.textContent = (Number(value) || 0).toFixed(2);
-    }
     // Feedback sign params - special handling: update sign buttons
     if (snakeKey === 'balance_feedback_sign') {
         const v = parseInt(value);
@@ -2309,11 +2315,6 @@ function updateTelemetryUI(data) {
         document.getElementById('angleVal').textContent = correctedPitch.toFixed(1) + ' \u00B0';
         const vizPitchVal = (data.viz_pitch !== undefined) ? data.viz_pitch : correctedPitch || 0;
         document.getElementById('robot3d-pitch').textContent = vizPitchVal.toFixed(1) + '°';
-        const span = document.getElementById('trimValueDisplay');
-        if (span) {
-            const t = (data.trim_angle !== undefined) ? Number(data.trim_angle) : Number((window.telemetryData && window.telemetryData.trim_angle) || 0);
-            span.textContent = (isNaN(t) ? 0 : t).toFixed(2);
-        }
         pitchHistory.push(correctedPitch);
         if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
     }
@@ -2322,11 +2323,6 @@ function updateTelemetryUI(data) {
         const vizRollVal = (data.viz_roll !== undefined) ? data.viz_roll : correctedRoll || 0;
         document.getElementById('robot3d-roll').textContent = vizRollVal.toFixed(1) + '°';
         document.getElementById('rollVal').textContent = correctedRoll.toFixed(1) + ' \u00B0';
-        const rollSpan = document.getElementById('rollTrimValueDisplay');
-        if (rollSpan) {
-            const rt = (data.roll_trim !== undefined) ? Number(data.roll_trim) : Number((window.telemetryData && window.telemetryData.roll_trim) || 0);
-            rollSpan.textContent = (isNaN(rt) ? 0 : rt).toFixed(2);
-        }
     }
     if (data.yaw !== undefined) {
         document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' °';
@@ -2387,42 +2383,6 @@ function updateTelemetryUI(data) {
     if (calibGyro !== undefined) { document.getElementById('calibGyroVal').textContent = calibGyro; updateCalibrationProgress('gyro', calibGyro); }
     const calibMag = (data.calib_mag !== undefined) ? data.calib_mag : data.cm;
     if (calibMag !== undefined) { document.getElementById('calibMagVal').textContent = calibMag; updateCalibrationProgress('mag', calibMag); }
-    const trimAngle = (data.trim_angle !== undefined)
-        ? Number(data.trim_angle)
-        : (typeof data.ta !== 'undefined' ? Number(data.ta) : undefined);
-
-    if (typeof trimAngle !== 'undefined' && !isNaN(trimAngle)) {
-        if (originalFirmwareTrimPitch === null) originalFirmwareTrimPitch = trimAngle;
-        // Aparantna wartość trima to teraz bezpośrednio wartość firmware
-        const apparentTrim = trimAngle;
-
-        const span = document.getElementById('trimValueDisplay');
-        if (span) span.textContent = apparentTrim.toFixed(2);
-
-        const origSpan = document.getElementById('trimOriginalDisplay');
-        if (origSpan) origSpan.textContent = originalFirmwareTrimPitch.toFixed(2);
-
-        const deltaSpan = document.getElementById('trimDeltaDisplay');
-        if (deltaSpan) deltaSpan.textContent = (trimAngle - (originalFirmwareTrimPitch || 0)).toFixed(2);
-    }
-
-    const rollTrim = (data.roll_trim !== undefined)
-        ? Number(data.roll_trim)
-        : (typeof data.rt !== 'undefined' ? Number(data.rt) : undefined);
-
-    if (typeof rollTrim !== 'undefined' && !isNaN(rollTrim)) {
-        if (originalFirmwareTrimRoll === null) originalFirmwareTrimRoll = rollTrim;
-        const apparentRollTrim = rollTrim;
-
-        const rollSpan = document.getElementById('rollTrimValueDisplay');
-        if (rollSpan) rollSpan.textContent = apparentRollTrim.toFixed(2);
-
-        const origRollSpan = document.getElementById('rollTrimOriginalDisplay');
-        if (origRollSpan) origRollSpan.textContent = originalFirmwareTrimRoll.toFixed(2);
-
-        const rollDeltaSpan = document.getElementById('rollTrimDeltaDisplay');
-        if (rollDeltaSpan) rollDeltaSpan.textContent = (rollTrim - (originalFirmwareTrimRoll || 0)).toFixed(2);
-    }
     if (data.states && !AppState.isApplyingConfig) {
         AppState.isApplyingConfig = true;
         // states short keys fallback
@@ -3998,9 +3958,9 @@ function sendFullConfigToRobot() {
         }
         params[snakeKey] = value;
     }
-    // Add trim parameters from displays
-    params['trim_angle'] = parseFloat(document.getElementById('trimValueDisplay').textContent) || 0;
-    params['roll_trim'] = parseFloat(document.getElementById('rollTrimValueDisplay').textContent) || 0;
+    // Add trim parameters from displays - now always 0 since corrections are in quaternion
+    params['trim_angle'] = 0;
+    params['roll_trim'] = 0;
     addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info');
     sendBleMessage({ type: 'full_config', params });
 }
