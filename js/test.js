@@ -109,9 +109,6 @@ let bleBuffer = '', bleMessageQueue = [], isSendingBleMessage = false; const ble
 const BLE_SEND_INTERVAL = 20;
 
 let joystickCenter, joystickRadius, knobRadius, isDragging = false, lastJoystickSendTime = 0;
-let joystickSendIntervalId = null;
-let lastJoystickX = 0.0;
-let lastJoystickY = 0.0;
 const JOYSTICK_SEND_INTERVAL = 20;
 
 let gamepadIndex = null, lastGamepadState = [], gamepadMappings = {}; const GAMEPAD_MAPPING_KEY = 'pid_gamepad_mappings_v3';
@@ -770,24 +767,6 @@ function getRawEuler() {
     return eul || { pitch: 0, yaw: 0, roll: 0 };
 }
 
-// Compute Euler of raw sensor quaternion (q_sensor) by removing mount correction (qcorr)
-function computeSensorEulerFromTelemetry() {
-    if (!window.telemetryData || typeof window.telemetryData.qw !== 'number') return { pitch: 0, yaw: 0, roll: 0 };
-    try {
-        const qf = new THREE.Quaternion(window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz, window.telemetryData.qw);
-        if (window.lastMountCorr && typeof window.lastMountCorr.qw === 'number') {
-            const lc = window.lastMountCorr;
-            const qc = new THREE.Quaternion(lc.qx, lc.qy, lc.qz, lc.qw);
-            const qcInv = qc.clone().invert();
-            const qSensor = qcInv.multiply(qf);
-            return computeEulerFromQuaternion(qSensor.w, qSensor.x, qSensor.y, qSensor.z) || { pitch: 0, yaw: 0, roll: 0 };
-        }
-        return computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz) || { pitch: 0, yaw: 0, roll: 0 };
-    } catch (e) {
-        return { pitch: 0, yaw: 0, roll: 0 };
-    }
-}
-
 // GLOBALNE: ustawianie punktu 0 dla Pitch i Roll.
 // UWAGA: Kwaternion z telemetrii ma już zastosowane trymy (firmware wysyła q_final),
 // więc aby uzyskać surowy fizyczny kąt przed trybem, odejmujemy aktualny trim.
@@ -796,9 +775,8 @@ function setPitchZero() {
         addLogMessage('[UI] Brak danych telemetrii (pitch).', 'warn');
         return;
     }
-    // Oblicz surowy kąty sensora (q_sensor) wyjmując korekcję montażu
-    const sensorEul = computeSensorEulerFromTelemetry();
-    let correctedPitch = Number(sensorEul.pitch);
+    // Oblicz skorygowany kąt bezpośrednio z kwaternionu (q_final z firmware)
+    let correctedPitch = Number(window.telemetryData.pitch);
     if (typeof correctedPitch !== 'number' || isNaN(correctedPitch)) {
         if (typeof window.telemetryData.qw === 'number') {
             const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
@@ -810,13 +788,12 @@ function setPitchZero() {
     const currentTrim = Number(window.telemetryData.trim_angle || 0);
     // Zaokrąglij lekko, by uniknąć flipa znaku przy ±0.00x
     correctedPitch = Math.round(correctedPitch * 100) / 100;
-    const rawPitch = correctedPitch - currentTrim;
+    const rawPitch = correctedPitch - currentTrim; // surowy kąt przed trimem
     if (isNaN(rawPitch)) {
         addLogMessage('[UI] Nieprawidlowy odczyt pitch.', 'error');
         return;
     }
     const delta = -rawPitch; // obróć montaż o -pitch aby uzyskać 0°
-    console.debug('[UI-test] setPitchZero -> sensorPitch=', sensorEul.pitch, 'currentTrim=', currentTrim, 'rawPitch=', rawPitch, 'delta=', delta, 'lastMountCorr=', window.lastMountCorr);
     sendBleMessage({ type: 'adjust_zero', value: delta });
     const span = document.getElementById('trimValueDisplay');
     if (span) span.textContent = '0.00';
@@ -833,8 +810,7 @@ function setRollZero() {
         addLogMessage('[UI] Brak danych telemetrii (roll).', 'warn');
         return;
     }
-    const sensorEul = computeSensorEulerFromTelemetry();
-    let correctedRoll = Number(sensorEul.roll);
+    let correctedRoll = Number(window.telemetryData.roll);
     if (typeof correctedRoll !== 'number' || isNaN(correctedRoll)) {
         if (typeof window.telemetryData.qw === 'number') {
             const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
@@ -851,7 +827,6 @@ function setRollZero() {
         return;
     }
     const delta = -rawRoll;
-    console.debug('[UI-test] setRollZero -> sensorRoll=', sensorEul.roll, 'currentTrim=', currentRollTrim, 'rawRoll=', rawRoll, 'delta=', delta, 'lastMountCorr=', window.lastMountCorr);
     sendBleMessage({ type: 'adjust_roll', value: delta });
     const span = document.getElementById('rollTrimValueDisplay');
     if (span) span.textContent = '0.00';
@@ -2452,7 +2427,6 @@ function initJoystick() {
     joystickRadius = size / 2 * 0.75;
     knobRadius = size / 2 * 0.25;
     drawJoystick(joystickCtx, joystickCenter.x, joystickCenter.y);
-    // Joystick mode selector removed; pointer joystick sends joystick drive messages
 }
 function drawJoystick(ctx, x, y) {
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -2465,46 +2439,10 @@ function drawJoystick(ctx, x, y) {
     ctx.fillStyle = '#61dafb';
     ctx.fill();
 }
-function handleJoystickStart(event) {
-    event.preventDefault();
-    isDragging = true;
-    const joystickCanvas = document.getElementById('joystickCanvas');
-    let { x, y } = getJoystickPosition(event);
-    const dx = x - joystickCenter.x;
-    const dy = y - joystickCenter.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; }
-    drawJoystick(joystickCanvas.getContext('2d'), x, y);
-    lastJoystickX = (x - joystickCenter.x) / joystickRadius;
-    lastJoystickY = -(y - joystickCenter.y) / joystickRadius;
-    sendBleMessage({ type: 'joystick', x: lastJoystickX, y: lastJoystickY });
-    if (joystickSendIntervalId === null) {
-        joystickSendIntervalId = setInterval(() => {
-            if (!isDragging) return;
-            sendBleMessage({ type: 'joystick', x: lastJoystickX, y: lastJoystickY });
-        }, JOYSTICK_SEND_INTERVAL);
-    }
-}
-function handleJoystickMove(event) {
-    if (!isDragging) return;
-    event.preventDefault();
-    const joystickCanvas = document.getElementById('joystickCanvas');
-    let { x, y } = getJoystickPosition(event);
-    const dx = x - joystickCenter.x;
-    const dy = y - joystickCenter.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; }
-    drawJoystick(joystickCanvas.getContext('2d'), x, y);
-    lastJoystickX = (x - joystickCenter.x) / joystickRadius;
-    lastJoystickY = -(y - joystickCenter.y) / joystickRadius;
-    const now = Date.now();
-    if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) {
-        sendBleMessage({ type: 'joystick', x: lastJoystickX, y: lastJoystickY });
-        lastJoystickSendTime = now;
-    }
-}
+function handleJoystickStart(event) { event.preventDefault(); isDragging = true; }
+function handleJoystickMove(event) { if (!isDragging) return; event.preventDefault(); const joystickCanvas = document.getElementById('joystickCanvas'); let { x, y } = getJoystickPosition(event); const dx = x - joystickCenter.x; const dy = y - joystickCenter.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; } drawJoystick(joystickCanvas.getContext('2d'), x, y); const now = Date.now(); if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) { const joyX = (x - joystickCenter.x) / joystickRadius; const joyY = -(y - joystickCenter.y) / joystickRadius; sendBleMessage({ type: 'joystick', x: joyX, y: joyY }); lastJoystickSendTime = now; } }
 function getJoystickPosition(event) { const rect = document.getElementById('joystickCanvas').getBoundingClientRect(); const touch = event.touches ? event.touches[0] : event; return { x: touch.clientX - rect.left, y: touch.clientY - rect.top }; }
-function handleJoystickEnd(event) { if (!isDragging) return; event.preventDefault(); isDragging = false; if (joystickSendIntervalId !== null) { clearInterval(joystickSendIntervalId); joystickSendIntervalId = null; } drawJoystick(document.getElementById('joystickCanvas').getContext('2d'), joystickCenter.x, joystickCenter.y); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
+function handleJoystickEnd(event) { if (!isDragging) return; event.preventDefault(); isDragging = false; drawJoystick(document.getElementById('joystickCanvas').getContext('2d'), joystickCenter.x, joystickCenter.y); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
 function pollGamepad() { if (gamepadIndex !== null) { const gp = navigator.getGamepads()[gamepadIndex]; if (!gp) return; if (isMappingButton && actionToMap) { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { Object.keys(gamepadMappings).forEach(key => { if (gamepadMappings[key] === actionToMap) delete gamepadMappings[key]; }); gamepadMappings[i] = actionToMap; saveGamepadMappings(); addLogMessage(`[UI] Akcja '${availableActions[actionToMap].label}' przypisana do przycisku ${i}.`, 'success'); isMappingButton = false; actionToMap = null; renderMappingModal(); } }); } else { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { const action = gamepadMappings[i]; if (action && availableActions[action]) { const element = document.getElementById(availableActions[action].elementId); if (element && !element.disabled) { element.click(); flashElement(element); } } } }); } lastGamepadState = gp.buttons.map(b => b.pressed); let x = gp.axes[0] || 0; let y = gp.axes[1] || 0; if (Math.abs(x) < 0.15) x = 0; if (Math.abs(y) < 0.15) y = 0; sendBleMessage({ type: 'joystick', x: x, y: -y }); } requestAnimationFrame(pollGamepad); }
 window.addEventListener('gamepadconnected', (e) => { gamepadIndex = e.gamepad.index; document.getElementById('gamepadStatus').textContent = 'Polaczony'; document.getElementById('gamepadStatus').style.color = '#a2f279'; addLogMessage(`[UI] Gamepad polaczony: ${e.gamepad.id}`, 'success'); });
 window.addEventListener('gamepaddisconnected', (e) => { gamepadIndex = null; document.getElementById('gamepadStatus').textContent = 'Brak'; document.getElementById('gamepadStatus').style.color = '#f7b731'; addLogMessage('[UI] Gamepad rozlaczony.', 'warn'); });
@@ -2673,7 +2611,7 @@ function setupParameterListeners() {
     ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'disableMagnetometerSwitch'].forEach(id => { const el = document.getElementById(id); if (!el) return; el.addEventListener('change', (e) => { if (AppState.isApplyingConfig) return; const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle', 'disableMagnetometerSwitch': 'set_param' }; if (typeMap[id] === 'set_param') { sendBleMessage({ type: 'set_param', key: 'disable_magnetometer', value: e.target.checked ? 1.0 : 0.0 }); } else { sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); } }); });
 
     // POPRAWKA: Trymy zmieniają fizyczny montaż (qcorr). Wysyłamy DELTY przez adjust_zero/adjust_roll.
-    const toolButtons = { 'resetZeroBtn': { type: 'adjust_zero' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
+    const toolButtons = { 'resetZeroBtn': { type: 'set_pitch_zero' }, 'resetEncodersBtn': { type: 'reset_encoders' }, 'emergencyStopBtn': { type: 'emergency_stop' } };
     // Trim (pitch): wysyłka als delta (deg) -> adjust_zero (obrót wokół Y)
     function updateAndSendTrim(delta) {
         const span = document.getElementById('trimValueDisplay');

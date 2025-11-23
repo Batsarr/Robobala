@@ -159,7 +159,7 @@ function getPIDParamKeys(loop) {
     else if (loop === 'speed') suffix = 's';
     else if (loop === 'position') suffix = 'p';
     else suffix = 'b'; // default to balance
-
+    
     return {
         kp: `kp_${suffix}`,
         ki: `ki_${suffix}`,
@@ -190,7 +190,7 @@ function runTelemetryBasedTest(kp, ki, kd) {
         const testStartTime = Date.now();
         const telemetrySamples = [];
         let resolved = false;
-
+        
         // Get test duration from UI (default 2000ms)
         const trialInput = document.getElementById('tuningTrialDurationInput');
         let testDurationMs = 2000;
@@ -198,11 +198,11 @@ function runTelemetryBasedTest(kp, ki, kd) {
             const v = parseInt(trialInput.value, 10);
             if (!isNaN(v) && v > 0) testDurationMs = v;
         }
-
+        
         // Add parameter settling time (time for robot to apply new PID values)
         const settlingTimeMs = PARAMETER_SETTLING_TIME_MS;
         const totalDurationMs = testDurationMs + settlingTimeMs;
-
+        
         // Timeout safety (2x expected duration)
         const timeoutMs = totalDurationMs * 2;
         let timeoutHandle = setTimeout(() => {
@@ -212,23 +212,23 @@ function runTelemetryBasedTest(kp, ki, kd) {
                 reject(new Error('test_timeout'));
             }
         }, timeoutMs);
-
+        
         function cleanup() {
             window.removeEventListener('ble_message', telemetryHandler);
             clearTimeout(timeoutHandle);
         }
-
+        
         function telemetryHandler(evt) {
             const d = evt.detail || evt;
-
+            
             // Only collect telemetry messages
             if (d.type !== 'telemetry') return;
-
+            
             const elapsedTime = Date.now() - testStartTime;
-
+            
             // Skip samples during settling period
             if (elapsedTime < settlingTimeMs) return;
-
+            
             // Collect telemetry sample
             const sample = {
                 timestamp: elapsedTime - settlingTimeMs, // Relative to test start (after settling)
@@ -237,49 +237,49 @@ function runTelemetryBasedTest(kp, ki, kd) {
                 speed: Number(d.speed || d.sp) || 0,
                 loopTime: Number(d.loop_time || d.lt) || 0
             };
-
+            
             telemetrySamples.push(sample);
-
+            
             // Check if test duration reached
             if (elapsedTime >= totalDurationMs) {
                 finishTest();
             }
         }
-
+        
         function finishTest() {
             if (resolved) return;
             resolved = true;
             cleanup();
-
+            
             // Calculate fitness from collected telemetry
             if (telemetrySamples.length < 5) {
                 // Not enough data - penalize
-                resolve({
-                    fitness: Infinity,
-                    itae: 0,
-                    overshoot: 0,
-                    steady_state_error: 0,
+                resolve({ 
+                    fitness: Infinity, 
+                    itae: 0, 
+                    overshoot: 0, 
+                    steady_state_error: 0, 
                     raw: { samples: telemetrySamples.length, reason: 'insufficient_data' }
                 });
                 return;
             }
-
+            
             const metrics = calculateFitnessFromTelemetry(telemetrySamples);
             resolve(metrics);
         }
-
+        
         // Start listening to telemetry
         window.addEventListener('ble_message', telemetryHandler);
-
+        
         // Apply PID parameters to robot using set_param commands
         const loop = document.getElementById('tuning-loop-selector')?.value || 'balance';
         const paramKeys = getPIDParamKeys(loop);
-
+        
         // Send parameters (robot applies them immediately)
         sendBleCommand('set_param', { key: paramKeys.kp, value: kp });
         sendBleCommand('set_param', { key: paramKeys.ki, value: ki });
         sendBleCommand('set_param', { key: paramKeys.kd, value: kd });
-
+        
         try {
             addLogMessage(`[TelemetryTest] Started test with Kp=${kp.toFixed(3)}, Ki=${ki.toFixed(3)}, Kd=${kd.toFixed(3)}, duration=${testDurationMs}ms`, 'info');
         } catch (_) {
@@ -309,10 +309,10 @@ function calculateFitnessFromTelemetry(samples) {
             raw: { samples: 0 }
         };
     }
-
+    
     // Target angle for balancing is 0 degrees
     const targetAngle = 0;
-
+    
     // Calculate ITAE (Integral of Time-weighted Absolute Error)
     let itae = 0;
     for (let i = 0; i < samples.length; i++) {
@@ -322,7 +322,7 @@ function calculateFitnessFromTelemetry(samples) {
     }
     // Normalize by number of samples
     itae = itae / samples.length;
-
+    
     // Calculate overshoot (maximum absolute deviation from target)
     let maxDeviation = 0;
     for (let i = 0; i < samples.length; i++) {
@@ -332,7 +332,7 @@ function calculateFitnessFromTelemetry(samples) {
         }
     }
     const overshoot = maxDeviation;
-
+    
     // Calculate steady state error (average error in final 30% of test)
     const steadyStateStart = Math.floor(samples.length * 0.7);
     let sseSum = 0;
@@ -342,16 +342,16 @@ function calculateFitnessFromTelemetry(samples) {
         sseCount++;
     }
     const steadyStateError = sseCount > 0 ? (sseSum / sseCount) : 0;
-
+    
     // Calculate fitness (same formula as before)
     const fitness = itae + (overshoot * 10) + (steadyStateError * 5);
-
+    
     // Add stability penalty for oscillations
     let oscillationPenalty = 0;
     if (samples.length > 3) {
         let signChanges = 0;
         for (let i = 1; i < samples.length; i++) {
-            const prevError = samples[i - 1].pitch - targetAngle;
+            const prevError = samples[i-1].pitch - targetAngle;
             const currError = samples[i].pitch - targetAngle;
             if ((prevError > 0 && currError < 0) || (prevError < 0 && currError > 0)) {
                 signChanges++;
@@ -363,15 +363,15 @@ function calculateFitnessFromTelemetry(samples) {
             oscillationPenalty = oscillationRate * 20;
         }
     }
-
+    
     const finalFitness = fitness + oscillationPenalty;
-
+    
     try {
         addLogMessage(`[TelemetryTest] Calculated fitness: ITAE=${itae.toFixed(2)}, Overshoot=${overshoot.toFixed(2)}°, SSE=${steadyStateError.toFixed(2)}°, Fitness=${finalFitness.toFixed(2)}`, 'info');
     } catch (_) {
         // Logging is optional - calculation continues even if logging fails
     }
-
+    
     return {
         fitness: finalFitness,
         itae: itae,
@@ -385,37 +385,142 @@ function calculateFitnessFromTelemetry(samples) {
 }
 
 function updateBestDisplay(params) {
-    if (typeof window.updateBestDisplay === 'function') {
-        try { window.updateBestDisplay(params); } catch (e) { console.debug('[tuning_algorithms] updateBestDisplay error', e); }
-    } else {
-        // Fallback: simply log
-        console.debug('[tuning_algorithms] Best params:', params);
+    const elKp = document.getElementById('best-kp');
+    const elKi = document.getElementById('best-ki');
+    const elKd = document.getElementById('best-kd');
+    const elF = document.getElementById('best-fitness');
+    if (elKp) elKp.textContent = params.kp.toFixed(3);
+    if (elKi) elKi.textContent = params.ki.toFixed(3);
+    if (elKd) elKd.textContent = params.kd.toFixed(3);
+    if (elF && params.fitness !== undefined && params.fitness !== Infinity) {
+        elF.textContent = params.fitness.toFixed(4);
     }
+    const applyBtn = document.getElementById('apply-best-btn');
+    if (applyBtn) applyBtn.disabled = false;
 }
 
 function updateProgressDisplay(current, total, bestFitness) {
-    if (typeof window.updateProgressDisplay === 'function') {
-        try { window.updateProgressDisplay(current, total, bestFitness); } catch (e) { console.debug('[tuning_algorithms] updateProgressDisplay error', e); }
-    } else {
-        fitnessChartData.push({ x: current, y: bestFitness });
-        try { if (typeof window.updateFitnessChart === 'function') window.updateFitnessChart(); } catch (_) { }
+    const itEl = document.getElementById('current-iteration');
+    const totEl = document.getElementById('total-iterations');
+    const fEl = document.getElementById('best-fitness');
+    if (itEl) itEl.textContent = current;
+    if (totEl) totEl.textContent = total;
+    if (fEl && bestFitness !== undefined && bestFitness !== Infinity) {
+        fEl.textContent = bestFitness.toFixed(4);
     }
+    fitnessChartData.push({ x: current, y: bestFitness });
+    try { updateFitnessChart(); } catch (_) { /* no-op if chart not ready */ }
 }
 
 function updateFitnessChart() {
-    if (typeof window.updateFitnessChart === 'function') {
-        try { window.updateFitnessChart(); } catch (e) { console.debug('[tuning_algorithms] updateFitnessChart error', e); }
-        return;
-    }
-    // fallback: no-op; charting is handled by UI
+    const canvas = document.getElementById('fitness-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!Array.isArray(fitnessChartData) || fitnessChartData.length === 0) return;
+
+    const minFitness = Math.min(...fitnessChartData.map(d => d.y));
+    const maxFitness = Math.max(...fitnessChartData.map(d => d.y));
+    const maxIteration = Math.max(...fitnessChartData.map(d => d.x));
+
+    const padding = 40;
+    const width = canvas.width - 2 * padding;
+    const height = canvas.height - 2 * padding;
+
+    // axes
+    ctx.strokeStyle = '#61dafb';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(padding, padding);
+    ctx.lineTo(padding, canvas.height - padding);
+    ctx.lineTo(canvas.width - padding, canvas.height - padding);
+    ctx.stroke();
+
+    // labels
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '12px Arial';
+    ctx.fillText('Fitness', 5, padding);
+    ctx.fillText('Iteracja', canvas.width - padding, canvas.height - padding + 20);
+
+    // line
+    ctx.strokeStyle = '#a2f279';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    fitnessChartData.forEach((p, i) => {
+        const x = padding + (p.x / (maxIteration || 1)) * width;
+        const y = canvas.height - padding - ((p.y - minFitness) / ((maxFitness - minFitness) || 0.0001)) * height;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // points
+    ctx.fillStyle = '#a2f279';
+    fitnessChartData.forEach((p) => {
+        const x = padding + (p.x / (maxIteration || 1)) * width;
+        const y = canvas.height - padding - ((p.y - minFitness) / ((maxFitness - minFitness) || 0.0001)) * height;
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, 2 * Math.PI);
+        ctx.fill();
+    });
 }
 
 function addTestToResultsTable(testNum, params, fitness, itae, overshoot, testType = 'metrics_test', meta = {}) {
-    if (typeof window.addTestToResultsTable === 'function') {
-        try { window.addTestToResultsTable(testNum, params, fitness, itae, overshoot, testType, meta); } catch (e) { console.debug('[tuning_algorithms] addTestToResultsTable error', e); }
-        return;
+    const tbody = document.getElementById('results-table-body');
+    // Save to global tuning history if available
+    try {
+        if (Array.isArray(tuningHistory)) {
+            tuningHistory.push({ idx: testNum, kp: params.kp, ki: params.ki, kd: params.kd, fitness, itae, overshoot, testType });
+            if (typeof refreshRecentList === 'function') refreshRecentList();
+        }
+    } catch (_) { /* ignore */ }
+    if (!tbody) return;
+
+    const metaText = (meta && meta.gen && meta.individualIdx) ? ` (Gen ${meta.gen}/${meta.totalGen}, Osobnik ${meta.individualIdx}/${meta.pop})` : '';
+    const row = tbody.insertRow(0); // Insert at top
+    row.innerHTML = `
+        <td>${testNum}${metaText}</td>
+        <td>${params.kp.toFixed(3)}</td>
+        <td>${params.ki.toFixed(3)}</td>
+        <td>${params.kd.toFixed(3)}</td>
+        <td>${(fitness === Infinity || isNaN(fitness)) ? '---' : fitness.toFixed(4)}</td>
+        <td>${(isNaN(itae) ? '---' : itae.toFixed(2))}</td>
+        <td>${isNaN(overshoot) ? '---' : overshoot.toFixed(2)}${(testType === 'metrics_test') ? '°' : '%'}</td>
+        <td><button onclick="applyParameters(${params.kp}, ${params.ki}, ${params.kd})" class="btn-small">Zastosuj</button></td>
+    `;
+    // Also add block entry (for mobile, include generation/individual meta if available)
+    const method = AppState.activeTuningMethod;
+    let blockContainer;
+    if (method && method.startsWith('ga')) blockContainer = document.getElementById('ga-results-blocks');
+    else if (method && method.startsWith('pso')) blockContainer = document.getElementById('pso-results-blocks');
+    if (blockContainer) {
+        const block = document.createElement('div');
+        block.className = 'result-entry';
+        const header = document.createElement('div');
+        header.className = 'result-header';
+        const genInfo = (meta.gen && meta.totalGen) ? `Gen ${meta.gen}/${meta.totalGen}` : '';
+        const indInfo = (meta.individualIdx && meta.pop) ? ` · Osobnik ${meta.individualIdx}/${meta.pop}` : '';
+        header.innerHTML = `<strong>Wynik #${testNum} ${genInfo}${indInfo}:</strong> Fitness = ${(fitness !== undefined && fitness !== Infinity) ? fitness.toFixed(4) : '---'}`;
+
+        const paramsDiv = document.createElement('div');
+        paramsDiv.className = 'result-params';
+        paramsDiv.textContent = `Kp: ${params.kp !== undefined ? params.kp.toFixed(4) : '---'}, Ki: ${params.ki !== undefined ? params.ki.toFixed(4) : '---'}, Kd: ${params.kd !== undefined ? params.kd.toFixed(4) : '---'}`;
+
+        const metricsDiv = document.createElement('div');
+        metricsDiv.className = 'result-metrics';
+        metricsDiv.textContent = `Overshoot: ${overshoot !== undefined ? overshoot.toFixed(2) + '%' : '---'}, ITAE: ${itae !== undefined ? itae.toFixed(2) : '---'}`;
+
+        const applyBtnBlock = document.createElement('button');
+        applyBtnBlock.textContent = 'Zastosuj';
+        applyBtnBlock.className = 'test-btn';
+        applyBtnBlock.addEventListener('click', () => { applyParameters(params.kp, params.ki, params.kd); addLogMessage('[UI] Zastosowano parametry z historii strojenia.', 'info'); });
+        block.appendChild(header);
+        block.appendChild(paramsDiv);
+        block.appendChild(metricsDiv);
+        block.appendChild(applyBtnBlock);
+        blockContainer.insertBefore(block, blockContainer.firstChild);
     }
-    try { if (Array.isArray(window.tuningHistory)) window.tuningHistory.push({ idx: testNum, kp: params.kp, ki: params.ki, kd: params.kd, fitness, itae, overshoot, testType }); } catch (_) { }
 }
 
 function applyParameters(kp, ki, kd) {
@@ -815,9 +920,9 @@ class ParticleSwarmOptimization {
 
     async evaluateFitness(particle, idx = 0) {
         this.testCounter++;
-
+        
         // Update current test display (when starting)
-        try {
+        try { 
             if (typeof updateCurrentTestDisplay === 'function') {
                 updateCurrentTestDisplay(this.iteration + 1, this.iterations, idx, this.particles.length, particle.position.kp, particle.position.ki, particle.position.kd, particle.fitness);
             }
@@ -826,7 +931,7 @@ class ParticleSwarmOptimization {
         try {
             // NEW: Use telemetry-based test instead of run_metrics_test command
             const res = await runTelemetryBasedTest(particle.position.kp, particle.position.ki, particle.position.kd);
-
+            
             const fitness = res.fitness;
             particle.fitness = fitness;
 
@@ -844,11 +949,11 @@ class ParticleSwarmOptimization {
             }
 
             const meta = { gen: this.iteration + 1, totalGen: this.iterations, individualIdx: idx, pop: this.particles.length };
-            try {
-                fitnessChartData.push({ x: this.iteration + (idx / Math.max(1, this.particles.length)), y: fitness });
-                updateFitnessChart();
+            try { 
+                fitnessChartData.push({ x: this.iteration + (idx / Math.max(1, this.particles.length)), y: fitness }); 
+                updateFitnessChart(); 
             } catch (_) { }
-
+            
             addTestToResultsTable(this.testCounter, particle.position, fitness, res.itae, res.overshoot, 'telemetry_test', meta);
 
             return fitness;
@@ -1392,9 +1497,9 @@ class BayesianOptimization {
 
     async evaluateSample(sample) {
         this.testCounter++;
-
+        
         // Update UI about starting this sample
-        try {
+        try { 
             if (typeof updateCurrentTestDisplay === 'function') {
                 updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, null);
             }
@@ -1403,11 +1508,11 @@ class BayesianOptimization {
         try {
             // NEW: Use telemetry-based test instead of run_metrics_test command
             const res = await runTelemetryBasedTest(sample.kp, sample.ki, sample.kd);
-
+            
             const fitness = res.fitness;
 
             // Update UI with resulting fitness for this sample
-            try {
+            try { 
                 if (typeof updateCurrentTestDisplay === 'function') {
                     updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, fitness);
                 }

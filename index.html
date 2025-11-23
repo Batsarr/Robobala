@@ -50,7 +50,6 @@
         <div class="card" id="controls-card">
             <h2>Sterowanie</h2>
             <div id="joystickWrapper"><canvas id="joystickCanvas"></canvas></div>
-            <!-- Joystick mode selector removed; legacy buttons and joystick settings are used instead -->
             <div class="control-row"><span class="control-label">Balansowanie</span><label class="switch"><input type="checkbox" id="balanceSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">Trzymaj Pozycje</span><label class="switch"><input type="checkbox" id="holdPositionSwitch"><span class="slider round"></span></label></div>
             <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
@@ -60,7 +59,7 @@
             <div class="trim-controls">
                 <button id="trimMinus01Btn">-0.1</button>
                 <button id="trimMinus001Btn">-0.01</button>
-                <span>Korekta montażu (Pitch): <span id="trimValueDisplay">0.00</span>°</span>
+                <span>Korekta Pionu: <span id="trimValueDisplay">0.00</span>°</span>
                 <button id="trimPlus001Btn">+0.01</button>
                 <button id="trimPlus01Btn">+0.1</button>
             </div>
@@ -68,7 +67,7 @@
             <div class="trim-controls">
                 <button id="rollTrimMinus01Btn">-0.1</button>
                 <button id="rollTrimMinus001Btn">-0.01</button>
-                <span>Korekta montażu (Roll): <span id="rollTrimValueDisplay">0.00</span>°</span>
+                <span>Korekta Roll: <span id="rollTrimValueDisplay">0.00</span>°</span>
                 <button id="rollTrimPlus001Btn">+0.01</button>
                 <button id="rollTrimPlus01Btn">+0.1</button>
             </div>
@@ -120,7 +119,15 @@
                     <span class="value">Sys: <span id="calibSysVal">-</span></span>
                     <div class="historical-metric">Acc: <span id="calibAccelVal">-</span> Gyro: <span id="calibGyroVal">-</span> Mag: <span id="calibMagVal">-</span></div>
                 </div>
-                <!-- Offset (Pitch) and Offset (Roll) removed - we show corrected quaternion-based orientation instead -->
+                <div class="dashboard-item">
+                    <span class="label">Offset (Pitch)</span>
+                    <span class="value" id="angleOffsetVal">0.0 °</span>
+                    <div class="historical-metric">Delta vs initial: <span id="offsetDeltaVal">0.0 °</span></div>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Offset (Roll)</span>
+                    <span class="value" id="rollOffsetVal">0.0 °</span>
+                </div>
                 <div class="dashboard-item">
                     <span class="label">Kat (Pitch)</span>
                     <span class="value" id="angleVal">0.0 &deg;</span>
@@ -675,9 +682,6 @@
     <!-- Production mode: używamy wyłącznie zbudowanego pakietu 'main.js'.
         NIE ładujemy jednocześnie modularnych plików aby uniknąć
         redeklaracji zmiennych (patrz komentarz w main.js). -->
-    <script src="js/state_manager.js"></script>
-    <script src="js/communication_layer.js"></script>
-    <script src="js/tuning_algorithms.js"></script>
     <script src="js/main.js"></script>
 
 </body>

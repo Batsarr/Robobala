@@ -119,7 +119,7 @@
       manualPitchCorrection = 0;
       
       window.sendBleMessage({ type: 'set_param', key: 'trim_angle', value: newTrim });
-  window.sendBleMessage({ type: 'adjust_zero', value: 0 });
+      window.sendBleMessage({ type: 'set_pitch_zero' });
       
       const span = document.getElementById('trimValueDisplay');
       if (span) span.textContent = '0.00';
