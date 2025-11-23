@@ -57,6 +57,29 @@
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
             <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Ustaw punkt 0 (Pitch)</button>
             <button id="resetRollZeroBtn" style="margin-top:10px; width:100%;">Ustaw punkt 0 (Roll)</button>
+            <div style="margin-top:10px;">
+                <strong>Małe korekty trimów</strong>
+                <div style="display:flex; gap:6px; margin-top:6px;">
+                    <div style="flex:1;">
+                        <div>Pitch</div>
+                        <div style="display:flex; gap:2px; margin-top:4px;">
+                            <button id="pitchTrimPlus01Btn" style="flex:1; font-size:0.8em;">+0.1°</button>
+                            <button id="pitchTrimMinus01Btn" style="flex:1; font-size:0.8em;">-0.1°</button>
+                            <button id="pitchTrimPlus001Btn" style="flex:1; font-size:0.8em;">+0.01°</button>
+                            <button id="pitchTrimMinus001Btn" style="flex:1; font-size:0.8em;">-0.01°</button>
+                        </div>
+                    </div>
+                    <div style="flex:1;">
+                        <div>Roll</div>
+                        <div style="display:flex; gap:2px; margin-top:4px;">
+                            <button id="rollTrimPlus01Btn" style="flex:1; font-size:0.8em;">+0.1°</button>
+                            <button id="rollTrimMinus01Btn" style="flex:1; font-size:0.8em;">-0.1°</button>
+                            <button id="rollTrimPlus001Btn" style="flex:1; font-size:0.8em;">+0.01°</button>
+                            <button id="rollTrimMinus001Btn" style="flex:1; font-size:0.8em;">-0.01°</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
             <button id="emergencyStopBtn">STOP AWARYJNY</button>
             <button class="accordion-header" onclick="toggleAccordion(this)" style="margin-top: 15px;">Strojenie Joysticka</button>
@@ -572,6 +595,31 @@
                     <div style="display:flex; gap:8px;">
                         <button id="setModalPitchZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Pitch)</button>
                         <button id="setModalRollZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Roll)</button>
+                    </div>
+                    <!-- Małe korekty trimów -->
+                    <hr style="border-color:#2a2a35;">
+                    <div style="margin-top:6px;">
+                        <strong>Małe korekty trimów</strong>
+                        <div style="display:flex; gap:6px; margin-top:6px;">
+                            <div style="flex:1;">
+                                <div>Pitch</div>
+                                <div style="display:flex; gap:2px; margin-top:4px;">
+                                    <button id="pitchTrimPlus01Btn" style="flex:1; font-size:0.8em;">+0.1°</button>
+                                    <button id="pitchTrimMinus01Btn" style="flex:1; font-size:0.8em;">-0.1°</button>
+                                    <button id="pitchTrimPlus001Btn" style="flex:1; font-size:0.8em;">+0.01°</button>
+                                    <button id="pitchTrimMinus001Btn" style="flex:1; font-size:0.8em;">-0.01°</button>
+                                </div>
+                            </div>
+                            <div style="flex:1;">
+                                <div>Roll</div>
+                                <div style="display:flex; gap:2px; margin-top:4px;">
+                                    <button id="rollTrimPlus01Btn" style="flex:1; font-size:0.8em;">+0.1°</button>
+                                    <button id="rollTrimMinus01Btn" style="flex:1; font-size:0.8em;">-0.1°</button>
+                                    <button id="rollTrimPlus001Btn" style="flex:1; font-size:0.8em;">+0.01°</button>
+                                    <button id="rollTrimMinus001Btn" style="flex:1; font-size:0.8em;">-0.01°</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

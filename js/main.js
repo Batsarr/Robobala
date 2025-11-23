@@ -1244,6 +1244,15 @@ function initSensorMappingPreview() {
     });
     document.getElementById('setModalPitchZeroBtn')?.addEventListener('click', () => { setPitchZero(); });
     document.getElementById('setModalRollZeroBtn')?.addEventListener('click', () => { setRollZero(); });
+    // Małe korekty trimów
+    document.getElementById('pitchTrimPlus01Btn')?.addEventListener('click', () => { adjustTrim('pitch', 0.1); });
+    document.getElementById('pitchTrimMinus01Btn')?.addEventListener('click', () => { adjustTrim('pitch', -0.1); });
+    document.getElementById('pitchTrimPlus001Btn')?.addEventListener('click', () => { adjustTrim('pitch', 0.01); });
+    document.getElementById('pitchTrimMinus001Btn')?.addEventListener('click', () => { adjustTrim('pitch', -0.01); });
+    document.getElementById('rollTrimPlus01Btn')?.addEventListener('click', () => { adjustTrim('roll', 0.1); });
+    document.getElementById('rollTrimMinus01Btn')?.addEventListener('click', () => { adjustTrim('roll', -0.1); });
+    document.getElementById('rollTrimPlus001Btn')?.addEventListener('click', () => { adjustTrim('roll', 0.01); });
+    document.getElementById('rollTrimMinus001Btn')?.addEventListener('click', () => { adjustTrim('roll', -0.01); });
     document.getElementById('clearModalPitchZeroBtn')?.addEventListener('click', () => {
         // Nowy model: trymy nie są stosowane runtime – nic do czyszczenia.
         addLogMessage('[UI] Trym (Pitch) jest częścią montażu (qcorr) i nie podlega czyszczeniu wartością 0. Użyj przycisków ± lub Ustaw punkt 0.', 'warn');
@@ -1605,6 +1614,13 @@ function setRollZero() {
     if (val) val.textContent = '0.0 °';
     updateChart({ roll: 0 });
     addLogMessage(`[UI] Punkt 0 (Roll) ustawiony. Obrót montażu X+=${delta.toFixed(2)}° (persist).`, 'success');
+}
+
+function adjustTrim(axis, delta) {
+    // axis: 'pitch' or 'roll'
+    // delta: number like 0.1 or -0.01
+    sendBleMessage({ type: axis === 'pitch' ? 'adjust_zero' : 'adjust_roll', value: delta });
+    addLogMessage(`[UI] Korekta ${axis} o ${delta.toFixed(2)}°`, 'success');
 }
 
 const debounce = (func, delay) => { let timeout; return function (...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
@@ -3652,7 +3668,10 @@ function setTuningUiLock(isLocked, method) {
     AppState.activeTuningMethod = isLocked ? method : '';
 
     // Globalny tryb strojenia (odblokowane: Sterowanie, Optymalizacja, Logi)
-    document.body.classList.toggle('tuning-active', isLocked);
+    // Dla pojedynczych testów nie blokuj UI, tylko dla algorytmów optymalizacji
+    if (method !== 'single-tests') {
+        document.body.classList.toggle('tuning-active', isLocked);
+    }
 
     // Wyłączamy przełączanie zakładek. Disable run test buttons OUTSIDE of autotune card only
     document.querySelectorAll('.run-test-btn').forEach(btn => {
