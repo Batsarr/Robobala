@@ -838,7 +838,9 @@ const parameterMapping = {
     'ga-weight-itae': 'weights_itae', 'ga-weight-overshoot': 'weights_overshoot', 'ga-weight-control-effort': 'weights_control_effort',
     'ga-generations': 'ga_generations', 'ga-population': 'ga_population', 'ga-mutation-rate': 'ga_mutation_rate', 'ga-elitism': 'ga_elitism', 'ga-adaptive': 'ga_adaptive', 'ga-convergence-check': 'ga_convergence_check',
     'pso-iterations': 'pso_iterations', 'pso-particles': 'pso_particles', 'pso-inertia': 'pso_inertia', 'pso-adaptive-inertia': 'pso_adaptive_inertia', 'pso-velocity-clamp': 'pso_velocity_clamp', 'pso-neighborhood': 'pso_neighborhood',
-    'zn-trial-duration': 'tuning_trial_duration_ms', 'zn-max-amplitude': 'zn_amplitude'
+    'zn-trial-duration': 'tuning_trial_duration_ms',
+    // Madgwick filter parameters
+    'useMadgwickFilterInput': 'use_madgwick_filter', 'madgwickBetaInput': 'madgwick_beta', 'madgwickZetaInput': 'madgwick_zeta', 'zn-max-amplitude': 'zn_amplitude'
 };
 // Map toggle for disabling magnetometer (now included in parameterMapping)
 
