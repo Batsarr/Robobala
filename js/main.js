@@ -683,6 +683,11 @@ let currentSequenceStep = 0; const MAX_SEQUENCE_STEPS = 15;
 // Model mapping for 3D visualization
 let modelMapping = { pitch: { source: 0, sign: 1 }, yaw: { source: 1, sign: 1 }, roll: { source: 2, sign: 1 } };
 
+// 3D Visualization variables
+let scene3D, camera3D, renderer3D, controls3D, robotPivot, leftWheel, rightWheel, groundMesh, groundTexture, skyDome;
+let isAnimation3DEnabled = false, isMovement3DEnabled = false, robotPerspectiveZoom = 40;
+let currentEncoderLeft = 0, currentEncoderRight = 0, lastEncoderAvg = 0;
+
 // Setup communication layer message handlers
 function setupCommunicationHandlers() {
     // Handle disconnection
@@ -763,6 +768,19 @@ function processCompleteMessage(data) {
             // Legacy guard: mappingWizard removed; keep defensive check
             if (typeof mappingWizard !== 'undefined' && mappingWizard && mappingWizard.isActive && typeof processWizardTelemetry === 'function') {
                 processWizardTelemetry(data);
+            }
+            // Update encoder variables for 3D visualization
+            const encLeft = (data.encoder_left !== undefined) ? data.encoder_left : data.el;
+            if (encLeft !== undefined) {
+                currentEncoderLeft = encLeft;
+                const encoderLeftEl = document.getElementById('encoderLeftVal');
+                if (encoderLeftEl) encoderLeftEl.textContent = encLeft;
+            }
+            const encRight = (data.encoder_right !== undefined) ? data.encoder_right : data.er;
+            if (encRight !== undefined) {
+                currentEncoderRight = encRight;
+                const encoderRightEl = document.getElementById('encoderRightVal');
+                if (encoderRightEl) encoderRightEl.textContent = encRight;
             }
             break;
         case 'status_update':
@@ -1071,6 +1089,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebarClose = document.getElementById('sidebarClose');
     const menuLinks = document.querySelectorAll('.sidebar-menu a');
 
+    function capitalize(str) {
+        return str.split('-').map(word => {
+            if (word.length === 0) return word;
+            return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        }).join('');
+    }
+
     function openSidebar() {
         sidebar.classList.add('active');
         sidebarOverlay.classList.add('active');
@@ -1110,7 +1135,23 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.view').forEach(view => {
                 view.classList.remove('active');
             });
-            document.getElementById(`view${capitalize(viewId)}`).classList.add('active');
+            const newView = document.getElementById(`view${capitalize(viewId)}`);
+            newView.classList.add('active');
+
+            // Initialize 3D visualization when switching to 3D view
+            if (viewId === '3d' && typeof window.init3DVisualization === 'function') {
+                setTimeout(() => {
+                    try {
+                        window.init3DVisualization();
+                        window.setupControls3D?.();
+                        window.animate3D();
+                        addLogMessage('[UI] Wizualizacja 3D zainicjalizowana przy przełączaniu zakładki', 'info');
+                    } catch (e) {
+                        console.warn('3D initialization error:', e);
+                        addLogMessage('Błąd inicjalizacji wizualizacji 3D: ' + e.message, 'error');
+                    }
+                }, 100);
+            }
 
             // Close sidebar on mobile
             closeSidebar();
@@ -1119,12 +1160,6 @@ document.addEventListener('DOMContentLoaded', () => {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         });
     });
-
-    function capitalize(str) {
-        return str.split('-').map(word =>
-            word.charAt(0).toUpperCase() + word.slice(1)
-        ).join('');
-    }
 
     // ========================================================================
     // THEME TOGGLE
@@ -1492,7 +1527,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ========================================================================
     // 3D VISUALIZATION (Placeholder)
     // ========================================================================
-    const robot3DContainer = document.getElementById('robot3DContainer');
+    const robot3DContainer = document.getElementById('robot3d-container');
     const reset3DView = document.getElementById('reset3DView');
     const toggle3DAnimation = document.getElementById('toggle3DAnimation');
 

@@ -71,6 +71,10 @@
                 <span class="menu-icon">🔍</span>
                 <span>Diagnostyka</span>
             </a></li>
+            <li><a href="#" data-view="3d">
+                <span class="menu-icon">🎮</span>
+                <span>Model 3D</span>
+            </a></li>
             <li><a href="#" data-view="settings">
                 <span class="menu-icon">⚡</span>
                 <span>Ustawienia</span>
@@ -165,18 +169,6 @@
                         <span class="telemetry-label">Czas Pętli</span>
                         <span class="telemetry-value" id="loopTimeValue">0 μs</span>
                     </div>
-                </div>
-            </div>
-
-            <!-- 3D Visualization -->
-            <div class="card">
-                <h2 class="card-title">Model 3D
-                    <span class="tooltip-icon" data-tooltip="Wizualizacja orientacji robota w czasie rzeczywistym.">?</span>
-                </h2>
-                <div id="robot3DContainer" class="robot-3d-container"></div>
-                <div class="button-group">
-                    <button id="reset3DView" class="btn btn-secondary btn-small">Resetuj Widok</button>
-                    <button id="toggle3DAnimation" class="btn btn-secondary btn-small">Wł./Wył. Animację</button>
                 </div>
             </div>
         </section>
@@ -783,9 +775,23 @@
                 </div>
             </div>
         </section>
+
+        <!-- Diagnostics View -->
+        <section id="viewDiagnostics" class="view">
             <div class="card">
                 <h2 class="card-title">Diagnostyka</h2>
                 
+                <!-- Diagnostic Tools -->
+                <div class="diagnostic-tools">
+                    <h3>Narzędzia Diagnostyczne</h3>
+                    <div class="button-group">
+                        <button id="calibrateMpuBtn" class="btn btn-secondary">Kalibracja IMU</button>
+                        <button id="calibrateZeroPointBtn" class="btn btn-secondary">Znajdź Pion Automatycznie</button>
+                        <button id="sensorMappingBtn" class="btn btn-secondary">Mapowanie Czujnika</button>
+                        <button id="modelMappingBtn" class="btn btn-secondary">Mapowanie Modelu 3D</button>
+                    </div>
+                </div>
+
                 <!-- Signal Analyzer -->
                 <div class="signal-analyzer">
                     <h3>Wykres Sygnałów</h3>
@@ -835,27 +841,36 @@
                         <button id="cursorABBtn" class="btn btn-secondary">Kursory A/B</button>
                     </div>
                 </div>
+            </div>
+        </section>
 
-                <!-- Results Table -->
-                <div class="results-table-container">
-                    <h3>Wyniki Testów</h3>
-                    <table id="results-table">
-                        <thead>
-                            <tr>
-                                <th>Test #</th>
-                                <th>Kp</th>
-                                <th>Ki</th>
-                                <th>Kd</th>
-                                <th>Fitness</th>
-                                <th>ITAE</th>
-                                <th>Overshoot</th>
-                                <th>Akcje</th>
-                            </tr>
-                        </thead>
-                        <tbody id="results-table-body">
-                            <!-- Results will be added here -->
-                        </tbody>
-                    </table>
+        <!-- 3D Visualization View -->
+        <section id="view3D" class="view">
+            <div class="card">
+                <h2 class="card-title">Model 3D Robota</h2>
+                <div id="robot3d-container" class="robot-3d-container"></div>
+                <div class="robot-3d-controls">
+                    <div class="control-row">
+                        <span class="control-label">Perspektywa Robota</span>
+                        <label class="switch">
+                            <input type="checkbox" id="robotPerspectiveCheckbox">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+                <div class="robot-3d-info">
+                    <div class="robot-3d-metrics">
+                        <div><strong>Przechyl (Pitch):</strong> <span id="robot3d-pitch">0.0°</span></div>
+                        <div><strong>Przechyl (Roll):</strong> <span id="robot3d-roll">0.0°</span></div>
+                        <div><strong>Obrot kół:</strong> <span id="robot3d-wheel-speed">0 obr/min</span></div>
+                        <div><strong>Pozycja X:</strong> <span id="robot3d-position-x">0.0 cm</span></div>
+                        <div><strong>Pozycja Z:</strong> <span id="robot3d-position-z">0.0 cm</span></div>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button id="reset3DView" class="btn btn-secondary">Resetuj Widok</button>
+                    <button id="toggle3DAnimation" class="btn btn-secondary">Wł./Wył. Animację</button>
+                    <button id="toggle3DMovement" class="btn btn-secondary">Start/Stop Ruchu</button>
                 </div>
             </div>
         </section>
