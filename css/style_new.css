@@ -1154,12 +1154,79 @@ input:checked + .slider:before {
     .robot-3d-container {
         height: 200px;
     }
+
+    /* Mobile-friendly PID tuning adjustments */
+    .tabs {
+        flex-direction: column;
+        gap: var(--spacing-xs);
+    }
+    .tab {
+        width: 100%;
+        text-align: left;
+        padding-left: var(--spacing-md);
+    }
+    .tab-content {
+        padding: var(--spacing-sm);
+    }
+    .param-group .input-group {
+        display: flex;
+        gap: var(--spacing-xs);
+        align-items: center;
+    }
+    .param-group input[type="number"] {
+        min-width: 0;
+        width: 100%;
+    }
     .diagnostics-section {
         display: flex;
         flex-direction: column;
     }
+
+    /* Right-side slide panel for manual corrections */
+    .panel-right {
+        position: fixed;
+        top: 60px; /* below header */
+        right: 0;
+        width: 340px;
+        height: calc(100% - 80px);
+        background-color: var(--bg-secondary);
+        border-left: 1px solid var(--border-color);
+        box-shadow: var(--shadow-lg);
+        padding: var(--spacing-md);
+        z-index: var(--z-sidebar);
+        transform: translateX(100%);
+        transition: transform var(--transition-base);
+    }
+    .panel-right.open {
+        transform: translateX(0);
+    }
+
+    @media (max-width: 767px) {
+        .panel-right {
+            width: 100%;
+            height: calc(100% - 60px);
+            top: 60px;
+        }
+    }
     .signal-analyzer {
         order: -1;
+    }
+    /* Mobile-friendly tab scrolling and stacked inputs for PID tuning */
+    .tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .tab {
+        min-width: 120px;
+        flex: none;
+    }
+    .param-group .input-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .param-group .input-group input[type="number"] {
+        width: 100%;
+        min-width: 0;
     }
 }
 
@@ -1738,6 +1805,14 @@ input:checked + .slider:before {
 .tuning-button.running {
     background: var(--accent-warn);
     animation: pulse 1s infinite;
+}
+
+/* Generic running state for small buttons (e.g. Auto) */
+.btn.running {
+    background: var(--accent-warn);
+    color: #1a1d24;
+    animation: pulse 1s infinite;
+    cursor: wait;
 }
 
 .tuning-progress {

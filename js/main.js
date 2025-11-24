@@ -246,8 +246,98 @@ class AppStore {
 }
 
 // Attach sensor mapping modal controls and IMU mapping buttons when DOM is ready
+// Setup manual/auto PWM tuning buttons (start/test/stop) before DomContentLoaded
+function setupManualTuneButtons() {
+    const activeTestTimers = new Map();
+    document.querySelectorAll('.manual-tune-row').forEach(row => {
+        const motor = row.dataset.motor;
+        const direction = row.dataset.direction;
+        const rowKey = `${motor}-${direction}`;
+        const input = row.querySelector('.tune-input');
+        const testBtn = row.querySelector('.test-btn');
+        const stopBtn = row.querySelector('.stop-btn');
+        const autoBtn = row.querySelector('.auto-btn');
+
+        if (testBtn) testBtn.addEventListener('click', () => {
+            const pwm = parseInt(input.value) || 0;
+            if (pwm <= 0) { addLogMessage('[UI] Wpisz dodatni PWM do testu.', 'warn'); return; }
+            commLayer.send({ type: 'manual_tune_motor', motor, direction, pwm });
+            addLogMessage(`[UI] Test ${motor} ${direction} rozpoczęty na 5s (PWM=${pwm}).`, 'info');
+            if (activeTestTimers.has(rowKey)) clearTimeout(activeTestTimers.get(rowKey));
+            const timeoutId = setTimeout(() => {
+                commLayer.send({ type: 'manual_tune_motor', motor, direction, pwm: 0 });
+                addLogMessage(`[UI] Test ${motor} ${direction} zakończony automatycznie po 5s.`, 'info');
+                activeTestTimers.delete(rowKey);
+            }, 5000);
+            activeTestTimers.set(rowKey, timeoutId);
+        });
+
+        if (stopBtn) stopBtn.addEventListener('click', () => {
+            if (activeTestTimers.has(rowKey)) { clearTimeout(activeTestTimers.get(rowKey)); activeTestTimers.delete(rowKey); }
+            commLayer.send({ type: 'manual_tune_motor', motor, direction, pwm: 0 });
+            addLogMessage(`[UI] Test ${motor} ${direction} zatrzymany.`, 'warn');
+        });
+
+        if (autoBtn) autoBtn.addEventListener('click', (e) => {
+            // If an autotune for this row is already in progress, ignore repeat presses
+            if (autoBtn.disabled) { addLogMessage(`[UI] Auto-strojenie już trwa dla ${motor} ${direction}`, 'warn'); return; }
+            if (!confirm('UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?')) return;
+            if (!appStore.getState('connection.isConnected')) { addLogMessage('[UI] Najpierw połącz się z robotem', 'warn'); return; }
+            const startValue = parseInt(document.getElementById('pwmTuneStartInput')?.value || 1200);
+            commLayer.send({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue });
+            if (autoBtn) { autoBtn.disabled = true; autoBtn.textContent = 'Szukanie...'; autoBtn.classList.add('running'); }
+            addLogMessage(`[UI] Rozpoczynam auto-strojenie dla ${motor} ${direction}...`, 'info');
+            // Add a safety timeout that re-enables the button after 30s
+            const rowKeyAuto = `${motor}-${direction}`;
+            if (globalActiveAutoTimers.has(rowKeyAuto)) clearTimeout(globalActiveAutoTimers.get(rowKeyAuto));
+            const autoTimeoutId = setTimeout(() => {
+                try { if (autoBtn) { autoBtn.disabled = false; autoBtn.textContent = 'Auto'; autoBtn.classList.remove('running'); } addLogMessage(`[UI] Auto-strojenie ${motor} ${direction} przerwane (timeout).`, 'warn'); } finally { globalActiveAutoTimers.delete(rowKeyAuto); }
+            }, 30000);
+            globalActiveAutoTimers.set(rowKeyAuto, autoTimeoutId);
+        });
+    });
+
+    const stopAll = document.getElementById('manualTuneStopAll');
+    if (stopAll) stopAll.addEventListener('click', () => {
+        commLayer.send({ type: 'manual_tune_stop_all' });
+        addLogMessage('[UI] Zatrzymano wszystkie silniki.', 'warn');
+        // clear test timers (manual 5s tests)
+        try { activeTestTimers.forEach((t) => clearTimeout(t)); activeTestTimers.clear(); } catch (e) { /* no-op */ }
+        // Clear any active auto timers and re-enable Auto buttons
+        try {
+            globalActiveAutoTimers.forEach((tId, key) => { clearTimeout(tId); });
+            globalActiveAutoTimers.clear();
+            document.querySelectorAll('.manual-tune-row').forEach(row => { const ab = row.querySelector('.auto-btn'); if (ab) { ab.disabled = false; ab.textContent = 'Auto'; ab.classList.remove('running'); } });
+        } catch (e) { /* no-op */ }
+    });
+
+    const startMinus = document.getElementById('pwmTuneStartMinus');
+    const startPlus = document.getElementById('pwmTuneStartPlus');
+    const startInput = document.getElementById('pwmTuneStartInput');
+    if (startMinus && startInput) startMinus.addEventListener('click', () => { startInput.value = Math.max(parseInt(startInput.value || 0) - 10, 1); });
+    if (startPlus && startInput) startPlus.addEventListener('click', () => { startInput.value = Math.min(parseInt(startInput.value || 0) + 10, 2047); });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize PWM tuning button handlers (if present)
+    setupManualTuneButtons();
+    // Initialize signal analyzer chart and controls (idempotent guards inside)
+    try { initSignalAnalyzerChart(); setupSignalChartControls(); setupSignalAnalyzerControls(); } catch (e) { /* no-op if Chart.js not present */ }
     document.getElementById('sensorMappingBtn')?.addEventListener('click', () => { openSensorMappingModal(); });
+    document.getElementById('sensorMappingBtnSettings')?.addEventListener('click', () => { openSensorMappingModal(); });
+    // Model mapping buttons
+    document.getElementById('modelMappingBtn')?.addEventListener('click', () => { openModelMappingModal(); sendBleMessage({ type: 'get_model_mapping' }); });
+    document.getElementById('modelMappingBtn3D')?.addEventListener('click', () => { openModelMappingModal(); sendBleMessage({ type: 'get_model_mapping' }); });
+    document.getElementById('modelMappingLoadBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'get_model_mapping' }); });
+    document.getElementById('modelMappingSaveBtn')?.addEventListener('click', () => {
+        if (!AppState.isConnected) { addLogMessage('[UI] Musisz być połączony z robotem aby zapisać mapowanie modelu 3D.', 'warn'); return; }
+        if (!confirm('Zapisz mapowanie modelu 3D do pamięci EEPROM robota?')) return;
+        gatherModelMappingFromUI();
+        sendBleMessage({ type: 'set_model_mapping', mapping: modelMapping });
+        addLogMessage('[UI] Wyslano mapowanie modelu 3D do robota.', 'info');
+    });
+    document.getElementById('modelMappingResetBtn')?.addEventListener('click', () => { resetModelMapping(); addLogMessage('[UI] Przywrócono domyślne mapowanie modelu (identity).', 'info'); });
+    document.getElementById('modelMappingCloseBtn')?.addEventListener('click', () => { closeModelMappingModal(); });
     document.getElementById('imuMappingLoadBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'get_imu_mapping' }); });
     document.getElementById('imuMappingSaveBtn')?.addEventListener('click', () => {
         if (!AppState.isConnected) { addLogMessage('[UI] Musisz być połączony z robotem aby zapisać mapowanie IMU.', 'warn'); return; }
@@ -274,6 +364,104 @@ document.addEventListener('DOMContentLoaded', () => {
         el.querySelectorAll('button').forEach(btn => {
             btn.addEventListener('click', () => { const sign = parseInt(btn.dataset.sign); setSignButtons(containerId, sign); });
         });
+    });
+
+    // Manual correction panel wiring (right-side)
+    const manualPanel = document.getElementById('dashboard-right-panel');
+    document.getElementById('openManualCorrectionPanel')?.addEventListener('click', () => {
+        if (!manualPanel) return;
+        manualPanel.style.display = 'block';
+        setTimeout(() => manualPanel.classList.add('open'), 20);
+        // Prefill inputs
+        const pInput = document.getElementById('manualPitchCorrectionInput');
+        const rInput = document.getElementById('manualRollCorrectionInput');
+        const curTrimPitch = (window.telemetryData && typeof window.telemetryData.trim_angle !== 'undefined') ? Number(window.telemetryData.trim_angle) : null;
+        const curTrimRoll = (window.telemetryData && typeof window.telemetryData.roll_trim !== 'undefined') ? Number(window.telemetryData.roll_trim) : null;
+        if (pInput) { pInput.value = (curTrimPitch !== null) ? curTrimPitch.toFixed(2) : (Number(window.telemetryData?.pitch || 0)).toFixed(2); pInput.dispatchEvent(new Event('change')); }
+        if (rInput) { rInput.value = (curTrimRoll !== null) ? curTrimRoll.toFixed(2) : (Number(window.telemetryData?.roll || 0)).toFixed(2); rInput.dispatchEvent(new Event('change')); }
+    });
+    document.getElementById('closeManualCorrectionPanel')?.addEventListener('click', () => {
+        if (!manualPanel) return;
+        manualPanel.classList.remove('open');
+        setTimeout(() => manualPanel.style.display = 'none', 300);
+    });
+
+    function bindSpinner(minusId, plusId, inputId, step) {
+        const minus = document.getElementById(minusId);
+        const plus = document.getElementById(plusId);
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        if (minus) minus.addEventListener('click', () => { input.value = (parseFloat(input.value || 0) - step).toFixed(getDecimalPlaces(step)); input.dispatchEvent(new Event('change')); });
+        if (plus) plus.addEventListener('click', () => { input.value = (parseFloat(input.value || 0) + step).toFixed(getDecimalPlaces(step)); input.dispatchEvent(new Event('change')); });
+    }
+
+    bindSpinner('pitchMinus', 'pitchPlus', 'manualPitchCorrectionInput', 0.1);
+    bindSpinner('rollMinus', 'rollPlus', 'manualRollCorrectionInput', 0.1);
+
+    // Pitch apply and set zero
+    document.getElementById('manualPitchApplyBtn')?.addEventListener('click', () => {
+        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+        const v = parseFloat(document.getElementById('manualPitchCorrectionInput')?.value || 0);
+        commLayer.send({ type: 'set_param', key: 'trim_angle', value: v });
+        addLogMessage(`[UI] Zmieniono trim (Pitch) na ${v}`, 'info');
+    });
+    document.getElementById('manualPitchSetZeroBtn')?.addEventListener('click', () => {
+        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+        const currentPitch = Number(window.telemetryData?.pitch || 0);
+        const newTrim = -currentPitch;
+        // Apply runtime delta for immediate effect then persist trim value (keep set_param as last message)
+        commLayer.send({ type: 'adjust_zero', value: newTrim });
+        commLayer.send({ type: 'set_param', key: 'trim_angle', value: newTrim });
+        addLogMessage(`[UI] Ustawiono punkt 0 (Pitch). Nowy trim=${newTrim.toFixed(2)}`, 'info');
+    });
+
+    // Roll apply and set zero
+    document.getElementById('manualRollApplyBtn')?.addEventListener('click', () => {
+        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+        const v = parseFloat(document.getElementById('manualRollCorrectionInput')?.value || 0);
+        commLayer.send({ type: 'set_param', key: 'roll_trim', value: v });
+        addLogMessage(`[UI] Zmieniono trim (Roll) na ${v}`, 'info');
+    });
+    document.getElementById('manualRollSetZeroBtn')?.addEventListener('click', () => {
+        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+        const currentRoll = Number(window.telemetryData?.roll || 0);
+        const newTrim = -currentRoll;
+        // Apply runtime delta for immediate effect then persist trim value (keep set_param as last message)
+        commLayer.send({ type: 'adjust_roll', value: newTrim });
+        commLayer.send({ type: 'set_param', key: 'roll_trim', value: newTrim });
+        addLogMessage(`[UI] Ustawiono punkt 0 (Roll). Nowy trim=${newTrim.toFixed(2)}`, 'info');
+    });
+
+    // Backward compatible Set Zero helpers (used by legacy UI modals)
+    function setPitchZero() {
+        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+        const currentPitch = Number(window.telemetryData?.pitch || 0);
+        const delta = -currentPitch;
+        commLayer.send({ type: 'adjust_zero', value: delta });
+        addLogMessage(`[UI] setPitchZero() -> adjust_zero ${delta}`, 'info');
+    }
+
+    function setRollZero() {
+        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+        const currentRoll = Number(window.telemetryData?.roll || 0);
+        const delta = -currentRoll;
+        commLayer.send({ type: 'adjust_roll', value: delta });
+        addLogMessage(`[UI] setRollZero() -> adjust_roll ${delta}`, 'info');
+    }
+
+    // Sidebar EEPROM save/load
+    document.getElementById('loadEepromBtn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+        commLayer.send({ type: 'request_full_config' });
+        addLogMessage('[UI] Żądanie odczytu EEPROM (request_full_config)', 'info');
+    });
+    document.getElementById('saveEepromBtn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+        if (!confirm('Czy zapisać bieżące parametry na robot (EEPROM)?')) return;
+        commLayer.send({ type: 'save_tunings' });
+        addLogMessage('[UI] Żądanie zapisu do EEPROM (save_tunings)', 'info');
     });
 });
 
@@ -715,9 +903,42 @@ let currentSequenceStep = 0; const MAX_SEQUENCE_STEPS = 15;
 
 // Model mapping for 3D visualization
 let modelMapping = { pitch: { source: 0, sign: 1 }, yaw: { source: 1, sign: 1 }, roll: { source: 2, sign: 1 } };
+function updateModelMappingUI() {
+    const sPitch = document.getElementById('modelPitchSource');
+    const sYaw = document.getElementById('modelYawSource');
+    const sRoll = document.getElementById('modelRollSource');
+    if (sPitch) sPitch.value = String(modelMapping.pitch.source);
+    if (sYaw) sYaw.value = String(modelMapping.yaw.source);
+    if (sRoll) sRoll.value = String(modelMapping.roll.source);
+    setSignButtons('modelPitchSign', modelMapping.pitch.sign);
+    setSignButtons('modelYawSign', modelMapping.yaw.sign);
+    setSignButtons('modelRollSign', modelMapping.roll.sign);
+    const cur = document.getElementById('model-mapping-current');
+    if (cur) { cur.textContent = `pitch: src=${modelMapping.pitch.source} sign=${modelMapping.pitch.sign} | yaw: src=${modelMapping.yaw.source} sign=${modelMapping.yaw.sign} | roll: src=${modelMapping.roll.source} sign=${modelMapping.roll.sign}`; }
+}
+
+function gatherModelMappingFromUI() {
+    modelMapping.pitch.source = parseInt(document.getElementById('modelPitchSource')?.value || '0');
+    modelMapping.yaw.source = parseInt(document.getElementById('modelYawSource')?.value || '1');
+    modelMapping.roll.source = parseInt(document.getElementById('modelRollSource')?.value || '2');
+    modelMapping.pitch.sign = getActiveSign('modelPitchSign');
+    modelMapping.yaw.sign = getActiveSign('modelYawSign');
+    modelMapping.roll.sign = getActiveSign('modelRollSign');
+}
+
+function resetModelMapping() {
+    modelMapping = { pitch: { source: 0, sign: 1 }, yaw: { source: 1, sign: 1 }, roll: { source: 2, sign: 1 } };
+    updateModelMappingUI();
+}
 
 // Signal analyzer chart variables
 let signalAnalyzerChart;
+let signalAnalyzerChartInitialized = false;
+let signalAnalyzerControlsBound = false;
+let signalChartMouseHandlersBound = false;
+// Global map to track pending autotune timers per motor/direction so we can clear them from other handlers
+let globalActiveAutoTimers = new Map();
+// Telemetry variables available for chart
 let availableTelemetry = {
     pitch: { label: 'Pitch', color: '#61dafb' },
     roll: { label: 'Roll', color: '#4CAF50' },
@@ -726,6 +947,8 @@ let availableTelemetry = {
     target_speed: { label: 'Target Speed', color: '#e74c3c' },
     output: { label: 'Output', color: '#9b59b6' }
 };
+
+// no duplicate setupManualTuneButtons here; the real function is defined earlier
 let isChartPaused = false;
 let chartRangeSelection = { isSelecting: false, startIndex: null, endIndex: null };
 let cursorA = null, cursorB = null;
@@ -760,7 +983,28 @@ function setupCommunicationHandlers() {
         // Disable/enable D-Pad controls visually and functionally
         document.querySelectorAll('.dpad-btn').forEach(btn => {
             try { btn.disabled = !value; } catch (e) { }
+            // Add a safety timeout in case robot doesn't respond, re-enable button after 30s
+            const rowKeyAuto = `${motor}-${direction}`;
+            if (globalActiveAutoTimers.has(rowKeyAuto)) clearTimeout(globalActiveAutoTimers.get(rowKeyAuto));
+            const autoTimeoutId = setTimeout(() => {
+                try {
+                    const row = document.querySelector(`.manual-tune-row[data-motor="${motor}"][data-direction="${direction}"]`);
+                    if (row) {
+                        const ab = row.querySelector('.auto-btn'); if (ab) { ab.disabled = false; ab.textContent = 'Auto'; }
+                    }
+                    addLogMessage(`[UI] Auto-strojenie ${motor} ${direction} przerwane (timeout).`, 'warn');
+                } finally {
+                    globalActiveAutoTimers.delete(rowKeyAuto);
+                }
+            }, 30000);
+            globalActiveAutoTimers.set(rowKeyAuto, autoTimeoutId);
         });
+        // clear any active auto timers and re-enable auto buttons
+        try {
+            globalActiveAutoTimers.forEach((tId, key) => { clearTimeout(tId); });
+            globalActiveAutoTimers.clear();
+            document.querySelectorAll('.manual-tune-row').forEach(row => { const ab = row.querySelector('.auto-btn'); if (ab) { ab.disabled = false; ab.textContent = 'Auto'; } });
+        } catch (e) { /* no-op */ }
     });
 
     appStore.subscribe('robot.state', (value) => {
@@ -868,6 +1112,22 @@ function processCompleteMessage(data) {
             }
             addLogMessage('[UI] Otrzymano mapowanie modelu 3D (model_mapping).', 'info');
             break;
+        case 'min_pwm_autotune_result':
+            try {
+                const motor = data.motor; const direction = data.direction; const found = data.found_pwm;
+                const id = `${motor === 'left' ? 'minPwmLeft' : 'minPwmRight'}${direction === 'fwd' ? 'Fwd' : 'Bwd'}Input`;
+                const inputEl = document.getElementById(id);
+                if (inputEl) { inputEl.value = found; inputEl.dispatchEvent(new Event('change')); }
+                const row = document.querySelector(`.manual-tune-row[data-motor="${motor}"][data-direction="${direction}"]`);
+                if (row) { const autoBtn = row.querySelector('.auto-btn'); if (autoBtn) { autoBtn.disabled = false; autoBtn.textContent = 'Auto'; autoBtn.classList.remove('running'); } }
+                // Clear any pending auto timeout for this motor-direction
+                try {
+                    const rowKeyAuto = `${motor}-${direction}`;
+                    if (globalActiveAutoTimers && globalActiveAutoTimers.has(rowKeyAuto)) { clearTimeout(globalActiveAutoTimers.get(rowKeyAuto)); globalActiveAutoTimers.delete(rowKeyAuto); }
+                } catch (e) { /* ignore */ }
+                addLogMessage(`[UI] min_pwm_autotune_result: ${motor} ${direction} -> ${found}`, 'info');
+            } catch (e) { console.error('Error handling min_pwm_autotune_result', e); }
+            break;
         case 'sync_begin':
             clearTimeout(AppState.syncTimeout);
             AppState.isSynced = false;
@@ -921,6 +1181,7 @@ function processCompleteMessage(data) {
         case 'full_config':
             break;
         case 'sync_complete':
+        case 'sync_end':
             // Zastosuj wszystkie zebrane parametry i stany
             AppState.isApplyingConfig = true;
             for (const [key, value] of Object.entries(AppState.tempParams)) {
@@ -968,6 +1229,8 @@ function applySingleParam(key, value) {
         'kd_b': 'balanceKd',
         'balance_pid_derivative_filter_alpha': 'balanceFilterAlpha',
         'balance_pid_integral_limit': 'balanceIntegralLimit'
+        , 'trim_angle': 'manualPitchCorrectionInput'
+        , 'roll_trim': 'manualRollCorrectionInput'
     };
 
     const inputId = paramMap[key];
@@ -1495,11 +1758,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Send joystick values to robot
         if (appStore.getState('connection.isConnected')) {
-            commLayer.send({
-                type: 'joystick_control',
-                x: normalizedX,
-                y: normalizedY
-            });
+            // New message type (modern): joystick_control
+            commLayer.send({ type: 'joystick_control', x: normalizedX, y: normalizedY });
+            // Backward-compatibility: also emit legacy 'joystick' which older firmware versions expect
+            commLayer.send({ type: 'joystick', x: normalizedX, y: normalizedY });
         }
     }
 
@@ -1513,11 +1775,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Send zero values to robot
         if (appStore.getState('connection.isConnected')) {
-            commLayer.send({
-                type: 'joystick_control',
-                x: 0,
-                y: 0
-            });
+            // Send both modern and legacy joystick stop messages
+            commLayer.send({ type: 'joystick_control', x: 0, y: 0 });
+            commLayer.send({ type: 'joystick', x: 0, y: 0 });
         }
     }
 
@@ -1605,18 +1865,24 @@ document.addEventListener('DOMContentLoaded', () => {
     balanceToggle.addEventListener('change', (e) => {
         const state = e.target.checked;
         commLayer.send({ type: 'set_param', key: 'balancing', value: state });
+        // Backward compatibility: also send legacy toggle event
+        commLayer.send({ type: 'balance_toggle', enabled: state });
         addLogMessage(`Balansowanie ${state ? 'włączono' : 'wyłączono'}`, state ? 'success' : 'warn');
     });
 
     holdPositionToggle.addEventListener('change', (e) => {
         const state = e.target.checked;
         commLayer.send({ type: 'set_param', key: 'holding_pos', value: state });
+        // Backward compatibility: also send legacy toggle event
+        commLayer.send({ type: 'hold_position_toggle', enabled: state });
         addLogMessage(`Trzymanie pozycji ${state ? 'włączono' : 'wyłączono'}`, state ? 'success' : 'warn');
     });
 
     speedModeToggle.addEventListener('change', (e) => {
         const state = e.target.checked;
         commLayer.send({ type: 'set_param', key: 'speed_mode', value: state });
+        // Backward compatibility: also send legacy toggle event
+        commLayer.send({ type: 'speed_mode_toggle', enabled: state });
         addLogMessage(`Tryb prędkości ${state ? 'włączono' : 'wyłączono'}`, state ? 'success' : 'warn');
     });
 
@@ -1993,6 +2259,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function openSensorMappingModal() { const m = document.getElementById('sensor-mapping-modal'); if (!m) return; m.style.display = 'flex'; sensorWizard = { step: 0, rotStartYaw: null, monitorId: null, progress: { upright: false, rotation: false, saved: false } }; updateSensorWizardUI(); initSensorMappingPreview(); sendBleMessage({ type: 'get_imu_mapping' }); if (!sensorModalTelemetryMonitorId) sensorModalTelemetryMonitorId = setInterval(updateModalTelemetryDisplay, 200); }
 
     function closeSensorMappingModal() { const m = document.getElementById('sensor-mapping-modal'); if (!m) return; if (sensorWizard.monitorId) { clearInterval(sensorWizard.monitorId); sensorWizard.monitorId = null; } if (sensorModalTelemetryMonitorId) { clearInterval(sensorModalTelemetryMonitorId); sensorModalTelemetryMonitorId = null; } m.style.display = 'none'; }
+    function openModelMappingModal() { const m = document.getElementById('model-mapping-modal'); if (!m) return; m.style.display = 'flex'; updateModelMappingUI(); sendBleMessage({ type: 'get_model_mapping' }); }
+    function closeModelMappingModal() { const m = document.getElementById('model-mapping-modal'); if (!m) return; m.style.display = 'none'; }
 
     function setWizardProgress() { const el = document.getElementById('sensorWizardProgress'); if (!el) return; const p = sensorWizard.progress; el.textContent = `[${p.upright ? 'x' : ' '}] Pion | [${p.rotation ? 'x' : ' '}] Rotacja ≥ 90° | [${p.saved ? 'x' : ' '}] Zapis`; if (p.saved && window.lastMountCorr) { const { qw, qx, qy, qz } = window.lastMountCorr; const preview = `\nqcorr: w=${qw.toFixed(3)} x=${qx.toFixed(3)} y=${qy.toFixed(3)} z=${qz.toFixed(3)}`; el.textContent += preview; } }
 
@@ -2036,7 +2304,13 @@ document.addEventListener('DOMContentLoaded', () => {
             'balanceKi': 'ki_b',
             'balanceKd': 'kd_b',
             'balanceFilterAlpha': 'balance_pid_derivative_filter_alpha',
-            'balanceIntegralLimit': 'balance_pid_integral_limit'
+            'balanceIntegralLimit': 'balance_pid_integral_limit',
+            'minPwmLeftFwdInput': 'min_pwm_left_fwd',
+            'minPwmLeftBwdInput': 'min_pwm_left_bwd',
+            'minPwmRightFwdInput': 'min_pwm_right_fwd',
+            'minPwmRightBwdInput': 'min_pwm_right_bwd',
+            'manualPitchCorrectionInput': 'trim_angle',
+            'manualRollCorrectionInput': 'roll_trim'
             // Add more mappings as needed
         };
         return paramMap[inputId];
@@ -3276,6 +3550,11 @@ function initSignalAnalyzerChart() {
     const canvasEl = document.getElementById('signalAnalyzerChart');
     if (!canvasEl) { console.warn('[UI] signalAnalyzerChart canvas not found - skipping init.'); return; }
     if (typeof Chart === 'undefined') { console.warn('[UI] Chart.js library is not loaded - telemetry chart disabled.'); return; }
+    // If already initialized, just resize and skip re-creation (prevent duplicates)
+    if (signalAnalyzerChart) {
+        try { signalAnalyzerChart.resize(); } catch (e) { /* ignore */ }
+        return;
+    }
     const ctx = canvasEl.getContext('2d');
     signalAnalyzerChart = new Chart(ctx, {
         type: 'line', data: { labels: Array(200).fill(''), datasets: [] },
@@ -3305,41 +3584,46 @@ function initSignalAnalyzerChart() {
         }
     });
 
-    // Add range selection functionality
+    // Add range selection functionality (bind once)
     const canvas = ctx.canvas;
-    let selectionStart = null;
+    if (!canvas.__rbChartHandlersBound) {
+        let selectionStart = null;
 
-    canvas.addEventListener('mousedown', (e) => {
-        if (e.shiftKey) {
-            chartRangeSelection.isSelecting = true;
-            const rect = canvas.getBoundingClientRect();
-            selectionStart = e.clientX - rect.left;
-            chartRangeSelection.startIndex = getChartIndexFromX(selectionStart);
-        }
-    });
-
-    canvas.addEventListener('mousemove', (e) => {
-        if (chartRangeSelection.isSelecting && selectionStart !== null) {
-            const rect = canvas.getBoundingClientRect();
-            const currentX = e.clientX - rect.left;
-            chartRangeSelection.endIndex = getChartIndexFromX(currentX);
-            highlightSelectedRange();
-        }
-    });
-
-    canvas.addEventListener('mouseup', (e) => {
-        if (chartRangeSelection.isSelecting) {
-            chartRangeSelection.isSelecting = false;
-            selectionStart = null;
-            // Range is now selected and stored in chartRangeSelection
-            if (chartRangeSelection.startIndex !== null && chartRangeSelection.endIndex !== null) {
-                addLogMessage(`[UI] Zakres zaznaczony: ${chartRangeSelection.startIndex} - ${chartRangeSelection.endIndex}. Użyj "Eksport CSV (Zakres)" aby wyeksportować.`, 'info');
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.shiftKey) {
+                chartRangeSelection.isSelecting = true;
+                const rect = canvas.getBoundingClientRect();
+                selectionStart = e.clientX - rect.left;
+                chartRangeSelection.startIndex = getChartIndexFromX(selectionStart);
             }
-        }
-    });
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (chartRangeSelection.isSelecting && selectionStart !== null) {
+                const rect = canvas.getBoundingClientRect();
+                const currentX = e.clientX - rect.left;
+                chartRangeSelection.endIndex = getChartIndexFromX(currentX);
+                highlightSelectedRange();
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (chartRangeSelection.isSelecting) {
+                chartRangeSelection.isSelecting = false;
+                selectionStart = null;
+                // Range is now selected and stored in chartRangeSelection
+                if (chartRangeSelection.startIndex !== null && chartRangeSelection.endIndex !== null) {
+                    addLogMessage(`[UI] Zakres zaznaczony: ${chartRangeSelection.startIndex} - ${chartRangeSelection.endIndex}. Użyj "Eksport CSV (Zakres)" aby wyeksportować.`, 'info');
+                }
+            }
+        });
+        canvas.__rbChartHandlersBound = true;
+    }
 }
 
 function setupSignalChartControls() {
+    if (signalAnalyzerControlsBound) return;
+    signalAnalyzerControlsBound = true;
     const container = document.getElementById('signalChartControls'); container.innerHTML = '';
     const defaultChecked = ['pitch', 'speed'];
     Object.keys(availableTelemetry).forEach((key) => {
@@ -3381,6 +3665,8 @@ function updateChart(data) {
 }
 
 function setupSignalAnalyzerControls() {
+    if (signalAnalyzerControlsBound) return;
+    signalAnalyzerControlsBound = true;
     document.getElementById('pauseChartBtn').addEventListener('click', () => { isChartPaused = true; document.getElementById('pauseChartBtn').style.display = 'none'; document.getElementById('resumeChartBtn').style.display = 'inline-block'; addLogMessage('[UI] Wykres wstrzymany.', 'info'); });
     document.getElementById('resumeChartBtn').addEventListener('click', () => { isChartPaused = false; document.getElementById('resumeChartBtn').style.display = 'none'; document.getElementById('pauseChartBtn').style.display = 'inline-block'; addLogMessage('[UI] Wykres wznowiony.', 'info'); });
     document.getElementById('cursorABBtn').addEventListener('click', toggleCursors);

@@ -79,6 +79,14 @@
                 <span class="menu-icon">⚡</span>
                 <span>Ustawienia</span>
             </a></li>
+            <li><a href="#" id="loadEepromBtn">
+                <span class="menu-icon">📂</span>
+                <span>Wczytaj EEPROM</span>
+            </a></li>
+            <li><a href="#" id="saveEepromBtn">
+                <span class="menu-icon">💾</span>
+                <span>Zapisz EEPROM</span>
+            </a></li>
         </ul>
         <div class="sidebar-footer">
             <button id="themeToggle" class="theme-toggle">
@@ -100,6 +108,7 @@
                 <button id="connectBtn" class="btn btn-primary btn-large">
                     <span>Połącz z Robotem</span>
                 </button>
+                <button id="openManualCorrectionPanel" class="btn btn-secondary" style="margin-left:10px;">Korekta</button>
             </div>
 
             <!-- Virtual Joystick -->
@@ -168,6 +177,38 @@
                     <div class="telemetry-item">
                         <span class="telemetry-label">Czas Pętli</span>
                         <span class="telemetry-value" id="loopTimeValue">0 μs</span>
+                    </div>
+                </div>
+            </div>
+            <div id="dashboard-right-panel" class="panel-right" style="display:none;">
+                <div class="card">
+                    <h3 class="card-title">Korekta ręczna (Pitch / Roll)</h3>
+                    <div class="param-group">
+                        <label for="manualPitchCorrectionInput">Pitch (°)</label>
+                        <div class="input-group">
+                            <button id="pitchMinus" class="btn-minus">−</button>
+                            <input type="number" id="manualPitchCorrectionInput" value="0.0" step="0.1">
+                            <button id="pitchPlus" class="btn-plus">+</button>
+                        </div>
+                        <div class="button-group">
+                            <button id="manualPitchApplyBtn" class="btn btn-primary">Zastosuj</button>
+                            <button id="manualPitchSetZeroBtn" class="btn btn-secondary">Ustaw 0</button>
+                        </div>
+                    </div>
+                    <div class="param-group">
+                        <label for="manualRollCorrectionInput">Roll (°)</label>
+                        <div class="input-group">
+                            <button id="rollMinus" class="btn-minus">−</button>
+                            <input type="number" id="manualRollCorrectionInput" value="0.0" step="0.1">
+                            <button id="rollPlus" class="btn-plus">+</button>
+                        </div>
+                        <div class="button-group">
+                            <button id="manualRollApplyBtn" class="btn btn-primary">Zastosuj</button>
+                            <button id="manualRollSetZeroBtn" class="btn btn-secondary">Ustaw 0</button>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:8px;">
+                        <button id="closeManualCorrectionPanel" class="btn btn-secondary">Zamknij</button>
                     </div>
                 </div>
             </div>
@@ -798,7 +839,7 @@
                     <div class="chart-controls" id="signalChartControls">
                         <!-- Checkboxes will be added here dynamically -->
                     </div>
-                    <canvas id="signalAnalyzerChart"></canvas>
+                    <canvas id="signalAnalyzerChart" class="signal-canvas"></canvas>
                     <div class="button-group">
                         <button id="pauseChartBtn" class="btn btn-secondary">Pauza</button>
                         <button id="resumeChartBtn" class="btn btn-secondary" style="display: none;">Wznów</button>
@@ -871,6 +912,7 @@
                     <button id="reset3DView" class="btn btn-secondary">Resetuj Widok</button>
                     <button id="toggle3DAnimation" class="btn btn-secondary">Wł./Wył. Animację</button>
                     <button id="toggle3DMovement" class="btn btn-secondary">Start/Stop Ruchu</button>
+                    <button id="modelMappingBtn3D" class="btn btn-secondary">Mapowanie Modelu 3D</button>
                 </div>
             </div>
         </section>
@@ -1019,6 +1061,84 @@
                         </div>
                     </div>
                 </div>
+                <!-- PWM Calibration (min PWM autotune) -->
+                <div class="accordion">
+                    <button class="accordion-btn">Kalibracja PWM Silników</button>
+                    <div class="accordion-content">
+                        <div class="pwm-info"> <strong>Info:</strong> Użyj przycisku <strong>Auto</strong>, aby automatycznie znaleźć prog startowy silnika, lub <strong>Testuj</strong>, aby sprawdzić ręcznie wpisaną wartość. <strong>UWAGA:</strong> Przed testem podnieś robota, aby koła mogły się swobodnie obracać!</div>
+                        <div class="param-group">
+                            <label for="pwmTuneStartInput">Rozpocznij auto-szukanie od PWM</label>
+                            <div class="input-group">
+                                <button id="pwmTuneStartMinus" class="btn-minus">−</button>
+                                <input type="number" id="pwmTuneStartInput" value="1200" min="1" max="2047" step="1">
+                                <button id="pwmTuneStartPlus" class="btn-plus">+</button>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="param-group manual-tune-row" data-motor="left" data-direction="fwd">
+                            <label>Lewy (Przód)</label>
+                            <div class="input-group">
+                                <button class="btn-minus tune-minus">−</button>
+                                <input type="number" id="minPwmLeftFwdInput" class="tune-input" value="1200" min="0" max="2047" step="1">
+                                <button class="btn-plus tune-plus">+</button>
+                            </div>
+                            <div class="button-group">
+                                <button class="btn test-btn">Testuj</button>
+                                <button class="btn stop-btn">Stop</button>
+                                <button class="btn auto-btn">Auto</button>
+                            </div>
+                        </div>
+
+                        <div class="param-group manual-tune-row" data-motor="left" data-direction="bwd">
+                            <label>Lewy (Tył)</label>
+                            <div class="input-group">
+                                <button class="btn-minus tune-minus">−</button>
+                                <input type="number" id="minPwmLeftBwdInput" class="tune-input" value="1200" min="0" max="2047" step="1">
+                                <button class="btn-plus tune-plus">+</button>
+                            </div>
+                            <div class="button-group">
+                                <button class="btn test-btn">Testuj</button>
+                                <button class="btn stop-btn">Stop</button>
+                                <button class="btn auto-btn">Auto</button>
+                            </div>
+                        </div>
+
+                        <div class="param-group manual-tune-row" data-motor="right" data-direction="fwd">
+                            <label>Prawy (Przód)</label>
+                            <div class="input-group">
+                                <button class="btn-minus tune-minus">−</button>
+                                <input type="number" id="minPwmRightFwdInput" class="tune-input" value="1200" min="0" max="2047" step="1">
+                                <button class="btn-plus tune-plus">+</button>
+                            </div>
+                            <div class="button-group">
+                                <button class="btn test-btn">Testuj</button>
+                                <button class="btn stop-btn">Stop</button>
+                                <button class="btn auto-btn">Auto</button>
+                            </div>
+                        </div>
+
+                        <div class="param-group manual-tune-row" data-motor="right" data-direction="bwd">
+                            <label>Prawy (Tył)</label>
+                            <div class="input-group">
+                                <button class="btn-minus tune-minus">−</button>
+                                <input type="number" id="minPwmRightBwdInput" class="tune-input" value="1200" min="0" max="2047" step="1">
+                                <button class="btn-plus tune-plus">+</button>
+                            </div>
+                            <div class="button-group">
+                                <button class="btn test-btn">Testuj</button>
+                                <button class="btn stop-btn">Stop</button>
+                                <button class="btn auto-btn">Auto</button>
+                            </div>
+                        </div>
+
+                        <div class="button-group" style="margin-top:12px;">
+                            <button id="manualTuneStopAll" class="btn btn-danger">ZATRZYMAJ WSZYSTKIE SILNIKI</button>
+                        </div>
+                        <div class="button-group" style="margin-top:8px;">
+                            <button id="sensorMappingBtnSettings" class="btn btn-secondary">Mapowanie Czujnika</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
     </main>
@@ -1047,6 +1167,153 @@
     </div>
 
     <!-- Load Scripts -->
+    <!-- Sensor mapping modal -->
+    <div id="sensor-mapping-modal" class="modal-backdrop" style="display:none;">
+        <div class="modal-content">
+            <h2>Mapowanie Czujnika (Orientacja) <span class="help-icon" id="sensorMappingHelp" title="Pokaż/ukryj szczegółową pomoc">?</span></h2>
+            <div id="sensorMappingHelpText" class="help-text" style="margin-bottom:10px;" aria-hidden="true">
+                <strong>Cel:</strong> Dopasowanie fizycznego montażu IMU do oczekiwanych osi sterowania robota.<br>
+                <strong>Kroki:</strong> (1) Pozycja pionowa referencyjna. (2) Obrót poziomy ≥ 90°. (3) Zapis korekcji.<br>
+                <strong>Wpływ:</strong> Działa na wewnętrzne wektory (akcelerometr/żyroskop) używane przez PID. Nie zmienia wizualizacji 3D (oddzielne mapowanie modelu).<br>
+                <strong>Wymagane:</strong> Kalibracja IMU (System=3) dla najlepszej dokładności.
+            </div>
+            <div id="sensorWizardStepInfo" style="margin:6px 0; font-size:12px; color:#aaa;">Krok <span id="sensorWizardStepNo">1</span>/3</div>
+            <div id="sensorWizardText" style="text-align:left; font-size:0.95em; line-height:1.5; background:#101014; border:1px solid #2a2a35; padding:12px; border-radius:8px;">
+                <!-- dynamic content -->
+            </div>
+            <div id="sensorWizardHint" style="margin-top:8px; font-size:0.85em; color:#bbb;"> </div>
+            <div id="sensorWizardProgress" style="margin-top:12px; font-family:monospace; background:#111; border:1px solid #333; border-radius:6px; padding:8px; text-align:left;">
+                [ ] Pion | [ ] Rotacja ≥ 90° | [ ] Zapis
+            </div>
+            <div class="sensor-mapping-wrapper" style="display:flex; gap:10px; margin-top:12px; align-items:flex-start;">
+                <div id="sensor-mapping-preview" class="sensor-mapping-preview" style="flex:1; min-width:250px; height:200px; background:#000; border-radius:6px; overflow:hidden;"></div>
+                <div class="sensor-mapping-controls" style="width:320px; display:flex; flex-direction:column; gap:8px;">
+                    <div style="display:flex; justify-content:space-between; gap:6px;">
+                        <div>
+                            <div>Pitch (Cube): <span id="modal-pitch-display">0.0°</span></div>
+                            <div style="font-size:0.8em; color:#9fa;">Telemetry: <span id="modal-pitch-telemetry">0.0°</span></div>
+                        </div>
+                        <div>
+                            <div>Roll (Cube): <span id="modal-roll-display">0.0°</span></div>
+                            <div style="font-size:0.8em; color:#9fa;">Telemetry: <span id="modal-roll-telemetry">0.0°</span></div>
+                        </div>
+                        <div>
+                            <div>Yaw (Cube): <span id="modal-yaw-display">0.0°</span></div>
+                            <div style="font-size:0.8em; color:#9fa;">Telemetry: <span id="modal-yaw-telemetry">0.0°</span></div>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Pitch</div><button id="pitchMinus90Btn">-90°</button><button id="pitchPlus90Btn">+90°</button></div>
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Roll</div><button id="rollMinus90Btn">-90°</button><button id="rollPlus90Btn">+90°</button></div>
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Yaw</div><button id="yawMinus90Btn">-90°</button><button id="yawPlus90Btn">+90°</button></div>
+                    </div>
+                    <div class="mount-rotate-90" style="display:flex; gap:8px; margin-top:6px;">
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Montaż X</div><button id="mountXMinus90Btn">-90°</button><button id="mountXPlus90Btn">+90°</button></div>
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Montaż Y</div><button id="mountYMinus90Btn">-90°</button><button id="mountYPlus90Btn">+90°</button></div>
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Montaż Z</div><button id="mountZMinus90Btn">-90°</button><button id="mountZPlus90Btn">+90°</button></div>
+                    </div>
+                    <hr style="border-color:#2a2a35;">
+                    <div style="margin-top:6px;">
+                        <strong>Mapowanie osi IMU (wpływ na PID)</strong>
+                        <div style="display:flex; gap:6px; margin-top:6px;">
+                            <div style="flex:1;">
+                                <div>Pitch (Źródło)</div>
+                                <select id="imuPitchSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
+                                <div class="sign-toggle" id="imuPitchSign" style="margin-top:6px;"><button data-sign="1" class="active" title="Dodatni">+1</button><button data-sign="-1" title="Ujemny">-1</button></div>
+                            </div>
+                            <div style="flex:1;">
+                                <div>Yaw (Źródło)</div>
+                                <select id="imuYawSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
+                                <div class="sign-toggle" id="imuYawSign" style="margin-top:6px;"><button data-sign="1" class="active">+1</button><button data-sign="-1">-1</button></div>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:6px; margin-top:6px; align-items:center;">
+                            <div style="flex:1;">
+                                <div>Roll (Źródło)</div>
+                                <select id="imuRollSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
+                                <div class="sign-toggle" id="imuRollSign" style="margin-top:6px;"><button data-sign="1" class="active">+1</button><button data-sign="-1">-1</button></div>
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:6px; min-width:120px;">
+                                <button id="imuMappingLoadBtn" style="background:#61dafb;">Wczytaj</button>
+                                <button id="imuMappingSaveBtn" style="background:#a2f279;">Zapisz</button>
+                            </div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px; margin-top:8px;"><input id="markFrontFaceChk" type="checkbox"><label for="markFrontFaceChk">Oznacz front (góra/dół) w podglądzie</label></div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button id="setModalPitchZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Pitch)</button>
+                        <button id="setModalRollZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Roll)</button>
+                    </div>
+                    <hr style="border-color:#2a2a35;">
+                    <div style="margin-top:6px;">
+                        <strong>Małe korekty trimów</strong>
+                        <div style="display:flex; gap:6px; margin-top:6px;">
+                            <div style="flex:1;">
+                                <div>Pitch</div>
+                                <div style="display:flex; gap:2px; margin-top:4px;">
+                                    <button id="pitchTrimPlus01Btn" style="flex:1; font-size:0.8em;">+0.1°</button>
+                                    <button id="pitchTrimMinus01Btn" style="flex:1; font-size:0.8em;">-0.1°</button>
+                                    <button id="pitchTrimPlus001Btn" style="flex:1; font-size:0.8em;">+0.01°</button>
+                                    <button id="pitchTrimMinus001Btn" style="flex:1; font-size:0.8em;">-0.01°</button>
+                                </div>
+                            </div>
+                            <div style="flex:1;">
+                                <div>Roll</div>
+                                <div style="display:flex; gap:2px; margin-top:4px;">
+                                    <button id="rollTrimPlus01Btn" style="flex:1; font-size:0.8em;">+0.1°</button>
+                                    <button id="rollTrimMinus01Btn" style="flex:1; font-size:0.8em;">-0.1°</button>
+                                    <button id="rollTrimPlus001Btn" style="flex:1; font-size:0.8em;">+0.01°</button>
+                                    <button id="rollTrimMinus001Btn" style="flex:1; font-size:0.8em;">-0.01°</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
+                <button id="sensorWizardCancelBtn" style="background:#ff6347;">Anuluj</button>
+                <button id="sensorWizardBackBtn" disabled>Wstecz</button>
+                <button id="sensorWizardNextBtn" style="background:#61dafb;">Dalej</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal mapowania modelu 3D -->
+    <div id="model-mapping-modal" class="modal-backdrop" style="display:none;">
+        <div class="modal-content">
+            <h2>Mapowanie Modelu 3D (Wizualizacja) <span class="help-icon" id="modelMappingHelp" title="Pokaż/ukryj szczegółową pomoc">?</span></h2>
+            <div id="modelMappingHelpText" class="help-text" style="margin-bottom:10px;" aria-hidden="true">
+                <strong>Co to robi?</strong> Przekształca kąty Euler'a (pochodne z kwaternionu) na osie sceny 3D.<br>
+                <strong>Kiedy użyć?</strong> Jeśli model 3D reaguje w niewłaściwych osiach albo odwrotnie niż oczekujesz.<br>
+                <strong>Źródła:</strong> Pitch/Yaw/Roll liczone z kwaternionu (standard ZYX).<br>
+                <strong>Znaki:</strong> Użyj -1 aby odwrócić kierunek osi bez zmiany logiki sterowania.
+            </div>
+            <p style="text-align:left; font-size:0.85em; line-height:1.4;" title="Tylko wizualizacja, nie sterowanie">Określ, które składowe kątów Euler'a mają zasilać osie modelu 3D oraz ich znak.</p>
+            <div class="model-mapping-row">
+                <strong>Pitch:</strong>
+                <select id="modelPitchSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
+                <div class="sign-toggle" id="modelPitchSign"><button data-sign="1" class="active">+1</button><button data-sign="-1">-1</button></div>
+            </div>
+            <div class="model-mapping-row">
+                <strong>Yaw:</strong>
+                <select id="modelYawSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
+                <div class="sign-toggle" id="modelYawSign"><button data-sign="1" class="active">+1</button><button data-sign="-1">-1</button></div>
+            </div>
+            <div class="model-mapping-row">
+                <strong>Roll:</strong>
+                <select id="modelRollSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
+                <div class="sign-toggle" id="modelRollSign"><button data-sign="1" class="active">+1</button><button data-sign="-1">-1</button></div>
+            </div>
+            <div id="model-mapping-current">Brak danych mapowania.</div>
+            <div style="display:flex; gap:10px; margin-top:12px;">
+                <button id="modelMappingLoadBtn" style="flex:1; background:#61dafb;">Wczytaj</button>
+                <button id="modelMappingSaveBtn" style="flex:1; background:#a2f279;">Zapisz</button>
+                <button id="modelMappingResetBtn" style="flex:1; background:#f7b731;">Domyślne</button>
+            </div>
+            <button id="modelMappingCloseBtn" style="width:100%; margin-top:14px; background:#ff6347;">Zamknij</button>
+        </div>
+    </div>
+    
     <script src="js/main.js"></script>
 </body>
 </html>
