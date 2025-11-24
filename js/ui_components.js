@@ -425,14 +425,22 @@ function startMapping(action, buttonElement) { if (gamepadIndex === null) { addL
 function renderMappingModal() { const list = document.getElementById('gamepad-mapping-list'); list.innerHTML = ''; for (const [action, config] of Object.entries(availableActions)) { const row = document.createElement('div'); row.className = 'mapping-row'; const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action); row.innerHTML = `<span class="mapping-label">${config.label}</span><span class="mapping-display">${buttonIndex !== undefined ? `Przycisk ${buttonIndex}` : 'Brak'}</span><button class="mapping-button" data-action="${action}">Przypisz</button>`; list.appendChild(row); } list.querySelectorAll('.mapping-button').forEach(button => { button.addEventListener('click', (e) => { const action = e.target.dataset.action; startMapping(action, e.target); }); }); }
 if (typeof window.init3DVisualization === 'undefined') {
     window.init3DVisualization = function () {
+        console.log('[3D] init3DVisualization called');
         const container = document.getElementById('robot3d-container');
+        if (!container) {
+            console.error('[3D] Container not found');
+            return;
+        }
+        console.log('[3D] Container found, size:', container.clientWidth, container.clientHeight);
         scene3D = new THREE.Scene();
         camera3D = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 2000);
         camera3D.position.set(28, 22, 48);
         camera3D.lookAt(0, 8, 0);
         renderer3D = new THREE.WebGLRenderer({ antialias: true });
         renderer3D.setSize(container.clientWidth, container.clientHeight);
+        console.log('[3D] Renderer size set to:', container.clientWidth, container.clientHeight);
         container.appendChild(renderer3D.domElement);
+        console.log('[3D] Renderer appended to container');
         controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
         controls3D.target.set(0, 8, 0);
         controls3D.maxPolarAngle = Math.PI / 2;
@@ -451,11 +459,14 @@ if (typeof window.init3DVisualization === 'undefined') {
         groundMesh.rotation.x = -Math.PI / 2;
         groundMesh.position.y = 0;
         scene3D.add(groundMesh);
+        console.log('[3D] Ground mesh added to scene');
         robotPivot = createRobotModel3D();
         robotPivot.position.y = 4.1;
         scene3D.add(robotPivot);
+        console.log('[3D] Robot model added to scene');
         skyDome = createSkyDome();
         scene3D.add(skyDome);
+        console.log('[3D] Sky dome added to scene');
         window.addEventListener('resize', () => {
             const width = container.clientWidth;
             const height = container.clientHeight;
@@ -465,12 +476,14 @@ if (typeof window.init3DVisualization === 'undefined') {
         });
         if (typeof setupControls3D === 'function') {
             setupControls3D();
+            console.log('[3D] Controls setup');
         } else {
             console.warn('[UI] setupControls3D nie jest jeszcze zdefiniowane podczas init3DVisualization. Dodaj fallback lub upewnij się że ui_core.js jest zaladowany.');
         }
         if (typeof setupCalibrationModal === 'function') {
             setupCalibrationModal();
         }
+        console.log('[3D] init3DVisualization completed');
     };
 }
 function createCustomWheel(totalRadius, tireThickness, width) { const wheelGroup = new THREE.Group(); const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 }); const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.4 }); const rimRadius = totalRadius - tireThickness; const tire = new THREE.Mesh(new THREE.TorusGeometry(rimRadius + tireThickness / 2, tireThickness / 2, 16, 100), tireMaterial); wheelGroup.add(tire); const rimShape = new THREE.Shape(); rimShape.absarc(0, 0, rimRadius, 0, Math.PI * 2, false); const holePath = new THREE.Path(); holePath.absarc(0, 0, rimRadius * 0.85, 0, Math.PI * 2, true); rimShape.holes.push(holePath); const extrudeSettings = { depth: width * 0.4, bevelEnabled: false }; const outerRimGeometry = new THREE.ExtrudeGeometry(rimShape, extrudeSettings); outerRimGeometry.center(); const outerRim = new THREE.Mesh(outerRimGeometry, rimMaterial); wheelGroup.add(outerRim); const hubRadius = rimRadius * 0.2; const hub = new THREE.Mesh(new THREE.CylinderGeometry(hubRadius, hubRadius, width * 0.5, 24), rimMaterial); hub.rotateX(Math.PI / 2); wheelGroup.add(hub); const spokeLength = (rimRadius * 0.85) - hubRadius; const spokeGeometry = new THREE.BoxGeometry(spokeLength, rimRadius * 0.15, width * 0.4); spokeGeometry.translate(hubRadius + spokeLength / 2, 0, 0); for (let i = 0; i < 6; i++) { const spoke = new THREE.Mesh(spokeGeometry, rimMaterial); spoke.rotation.z = i * (Math.PI / 3); wheelGroup.add(spoke); } return wheelGroup; }

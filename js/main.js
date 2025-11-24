@@ -101,6 +101,7 @@ class AppStore {
      * @param {string} path - Optional dot-notation path (e.g., 'connection.isConnected')
      * @returns {any} State value
      */
+
     getState(path = null) {
         if (!path) return this.state;
 
@@ -243,6 +244,38 @@ class AppStore {
         this.setState(updates);
     }
 }
+
+// Attach sensor mapping modal controls and IMU mapping buttons when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('sensorMappingBtn')?.addEventListener('click', () => { openSensorMappingModal(); });
+    document.getElementById('imuMappingLoadBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'get_imu_mapping' }); });
+    document.getElementById('imuMappingSaveBtn')?.addEventListener('click', () => {
+        if (!AppState.isConnected) { addLogMessage('[UI] Musisz być połączony z robotem aby zapisać mapowanie IMU.', 'warn'); return; }
+        if (!confirm('Zapisz mapowanie IMU do pamięci EEPROM robota?')) return;
+        const mapping = gatherIMUMappingFromUI();
+        sendBleMessage({ type: 'set_imu_mapping', mapping });
+        addLogMessage('[UI] Wysłano mapowanie IMU do robota (set_imu_mapping).', 'info');
+    });
+
+    ['imuPitchSource', 'imuYawSource', 'imuRollSource'].forEach(selectId => {
+        const s = document.getElementById(selectId);
+        if (!s) return;
+        s.addEventListener('change', () => {
+            if (AppState.isConnected) {
+                const mapping = gatherIMUMappingFromUI();
+                sendBleMessage({ type: 'set_imu_mapping', mapping });
+            }
+        });
+    });
+
+    ['imuPitchSign', 'imuYawSign', 'imuRollSign'].forEach(containerId => {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        el.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', () => { const sign = parseInt(btn.dataset.sign); setSignButtons(containerId, sign); });
+        });
+    });
+});
 
 // Create singleton instance
 const appStore = new AppStore();
@@ -683,9 +716,27 @@ let currentSequenceStep = 0; const MAX_SEQUENCE_STEPS = 15;
 // Model mapping for 3D visualization
 let modelMapping = { pitch: { source: 0, sign: 1 }, yaw: { source: 1, sign: 1 }, roll: { source: 2, sign: 1 } };
 
+// Signal analyzer chart variables
+let signalAnalyzerChart;
+let availableTelemetry = {
+    pitch: { label: 'Pitch', color: '#61dafb' },
+    roll: { label: 'Roll', color: '#4CAF50' },
+    yaw: { label: 'Yaw', color: '#FF9800' },
+    speed: { label: 'Speed', color: '#f7b731' },
+    target_speed: { label: 'Target Speed', color: '#e74c3c' },
+    output: { label: 'Output', color: '#9b59b6' }
+};
+let isChartPaused = false;
+let chartRangeSelection = { isSelecting: false, startIndex: null, endIndex: null };
+let cursorA = null, cursorB = null;
+
 // 3D Visualization variables
 let scene3D, camera3D, renderer3D, controls3D, robotPivot, leftWheel, rightWheel, groundMesh, groundTexture, skyDome;
 let isAnimation3DEnabled = false, isMovement3DEnabled = false, robotPerspectiveZoom = 40;
+// Sensor mapping preview and wizard globals
+let sensorPreview = { scene: null, camera: null, renderer: null, cube: null, axes: null, animId: null, faceIndicator: null, xLabel: null, yLabel: null, zLabel: null, xArrow: null, yArrow: null, zArrow: null };
+let sensorWizard = { step: 0, rotStartYaw: null, monitorId: null, progress: { upright: false, rotation: false, saved: false } };
+let sensorModalTelemetryMonitorId = null;
 let currentEncoderLeft = 0, currentEncoderRight = 0, lastEncoderAvg = 0;
 
 // Setup communication layer message handlers
@@ -878,9 +929,18 @@ function processCompleteMessage(data) {
             for (const [key, value] of Object.entries(AppState.tempTuningParams)) {
                 applySingleAutotuneParam(key, value);
             }
-            if (AppState.tempStates.balancing !== undefined) document.getElementById('balanceSwitch').checked = AppState.tempStates.balancing;
-            if (AppState.tempStates.holding_pos !== undefined) document.getElementById('holdPositionSwitch').checked = AppState.tempStates.holding_pos;
-            if (AppState.tempStates.speed_mode !== undefined) document.getElementById('speedModeSwitch').checked = AppState.tempStates.speed_mode;
+            if (AppState.tempStates.balancing !== undefined) {
+                const balEl = document.getElementById('balanceToggle') || document.getElementById('balanceSwitch');
+                if (balEl) balEl.checked = AppState.tempStates.balancing;
+            }
+            if (AppState.tempStates.holding_pos !== undefined) {
+                const holdEl = document.getElementById('holdPositionToggle') || document.getElementById('holdPositionSwitch');
+                if (holdEl) holdEl.checked = AppState.tempStates.holding_pos;
+            }
+            if (AppState.tempStates.speed_mode !== undefined) {
+                const speedEl = document.getElementById('speedModeToggle') || document.getElementById('speedModeSwitch');
+                if (speedEl) speedEl.checked = AppState.tempStates.speed_mode;
+            }
             AppState.isApplyingConfig = false;
 
             // Zaktualizuj UI
@@ -1096,6 +1156,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
 
+    // Robust helper to find a view element by data-view value.
+    // Handles cases like '3d' -> 'view3D' and performs case-insensitive fallback.
+    function getViewElement(viewId) {
+        if (!viewId) return null;
+        // 1) try capitalized (pid-tuning -> PidTuning)
+        let candidate = `view${capitalize(viewId)}`;
+        let el = document.getElementById(candidate);
+        if (el) return el;
+
+        // 2) try raw (view3d)
+        candidate = `view${viewId}`;
+        el = document.getElementById(candidate);
+        if (el) return el;
+
+        // 3) case-insensitive search among .view elements
+        const lower = candidate.toLowerCase();
+        const views = document.querySelectorAll('.view');
+        for (const v of views) {
+            if (v.id && v.id.toLowerCase() === lower) return v;
+        }
+
+        return null;
+    }
+
     function openSidebar() {
         sidebar.classList.add('active');
         sidebarOverlay.classList.add('active');
@@ -1135,20 +1219,32 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.view').forEach(view => {
                 view.classList.remove('active');
             });
-            const newView = document.getElementById(`view${capitalize(viewId)}`);
-            newView.classList.add('active');
+            const newView = getViewElement(viewId);
+            if (!newView) {
+                console.warn(`[UI] No view element found for data-view='${viewId}'. Tried view${capitalize(viewId)} and view${viewId}`);
+            } else {
+                newView.classList.add('active');
+            }
 
-            // Initialize 3D visualization when switching to 3D view
-            if (viewId === '3d' && typeof window.init3DVisualization === 'function') {
+            // Initialize 3D visualization when switching to diagnostics OR 3D view
+            if (viewId === 'diagnostics' || viewId === '3d') {
                 setTimeout(() => {
                     try {
-                        window.init3DVisualization();
-                        window.setupControls3D?.();
-                        window.animate3D();
-                        addLogMessage('[UI] Wizualizacja 3D zainicjalizowana przy przełączaniu zakładki', 'info');
+                        if (typeof window.init3DVisualization === 'function') {
+                            window.init3DVisualization();
+                            window.setupControls3D?.();
+                            window.animate3D();
+                            addLogMessage('[UI] Wizualizacja 3D zainicjalizowana przy przełączaniu zakładki', 'info');
+                        }
+                        if (typeof window.initSignalAnalyzerChart === 'function') {
+                            window.initSignalAnalyzerChart();
+                            window.setupSignalChartControls?.();
+                            window.setupSignalAnalyzerControls?.();
+                            addLogMessage('[UI] Analizator sygnału zainicjalizowany przy przełączaniu zakładki', 'info');
+                        }
                     } catch (e) {
-                        console.warn('3D initialization error:', e);
-                        addLogMessage('Błąd inicjalizacji wizualizacji 3D: ' + e.message, 'error');
+                        console.warn('Initialization error:', e);
+                        addLogMessage('Błąd inicjalizacji: ' + e.message, 'error');
                     }
                 }, 100);
             }
@@ -1525,23 +1621,400 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ========================================================================
-    // 3D VISUALIZATION (Placeholder)
+    // 3D VISUALIZATION
     // ========================================================================
     const robot3DContainer = document.getElementById('robot3d-container');
     const reset3DView = document.getElementById('reset3DView');
     const toggle3DAnimation = document.getElementById('toggle3DAnimation');
+    const toggle3DMovement = document.getElementById('toggle3DMovement');
 
-    reset3DView.addEventListener('click', () => {
-        addLogMessage('Widok 3D zresetowany', 'info');
-    });
+    // Wire up placeholder buttons now; the real hooks are set up in setupControls3D()
+    if (reset3DView) reset3DView.addEventListener('click', () => { addLogMessage('Widok 3D zresetowany', 'info'); });
+    if (toggle3DAnimation) toggle3DAnimation.addEventListener('click', () => { isAnimation3DEnabled = !isAnimation3DEnabled; addLogMessage('Animacja 3D przełączona', 'info'); });
+    if (toggle3DMovement) toggle3DMovement.addEventListener('click', () => { isMovement3DEnabled = !isMovement3DEnabled; addLogMessage('Ruch 3D przełączony', 'info'); });
 
-    toggle3DAnimation.addEventListener('click', () => {
-        addLogMessage('Animacja 3D przełączona', 'info');
-    });
+    // Implement THREE.js 3D scene initialization and robot model
+    function init3DVisualization() {
+        if (!robot3DContainer) return;
+        // If already initialized, resize renderer and return
+        if (renderer3D && renderer3D.domElement && robot3DContainer.contains(renderer3D.domElement)) {
+            renderer3D.setSize(robot3DContainer.clientWidth, robot3DContainer.clientHeight);
+            camera3D.aspect = robot3DContainer.clientWidth / robot3DContainer.clientHeight;
+            camera3D.updateProjectionMatrix();
+            return;
+        }
 
-    // TODO: Initialize THREE.js scene here
-    // For now, show placeholder
-    robot3DContainer.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary); font-size: 3rem;">🤖</div>';
+        scene3D = new THREE.Scene();
+        camera3D = new THREE.PerspectiveCamera(50, robot3DContainer.clientWidth / robot3DContainer.clientHeight, 0.1, 2000);
+        camera3D.position.set(28, 22, 48);
+        camera3D.lookAt(0, 8, 0);
+        renderer3D = new THREE.WebGLRenderer({ antialias: true });
+        renderer3D.setSize(robot3DContainer.clientWidth, robot3DContainer.clientHeight);
+        robot3DContainer.innerHTML = '';
+        robot3DContainer.appendChild(renderer3D.domElement);
+        controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
+        controls3D.target.set(0, 8, 0);
+        controls3D.maxPolarAngle = Math.PI / 2;
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene3D.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        directionalLight.position.set(10, 20, 15);
+        scene3D.add(directionalLight);
+
+        const PLANE_SIZE_CM = 2000;
+        groundTexture = createCheckerTexture(40);
+        const repeats = PLANE_SIZE_CM / 40;
+        groundTexture.repeat.set(repeats, repeats);
+        const groundMaterial = new THREE.MeshStandardMaterial({ map: groundTexture, roughness: 1.0, metalness: 0.0 });
+        const groundGeo = new THREE.PlaneGeometry(PLANE_SIZE_CM, PLANE_SIZE_CM, 1, 1);
+        groundMesh = new THREE.Mesh(groundGeo, groundMaterial);
+        groundMesh.rotation.x = -Math.PI / 2;
+        groundMesh.position.y = 0;
+        scene3D.add(groundMesh);
+
+        robotPivot = createRobotModel3D();
+        robotPivot.position.y = 4.1;
+        scene3D.add(robotPivot);
+
+        skyDome = createSkyDome();
+        scene3D.add(skyDome);
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            const width = robot3DContainer.clientWidth;
+            const height = robot3DContainer.clientHeight;
+            camera3D.aspect = width / height;
+            camera3D.updateProjectionMatrix();
+            renderer3D.setSize(width, height);
+        });
+
+        setupControls3D();
+    }
+
+    function createCustomWheel(totalRadius, tireThickness, width) {
+        const wheelGroup = new THREE.Group();
+        const tireMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 });
+        const rimMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.4 });
+        const rimRadius = totalRadius - tireThickness;
+        const tire = new THREE.Mesh(new THREE.TorusGeometry(rimRadius + tireThickness / 2, tireThickness / 2, 16, 100), tireMaterial);
+        wheelGroup.add(tire);
+        const rimShape = new THREE.Shape();
+        rimShape.absarc(0, 0, rimRadius, 0, Math.PI * 2, false);
+        const holePath = new THREE.Path();
+        holePath.absarc(0, 0, rimRadius * 0.85, 0, Math.PI * 2, true);
+        rimShape.holes.push(holePath);
+        const extrudeSettings = { depth: width * 0.4, bevelEnabled: false };
+        const outerRimGeometry = new THREE.ExtrudeGeometry(rimShape, extrudeSettings);
+        outerRimGeometry.center();
+        const outerRim = new THREE.Mesh(outerRimGeometry, rimMaterial);
+        wheelGroup.add(outerRim);
+        const hubRadius = rimRadius * 0.2;
+        const hub = new THREE.Mesh(new THREE.CylinderGeometry(hubRadius, hubRadius, width * 0.5, 24), rimMaterial);
+        hub.rotateX(Math.PI / 2);
+        wheelGroup.add(hub);
+        const spokeLength = (rimRadius * 0.85) - hubRadius;
+        const spokeGeometry = new THREE.BoxGeometry(spokeLength, rimRadius * 0.15, width * 0.4);
+        spokeGeometry.translate(hubRadius + spokeLength / 2, 0, 0);
+        for (let i = 0; i < 6; i++) {
+            const spoke = new THREE.Mesh(spokeGeometry, rimMaterial);
+            spoke.rotation.z = i * (Math.PI / 3);
+            wheelGroup.add(spoke);
+        }
+        return wheelGroup;
+    }
+
+    function createRobotModel3D() {
+        const BODY_WIDTH = 9.0, BODY_HEIGHT = 6.0, BODY_DEPTH = 3.5, WHEEL_GAP = 1.0;
+        const MAST_HEIGHT = 14.5, MAST_THICKNESS = 1.5;
+        const TIRE_THICKNESS = 1.0, WHEEL_WIDTH = 2.0;
+        const WHEEL_RADIUS_3D = 4.1;
+        const pivot = new THREE.Object3D();
+        const model = new THREE.Group();
+        const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1C1C1C });
+        const batteryMaterial = new THREE.MeshStandardMaterial({ color: 0x4169E1 });
+        const body = new THREE.Mesh(new THREE.BoxGeometry(BODY_WIDTH, BODY_HEIGHT, BODY_DEPTH), bodyMaterial);
+        body.position.y = WHEEL_RADIUS_3D;
+        model.add(body);
+        const mast = new THREE.Mesh(new THREE.BoxGeometry(MAST_THICKNESS, MAST_HEIGHT, MAST_THICKNESS), bodyMaterial);
+        mast.position.y = WHEEL_RADIUS_3D + BODY_HEIGHT / 2 + MAST_HEIGHT / 2;
+        model.add(mast);
+        const battery = new THREE.Mesh(new THREE.BoxGeometry(6.0, 1.0, 3.0), batteryMaterial);
+        battery.position.y = mast.position.y + MAST_HEIGHT / 2 + 0.5;
+        model.add(battery);
+        leftWheel = createCustomWheel(WHEEL_RADIUS_3D, TIRE_THICKNESS, WHEEL_WIDTH);
+        leftWheel.rotation.y = Math.PI / 2;
+        leftWheel.position.set(-(BODY_WIDTH / 2 + WHEEL_GAP), WHEEL_RADIUS_3D, 0);
+        model.add(leftWheel);
+        rightWheel = createCustomWheel(WHEEL_RADIUS_3D, TIRE_THICKNESS, WHEEL_WIDTH);
+        rightWheel.rotation.y = Math.PI / 2;
+        rightWheel.position.set(BODY_WIDTH / 2 + WHEEL_GAP, WHEEL_RADIUS_3D, 0);
+        model.add(rightWheel);
+        model.position.y = -WHEEL_RADIUS_3D;
+        pivot.add(model);
+        return pivot;
+    }
+
+    function createCheckerTexture(squareSizeCm = 20, colorA = '#C8C8C8', colorB = '#787878') {
+        const size = 256;
+        const squares = 2;
+        const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size; const ctx = canvas.getContext('2d'); const s = size / squares; for (let y = 0; y < squares; y++) { for (let x = 0; x < squares; x++) { ctx.fillStyle = ((x + y) % 2 === 0) ? colorA : colorB; ctx.fillRect(x * s, y * s, s, s); } }
+        const tex = new THREE.CanvasTexture(canvas); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 8; tex.encoding = THREE.sRGBEncoding; return tex;
+    }
+
+    function createSkyDome() {
+        const width = 2048, height = 1024;
+        const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); const grad = ctx.createLinearGradient(0, 0, 0, height); grad.addColorStop(0, '#87CEEB'); grad.addColorStop(0.6, '#B0E0E6'); grad.addColorStop(1, '#E6F2FA'); ctx.fillStyle = grad; ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        for (let i = 0; i < 150; i++) {
+            const x = Math.random() * width;
+            const y = Math.random() * height * 0.6;
+            const radius = 20 + Math.random() * 80;
+            const blur = 10 + Math.random() * 20;
+            ctx.filter = `blur(${blur}px)`;
+            ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill(); if (x > width - radius * 2) { ctx.beginPath(); ctx.arc(x - width, y, radius, 0, Math.PI * 2); ctx.fill(); } if (x < radius * 2) { ctx.beginPath(); ctx.arc(x + width, y, radius, 0, Math.PI * 2); ctx.fill(); }
+        }
+        ctx.filter = 'none';
+        const tex = new THREE.CanvasTexture(canvas); tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.ClampToEdgeWrapping; tex.encoding = THREE.sRGBEncoding; const skyGeo = new THREE.SphereGeometry(1000, 32, 16); const skyMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide }); return new THREE.Mesh(skyGeo, skyMat);
+    }
+
+    function setupControls3D() {
+        const btnReset = document.getElementById('reset3DView') || document.getElementById('reset3dView');
+        const btnToggleAnim = document.getElementById('toggle3DAnimation') || document.getElementById('toggle3dAnimation');
+        const btnToggleMove = document.getElementById('toggle3DMovement') || document.getElementById('toggle3dMovement');
+        if (btnReset) btnReset.addEventListener('click', () => { camera3D.position.set(28, 22, 48); controls3D.target.set(0, 8, 0); controls3D.update(); });
+        if (btnToggleAnim) btnToggleAnim.addEventListener('click', () => isAnimation3DEnabled = !isAnimation3DEnabled);
+        if (btnToggleMove) btnToggleMove.addEventListener('click', () => { isMovement3DEnabled = !isMovement3DEnabled; lastEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2; });
+    }
+
+    function update3DAnimation() {
+        if (isAnimation3DEnabled && robotPivot) {
+            if (typeof window.telemetryData?.qw === 'number') {
+                try {
+                    const qRaw = new THREE.Quaternion(window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz, window.telemetryData.qw).normalize();
+                    const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
+                    const mapped = eul ? applyModelMappingToEuler(eul) : { pitch: 0, yaw: 0, roll: 0 };
+                    const qMappedEuler = new THREE.Quaternion().setFromEuler(new THREE.Euler(THREE.MathUtils.degToRad(mapped.pitch), THREE.MathUtils.degToRad(mapped.yaw), THREE.MathUtils.degToRad(mapped.roll), 'YXZ'));
+                    robotPivot.quaternion.slerp(qMappedEuler, 0.35);
+                } catch (err) {
+                    console.error('Quaternion mapping error', err);
+                }
+            }
+            robotPivot.position.y = 4.4;
+            const isRobotPerspective = document.getElementById('robotPerspectiveCheckbox')?.checked;
+            controls3D.enabled = !isRobotPerspective;
+            if (isRobotPerspective) {
+                const offset = new THREE.Vector3(0, 15, robotPerspectiveZoom);
+                offset.applyQuaternion(robotPivot.quaternion);
+                const cameraPosition = robotPivot.position.clone().add(offset);
+                camera3D.position.lerp(cameraPosition, 0.1);
+                const lookAtPosition = robotPivot.position.clone().add(new THREE.Vector3(0, 10, 0));
+                camera3D.lookAt(lookAtPosition);
+            }
+            const ppr = parseFloat(document.getElementById('encoderPprInput')?.value) || 820;
+            const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
+            const wheelRotationR = (currentEncoderRight / ppr) * 2 * Math.PI;
+            if (leftWheel) leftWheel.rotation.z = -wheelRotationL;
+            if (rightWheel) rightWheel.rotation.z = -wheelRotationR;
+            if (isMovement3DEnabled) {
+                const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput')?.value) || 8.2;
+                const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
+                const dist_cm = -((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * wheelDiameter;
+                if (groundTexture) {
+                    const yawRad = robotPivot.rotation.y;
+                    const dx = Math.sin(yawRad) * dist_cm;
+                    const dz = Math.cos(yawRad) * dist_cm;
+                    const squaresPerCm = 1 / 20;
+                    groundTexture.offset.x += dx * squaresPerCm;
+                    groundTexture.offset.y -= dz * squaresPerCm;
+                    groundTexture.needsUpdate = true;
+                }
+                const logicalX = (groundTexture ? -groundTexture.offset.x * 20 : 0);
+                const logicalZ = (groundTexture ? -groundTexture.offset.y * 20 : 0);
+                const elX = document.getElementById('robot3d-position-x'); if (elX) elX.textContent = logicalX.toFixed(1) + ' cm';
+                const elZ = document.getElementById('robot3d-position-z'); if (elZ) elZ.textContent = logicalZ.toFixed(1) + ' cm';
+                lastEncoderAvg = currentEncoderAvg;
+            }
+        }
+    }
+
+    function animate3D() {
+        requestAnimationFrame(animate3D);
+        update3DAnimation();
+        if (skyDome) skyDome.rotation.y += 0.00005;
+        if (controls3D && renderer3D && scene3D && camera3D) {
+            controls3D.update();
+            renderer3D.render(scene3D, camera3D);
+        }
+    }
+
+    // Expose 3D functions on global window for calls by other parts of app
+    window.init3DVisualization = init3DVisualization;
+    window.setupControls3D = setupControls3D;
+    window.animate3D = animate3D;
+
+    // ========================================================================
+    // SENSOR MAPPING PREVIEW & WIZARD (copied from dev implementation)
+    // ========================================================================
+
+    // Init the simple 3D cube preview for IMU sensor mapping
+    function initSensorMappingPreview() {
+        const container = document.getElementById('sensor-mapping-preview');
+        if (!container) return;
+        // Clean up existing renderer
+        if (sensorPreview.renderer && sensorPreview.renderer.domElement) {
+            while (container.firstChild) container.removeChild(container.firstChild);
+            try { sensorPreview.renderer.dispose(); } catch (e) { /* no-op */ }
+            sensorPreview.renderer = null;
+        }
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(3, 3, 6);
+        camera.lookAt(0, 0, 0);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setClearColor(0x000000, 0);
+        container.appendChild(renderer.domElement);
+        const geom = new THREE.BoxGeometry(2, 0.2, 2);
+        const mat = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.2, roughness: 0.7 });
+        const cube = new THREE.Mesh(geom, mat);
+        const axes = new THREE.AxesHelper(3);
+        scene.add(axes);
+        scene.add(cube);
+        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambient);
+        const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+        dir.position.set(5, 10, 7);
+        scene.add(dir);
+        sensorPreview.scene = scene; sensorPreview.camera = camera; sensorPreview.renderer = renderer; sensorPreview.cube = cube; sensorPreview.axes = axes;
+        const makeAxisLabel = (text, color) => {
+            const canvasLabel = document.createElement('canvas'); canvasLabel.width = 128; canvasLabel.height = 64; const ctxLabel = canvasLabel.getContext('2d'); ctxLabel.font = 'bold 30px Arial'; ctxLabel.textAlign = 'center'; ctxLabel.textBaseline = 'middle'; ctxLabel.fillStyle = color || '#ffffff'; ctxLabel.fillText(text, canvasLabel.width / 2, canvasLabel.height / 2);
+            const labelTex = new THREE.CanvasTexture(canvasLabel);
+            const labelMat = new THREE.SpriteMaterial({ map: labelTex, depthTest: false });
+            return new THREE.Sprite(labelMat);
+        };
+        sensorPreview.xLabel = makeAxisLabel('X', '#ff0000'); sensorPreview.xLabel.scale.set(1.2, 0.6, 1);
+        sensorPreview.yLabel = makeAxisLabel('Y', '#00ff00'); sensorPreview.yLabel.scale.set(1.2, 0.6, 1);
+        sensorPreview.zLabel = makeAxisLabel('Z', '#0000ff'); sensorPreview.zLabel.scale.set(1.2, 0.6, 1);
+        cube.add(sensorPreview.xLabel); cube.add(sensorPreview.yLabel); cube.add(sensorPreview.zLabel);
+        sensorPreview.xLabel.position.set(1.3, 0, 0);
+        sensorPreview.yLabel.position.set(0, 1.3, 0);
+        sensorPreview.zLabel.position.set(0, 0, 1.3);
+        sensorPreview.xArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 1.1, 0xff0000);
+        sensorPreview.yArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 1.1, 0x00ff00);
+        sensorPreview.zArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 1.1, 0x0000ff);
+        cube.add(sensorPreview.xArrow); cube.add(sensorPreview.yArrow); cube.add(sensorPreview.zArrow);
+        const faceGeom = new THREE.PlaneGeometry(0.8, 0.8);
+        const faceMat = new THREE.MeshBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.75, side: THREE.DoubleSide });
+        const faceIndicator = new THREE.Mesh(faceGeom, faceMat);
+        faceIndicator.position.set(0, 0, 1.3);
+        faceIndicator.lookAt(sensorPreview.camera.position);
+        faceIndicator.visible = false;
+        cube.add(faceIndicator);
+        sensorPreview.faceIndicator = faceIndicator;
+        function render() { sensorPreview.animId = requestAnimationFrame(render); renderer.render(scene, camera); }
+        render();
+        window.addEventListener('resize', () => { if (!sensorPreview.renderer) return; const w = container.clientWidth, h = container.clientHeight; sensorPreview.camera.aspect = w / h; sensorPreview.camera.updateProjectionMatrix(); sensorPreview.renderer.setSize(w, h); });
+        updateSensorMappingDisplays();
+        ['pitchMinus90Btn', 'pitchPlus90Btn', 'rollMinus90Btn', 'rollPlus90Btn', 'yawMinus90Btn', 'yawPlus90Btn'].forEach(id => { const b = document.getElementById(id); if (!b) return; b.addEventListener('click', (e) => { const delta = id.includes('Minus') ? -90 : 90; if (id.startsWith('pitch')) rotateSensorCube('x', delta); if (id.startsWith('roll')) rotateSensorCube('z', delta); if (id.startsWith('yaw')) rotateSensorCube('y', delta); }); });
+        document.getElementById('setModalPitchZeroBtn')?.addEventListener('click', () => { setPitchZero(); });
+        document.getElementById('setModalRollZeroBtn')?.addEventListener('click', () => { setRollZero(); });
+        document.getElementById('clearModalPitchZeroBtn')?.addEventListener('click', () => { addLogMessage('[UI] Trym (Pitch) jest częścią montażu (qcorr) i nie podlega czyszczeniu wartością 0. Użyj przycisków ± lub Ustaw punkt 0.', 'warn'); });
+        document.getElementById('clearModalRollZeroBtn')?.addEventListener('click', () => { addLogMessage('[UI] Trym (Roll) jest częścią montażu (qcorr) i nie podlega czyszczeniu wartością 0. Użyj przycisków ± lub Ustaw punkt 0.', 'warn'); });
+        const rotate90 = (axis, steps) => { sendBleMessage({ type: 'rotate_mount_90', axis, steps }); addLogMessage(`[UI] Obrót montażu 90°: axis=${axis.toUpperCase()} steps=${steps}`, 'info'); };
+        document.getElementById('mountXMinus90Btn')?.addEventListener('click', () => rotate90('x', -1));
+        document.getElementById('mountXPlus90Btn')?.addEventListener('click', () => rotate90('x', 1));
+        document.getElementById('mountYMinus90Btn')?.addEventListener('click', () => rotate90('y', -1));
+        document.getElementById('mountYPlus90Btn')?.addEventListener('click', () => rotate90('y', 1));
+        document.getElementById('mountZMinus90Btn')?.addEventListener('click', () => rotate90('z', -1));
+        document.getElementById('mountZPlus90Btn')?.addEventListener('click', () => rotate90('z', 1));
+    }
+
+    function gatherIMUMappingFromUI() {
+        const mapping = {
+            pitch: { source: parseInt(document.getElementById('imuPitchSource')?.value || '0'), sign: parseInt(getActiveSign('imuPitchSign')) },
+            yaw: { source: parseInt(document.getElementById('imuYawSource')?.value || '1'), sign: parseInt(getActiveSign('imuYawSign')) },
+            roll: { source: parseInt(document.getElementById('imuRollSource')?.value || '2'), sign: parseInt(getActiveSign('imuRollSign')) }
+        };
+        return mapping;
+    }
+
+    function updateIMUMappingUIFromData(data) {
+        if (!data || !data.pitch) return;
+        const p = document.getElementById('imuPitchSource'); if (p) p.value = data.pitch.source || '0';
+        const y = document.getElementById('imuYawSource'); if (y) y.value = data.yaw.source || '1';
+        const r = document.getElementById('imuRollSource'); if (r) r.value = data.roll.source || '2';
+        setSignButtons('imuPitchSign', parseInt(data.pitch.sign)); setSignButtons('imuYawSign', parseInt(data.yaw.sign)); setSignButtons('imuRollSign', parseInt(data.roll.sign));
+    }
+
+    function rotateSensorCube(axis, deg) {
+        if (!sensorPreview.cube) return; const rad = THREE.MathUtils.degToRad(deg);
+        if (axis === 'x') sensorPreview.cube.rotateX(rad); else if (axis === 'y') sensorPreview.cube.rotateY(rad); else if (axis === 'z') sensorPreview.cube.rotateZ(rad);
+        updateSensorMappingDisplays(); if (Math.abs(deg) % 90 === 0) { try { applyRotationToIMUMapping(axis, deg); } catch (e) { /* no-op */ } }
+    }
+
+    function mappingObjToMatrix(mapping) { const M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]; const setRow = (rowIdx, m) => { const col = parseInt(m.source); const sign = parseInt(m.sign) || 1; M[rowIdx][col] = sign; }; setRow(0, mapping.pitch); setRow(1, mapping.yaw); setRow(2, mapping.roll); return M; }
+
+    function matrixToMappingObj(M) { const findInRow = (row) => { for (let c = 0; c < 3; c++) { const v = M[row][c]; if (v === 0) continue; return { source: c, sign: v }; } return { source: 0, sign: 1 }; }; return { pitch: findInRow(0), yaw: findInRow(1), roll: findInRow(2) }; }
+
+    function getRotationMatrix(axis, deg) {
+        const d = ((deg % 360) + 360) % 360; const q = (d === 270) ? -90 : d; let RA = null;
+        if (axis === 'x') {
+            if (q === 90) RA = [[1, 0, 0], [0, 0, -1], [0, 1, 0]];
+            else if (q === -90) RA = [[1, 0, 0], [0, 0, 1], [0, -1, 0]];
+            else if (q === 180) RA = [[1, 0, 0], [0, -1, 0], [0, 0, -1]];
+            else RA = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+        } else if (axis === 'y') {
+            if (q === 90) RA = [[0, 0, 1], [0, 1, 0], [-1, 0, 0]];
+            else if (q === -90) RA = [[0, 0, -1], [0, 1, 0], [1, 0, 0]];
+            else if (q === 180) RA = [[-1, 0, 0], [0, 1, 0], [0, 0, -1]];
+            else RA = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+        } else {
+            if (q === 90) RA = [[0, -1, 0], [1, 0, 0], [0, 0, 1]];
+            else if (q === -90) RA = [[0, 1, 0], [-1, 0, 0], [0, 0, 1]];
+            else if (q === 180) RA = [[-1, 0, 0], [0, -1, 0], [0, 0, 1]];
+            else RA = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+        }
+        return RA;
+    }
+
+    function multiplyMatrix(A, B) {
+        const R = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+        for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { let s = 0; for (let k = 0; k < 3; k++) s += A[i][k] * B[k][j]; R[i][j] = s; }
+        return R;
+    }
+
+    function applyRotationToIMUMapping(axis, deg) { const cur = gatherIMUMappingFromUI(); const M = mappingObjToMatrix(cur); const R = getRotationMatrix(axis, deg); const Mprime = multiplyMatrix(M, R); const newMap = matrixToMappingObj(Mprime); updateIMUMappingUIFromData(newMap); }
+
+    function updateSensorMappingDisplays() { if (!sensorPreview.cube) return; const q = sensorPreview.cube.quaternion; const eul = new THREE.Euler().setFromQuaternion(q, 'ZYX'); const yaw = THREE.MathUtils.radToDeg(eul.x); const pitch = THREE.MathUtils.radToDeg(eul.y); const roll = THREE.MathUtils.radToDeg(eul.z); const pd = document.getElementById('modal-pitch-display'); const rd = document.getElementById('modal-roll-display'); const yd = document.getElementById('modal-yaw-display'); if (pd) pd.textContent = pitch.toFixed(2) + '°'; if (rd) rd.textContent = roll.toFixed(2) + '°'; if (yd) yd.textContent = yaw.toFixed(2) + '°'; }
+
+    function updateModalTelemetryDisplay() { const e = getRawEuler(); const pd = document.getElementById('modal-pitch-telemetry'); const rd = document.getElementById('modal-roll-telemetry'); const yd = document.getElementById('modal-yaw-telemetry'); if (pd) pd.textContent = (e.pitch || 0).toFixed(2) + '°'; if (rd) rd.textContent = (e.roll || 0).toFixed(2) + '°'; if (yd) yd.textContent = (e.yaw || 0).toFixed(2) + '°'; }
+
+    function openSensorMappingModal() { const m = document.getElementById('sensor-mapping-modal'); if (!m) return; m.style.display = 'flex'; sensorWizard = { step: 0, rotStartYaw: null, monitorId: null, progress: { upright: false, rotation: false, saved: false } }; updateSensorWizardUI(); initSensorMappingPreview(); sendBleMessage({ type: 'get_imu_mapping' }); if (!sensorModalTelemetryMonitorId) sensorModalTelemetryMonitorId = setInterval(updateModalTelemetryDisplay, 200); }
+
+    function closeSensorMappingModal() { const m = document.getElementById('sensor-mapping-modal'); if (!m) return; if (sensorWizard.monitorId) { clearInterval(sensorWizard.monitorId); sensorWizard.monitorId = null; } if (sensorModalTelemetryMonitorId) { clearInterval(sensorModalTelemetryMonitorId); sensorModalTelemetryMonitorId = null; } m.style.display = 'none'; }
+
+    function setWizardProgress() { const el = document.getElementById('sensorWizardProgress'); if (!el) return; const p = sensorWizard.progress; el.textContent = `[${p.upright ? 'x' : ' '}] Pion | [${p.rotation ? 'x' : ' '}] Rotacja ≥ 90° | [${p.saved ? 'x' : ' '}] Zapis`; if (p.saved && window.lastMountCorr) { const { qw, qx, qy, qz } = window.lastMountCorr; const preview = `\nqcorr: w=${qw.toFixed(3)} x=${qx.toFixed(3)} y=${qy.toFixed(3)} z=${qz.toFixed(3)}`; el.textContent += preview; } }
+
+    function setWizardStepNo() { const n = document.getElementById('sensorWizardStepNo'); if (n) n.textContent = (sensorWizard.step + 1).toString(); }
+
+    function getCurrentYawDeg() { const td = window.telemetryData || {}; const { qw, qx, qy, qz } = td; if (typeof qw !== 'number') return null; const eul = computeEulerFromQuaternion(qw, qx, qy, qz); return eul ? eul.yaw : null; }
+
+    function angleDeltaDeg(a, b) { if (a === null || b === null) return null; let d = ((a - b + 540) % 360) - 180; return Math.abs(d); }
+
+    function updateSensorWizardUI() { setWizardStepNo(); setWizardProgress(); const t = document.getElementById('sensorWizardText'); const hint = document.getElementById('sensorWizardHint'); const back = document.getElementById('sensorWizardBackBtn'); const next = document.getElementById('sensorWizardNextBtn'); if (!t || !hint || !back || !next) return; if (sensorWizard.step === 0) { back.disabled = true; next.disabled = false; next.textContent = 'Dalej'; t.innerHTML = '1) Postaw robota pionowo (koła w dół, prosto) na stabilnej powierzchni i poczekaj aż się uspokoi.<br>Po kliknięciu Dalej zarejestrujemy bazową orientację.'; hint.textContent = 'Warunek: kalibracja IMU (Sys=3). Jeśli nie, wykonaj kalibrację przed kontynuacją.'; } else if (sensorWizard.step === 1) { back.disabled = false; next.disabled = true; next.textContent = 'Czekam na ≥ 90°'; t.innerHTML = '2) Obracaj robota powoli zgodnie z ruchem wskazówek zegara (poziomo).<br>Krok zakończy się automatycznie po wykryciu obrotu ≥ 90°.'; hint.textContent = 'Nie podnoś robota – trzymaj koła w dół. Możesz obracać więcej (180–360°) – wystarczy przekroczyć 90°.'; } else { back.disabled = false; next.disabled = false; next.textContent = 'Zapisz'; let extra = ''; if (window.lastMountCorr) { const { qw, qx, qy, qz } = window.lastMountCorr; extra = `<div style="margin-top:8px; font-size:0.8em; color:#9fa;">Aktualne (ostatnie) qcorr:<br>w=${qw.toFixed(4)} x=${qx.toFixed(4)} y=${qy.toFixed(4)} z=${qz.toFixed(4)}</div>`; } t.innerHTML = '3) Zapisz ustawienia mapowania. Zmiany zostaną utrwalone w pamięci i zaczną działać natychmiast.' + extra; hint.textContent = 'Po zapisie osie w Dashboard i w modelu 3D będą już skorygowane.'; } }
+
+    function startRotationMonitor() { sensorWizard.rotStartYaw = getCurrentYawDeg(); if (sensorWizard.monitorId) { clearInterval(sensorWizard.monitorId); sensorWizard.monitorId = null; } sensorWizard.monitorId = setInterval(() => { const cy = getCurrentYawDeg(); const d = angleDeltaDeg(cy, sensorWizard.rotStartYaw); if (d !== null && d >= 90) { clearInterval(sensorWizard.monitorId); sensorWizard.monitorId = null; sendBleMessage({ type: 'sensor_map_capture_rot_end' }); sensorWizard.progress.rotation = true; sensorWizard.step = 2; updateSensorWizardUI(); setWizardProgress(); addLogMessage('[UI] Wykryto rotację ≥ 90°. Przechodzę do kroku Zapis.', 'success'); } }, 100); }
+
+    // Expose sensor mapping helpers globally for backward compatibility
+    window.initSensorMappingPreview = initSensorMappingPreview;
+    window.gatherIMUMappingFromUI = gatherIMUMappingFromUI;
+    window.updateIMUMappingUIFromData = updateIMUMappingUIFromData;
+    window.rotateSensorCube = rotateSensorCube;
+    window.applyRotationToIMUMapping = applyRotationToIMUMapping;
+    window.openSensorMappingModal = openSensorMappingModal;
+    window.closeSensorMappingModal = closeSensorMappingModal;
+
 
     // ========================================================================
     // PARAMETER CHANGE HANDLING
@@ -2794,3 +3267,212 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+
+// ========================================================================
+// SIGNAL ANALYZER FUNCTIONS (ported from .interface_2)
+// ========================================================================
+
+function initSignalAnalyzerChart() {
+    const canvasEl = document.getElementById('signalAnalyzerChart');
+    if (!canvasEl) { console.warn('[UI] signalAnalyzerChart canvas not found - skipping init.'); return; }
+    if (typeof Chart === 'undefined') { console.warn('[UI] Chart.js library is not loaded - telemetry chart disabled.'); return; }
+    const ctx = canvasEl.getContext('2d');
+    signalAnalyzerChart = new Chart(ctx, {
+        type: 'line', data: { labels: Array(200).fill(''), datasets: [] },
+        options: {
+            animation: false, responsive: true, maintainAspectRatio: false,
+            scales: {
+                x: {
+                    display: true,
+                    title: { display: true, text: 'Czas', color: '#fff' },
+                    ticks: { color: '#fff' }
+                },
+                y: { type: 'linear', display: true, position: 'left', id: 'y-pitch', ticks: { color: availableTelemetry['pitch']?.color || '#61dafb' }, title: { display: true, text: 'Pitch (°)', color: availableTelemetry['pitch']?.color || '#61dafb' } },
+                y1: { type: 'linear', display: false, position: 'right', id: 'y-speed', ticks: { color: availableTelemetry['speed']?.color || '#f7b731' }, title: { display: true, text: 'Speed (imp/s)', color: availableTelemetry['speed']?.color || '#f7b731' }, grid: { drawOnChartArea: false } }
+            },
+            plugins: {
+                legend: { labels: { color: '#fff' } },
+                tooltip: { mode: 'index', intersect: false }
+            },
+            onClick: handleChartClick,
+            onHover: (event, activeElements, chart) => {
+                if (chartRangeSelection.isSelecting) {
+                    chart.canvas.style.cursor = 'crosshair';
+                } else {
+                    chart.canvas.style.cursor = 'default';
+                }
+            }
+        }
+    });
+
+    // Add range selection functionality
+    const canvas = ctx.canvas;
+    let selectionStart = null;
+
+    canvas.addEventListener('mousedown', (e) => {
+        if (e.shiftKey) {
+            chartRangeSelection.isSelecting = true;
+            const rect = canvas.getBoundingClientRect();
+            selectionStart = e.clientX - rect.left;
+            chartRangeSelection.startIndex = getChartIndexFromX(selectionStart);
+        }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        if (chartRangeSelection.isSelecting && selectionStart !== null) {
+            const rect = canvas.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            chartRangeSelection.endIndex = getChartIndexFromX(currentX);
+            highlightSelectedRange();
+        }
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+        if (chartRangeSelection.isSelecting) {
+            chartRangeSelection.isSelecting = false;
+            selectionStart = null;
+            // Range is now selected and stored in chartRangeSelection
+            if (chartRangeSelection.startIndex !== null && chartRangeSelection.endIndex !== null) {
+                addLogMessage(`[UI] Zakres zaznaczony: ${chartRangeSelection.startIndex} - ${chartRangeSelection.endIndex}. Użyj "Eksport CSV (Zakres)" aby wyeksportować.`, 'info');
+            }
+        }
+    });
+}
+
+function setupSignalChartControls() {
+    const container = document.getElementById('signalChartControls'); container.innerHTML = '';
+    const defaultChecked = ['pitch', 'speed'];
+    Object.keys(availableTelemetry).forEach((key) => {
+        const label = document.createElement('label'); const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox'; checkbox.value = key; checkbox.checked = defaultChecked.includes(key);
+        checkbox.addEventListener('change', (e) => {
+            const varName = e.target.value, datasetLabel = availableTelemetry[varName].label, datasetColor = availableTelemetry[varName].color;
+            let dataset = signalAnalyzerChart.data.datasets.find(ds => ds.label === datasetLabel);
+            if (e.target.checked) {
+                if (!dataset) {
+                    let yAxisID = 'y-pitch';
+                    if (['speed', 'target_speed', 'output'].includes(varName)) { yAxisID = 'y-speed'; signalAnalyzerChart.options.scales['y1'].display = true; }
+                    signalAnalyzerChart.data.datasets.push({ label: datasetLabel, data: Array(signalAnalyzerChart.data.labels.length).fill(null), borderColor: datasetColor, fill: false, tension: 0.1, pointRadius: 0, yAxisID: yAxisID });
+                }
+            } else {
+                const datasetIndex = signalAnalyzerChart.data.datasets.findIndex(ds => ds.label === datasetLabel);
+                if (datasetIndex > -1) { signalAnalyzerChart.data.datasets.splice(datasetIndex, 1); }
+                if (!signalAnalyzerChart.data.datasets.some(ds => ds.yAxisID === 'y-speed')) { signalAnalyzerChart.options.scales['y1'].display = false; }
+            }
+            signalAnalyzerChart.update(); updateCursorInfo();
+        });
+        label.appendChild(checkbox); label.append(` ${availableTelemetry[key].label}`); container.appendChild(label);
+        if (checkbox.checked) checkbox.dispatchEvent(new Event('change'));
+    });
+}
+
+function updateChart(data) {
+    if (isChartPaused || !signalAnalyzerChart) return;
+    const chartData = signalAnalyzerChart.data;
+    const currentTimeLabel = (Date.now() / 1000).toFixed(1);
+    if (chartData.labels.length >= 200) { chartData.labels.shift(); chartData.datasets.forEach(ds => ds.data.shift()); }
+    chartData.labels.push(currentTimeLabel);
+    chartData.datasets.forEach(ds => {
+        const key = Object.keys(availableTelemetry).find(k => availableTelemetry[k].label === ds.label);
+        const value = (key && data[key] !== undefined) ? data[key] : null;
+        ds.data.push(value);
+    });
+    signalAnalyzerChart.update('none');
+}
+
+function setupSignalAnalyzerControls() {
+    document.getElementById('pauseChartBtn').addEventListener('click', () => { isChartPaused = true; document.getElementById('pauseChartBtn').style.display = 'none'; document.getElementById('resumeChartBtn').style.display = 'inline-block'; addLogMessage('[UI] Wykres wstrzymany.', 'info'); });
+    document.getElementById('resumeChartBtn').addEventListener('click', () => { isChartPaused = false; document.getElementById('resumeChartBtn').style.display = 'none'; document.getElementById('pauseChartBtn').style.display = 'inline-block'; addLogMessage('[UI] Wykres wznowiony.', 'info'); });
+    document.getElementById('cursorABBtn').addEventListener('click', toggleCursors);
+    document.getElementById('exportCsvBtn').addEventListener('click', () => exportChartDataToCsv(false));
+    document.getElementById('exportRangeCsvBtn').addEventListener('click', () => {
+        if (chartRangeSelection.startIndex === null || chartRangeSelection.endIndex === null) {
+            addLogMessage('[UI] Najpierw zaznacz zakres! Przytrzymaj Shift i przeciągnij myszką po wykresie.', 'warn');
+            return;
+        }
+        exportChartDataToCsv(true);
+    });
+    document.getElementById('resetZoomBtn').addEventListener('click', () => {
+        if (signalAnalyzerChart.resetZoom) {
+            signalAnalyzerChart.resetZoom();
+            addLogMessage('[UI] Widok wykresu zresetowany.', 'info');
+        }
+    });
+    document.getElementById('exportPngBtn').addEventListener('click', exportChartToPng);
+}
+
+function toggleCursors() { const cursorInfo = document.getElementById('cursorInfo'); if (cursorInfo.style.display === 'none') { cursorInfo.style.display = 'flex'; cursorA = { index: Math.floor(signalAnalyzerChart.data.labels.length * 0.25) }; cursorB = { index: Math.floor(signalAnalyzerChart.data.labels.length * 0.75) }; updateCursorInfo(); } else { cursorInfo.style.display = 'none'; cursorA = null; cursorB = null; } signalAnalyzerChart.update(); }
+function handleChartClick(event) { if (!cursorA && !cursorB) return; const activePoints = signalAnalyzerChart.getElementsAtEventForMode(event, 'index', { intersect: false }, true); if (activePoints.length > 0) { const clickedIndex = activePoints[0].index; if (cursorA && cursorB) { const distA = Math.abs(clickedIndex - cursorA.index); const distB = Math.abs(clickedIndex - cursorB.index); if (distA < distB) { cursorA.index = clickedIndex; } else { cursorB.index = clickedIndex; } } else if (cursorA) { cursorA.index = clickedIndex; } updateCursorInfo(); signalAnalyzerChart.update(); } }
+function updateCursorInfo() { if (!cursorA && !cursorB) { document.getElementById('cursorInfo').style.display = 'none'; return; } document.getElementById('cursorInfo').style.display = 'flex'; const labels = signalAnalyzerChart.data.labels; const datasets = signalAnalyzerChart.data.datasets; if (cursorA) { document.getElementById('cursorAX').textContent = labels[cursorA.index] || '---'; document.getElementById('cursorAY').textContent = datasets.length > 0 && datasets[0].data[cursorA.index] !== undefined ? datasets[0].data[cursorA.index].toFixed(2) : '---'; } if (cursorB) { document.getElementById('cursorBX').textContent = labels[cursorB.index] || '---'; document.getElementById('cursorBY').textContent = datasets.length > 0 && datasets[0].data[cursorB.index] !== undefined ? datasets[0].data[cursorB.index].toFixed(2) : '---'; } if (cursorA && cursorB) { const timeA = parseFloat(labels[cursorA.index]); const timeB = parseFloat(labels[cursorB.index]); document.getElementById('cursorDeltaT').textContent = `${Math.abs(timeB - timeA).toFixed(2)}s`; datasets.forEach(ds => { const valA = ds.data[cursorA.index]; const valB = ds.data[cursorB.index]; if (valA !== null && valB !== null) { if (ds.yAxisID === 'y-pitch') document.getElementById('cursorDeltaYPitch').textContent = `${(valB - valA).toFixed(2)}°`; else if (ds.yAxisID === 'y-speed') document.getElementById('cursorDeltaYSpeed').textContent = `${(valB - valA).toFixed(0)} imp/s`; } }); } }
+function getChartIndexFromX(xPixel) {
+    const chart = signalAnalyzerChart;
+    const xScale = chart.scales['x'];
+    const dataLength = chart.data.labels.length;
+
+    // Prevent division by zero
+    const xStart = xScale.left;
+    const xEnd = xScale.right;
+    const xRange = xEnd - xStart;
+    if (xRange === 0 || dataLength === 0) {
+        return 0;
+    }
+
+    const relativeX = (xPixel - xStart) / xRange;
+    const index = Math.round(relativeX * (dataLength - 1));
+
+    return Math.max(0, Math.min(dataLength - 1, index));
+}
+
+function highlightSelectedRange() {
+    // Update the chart to show selected range
+    // The visual feedback is provided through the selection state and console messages
+    if (chartRangeSelection.startIndex !== null && chartRangeSelection.endIndex !== null) {
+        const start = Math.min(chartRangeSelection.startIndex, chartRangeSelection.endIndex);
+        const end = Math.max(chartRangeSelection.startIndex, chartRangeSelection.endIndex);
+        // Visual highlighting could be added here with a Chart.js plugin in future
+        // For now, we rely on user feedback through the log system
+    }
+}
+
+function exportChartDataToCsv(exportRange = false) {
+    const data = signalAnalyzerChart.data;
+    let csvContent = "data:text/csv;charset=utf-8,";
+    let headers = ['Time'];
+    data.datasets.forEach(ds => headers.push(ds.label));
+    csvContent += headers.join(',') + '\n';
+
+    let startIdx = 0;
+    let endIdx = data.labels.length - 1;
+
+    // If exporting range and a range is selected, use it
+    if (exportRange && chartRangeSelection.startIndex !== null && chartRangeSelection.endIndex !== null) {
+        startIdx = Math.min(chartRangeSelection.startIndex, chartRangeSelection.endIndex);
+        endIdx = Math.max(chartRangeSelection.startIndex, chartRangeSelection.endIndex);
+        addLogMessage(`[UI] Eksportowanie zakresu: ${startIdx} - ${endIdx}`, 'info');
+    }
+
+    for (let i = startIdx; i <= endIdx; i++) {
+        let row = [data.labels[i]];
+        data.datasets.forEach(ds => {
+            const value = ds.data[i] !== null ? ds.data[i].toFixed(4) : '';
+            row.push(value);
+        });
+        csvContent += row.join(',') + '\n';
+    }
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    const filename = exportRange ? "telemetry_data_range.csv" : "telemetry_data.csv";
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    const message = exportRange ? '[UI] Zaznaczony zakres wyeksportowany do CSV.' : '[UI] Dane wykresu wyeksportowane do CSV.';
+    addLogMessage(message, 'info');
+}
+function exportChartToPng() { const link = document.createElement('a'); link.download = 'telemetry_chart.png'; link.href = signalAnalyzerChart.toBase64Image(); link.click(); addLogMessage('[UI] Wykres wyeksportowany do PNG.', 'info'); }
+
+// Make chart functions globally available
+window.initSignalAnalyzerChart = initSignalAnalyzerChart;
+window.setupSignalChartControls = setupSignalChartControls;
+window.setupSignalAnalyzerControls = setupSignalAnalyzerControls;

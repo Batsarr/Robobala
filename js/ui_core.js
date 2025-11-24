@@ -101,12 +101,16 @@
 
     if (typeof window.animate3D === 'undefined') {
         window.animate3D = function () {
+            console.log('[3D] animate3D called');
             requestAnimationFrame(window.animate3D);
             try { window.update3DAnimation(); } catch (_) { }
             if (window.skyDome) window.skyDome.rotation.y += 0.00005;
             if (window.controls3D && window.renderer3D && window.scene3D && window.camera3D) {
                 window.controls3D.update();
                 window.renderer3D.render(window.scene3D, window.camera3D);
+                console.log('[3D] Scene rendered');
+            } else {
+                console.warn('[3D] Missing renderer, scene or camera');
             }
         };
     }

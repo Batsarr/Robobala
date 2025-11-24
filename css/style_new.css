@@ -1143,6 +1143,26 @@ input:checked + .slider:before {
     }
 }
 
+@media (max-width: 767px) {
+    .btn {
+        padding: 8px 16px;
+        font-size: 0.875rem;
+    }
+    .signal-canvas {
+        height: 200px;
+    }
+    .robot-3d-container {
+        height: 200px;
+    }
+    .diagnostics-section {
+        display: flex;
+        flex-direction: column;
+    }
+    .signal-analyzer {
+        order: -1;
+    }
+}
+
 /* ============================================================================
    ANIMATIONS & TRANSITIONS
    ============================================================================ */
