@@ -1747,6 +1747,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let joystickKnob = { x: 0, y: 0 };
     let joystickRadius = 0;
     let knobRadius = 0;
+    let joystickInterval = null;
+    let currentJoyX = 0;
+    let currentJoyY = 0;
 
     function initJoystick() {
         const size = joystickCanvas.parentElement.offsetWidth;
@@ -1787,6 +1790,16 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         joystickActive = true;
         handleJoystickMove(e);
+
+        // Start continuous sending
+        if (joystickInterval) clearInterval(joystickInterval);
+        joystickInterval = setInterval(() => {
+            if (appStore.getState('connection.isConnected')) {
+                // Send joystick values continuously
+                commLayer.send({ type: 'joystick_control', x: currentJoyX, y: currentJoyY });
+                commLayer.send({ type: 'joystick', x: currentJoyX, y: currentJoyY });
+            }
+        }, 100); // Send every 100ms
     }
 
     function handleJoystickMove(e) {
@@ -1816,13 +1829,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const normalizedX = (x - joystickCenter.x) / joystickRadius;
         const normalizedY = -(y - joystickCenter.y) / joystickRadius;
 
-        // Send joystick values to robot
-        if (appStore.getState('connection.isConnected')) {
-            // New message type (modern): joystick_control
-            commLayer.send({ type: 'joystick_control', x: normalizedX, y: normalizedY });
-            // Backward-compatibility: also emit legacy 'joystick' which older firmware versions expect
-            commLayer.send({ type: 'joystick', x: normalizedX, y: normalizedY });
-        }
+        // Update current values for continuous sending
+        currentJoyX = normalizedX;
+        currentJoyY = normalizedY;
     }
 
     function handleJoystickEnd(e) {
@@ -1832,6 +1841,14 @@ document.addEventListener('DOMContentLoaded', () => {
         joystickActive = false;
         joystickKnob = { ...joystickCenter };
         drawJoystick();
+
+        // Stop continuous sending and reset values
+        if (joystickInterval) {
+            clearInterval(joystickInterval);
+            joystickInterval = null;
+        }
+        currentJoyX = 0;
+        currentJoyY = 0;
 
         // Send zero values to robot
         if (appStore.getState('connection.isConnected')) {
@@ -1851,6 +1868,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.addEventListener('resize', initJoystick);
     initJoystick();
+
+    // ========================================================================
+    // GAMEPAD POLLING (like old version)
+    // ========================================================================
+    let gamepadIndex = null;
+
+    function pollGamepad() {
+        if (gamepadIndex !== null) {
+            const gp = navigator.getGamepads()[gamepadIndex];
+            if (!gp) return;
+
+            let x = gp.axes[0] || 0;
+            let y = gp.axes[1] || 0;
+
+            // Apply deadzone
+            if (Math.abs(x) < 0.15) x = 0;
+            if (Math.abs(y) < 0.15) y = 0;
+
+            // Send joystick values continuously
+            if (appStore.getState('connection.isConnected')) {
+                commLayer.send({ type: 'joystick_control', x: x, y: -y });
+                commLayer.send({ type: 'joystick', x: x, y: -y });
+            }
+        }
+        requestAnimationFrame(pollGamepad);
+    }
+
+    // Start polling when gamepad is connected
+    window.addEventListener('gamepadconnected', (e) => {
+        gamepadIndex = e.gamepad.index;
+        addLogMessage(`Podłączono gamepad: ${e.gamepad.id}`, 'info');
+        pollGamepad();
+    });
+
+    window.addEventListener('gamepaddisconnected', (e) => {
+        if (gamepadIndex === e.gamepad.index) {
+            gamepadIndex = null;
+        }
+        addLogMessage(`Odłączono gamepad: ${e.gamepad.id}`, 'warn');
+    });
 
     // ========================================================================
     // CONNECTION BUTTON

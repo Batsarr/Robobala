@@ -2227,3 +2227,86 @@ input:checked + .slider:before {
 .fade-in {
     animation: fadeIn var(--transition-base);
 }
+
+/* ============================================================================
+   D-PAD STYLES (like old version)
+   ============================================================================ */
+.dpad-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    gap: 5px;
+    max-width: 150px;
+    margin: 15px auto;
+}
+
+.dpad-btn {
+    background-color: var(--accent-primary);
+    color: var(--bg-primary);
+    border-radius: 5px;
+    font-size: 2em;
+    line-height: 1;
+    padding: 5px;
+    cursor: pointer;
+    border: none;
+    transition: all var(--transition-fast);
+}
+
+.dpad-btn:hover {
+    background-color: var(--accent-secondary);
+}
+
+.dpad-btn:active {
+    transform: scale(0.95);
+}
+
+#dpad-up {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+#dpad-left {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+#dpad-right {
+    grid-column: 3;
+    grid-row: 2;
+}
+
+#dpad-down {
+    grid-column: 2;
+    grid-row: 3;
+}
+
+#dpad-stop {
+    grid-column: 2;
+    grid-row: 2;
+    background-color: var(--accent-error);
+    color: white;
+}
+
+.dpad-input-group {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+    margin: 10px 0;
+}
+
+.dpad-input-group label {
+    text-align: right;
+    font-weight: bold;
+    color: var(--accent-secondary);
+}
+
+.dpad-input-group input {
+    width: 100%;
+    box-sizing: border-box;
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    padding: 4px;
+}
