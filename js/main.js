@@ -368,9 +368,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Manual correction panel wiring (right-side)
     const manualPanel = document.getElementById('dashboard-right-panel');
+    const manualPanelOverlay = document.getElementById('panelRightOverlay');
     document.getElementById('openManualCorrectionPanel')?.addEventListener('click', () => {
         if (!manualPanel) return;
         manualPanel.style.display = 'block';
+        manualPanelOverlay.classList.add('active');
         setTimeout(() => manualPanel.classList.add('open'), 20);
         // Prefill inputs
         const pInput = document.getElementById('manualPitchCorrectionInput');
@@ -383,6 +385,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('closeManualCorrectionPanel')?.addEventListener('click', () => {
         if (!manualPanel) return;
         manualPanel.classList.remove('open');
+        manualPanelOverlay.classList.remove('active');
+        setTimeout(() => manualPanel.style.display = 'none', 300);
+    });
+    // Close on overlay click
+    manualPanelOverlay?.addEventListener('click', () => {
+        if (!manualPanel) return;
+        manualPanel.classList.remove('open');
+        manualPanelOverlay.classList.remove('active');
         setTimeout(() => manualPanel.style.display = 'none', 300);
     });
 
@@ -1886,6 +1896,35 @@ document.addEventListener('DOMContentLoaded', () => {
         addLogMessage(`Tryb prędkości ${state ? 'włączono' : 'wyłączono'}`, state ? 'success' : 'warn');
     });
 
+    // IMU Madgwick parameters button
+    const setMadgwickParams = document.getElementById('setMadgwickParams');
+    if (setMadgwickParams) {
+        setMadgwickParams.addEventListener('click', () => {
+            const beta = parseFloat(document.getElementById('madgwickBeta').value);
+            const zeta = parseFloat(document.getElementById('madgwickZeta').value);
+            if (appStore.getState('connection.isConnected')) {
+                commLayer.send({ type: 'set_madgwick_params', beta: beta, zeta: zeta });
+                addLogMessage(`Ustawiono parametry Madgwicka: beta=${beta}, zeta=${zeta}`, 'info');
+            } else {
+                addLogMessage('Najpierw połącz się z robotem', 'warn');
+            }
+        });
+    }
+
+    // IMU telemetry toggle
+    const imuTelemetryToggle = document.getElementById('imuTelemetryToggle');
+    if (imuTelemetryToggle) {
+        imuTelemetryToggle.addEventListener('change', (e) => {
+            const state = e.target.checked;
+            if (appStore.getState('connection.isConnected')) {
+                commLayer.send({ type: 'set_param', key: 'imu_telemetry_enabled', value: state });
+                addLogMessage(`Telemetria IMU ${state ? 'włączona' : 'wyłączona'}`, state ? 'success' : 'warn');
+            } else {
+                addLogMessage('Najpierw połącz się z robotem', 'warn');
+            }
+        });
+    }
+
     // ========================================================================
     // 3D VISUALIZATION
     // ========================================================================
@@ -2310,7 +2349,9 @@ document.addEventListener('DOMContentLoaded', () => {
             'minPwmRightFwdInput': 'min_pwm_right_fwd',
             'minPwmRightBwdInput': 'min_pwm_right_bwd',
             'manualPitchCorrectionInput': 'trim_angle',
-            'manualRollCorrectionInput': 'roll_trim'
+            'manualRollCorrectionInput': 'roll_trim',
+            'madgwickBeta': 'madgwick_beta',
+            'madgwickZeta': 'madgwick_zeta'
             // Add more mappings as needed
         };
         return paramMap[inputId];
@@ -3316,6 +3357,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function startTuning() {
+        if (!appStore.getState('connection.isConnected')) {
+            addLogMessage('Najpierw połącz się z robotem', 'warn');
+            return;
+        }
+
         if (currentTuningAlgorithm && currentTuningAlgorithm.isRunning) {
             addLogMessage('Strojenie już jest aktywne', 'warning');
             return;

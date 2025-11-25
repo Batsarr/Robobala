@@ -422,6 +422,55 @@ body {
 }
 
 /* ============================================================================
+   RIGHT SLIDING PANEL (Manual Corrections)
+   ============================================================================ */
+.panel-right {
+    position: fixed;
+    top: 60px; /* below header */
+    right: 0;
+    width: 340px;
+    height: calc(100% - 80px);
+    background-color: var(--bg-secondary);
+    border-left: 1px solid var(--border-color);
+    box-shadow: var(--shadow-lg);
+    padding: var(--spacing-md);
+    z-index: var(--z-sidebar);
+    transform: translateX(100%);
+    transition: transform var(--transition-base);
+    overflow-y: auto;
+}
+
+.panel-right.open {
+    transform: translateX(0);
+}
+
+.panel-right-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: var(--z-overlay);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-base);
+}
+
+.panel-right-overlay.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+@media (max-width: 767px) {
+    .panel-right {
+        width: 100%;
+        height: calc(100% - 60px);
+        top: 60px;
+    }
+}
+
+/* ============================================================================
    FLOATING ACTION BUTTON (FAB)
    ============================================================================ */
 .fab-emergency {
@@ -1176,37 +1225,17 @@ input:checked + .slider:before {
     .param-group input[type="number"] {
         min-width: 0;
         width: 100%;
+        font-size: 0.875rem;
+        padding: 8px;
+    }
+    .btn-minus, .btn-plus {
+        width: 32px;
+        height: 32px;
+        font-size: 1rem;
     }
     .diagnostics-section {
         display: flex;
         flex-direction: column;
-    }
-
-    /* Right-side slide panel for manual corrections */
-    .panel-right {
-        position: fixed;
-        top: 60px; /* below header */
-        right: 0;
-        width: 340px;
-        height: calc(100% - 80px);
-        background-color: var(--bg-secondary);
-        border-left: 1px solid var(--border-color);
-        box-shadow: var(--shadow-lg);
-        padding: var(--spacing-md);
-        z-index: var(--z-sidebar);
-        transform: translateX(100%);
-        transition: transform var(--transition-base);
-    }
-    .panel-right.open {
-        transform: translateX(0);
-    }
-
-    @media (max-width: 767px) {
-        .panel-right {
-            width: 100%;
-            height: calc(100% - 60px);
-            top: 60px;
-        }
     }
     .signal-analyzer {
         order: -1;
@@ -1227,6 +1256,23 @@ input:checked + .slider:before {
     .param-group .input-group input[type="number"] {
         width: 100%;
         min-width: 0;
+    }
+    /* PWM calibration mobile adjustments */
+    .manual-tune-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--spacing-sm);
+    }
+    .manual-tune-row .input-group {
+        justify-content: center;
+    }
+    .manual-tune-row .button-group {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    .manual-tune-row .btn {
+        min-width: 60px;
+        font-size: 0.8rem;
     }
 }
 

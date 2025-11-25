@@ -99,6 +99,9 @@
     <!-- Sidebar Overlay -->
     <div id="sidebarOverlay" class="sidebar-overlay"></div>
 
+    <!-- Right Panel Overlay -->
+    <div id="panelRightOverlay" class="panel-right-overlay"></div>
+
     <!-- Main Content -->
     <main class="app-content">
         <!-- Dashboard View (Default) -->
@@ -226,6 +229,7 @@
                     <button class="tab" data-tab="position">Pozycja</button>
                     <button class="tab" data-tab="rotation">Obrót</button>
                     <button class="tab" data-tab="heading">Kurs</button>
+                    <button class="tab" data-tab="imu">IMU</button>
                 </div>
 
                 <!-- Balance PID Tab -->
@@ -590,6 +594,58 @@
                         </div>
                         <span class="sign-tooltip" data-tooltip="Odwróć znak sprzężenia pętli balansu (zmiana możliwa tylko w trybie IDLE)">?</span>
                     </div>
+                </div>
+
+                <!-- IMU Tab -->
+                <div id="tabImu" class="tab-content">
+                    <div class="accordion">
+                        <button class="accordion-btn">Filtr Madgwicka</button>
+                        <div class="accordion-content">
+                            <div class="param-group">
+                                <label for="madgwickBeta">
+                                    Beta - Wzmocnienie Gyro
+                                    <span class="tooltip-icon" data-tooltip="Parametr beta kontroluje zaufanie do żyroskopu. Wyższa wartość = szybsza reakcja na obroty, ale większa wrażliwość na szum. Typowy zakres: 0.01-0.1. Domyślnie: 0.1">?</span>
+                                </label>
+                                <div class="input-group">
+                                    <button class="btn-minus">−</button>
+                                    <input type="number" id="madgwickBeta" value="0.1" min="0" max="1" step="0.01">
+                                    <button class="btn-plus">+</button>
+                                </div>
+                            </div>
+                            <div class="param-group">
+                                <label for="madgwickZeta">
+                                    Zeta - Wzmocnienie Akcelerometru
+                                    <span class="tooltip-icon" data-tooltip="Parametr zeta kontroluje wpływ akcelerometru na korekcję dryftu żyroskopu. Wyższa wartość = lepsza korekcja dryftu, ale wolniejsza reakcja. Typowy zakres: 0-0.01. Domyślnie: 0.0">?</span>
+                                </label>
+                                <div class="input-group">
+                                    <button class="btn-minus">−</button>
+                                    <input type="number" id="madgwickZeta" value="0.0" min="0" max="0.1" step="0.001">
+                                    <button class="btn-plus">+</button>
+                                </div>
+                            </div>
+                            <div class="button-group">
+                                <button id="setMadgwickParams" class="btn btn-primary">Ustaw Parametry</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion">
+                        <button class="accordion-btn">Telemetria IMU</button>
+                        <div class="accordion-content">
+                            <div class="toggle-item">
+                                <label for="imuTelemetryToggle" class="toggle-label">
+                                    <span>Wysyłaj dane IMU</span>
+                                    <span class="tooltip-icon" data-tooltip="Włącz wysyłanie surowych danych z akcelerometru (ax,ay,az) i magnetometru (mx,my,mz) w telemetrii. Przydatne dla wykresów diagnostycznych, ale zwiększa obciążenie bandwidth BLE. Wyłącz aby oszczędzać energię i zmniejszyć opóźnienia.">?</span>
+                                </label>
+                                <label class="switch">
+                                    <input type="checkbox" id="imuTelemetryToggle">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="button-group mt-3">
                     <button id="loadConfig" class="btn btn-secondary">Wczytaj z Robota</button>
                     <button id="saveConfig" class="btn btn-primary">Zapisz na Robocie</button>
