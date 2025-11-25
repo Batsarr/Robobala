@@ -1542,6 +1542,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                 window.initHardwareSettings();
                                 addLogMessage('[UI] Ustawienia sprzętu zainicjalizowane przy przełączaniu zakładki', 'info');
                             }
+                            if (typeof window.initImuSettings === 'function') {
+                                window.initImuSettings();
+                                addLogMessage('[UI] Ustawienia IMU zainicjalizowane przy przełączaniu zakładki', 'info');
+                            }
+                            if (typeof window.initFusionSettings === 'function') {
+                                window.initFusionSettings();
+                                addLogMessage('[UI] Ustawienia fuzji zainicjalizowane przy przełączaniu zakładki', 'info');
+                            }
                             break;
                         case 'calibration':
                             if (typeof window.initSensorMappingPreview === 'function') {
@@ -1560,8 +1568,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 window.initPathVisualization();
                                 addLogMessage('[UI] Wizualizacja ścieżki zainicjalizowana przy przełączaniu zakładki', 'info');
                             }
-                            if (typeof setupDpadControls === 'function') {
-                                setupDpadControls();
+                            if (typeof window.setupDpadControls === 'function') {
+                                window.setupDpadControls();
                                 addLogMessage('[UI] Kontrolki D-Pad zainicjalizowane przy przełączaniu zakładki', 'info');
                             }
                             break;
@@ -3977,6 +3985,45 @@ window.initSignalAnalyzerChart = initSignalAnalyzerChart;
 window.setupSignalChartControls = setupSignalChartControls;
 window.setupSignalAnalyzerControls = setupSignalAnalyzerControls;
 
+// ========================================================================
+// SETTINGS INITIALIZATION FUNCTIONS
+// ========================================================================
+
+function initFusionSettings() {
+    const fusionAlphaInput = document.getElementById('fusionAlphaInput');
+    const balanceGainInput = document.getElementById('balanceGainInput');
+
+    if (fusionAlphaInput) {
+        fusionAlphaInput.addEventListener('change', () => {
+            const value = parseFloat(fusionAlphaInput.value);
+            if (!isNaN(value)) {
+                commLayer.send({ type: 'set_param', key: 'fusion_alpha', value: value });
+                addLogMessage(`[UI] Ustawiono fusion_alpha na ${value}`, 'info');
+            }
+        });
+    }
+
+    if (balanceGainInput) {
+        balanceGainInput.addEventListener('change', () => {
+            const value = parseFloat(balanceGainInput.value);
+            if (!isNaN(value)) {
+                commLayer.send({ type: 'set_param', key: 'balance_gain', value: value });
+                addLogMessage(`[UI] Ustawiono balance_gain na ${value}`, 'info');
+            }
+        });
+    }
+}
+
+function initJoystickSettings() {
+    // Placeholder for joystick settings initialization
+    console.log('initJoystickSettings called');
+}
+
+function initHardwareSettings() {
+    // Placeholder for hardware settings initialization
+    console.log('initHardwareSettings called');
+}
+
 // Make init functions globally available for view switching
 if (typeof initPidSettings === 'function') window.initPidSettings = initPidSettings;
 if (typeof initJoystickSettings === 'function') window.initJoystickSettings = initJoystickSettings;
@@ -3985,3 +4032,4 @@ if (typeof initImuSettings === 'function') window.initImuSettings = initImuSetti
 if (typeof initSensorMappingPreview === 'function') window.initSensorMappingPreview = initSensorMappingPreview;
 if (typeof initAutotuning === 'function') window.initAutotuning = initAutotuning;
 if (typeof setupDpadControls === 'function') window.setupDpadControls = setupDpadControls;
+if (typeof initFusionSettings === 'function') window.initFusionSettings = initFusionSettings;

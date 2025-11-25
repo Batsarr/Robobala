@@ -1142,6 +1142,35 @@
                     </div>
                 </div>
 
+                <!-- Fusion Tuning -->
+                <div class="accordion">
+                    <button class="accordion-btn">Strojenie Fuzji</button>
+                    <div class="accordion-content">
+                        <div class="param-group">
+                            <label for="fusionAlphaInput">
+                                Alpha filtra fuzji prędkości
+                                <span class="tooltip-icon" data-tooltip="Współczynnik filtra komplementarnego dla fuzji prędkości z enkoderów i IMU. 0.0 = tylko IMU, 1.0 = tylko enkoder. Wyższe wartości = większa ufność w enkoderach. Typowy zakres: 0.8-0.99. Domyślnie: 0.95">?</span>
+                            </label>
+                            <div class="input-group">
+                                <button id="fusionAlphaMinus" class="btn-minus">−</button>
+                                <input type="number" id="fusionAlphaInput" value="0.95" min="0.0" max="1.0" step="0.01">
+                                <button id="fusionAlphaPlus" class="btn-plus">+</button>
+                            </div>
+                        </div>
+                        <div class="param-group">
+                            <label for="balanceGainInput">
+                                Gain PWM balansu
+                                <span class="tooltip-icon" data-tooltip="Współczynnik skalowania wyjścia PID balansu na PWM silników. Wyższe wartości = silniejsze reakcje balansu. Typowy zakres: 500-2000. Domyślnie: 1000">?</span>
+                            </label>
+                            <div class="input-group">
+                                <button id="balanceGainMinus" class="btn-minus">−</button>
+                                <input type="number" id="balanceGainInput" value="1000" min="100" max="5000" step="50">
+                                <button id="balanceGainPlus" class="btn-plus">+</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- PWM Calibration (min PWM autotune) -->
                 <div class="accordion">
                     <button class="accordion-btn">Kalibracja PWM Silników</button>
