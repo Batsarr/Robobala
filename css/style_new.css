@@ -746,27 +746,27 @@ input:checked + .slider:before {
    ============================================================================ */
 .telemetry-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--spacing-md);
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: var(--spacing-sm);
 }
 
 .telemetry-item {
     background-color: var(--bg-tertiary);
-    padding: var(--spacing-md);
+    padding: var(--spacing-sm);
     border-radius: var(--radius-md);
     border-left: 3px solid var(--accent-primary);
 }
 
 .telemetry-label {
     display: block;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: var(--text-secondary);
     margin-bottom: var(--spacing-xs);
 }
 
 .telemetry-value {
     display: block;
-    font-size: 1.5rem;
+    font-size: 1.125rem;
     font-weight: 700;
     color: var(--accent-primary);
 }
@@ -899,14 +899,14 @@ input:checked + .slider:before {
    PARAMETER INPUTS
    ============================================================================ */
 .param-group {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: var(--spacing-md);
 }
 
 .param-group label {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: 0;
     font-weight: 500;
     color: var(--text-primary);
 }
@@ -1162,7 +1162,7 @@ input:checked + .slider:before {
     }
     
     .telemetry-grid {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(3, 1fr);
     }
     
     .robot-3d-container {

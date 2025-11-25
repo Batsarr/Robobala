@@ -3620,7 +3620,7 @@ function initSignalAnalyzerChart() {
     signalAnalyzerChart = new Chart(ctx, {
         type: 'line', data: { labels: Array(200).fill(''), datasets: [] },
         options: {
-            animation: false, responsive: true, maintainAspectRatio: false,
+            animation: false, responsive: false, maintainAspectRatio: false,
             scales: {
                 x: {
                     display: true,
