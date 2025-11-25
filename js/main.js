@@ -1281,9 +1281,10 @@ function updateTelemetryUI(data) {
         const yawEl = document.getElementById('yawValue');
         if (yawEl) yawEl.textContent = data.yaw.toFixed(1) + '°';
     }
-    if (data.loop_time !== undefined) {
+    if (data.loop_time !== undefined || data.lt !== undefined) {
+        const loopTime = data.loop_time !== undefined ? data.loop_time : data.lt;
         const loopEl = document.getElementById('loopTimeValue');
-        if (loopEl) loopEl.textContent = data.loop_time + ' μs';
+        if (loopEl) loopEl.textContent = loopTime + ' μs';
     }
 }
 
@@ -1521,6 +1522,51 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }, 100);
             }
+
+            // Initialize view-specific components
+            setTimeout(() => {
+                try {
+                    switch (viewId) {
+                        case 'pid-tuning':
+                            if (typeof window.initPidSettings === 'function') {
+                                window.initPidSettings();
+                                addLogMessage('[UI] Ustawienia PID zainicjalizowane przy przełączaniu zakładki', 'info');
+                            }
+                            break;
+                        case 'settings':
+                            if (typeof window.initJoystickSettings === 'function') {
+                                window.initJoystickSettings();
+                                addLogMessage('[UI] Ustawienia joysticka zainicjalizowane przy przełączaniu zakładki', 'info');
+                            }
+                            if (typeof window.initHardwareSettings === 'function') {
+                                window.initHardwareSettings();
+                                addLogMessage('[UI] Ustawienia sprzętu zainicjalizowane przy przełączaniu zakładki', 'info');
+                            }
+                            break;
+                        case 'calibration':
+                            if (typeof window.initSensorMappingPreview === 'function') {
+                                window.initSensorMappingPreview();
+                                addLogMessage('[UI] Podgląd mapowania czujników zainicjalizowany przy przełączaniu zakładki', 'info');
+                            }
+                            break;
+                        case 'autotuning':
+                            if (typeof window.initAutotuning === 'function') {
+                                window.initAutotuning();
+                                addLogMessage('[UI] Autostrojenie zainicjalizowane przy przełączaniu zakładki', 'info');
+                            }
+                            break;
+                        case 'autonomous':
+                            if (typeof window.initPathVisualization === 'function') {
+                                window.initPathVisualization();
+                                addLogMessage('[UI] Wizualizacja ścieżki zainicjalizowana przy przełączaniu zakładki', 'info');
+                            }
+                            break;
+                    }
+                } catch (e) {
+                    console.warn('View initialization error:', e);
+                    addLogMessage('Błąd inicjalizacji widoku: ' + e.message, 'error');
+                }
+            }, 150);
 
             // Close sidebar on mobile
             closeSidebar();
@@ -1895,35 +1941,6 @@ document.addEventListener('DOMContentLoaded', () => {
         commLayer.send({ type: 'speed_mode_toggle', enabled: state });
         addLogMessage(`Tryb prędkości ${state ? 'włączono' : 'wyłączono'}`, state ? 'success' : 'warn');
     });
-
-    // IMU Madgwick parameters button
-    const setMadgwickParams = document.getElementById('setMadgwickParams');
-    if (setMadgwickParams) {
-        setMadgwickParams.addEventListener('click', () => {
-            const beta = parseFloat(document.getElementById('madgwickBeta').value);
-            const zeta = parseFloat(document.getElementById('madgwickZeta').value);
-            if (appStore.getState('connection.isConnected')) {
-                commLayer.send({ type: 'set_madgwick_params', beta: beta, zeta: zeta });
-                addLogMessage(`Ustawiono parametry Madgwicka: beta=${beta}, zeta=${zeta}`, 'info');
-            } else {
-                addLogMessage('Najpierw połącz się z robotem', 'warn');
-            }
-        });
-    }
-
-    // IMU telemetry toggle
-    const imuTelemetryToggle = document.getElementById('imuTelemetryToggle');
-    if (imuTelemetryToggle) {
-        imuTelemetryToggle.addEventListener('change', (e) => {
-            const state = e.target.checked;
-            if (appStore.getState('connection.isConnected')) {
-                commLayer.send({ type: 'set_param', key: 'imu_telemetry_enabled', value: state });
-                addLogMessage(`Telemetria IMU ${state ? 'włączona' : 'wyłączona'}`, state ? 'success' : 'warn');
-            } else {
-                addLogMessage('Najpierw połącz się z robotem', 'warn');
-            }
-        });
-    }
 
     // ========================================================================
     // 3D VISUALIZATION
@@ -2349,9 +2366,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'minPwmRightFwdInput': 'min_pwm_right_fwd',
             'minPwmRightBwdInput': 'min_pwm_right_bwd',
             'manualPitchCorrectionInput': 'trim_angle',
-            'manualRollCorrectionInput': 'roll_trim',
-            'madgwickBeta': 'madgwick_beta',
-            'madgwickZeta': 'madgwick_zeta'
+            'manualRollCorrectionInput': 'roll_trim'
             // Add more mappings as needed
         };
         return paramMap[inputId];
@@ -3808,3 +3823,10 @@ function exportChartToPng() { const link = document.createElement('a'); link.dow
 window.initSignalAnalyzerChart = initSignalAnalyzerChart;
 window.setupSignalChartControls = setupSignalChartControls;
 window.setupSignalAnalyzerControls = setupSignalAnalyzerControls;
+
+// Make init functions globally available for view switching
+window.initPidSettings = initPidSettings;
+window.initJoystickSettings = initJoystickSettings;
+window.initHardwareSettings = initHardwareSettings;
+window.initSensorMappingPreview = initSensorMappingPreview;
+window.initAutotuning = initAutotuning;
