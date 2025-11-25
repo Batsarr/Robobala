@@ -3825,8 +3825,8 @@ window.setupSignalChartControls = setupSignalChartControls;
 window.setupSignalAnalyzerControls = setupSignalAnalyzerControls;
 
 // Make init functions globally available for view switching
-window.initPidSettings = initPidSettings;
-window.initJoystickSettings = initJoystickSettings;
-window.initHardwareSettings = initHardwareSettings;
-window.initSensorMappingPreview = initSensorMappingPreview;
-window.initAutotuning = initAutotuning;
+if (typeof initPidSettings === 'function') window.initPidSettings = initPidSettings;
+if (typeof initJoystickSettings === 'function') window.initJoystickSettings = initJoystickSettings;
+if (typeof initHardwareSettings === 'function') window.initHardwareSettings = initHardwareSettings;
+if (typeof initSensorMappingPreview === 'function') window.initSensorMappingPreview = initSensorMappingPreview;
+if (typeof initAutotuning === 'function') window.initAutotuning = initAutotuning;
