@@ -669,6 +669,26 @@
             <div class="card">
                 <h2 class="card-title">Sterowanie Autonomiczne</h2>
                 
+                <!-- Manual Autonomous Controls -->
+                <div class="card">
+                    <h3>Sterowanie Precyzyjne (D-Pad)</h3>
+                    <div class="dpad-input-group">
+                        <label for="dpadDistInput">Dystans (cm):</label>
+                        <input type="number" id="dpadDistInput" value="20">
+                    </div>
+                    <div class="dpad-input-group">
+                        <label for="dpadAngleInput">Kąt (st.):</label>
+                        <input type="number" id="dpadAngleInput" value="90">
+                    </div>
+                    <div class="dpad-container">
+                        <button id="dpad-up" class="dpad-btn" data-dpad="up">↑</button>
+                        <button id="dpad-left" class="dpad-btn" data-dpad="left">←</button>
+                        <button id="dpad-stop" class="dpad-btn" data-dpad="stop">×</button>
+                        <button id="dpad-right" class="dpad-btn" data-dpad="right">→</button>
+                        <button id="dpad-down" class="dpad-btn" data-dpad="down">↓</button>
+                    </div>
+                </div>
+
                 <!-- Sequence Controls -->
                 <div class="sequence-controls">
                     <div class="button-group">
@@ -1072,6 +1092,56 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- IMU Settings -->
+                <div class="accordion">
+                    <button class="accordion-btn">Strojenie IMU</button>
+                    <div class="accordion-content">
+                        <div class="param-group">
+                            <label for="useMadgwickFilterInput">
+                                Użyj filtra Madgwicka
+                                <span class="tooltip-icon" data-tooltip="Włącz własną fuzję IMU z filtrem Madgwicka zamiast wbudowanego filtra BNO055. Może poprawić stabilność w trudnych warunkach.">?</span>
+                            </label>
+                            <label class="switch">
+                                <input type="checkbox" id="useMadgwickFilterInput">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="param-group">
+                            <label for="madgwickBetaInput">
+                                Beta (filtr Madgwicka)
+                                <span class="tooltip-icon" data-tooltip="Współczynnik ufności w dane żyroskopu. Wyższe wartości = szybsza reakcja na zmiany, ale większa wrażliwość na szumy. Typowy zakres: 0.01-1.0. Domyślnie: 0.1">?</span>
+                            </label>
+                            <div class="input-group">
+                                <button id="madgwickBetaMinus" class="btn-minus">−</button>
+                                <input type="number" id="madgwickBetaInput" value="0.1" min="0.001" max="2.0" step="0.01">
+                                <button id="madgwickBetaPlus" class="btn-plus">+</button>
+                            </div>
+                        </div>
+                        <div class="param-group">
+                            <label for="madgwickZetaInput">
+                                Zeta (filtr Madgwicka)
+                                <span class="tooltip-icon" data-tooltip="Współczynnik korekcji dryftu żyroskopu. Wyższe wartości = lepsza korekcja dryftu, ale wolniejsza reakcja. Typowy zakres: 0-1.0. Domyślnie: 0.0">?</span>
+                            </label>
+                            <div class="input-group">
+                                <button id="madgwickZetaMinus" class="btn-minus">−</button>
+                                <input type="number" id="madgwickZetaInput" value="0.0" min="0.0" max="1.0" step="0.01">
+                                <button id="madgwickZetaPlus" class="btn-plus">+</button>
+                            </div>
+                        </div>
+                        <div class="param-group">
+                            <label for="magnetometerEnabledInput">
+                                Włącz magnetometr
+                                <span class="tooltip-icon" data-tooltip="Włącz magnetometr dla 9-osiowej fuzji IMU (NDOF). Wyłącz jeśli magnetometr jest zakłócany (np. przez silniki).">?</span>
+                            </label>
+                            <label class="switch">
+                                <input type="checkbox" id="magnetometerEnabledInput" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- PWM Calibration (min PWM autotune) -->
                 <div class="accordion">
                     <button class="accordion-btn">Kalibracja PWM Silników</button>
