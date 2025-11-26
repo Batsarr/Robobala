@@ -1235,16 +1235,16 @@ function applySingleParam(key, value) {
         'kd_b': 'balanceKd',
         'balance_pid_derivative_filter_alpha': 'balanceFilterAlpha',
         'balance_pid_integral_limit': 'balanceIntegralLimit'
-    , 'trim_angle': 'manualPitchCorrectionInput'
+        , 'trim_angle': 'manualPitchCorrectionInput'
         , 'roll_trim': 'manualRollCorrectionInput'
         , 'fusion_alpha': 'fusionAlphaInput'
         , 'balance_gain': 'balanceGainInput'
-    , 'balance_accel_k': 'balanceAccelKInput'
+        , 'balance_accel_k': 'balanceAccelKInput'
         , 'balance_accel_kd': 'balanceAccelKdInput'
-    , 'max_balance_speed_offset': 'balanceMaxSpeedOffsetInput'
-    , 'pitch_rate_to_imp_scale': 'pitchRateToImpInput'
-    , 'use_accel_for_speed_fusion': 'useAccelForSpeedFusionInput'
-    , 'imu_velocity_leak': 'imuVelocityLeakInput'
+        , 'max_balance_speed_offset': 'balanceMaxSpeedOffsetInput'
+        , 'pitch_rate_to_imp_scale': 'pitchRateToImpInput'
+        , 'use_accel_for_speed_fusion': 'useAccelForSpeedFusionInput'
+        , 'imu_velocity_leak': 'imuVelocityLeakInput'
     };
 
     const inputId = paramMap[key];
@@ -2464,9 +2464,9 @@ document.addEventListener('DOMContentLoaded', () => {
             'balanceAccelKInput': 'balance_accel_k',
             'balanceAccelKdInput': 'balance_accel_kd',
             'balanceMaxSpeedOffsetInput': 'max_balance_speed_offset'
-        , 'pitchRateToImpInput': 'pitch_rate_to_imp_scale'
-        , 'useAccelForSpeedFusionInput': 'use_accel_for_speed_fusion'
-        , 'imuVelocityLeakInput': 'imu_velocity_leak'
+            , 'pitchRateToImpInput': 'pitch_rate_to_imp_scale'
+            , 'useAccelForSpeedFusionInput': 'use_accel_for_speed_fusion'
+            , 'imuVelocityLeakInput': 'imu_velocity_leak'
         };
         return paramMap[inputId];
     }
