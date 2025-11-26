@@ -253,7 +253,7 @@
                 if (snakeKey === 'ga_mutation_rate' || snakeKey === 'ga_crossover_rate') displayValue = Number(value) * 100.0;
                 if (snakeKey === 'tuning_trial_duration_ms') displayValue = Number(value) / 1000.0;
                 if (el.type === 'checkbox') el.checked = !!displayValue; else el.value = displayValue;
-                try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
+                try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) { }
             } catch (err) {
                 console.warn('[ui_core] applySingleAutotuneParam error', err, snakeKey, value);
             }
@@ -313,7 +313,7 @@
             // Special handling: joystick/manual buttons already wired elsewhere; ensure they use sendBleMessage
             // Autotune toggles (include-ki-checkbox) - ensure change sends set_tuning_config_param
             const kiChk = document.getElementById('include-ki-checkbox'); if (kiChk) kiChk.addEventListener('change', (e) => { sendBleMessage({ type: 'set_tuning_config_param', key: 'search_ki', value: e.target.checked }); });
-            
+
             // Fallback listeners for IMU & Model mapping (set_imu_mapping/set_model_mapping)
             if (typeof window.gatherIMUMappingFromUI === 'undefined') {
                 window.getActiveSign = function (containerId) {

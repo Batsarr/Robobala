@@ -1204,6 +1204,13 @@ input:checked + .slider:before {
         height: 200px;
     }
 
+    /* Mobile-friendly joystick adjustments */
+    .joystick-container {
+        width: 180px;
+        height: 180px;
+        margin: 0 auto;
+    }
+
     /* Mobile-friendly PID tuning adjustments */
     .tabs {
         flex-direction: column;
@@ -1230,9 +1237,9 @@ input:checked + .slider:before {
         padding: 8px;
     }
     .btn-minus, .btn-plus {
-        width: 32px;
-        height: 32px;
-        font-size: 1rem;
+        width: 28px;
+        height: 28px;
+        font-size: 0.9rem;
         flex-shrink: 0;
     }
     .diagnostics-section {

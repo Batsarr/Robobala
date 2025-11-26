@@ -853,17 +853,6 @@
             <div class="card">
                 <h2 class="card-title">Diagnostyka</h2>
                 
-                <!-- Diagnostic Tools -->
-                <div class="diagnostic-tools">
-                    <h3>Narzędzia Diagnostyczne</h3>
-                    <div class="button-group">
-                        <button id="calibrateMpuBtn" class="btn btn-secondary">Kalibracja IMU</button>
-                        <button id="calibrateZeroPointBtn" class="btn btn-secondary">Znajdź Pion Automatycznie</button>
-                        <button id="sensorMappingBtn" class="btn btn-secondary">Mapowanie Czujnika</button>
-                        <button id="modelMappingBtn" class="btn btn-secondary">Mapowanie Modelu 3D</button>
-                    </div>
-                </div>
-
                 <!-- Signal Analyzer -->
                 <div class="signal-analyzer">
                     <h3>Wykres Sygnałów</h3>
@@ -1227,6 +1216,17 @@
                         </div>
                         <div class="button-group" style="margin-top:8px;">
                             <button id="sensorMappingBtnSettings" class="btn btn-secondary">Mapowanie Czujnika</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- IMU Calibration -->
+                <div class="accordion">
+                    <button class="accordion-btn">Kalibracja IMU</button>
+                    <div class="accordion-content">
+                        <div class="button-group">
+                            <button id="calibrateMpuBtnSettings" class="btn btn-secondary">Kalibracja IMU</button>
+                            <button id="calibrateZeroPointBtnSettings" class="btn btn-secondary">Znajdź Pion Automatycznie</button>
                         </div>
                     </div>
                 </div>
