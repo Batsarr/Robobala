@@ -872,11 +872,7 @@ const AppState = new Proxy({}, {
             'isSequenceRunning': 'sequence.isRunning',
             'isTuningActive': 'tuning.isActive',
             'activeTuningMethod': 'tuning.activeMethod',
-            'syncTimeout': 'connection.syncTimeout',
-            'isSyncingConfig': 'ui.isSyncingConfig',
-            'tempParams': 'sync.tempParams',
-            'tempTuningParams': 'sync.tempTuningParams',
-            'tempStates': 'sync.tempStates'
+            'syncTimeout': 'connection.syncTimeout'
         };
 
         if (prop in stateMap) {
@@ -1239,18 +1235,43 @@ function applySingleParam(key, value) {
         'kd_b': 'balanceKd',
         'balance_pid_derivative_filter_alpha': 'balanceFilterAlpha',
         'balance_pid_integral_limit': 'balanceIntegralLimit'
-        , 'trim_angle': 'manualPitchCorrectionInput'
+    , 'trim_angle': 'manualPitchCorrectionInput'
         , 'roll_trim': 'manualRollCorrectionInput'
+        , 'fusion_alpha': 'fusionAlphaInput'
+        , 'balance_gain': 'balanceGainInput'
+    , 'balance_accel_k': 'balanceAccelKInput'
+        , 'balance_accel_kd': 'balanceAccelKdInput'
+    , 'max_balance_speed_offset': 'balanceMaxSpeedOffsetInput'
+    , 'pitch_rate_to_imp_scale': 'pitchRateToImpInput'
+    , 'use_accel_for_speed_fusion': 'useAccelForSpeedFusionInput'
+    , 'imu_velocity_leak': 'imuVelocityLeakInput'
     };
 
     const inputId = paramMap[key];
     if (inputId) {
         const input = document.getElementById(inputId);
         if (input) {
-            input.value = value;
-            input.dispatchEvent(new Event('change'));
+            if (input.type === 'checkbox') {
+                input.checked = (value >= 0.5);
+            } else {
+                input.value = value;
+                input.dispatchEvent(new Event('change'));
+            }
         }
     }
+}
+
+// Checkbox handler for useAccelForSpeedFusionInput
+const useAccelCheckbox = document.getElementById('useAccelForSpeedFusionInput');
+if (useAccelCheckbox) {
+    useAccelCheckbox.addEventListener('change', (e) => {
+        if (AppState.isApplyingConfig) return;
+        const paramKey = getParamKeyFromInputId(e.target.id);
+        if (paramKey && appStore.getState('connection.isConnected')) {
+            commLayer.send({ type: 'set_param', key: paramKey, value: e.target.checked ? 1.0 : 0.0 });
+            addLogMessage(`Param ${paramKey}: ${e.target.checked ? 1.0 : 0.0}`, 'info');
+        }
+    });
 }
 
 function applySingleAutotuneParam(key, value) {
@@ -2414,6 +2435,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // ========================================================================
     document.querySelectorAll('input[type="number"]').forEach(input => {
         input.addEventListener('change', (e) => {
+            // Avoid sending set_param when we are applying a full config sync
+            if (AppState.isApplyingConfig) return;
             const label = e.target.closest('.param-group')?.querySelector('label')?.textContent.trim() || 'Parametr';
             const paramKey = getParamKeyFromInputId(e.target.id);
             if (paramKey && appStore.getState('connection.isConnected')) {
@@ -2435,8 +2458,15 @@ document.addEventListener('DOMContentLoaded', () => {
             'minPwmRightFwdInput': 'min_pwm_right_fwd',
             'minPwmRightBwdInput': 'min_pwm_right_bwd',
             'manualPitchCorrectionInput': 'trim_angle',
-            'manualRollCorrectionInput': 'roll_trim'
-            // Add more mappings as needed
+            'manualRollCorrectionInput': 'roll_trim',
+            'fusionAlphaInput': 'fusion_alpha',
+            'balanceGainInput': 'balance_gain',
+            'balanceAccelKInput': 'balance_accel_k',
+            'balanceAccelKdInput': 'balance_accel_kd',
+            'balanceMaxSpeedOffsetInput': 'max_balance_speed_offset'
+        , 'pitchRateToImpInput': 'pitch_rate_to_imp_scale'
+        , 'useAccelForSpeedFusionInput': 'use_accel_for_speed_fusion'
+        , 'imuVelocityLeakInput': 'imu_velocity_leak'
         };
         return paramMap[inputId];
     }
@@ -3992,6 +4022,9 @@ window.setupSignalAnalyzerControls = setupSignalAnalyzerControls;
 function initFusionSettings() {
     const fusionAlphaInput = document.getElementById('fusionAlphaInput');
     const balanceGainInput = document.getElementById('balanceGainInput');
+    const balanceAccelKInput = document.getElementById('balanceAccelKInput');
+    const balanceAccelKdInput = document.getElementById('balanceAccelKdInput');
+    const balanceMaxSpeedOffsetInput = document.getElementById('balanceMaxSpeedOffsetInput');
 
     if (fusionAlphaInput) {
         fusionAlphaInput.addEventListener('change', () => {
@@ -4009,6 +4042,33 @@ function initFusionSettings() {
             if (!isNaN(value)) {
                 commLayer.send({ type: 'set_param', key: 'balance_gain', value: value });
                 addLogMessage(`[UI] Ustawiono balance_gain na ${value}`, 'info');
+            }
+        });
+    }
+    if (balanceAccelKInput) {
+        balanceAccelKInput.addEventListener('change', () => {
+            const value = parseFloat(balanceAccelKInput.value);
+            if (!isNaN(value)) {
+                commLayer.send({ type: 'set_param', key: 'balance_accel_k', value: value });
+                addLogMessage(`[UI] Ustawiono balance_accel_k na ${value}`, 'info');
+            }
+        });
+    }
+    if (balanceAccelKdInput) {
+        balanceAccelKdInput.addEventListener('change', () => {
+            const value = parseFloat(balanceAccelKdInput.value);
+            if (!isNaN(value)) {
+                commLayer.send({ type: 'set_param', key: 'balance_accel_kd', value: value });
+                addLogMessage(`[UI] Ustawiono balance_accel_kd na ${value}`, 'info');
+            }
+        });
+    }
+    if (balanceMaxSpeedOffsetInput) {
+        balanceMaxSpeedOffsetInput.addEventListener('change', () => {
+            const value = parseFloat(balanceMaxSpeedOffsetInput.value);
+            if (!isNaN(value)) {
+                commLayer.send({ type: 'set_param', key: 'max_balance_speed_offset', value: value });
+                addLogMessage(`[UI] Ustawiono max_balance_speed_offset na ${value}`, 'info');
             }
         });
     }
