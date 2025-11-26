@@ -1148,7 +1148,10 @@ function processCompleteMessage(data) {
                     AppState.tempParams[data.key] = data.value;
                 }
             } else {
+                // Avoid re-sending set_param while applying the remote update to UI controls
+                AppState.isApplyingConfig = true;
                 applySingleParam(data.key, data.value);
+                AppState.isApplyingConfig = false;
             }
             break;
         case 'set_tuning_config_param':
@@ -1228,23 +1231,44 @@ function processCompleteMessage(data) {
 
 // Helper functions for message processing
 function applySingleParam(key, value) {
-    // Map parameter keys to input IDs
+    // Map parameter keys to input IDs (use actual HTML element IDs with 'Input' suffix)
     const paramMap = {
-        'kp_b': 'balanceKp',
-        'ki_b': 'balanceKi',
-        'kd_b': 'balanceKd',
-        'balance_pid_derivative_filter_alpha': 'balanceFilterAlpha',
-        'balance_pid_integral_limit': 'balanceIntegralLimit'
-        , 'trim_angle': 'manualPitchCorrectionInput'
-        , 'roll_trim': 'manualRollCorrectionInput'
-        , 'fusion_alpha': 'fusionAlphaInput'
-        , 'balance_gain': 'balanceGainInput'
-        , 'balance_accel_k': 'balanceAccelKInput'
-        , 'balance_accel_kd': 'balanceAccelKdInput'
-        , 'max_balance_speed_offset': 'balanceMaxSpeedOffsetInput'
-        , 'pitch_rate_to_imp_scale': 'pitchRateToImpInput'
-        , 'use_accel_for_speed_fusion': 'useAccelForSpeedFusionInput'
-        , 'imu_velocity_leak': 'imuVelocityLeakInput'
+        'kp_b': 'balanceKpInput',
+        'ki_b': 'balanceKiInput',
+        'kd_b': 'balanceKdInput',
+        'balance_pid_derivative_filter_alpha': 'balanceFilterAlphaInput',
+        'balance_pid_integral_limit': 'balanceIntegralLimitInput',
+        'kp_s': 'speedKpInput',
+        'ki_s': 'speedKiInput',
+        'kd_s': 'speedKdInput',
+        'speed_pid_filter_alpha': 'speedFilterAlphaInput',
+        'speed_pid_integral_limit': 'speedIntegralLimitInput',
+        'speed_pid_deadband': 'speedDeadbandInput',
+        'kp_p': 'positionKpInput',
+        'ki_p': 'positionKiInput',
+        'kd_p': 'positionKdInput',
+        'position_pid_filter_alpha': 'positionFilterAlphaInput',
+        'position_pid_integral_limit': 'positionIntegralLimitInput',
+        'position_pid_deadband': 'positionDeadbandInput',
+        'kp_r': 'rotationKpInput',
+        'kd_r': 'rotationKdInput',
+        'kp_h': 'headingKpInput',
+        'ki_h': 'headingKiInput',
+        'kd_h': 'headingKdInput',
+        'balance_gain': 'balanceGainInput',
+        'balance_accel_k': 'balanceAccelKInput',
+        'balance_accel_kd': 'balanceAccelKdInput',
+        'max_balance_speed_offset': 'balanceMaxSpeedOffsetInput',
+        'trim_angle': 'manualPitchCorrectionInput',
+        'roll_trim': 'manualRollCorrectionInput',
+        'fusion_alpha': 'fusionAlphaInput',
+        'pitch_rate_to_imp_scale': 'pitchRateToImpInput',
+        'use_accel_for_speed_fusion': 'useAccelForSpeedFusionInput',
+        'imu_velocity_leak': 'imuVelocityLeakInput',
+        'min_pwm_left_fwd': 'minPwmLeftFwdInput',
+        'min_pwm_left_bwd': 'minPwmLeftBwdInput',
+        'min_pwm_right_fwd': 'minPwmRightFwdInput',
+        'min_pwm_right_bwd': 'minPwmRightBwdInput'
     };
 
     const inputId = paramMap[key];
@@ -2448,11 +2472,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getParamKeyFromInputId(inputId) {
         const paramMap = {
-            'balanceKp': 'kp_b',
-            'balanceKi': 'ki_b',
-            'balanceKd': 'kd_b',
-            'balanceFilterAlpha': 'balance_pid_derivative_filter_alpha',
-            'balanceIntegralLimit': 'balance_pid_integral_limit',
+            'balanceKpInput': 'kp_b',
+            'balanceKiInput': 'ki_b',
+            'balanceKdInput': 'kd_b',
+            'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha',
+            'balanceIntegralLimitInput': 'balance_pid_integral_limit',
+            'speedKpInput': 'kp_s',
+            'speedKiInput': 'ki_s',
+            'speedKdInput': 'kd_s',
+            'speedFilterAlphaInput': 'speed_pid_filter_alpha',
+            'maxTargetAngleInput': 'max_target_angle_from_speed_pid',
+            'speedIntegralLimitInput': 'speed_pid_integral_limit',
+            'speedDeadbandInput': 'speed_pid_deadband',
+            'positionKpInput': 'kp_p',
+            'positionKiInput': 'ki_p',
+            'positionKdInput': 'kd_p',
+            'positionFilterAlphaInput': 'position_pid_filter_alpha',
+            'maxTargetSpeedInput': 'max_target_speed_from_pos_pid',
+            'positionIntegralLimitInput': 'position_pid_integral_limit',
+            'positionDeadbandInput': 'position_pid_deadband',
+            'rotationKpInput': 'kp_r',
+            'rotationKdInput': 'kd_r',
+            'headingKpInput': 'kp_h',
+            'headingKiInput': 'ki_h',
+            'headingKdInput': 'kd_h',
             'minPwmLeftFwdInput': 'min_pwm_left_fwd',
             'minPwmLeftBwdInput': 'min_pwm_left_bwd',
             'minPwmRightFwdInput': 'min_pwm_right_fwd',
@@ -2463,10 +2506,10 @@ document.addEventListener('DOMContentLoaded', () => {
             'balanceGainInput': 'balance_gain',
             'balanceAccelKInput': 'balance_accel_k',
             'balanceAccelKdInput': 'balance_accel_kd',
-            'balanceMaxSpeedOffsetInput': 'max_balance_speed_offset'
-            , 'pitchRateToImpInput': 'pitch_rate_to_imp_scale'
-            , 'useAccelForSpeedFusionInput': 'use_accel_for_speed_fusion'
-            , 'imuVelocityLeakInput': 'imu_velocity_leak'
+            'balanceMaxSpeedOffsetInput': 'max_balance_speed_offset',
+            'pitchRateToImpInput': 'pitch_rate_to_imp_scale',
+            'useAccelForSpeedFusionInput': 'use_accel_for_speed_fusion',
+            'imuVelocityLeakInput': 'imu_velocity_leak'
         };
         return paramMap[inputId];
     }
@@ -2672,9 +2715,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (bestKp !== '---' && bestKi !== '---' && bestKd !== '---') {
                 // Update UI inputs
-                document.getElementById('balanceKp').value = parseFloat(bestKp);
-                document.getElementById('balanceKi').value = parseFloat(bestKi);
-                document.getElementById('balanceKd').value = parseFloat(bestKd);
+                document.getElementById('balanceKpInput').value = parseFloat(bestKp);
+                document.getElementById('balanceKiInput').value = parseFloat(bestKi);
+                document.getElementById('balanceKdInput').value = parseFloat(bestKd);
 
                 // Send to robot
                 if (appStore.getState('connection.isConnected')) {
@@ -2906,7 +2949,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.applyParameters = function (kp, ki, kd) {
         if (kp !== undefined && ki !== undefined && kd !== undefined) {
-            document.getElementById('balanceKp').value = kp;
+            document.getElementById('balanceKpInput').value = kp;
             document.getElementById('balanceKi').value = ki;
             document.getElementById('balanceKd').value = kd;
 
@@ -3749,7 +3792,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Map loop type to input element IDs
         let kpInputId, kiInputId, kdInputId;
         if (loop === 'balance') {
-            kpInputId = 'balanceKp';
+            kpInputId = 'balanceKpInput';
             kiInputId = 'balanceKi';
             kdInputId = 'balanceKd';
         } else if (loop === 'speed') {
