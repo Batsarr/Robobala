@@ -872,7 +872,11 @@ const AppState = new Proxy({}, {
             'isSequenceRunning': 'sequence.isRunning',
             'isTuningActive': 'tuning.isActive',
             'activeTuningMethod': 'tuning.activeMethod',
-            'syncTimeout': 'connection.syncTimeout'
+            'syncTimeout': 'connection.syncTimeout',
+            'isSyncingConfig': 'ui.isSyncingConfig',
+            'tempParams': 'sync.tempParams',
+            'tempTuningParams': 'sync.tempTuningParams',
+            'tempStates': 'sync.tempStates'
         };
 
         if (prop in stateMap) {
@@ -1148,10 +1152,7 @@ function processCompleteMessage(data) {
                     AppState.tempParams[data.key] = data.value;
                 }
             } else {
-                // Avoid re-sending set_param while applying the remote update to UI controls
-                AppState.isApplyingConfig = true;
                 applySingleParam(data.key, data.value);
-                AppState.isApplyingConfig = false;
             }
             break;
         case 'set_tuning_config_param':
@@ -1231,71 +1232,25 @@ function processCompleteMessage(data) {
 
 // Helper functions for message processing
 function applySingleParam(key, value) {
-    // Map parameter keys to input IDs (use actual HTML element IDs with 'Input' suffix)
+    // Map parameter keys to input IDs
     const paramMap = {
-        'kp_b': 'balanceKpInput',
-        'ki_b': 'balanceKiInput',
-        'kd_b': 'balanceKdInput',
-        'balance_pid_derivative_filter_alpha': 'balanceFilterAlphaInput',
-        'balance_pid_integral_limit': 'balanceIntegralLimitInput',
-        'kp_s': 'speedKpInput',
-        'ki_s': 'speedKiInput',
-        'kd_s': 'speedKdInput',
-        'speed_pid_filter_alpha': 'speedFilterAlphaInput',
-        'speed_pid_integral_limit': 'speedIntegralLimitInput',
-        'speed_pid_deadband': 'speedDeadbandInput',
-        'kp_p': 'positionKpInput',
-        'ki_p': 'positionKiInput',
-        'kd_p': 'positionKdInput',
-        'position_pid_filter_alpha': 'positionFilterAlphaInput',
-        'position_pid_integral_limit': 'positionIntegralLimitInput',
-        'position_pid_deadband': 'positionDeadbandInput',
-        'kp_r': 'rotationKpInput',
-        'kd_r': 'rotationKdInput',
-        'kp_h': 'headingKpInput',
-        'ki_h': 'headingKiInput',
-        'kd_h': 'headingKdInput',
-        'balance_gain': 'balanceGainInput',
-        'balance_accel_k': 'balanceAccelKInput',
-        'balance_accel_kd': 'balanceAccelKdInput',
-        'max_balance_speed_offset': 'balanceMaxSpeedOffsetInput',
-        'trim_angle': 'manualPitchCorrectionInput',
-        'roll_trim': 'manualRollCorrectionInput',
-        'fusion_alpha': 'fusionAlphaInput',
-        'pitch_rate_to_imp_scale': 'pitchRateToImpInput',
-        'use_accel_for_speed_fusion': 'useAccelForSpeedFusionInput',
-        'imu_velocity_leak': 'imuVelocityLeakInput',
-        'min_pwm_left_fwd': 'minPwmLeftFwdInput',
-        'min_pwm_left_bwd': 'minPwmLeftBwdInput',
-        'min_pwm_right_fwd': 'minPwmRightFwdInput',
-        'min_pwm_right_bwd': 'minPwmRightBwdInput'
+        'kp_b': 'balanceKp',
+        'ki_b': 'balanceKi',
+        'kd_b': 'balanceKd',
+        'balance_pid_derivative_filter_alpha': 'balanceFilterAlpha',
+        'balance_pid_integral_limit': 'balanceIntegralLimit'
+        , 'trim_angle': 'manualPitchCorrectionInput'
+        , 'roll_trim': 'manualRollCorrectionInput'
     };
 
     const inputId = paramMap[key];
     if (inputId) {
         const input = document.getElementById(inputId);
         if (input) {
-            if (input.type === 'checkbox') {
-                input.checked = (value >= 0.5);
-            } else {
-                input.value = value;
-                input.dispatchEvent(new Event('change'));
-            }
+            input.value = value;
+            input.dispatchEvent(new Event('change'));
         }
     }
-}
-
-// Checkbox handler for useAccelForSpeedFusionInput
-const useAccelCheckbox = document.getElementById('useAccelForSpeedFusionInput');
-if (useAccelCheckbox) {
-    useAccelCheckbox.addEventListener('change', (e) => {
-        if (AppState.isApplyingConfig) return;
-        const paramKey = getParamKeyFromInputId(e.target.id);
-        if (paramKey && appStore.getState('connection.isConnected')) {
-            commLayer.send({ type: 'set_param', key: paramKey, value: e.target.checked ? 1.0 : 0.0 });
-            addLogMessage(`Param ${paramKey}: ${e.target.checked ? 1.0 : 0.0}`, 'info');
-        }
-    });
 }
 
 function applySingleAutotuneParam(key, value) {
@@ -1587,14 +1542,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                 window.initHardwareSettings();
                                 addLogMessage('[UI] Ustawienia sprzętu zainicjalizowane przy przełączaniu zakładki', 'info');
                             }
-                            if (typeof window.initImuSettings === 'function') {
-                                window.initImuSettings();
-                                addLogMessage('[UI] Ustawienia IMU zainicjalizowane przy przełączaniu zakładki', 'info');
-                            }
-                            if (typeof window.initFusionSettings === 'function') {
-                                window.initFusionSettings();
-                                addLogMessage('[UI] Ustawienia fuzji zainicjalizowane przy przełączaniu zakładki', 'info');
-                            }
                             break;
                         case 'calibration':
                             if (typeof window.initSensorMappingPreview === 'function') {
@@ -1613,8 +1560,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 window.initPathVisualization();
                                 addLogMessage('[UI] Wizualizacja ścieżki zainicjalizowana przy przełączaniu zakładki', 'info');
                             }
-                            if (typeof window.setupDpadControls === 'function') {
-                                window.setupDpadControls();
+                            if (typeof setupDpadControls === 'function') {
+                                setupDpadControls();
                                 addLogMessage('[UI] Kontrolki D-Pad zainicjalizowane przy przełączaniu zakładki', 'info');
                             }
                             break;
@@ -2459,8 +2406,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // ========================================================================
     document.querySelectorAll('input[type="number"]').forEach(input => {
         input.addEventListener('change', (e) => {
-            // Avoid sending set_param when we are applying a full config sync
-            if (AppState.isApplyingConfig) return;
             const label = e.target.closest('.param-group')?.querySelector('label')?.textContent.trim() || 'Parametr';
             const paramKey = getParamKeyFromInputId(e.target.id);
             if (paramKey && appStore.getState('connection.isConnected')) {
@@ -2472,44 +2417,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getParamKeyFromInputId(inputId) {
         const paramMap = {
-            'balanceKpInput': 'kp_b',
-            'balanceKiInput': 'ki_b',
-            'balanceKdInput': 'kd_b',
-            'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha',
-            'balanceIntegralLimitInput': 'balance_pid_integral_limit',
-            'speedKpInput': 'kp_s',
-            'speedKiInput': 'ki_s',
-            'speedKdInput': 'kd_s',
-            'speedFilterAlphaInput': 'speed_pid_filter_alpha',
-            'maxTargetAngleInput': 'max_target_angle_from_speed_pid',
-            'speedIntegralLimitInput': 'speed_pid_integral_limit',
-            'speedDeadbandInput': 'speed_pid_deadband',
-            'positionKpInput': 'kp_p',
-            'positionKiInput': 'ki_p',
-            'positionKdInput': 'kd_p',
-            'positionFilterAlphaInput': 'position_pid_filter_alpha',
-            'maxTargetSpeedInput': 'max_target_speed_from_pos_pid',
-            'positionIntegralLimitInput': 'position_pid_integral_limit',
-            'positionDeadbandInput': 'position_pid_deadband',
-            'rotationKpInput': 'kp_r',
-            'rotationKdInput': 'kd_r',
-            'headingKpInput': 'kp_h',
-            'headingKiInput': 'ki_h',
-            'headingKdInput': 'kd_h',
+            'balanceKp': 'kp_b',
+            'balanceKi': 'ki_b',
+            'balanceKd': 'kd_b',
+            'balanceFilterAlpha': 'balance_pid_derivative_filter_alpha',
+            'balanceIntegralLimit': 'balance_pid_integral_limit',
             'minPwmLeftFwdInput': 'min_pwm_left_fwd',
             'minPwmLeftBwdInput': 'min_pwm_left_bwd',
             'minPwmRightFwdInput': 'min_pwm_right_fwd',
             'minPwmRightBwdInput': 'min_pwm_right_bwd',
             'manualPitchCorrectionInput': 'trim_angle',
-            'manualRollCorrectionInput': 'roll_trim',
-            'fusionAlphaInput': 'fusion_alpha',
-            'balanceGainInput': 'balance_gain',
-            'balanceAccelKInput': 'balance_accel_k',
-            'balanceAccelKdInput': 'balance_accel_kd',
-            'balanceMaxSpeedOffsetInput': 'max_balance_speed_offset',
-            'pitchRateToImpInput': 'pitch_rate_to_imp_scale',
-            'useAccelForSpeedFusionInput': 'use_accel_for_speed_fusion',
-            'imuVelocityLeakInput': 'imu_velocity_leak'
+            'manualRollCorrectionInput': 'roll_trim'
+            // Add more mappings as needed
         };
         return paramMap[inputId];
     }
@@ -2715,9 +2634,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (bestKp !== '---' && bestKi !== '---' && bestKd !== '---') {
                 // Update UI inputs
-                document.getElementById('balanceKpInput').value = parseFloat(bestKp);
-                document.getElementById('balanceKiInput').value = parseFloat(bestKi);
-                document.getElementById('balanceKdInput').value = parseFloat(bestKd);
+                document.getElementById('balanceKp').value = parseFloat(bestKp);
+                document.getElementById('balanceKi').value = parseFloat(bestKi);
+                document.getElementById('balanceKd').value = parseFloat(bestKd);
 
                 // Send to robot
                 if (appStore.getState('connection.isConnected')) {
@@ -2949,7 +2868,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.applyParameters = function (kp, ki, kd) {
         if (kp !== undefined && ki !== undefined && kd !== undefined) {
-            document.getElementById('balanceKpInput').value = kp;
+            document.getElementById('balanceKp').value = kp;
             document.getElementById('balanceKi').value = ki;
             document.getElementById('balanceKd').value = kd;
 
@@ -3792,7 +3711,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Map loop type to input element IDs
         let kpInputId, kiInputId, kdInputId;
         if (loop === 'balance') {
-            kpInputId = 'balanceKpInput';
+            kpInputId = 'balanceKp';
             kiInputId = 'balanceKi';
             kdInputId = 'balanceKd';
         } else if (loop === 'speed') {
@@ -4058,75 +3977,6 @@ window.initSignalAnalyzerChart = initSignalAnalyzerChart;
 window.setupSignalChartControls = setupSignalChartControls;
 window.setupSignalAnalyzerControls = setupSignalAnalyzerControls;
 
-// ========================================================================
-// SETTINGS INITIALIZATION FUNCTIONS
-// ========================================================================
-
-function initFusionSettings() {
-    const fusionAlphaInput = document.getElementById('fusionAlphaInput');
-    const balanceGainInput = document.getElementById('balanceGainInput');
-    const balanceAccelKInput = document.getElementById('balanceAccelKInput');
-    const balanceAccelKdInput = document.getElementById('balanceAccelKdInput');
-    const balanceMaxSpeedOffsetInput = document.getElementById('balanceMaxSpeedOffsetInput');
-
-    if (fusionAlphaInput) {
-        fusionAlphaInput.addEventListener('change', () => {
-            const value = parseFloat(fusionAlphaInput.value);
-            if (!isNaN(value)) {
-                commLayer.send({ type: 'set_param', key: 'fusion_alpha', value: value });
-                addLogMessage(`[UI] Ustawiono fusion_alpha na ${value}`, 'info');
-            }
-        });
-    }
-
-    if (balanceGainInput) {
-        balanceGainInput.addEventListener('change', () => {
-            const value = parseFloat(balanceGainInput.value);
-            if (!isNaN(value)) {
-                commLayer.send({ type: 'set_param', key: 'balance_gain', value: value });
-                addLogMessage(`[UI] Ustawiono balance_gain na ${value}`, 'info');
-            }
-        });
-    }
-    if (balanceAccelKInput) {
-        balanceAccelKInput.addEventListener('change', () => {
-            const value = parseFloat(balanceAccelKInput.value);
-            if (!isNaN(value)) {
-                commLayer.send({ type: 'set_param', key: 'balance_accel_k', value: value });
-                addLogMessage(`[UI] Ustawiono balance_accel_k na ${value}`, 'info');
-            }
-        });
-    }
-    if (balanceAccelKdInput) {
-        balanceAccelKdInput.addEventListener('change', () => {
-            const value = parseFloat(balanceAccelKdInput.value);
-            if (!isNaN(value)) {
-                commLayer.send({ type: 'set_param', key: 'balance_accel_kd', value: value });
-                addLogMessage(`[UI] Ustawiono balance_accel_kd na ${value}`, 'info');
-            }
-        });
-    }
-    if (balanceMaxSpeedOffsetInput) {
-        balanceMaxSpeedOffsetInput.addEventListener('change', () => {
-            const value = parseFloat(balanceMaxSpeedOffsetInput.value);
-            if (!isNaN(value)) {
-                commLayer.send({ type: 'set_param', key: 'max_balance_speed_offset', value: value });
-                addLogMessage(`[UI] Ustawiono max_balance_speed_offset na ${value}`, 'info');
-            }
-        });
-    }
-}
-
-function initJoystickSettings() {
-    // Placeholder for joystick settings initialization
-    console.log('initJoystickSettings called');
-}
-
-function initHardwareSettings() {
-    // Placeholder for hardware settings initialization
-    console.log('initHardwareSettings called');
-}
-
 // Make init functions globally available for view switching
 if (typeof initPidSettings === 'function') window.initPidSettings = initPidSettings;
 if (typeof initJoystickSettings === 'function') window.initJoystickSettings = initJoystickSettings;
@@ -4135,4 +3985,3 @@ if (typeof initImuSettings === 'function') window.initImuSettings = initImuSetti
 if (typeof initSensorMappingPreview === 'function') window.initSensorMappingPreview = initSensorMappingPreview;
 if (typeof initAutotuning === 'function') window.initAutotuning = initAutotuning;
 if (typeof setupDpadControls === 'function') window.setupDpadControls = setupDpadControls;
-if (typeof initFusionSettings === 'function') window.initFusionSettings = initFusionSettings;

@@ -397,37 +397,6 @@
                                     <button class="btn-plus">+</button>
                                 </div>
                             </div>
-                            <div class="param-group">
-                                <label for="pitchRateToImpInput">
-                                    Skala pitch->imp/s
-                                    <span class="tooltip-icon" data-tooltip="Ile impulsów enkodera (imp/s) odpowiada 1°/s prędkości pitch; używane do fuzji prędkości IMU z enkoderami.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="pitchRateToImpInput" value="25.0" min="0" max="500" step="0.1">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="useAccelForSpeedFusionInput">
-                                    Użyj akcelerometru do fuzji prędkości
-                                    <span class="tooltip-icon" data-tooltip="Jeśli zaznaczone, UI/firmware będzie integrować składową przyspieszenia wzdłuż osi ruchu i używać jej w fuzji prędkości (oprócz pitch rate).">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <input type="checkbox" id="useAccelForSpeedFusionInput">
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="imuVelocityLeakInput">
-                                    Wyciek integratora IMU (1/s)
-                                    <span class="tooltip-icon" data-tooltip="Szybkość, z jaką zanika (wycieka) zintegrowana prędkość obliczona z akcelerometru, aby uniknąć dryfu (0.0..1.0/s).">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="imuVelocityLeakInput" value="0.3" min="0" max="1" step="0.01">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
                         </div>
                     </div>
 
@@ -991,7 +960,7 @@
                             <label for="joystickSensitivityInput">Czułość Globalna (%)
                                 <span class="tooltip-icon" data-tooltip="Globalny mnożnik dla wszystkich wartości z joysticka. Ustawienie 100% oznacza pełną czułość - robot reaguje maksymalnie na ruchy joysticka. Zmniejsz do 50-70%, jeśli robot jest zbyt nerwowy lub reaguje zbyt gwałtownie. Przydatne podczas nauki sterowania lub w ciasnych przestrzeniach. Typowy zakres: 60-100%.">?</span>
                             </label>
-                            <div class="input-group">
+                            <div class="numeric-input-wrapper">
                                 <button class="btn-minus">−</button>
                                 <input type="number" id="joystickSensitivityInput" value="100" min="10" max="100" step="5">
                                 <button class="btn-plus">+</button>
@@ -1016,6 +985,16 @@
                                 <input type="number" id="maxSpeedJoystickInput" value="800" min="200" max="4000" step="100">
                                 <button class="btn-plus">+</button>
                             </div>
+                        <div class="param-group">
+                            <label for="maxAccelJoystickInput">Max. przyspieszenie (imp/s^2)
+                                <span class="tooltip-icon" data-tooltip="Maksymalna zmiana zadanej prędkości na sekundę (imp/s^2). Ogranicza przyspieszenie przy sterowaniu joystickiem, co poprawia stabilność.">?</span>
+                            </label>
+                            <div class="input-group">
+                                <button class="btn-minus">−</button>
+                                <input type="number" id="maxAccelJoystickInput" class="config-value" value="200" min="0" max="5000" step="10">
+                                <button class="btn-plus">+</button>
+                            </div>
+                        </div>
                         </div>
                         <div class="param-group">
                             <label for="joystickAngleSensitivityInput">Czułość Kąta (st.)
@@ -1169,68 +1148,6 @@
                                 <input type="checkbox" id="magnetometerEnabledInput" checked>
                                 <span class="slider"></span>
                             </label>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Fusion Tuning -->
-                <div class="accordion">
-                    <button class="accordion-btn">Strojenie Fuzji</button>
-                    <div class="accordion-content">
-                        <div class="param-group">
-                            <label for="fusionAlphaInput">
-                                Alpha filtra fuzji prędkości
-                                <span class="tooltip-icon" data-tooltip="Współczynnik filtra komplementarnego dla fuzji prędkości z enkoderów i IMU. 0.0 = tylko IMU, 1.0 = tylko enkoder. Wyższe wartości = większa ufność w enkoderach. Typowy zakres: 0.8-0.99. Domyślnie: 0.95">?</span>
-                            </label>
-                            <div class="input-group">
-                                <button id="fusionAlphaMinus" class="btn-minus">−</button>
-                                <input type="number" id="fusionAlphaInput" value="0.95" min="0.0" max="1.0" step="0.01">
-                                <button id="fusionAlphaPlus" class="btn-plus">+</button>
-                            </div>
-                        </div>
-                        <div class="param-group">
-                            <label for="balanceGainInput">
-                                Gain PWM balansu
-                                <span class="tooltip-icon" data-tooltip="Współczynnik skalowania wyjścia PID balansu na PWM silników. Wyższe wartości = silniejsze reakcje balansu. Typowy zakres: 500-2000. Domyślnie: 1000">?</span>
-                            </label>
-                            <div class="input-group">
-                                <button id="balanceGainMinus" class="btn-minus">−</button>
-                                <input type="number" id="balanceGainInput" value="1000" min="100" max="5000" step="50">
-                                <button id="balanceGainPlus" class="btn-plus">+</button>
-                            </div>
-                        </div>
-                        <div class="param-group">
-                            <label for="balanceAccelKInput">
-                                Balance Accel K (imp/s² per °)
-                                <span class="tooltip-icon" data-tooltip="Proporcjonalny współczynnik mapowania błędu kąta do przyspieszenia (imp/s^2 per degree). Używaj małych wartości na początek.">?</span>
-                            </label>
-                            <div class="input-group">
-                                <button id="balanceAccelKMinus" class="btn-minus">−</button>
-                                <input type="number" id="balanceAccelKInput" value="2.0" min="0.0" max="50.0" step="0.1">
-                                <button id="balanceAccelKPlus" class="btn-plus">+</button>
-                            </div>
-                        </div>
-                        <div class="param-group">
-                            <label for="balanceAccelKdInput">
-                                Balance Accel Kd (imp/s² per °/s)
-                                <span class="tooltip-icon" data-tooltip="Człon różniczkujący mapujący prędkość kątową do przyspieszenia. Daje efekt tłumienia" >?</span>
-                            </label>
-                            <div class="input-group">
-                                <button id="balanceAccelKdMinus" class="btn-minus">−</button>
-                                <input type="number" id="balanceAccelKdInput" value="0.02" min="0.0" max="10.0" step="0.01">
-                                <button id="balanceAccelKdPlus" class="btn-plus">+</button>
-                            </div>
-                        </div>
-                        <div class="param-group">
-                            <label for="balanceMaxSpeedOffsetInput">
-                                Max Balance Speed Offset (imp/s)
-                                <span class="tooltip-icon" data-tooltip="Maksymalny skutek zintegrowanych przyspieszeń balansu (imp/s). Zapobiega runaway i gwałtownym skokom prędkości">?</span>
-                            </label>
-                            <div class="input-group">
-                                <button id="balanceMaxSpeedOffsetMinus" class="btn-minus">−</button>
-                                <input type="number" id="balanceMaxSpeedOffsetInput" value="200" min="0" max="5000" step="10">
-                                <button id="balanceMaxSpeedOffsetPlus" class="btn-plus">+</button>
-                            </div>
                         </div>
                     </div>
                 </div>
