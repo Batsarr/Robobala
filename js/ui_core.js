@@ -175,7 +175,10 @@
             // Safety/weights
             'safetyMaxAngle': 'safety_max_angle', 'safetyMaxSpeed': 'safety_max_speed', 'safetyMaxPwm': 'safety_max_pwm',
             'ga-weight-itae': 'weights_itae', 'ga-weight-overshoot': 'weights_overshoot', 'ga-weight-control-effort': 'weights_control_effort',
-            'ga-generations': 'ga_generations', 'ga-population': 'ga_population', 'ga-mutation-rate': 'ga_mutation_rate', 'ga-elitism': 'ga_elitism', 'ga-adaptive': 'ga_adaptive', 'ga-convergence-check': 'ga_convergence_check',
+            'ga-generations': 'ga_generations', 'ga-population': 'ga_population', 'ga-elitism': 'ga_elitism', 'ga-adaptive': 'ga_adaptive', 'ga-convergence-check': 'ga_convergence_check',
+            // Backward-compatible id: UI shows 'ga-mutation' id (percent) -> firmware 'ga_mutation_rate'
+            'ga-mutation': 'ga_mutation_rate',
+            // Additional tuning controls (note: some are runtime-only and not EEPROM stored)
             'pso-iterations': 'pso_iterations', 'pso-particles': 'pso_particles', 'pso-inertia': 'pso_inertia', 'pso-adaptive-inertia': 'pso_adaptive_inertia', 'pso-velocity-clamp': 'pso_velocity_clamp', 'pso-neighborhood': 'pso_neighborhood',
             'zn-amplitude': 'zn_amplitude', 'tuning_trial_duration_ms': 'tuning_trial_duration_ms',
             // Madgwick/IMU
@@ -247,7 +250,7 @@
                 if (!el) return;
                 let displayValue = value;
                 if (snakeKey.startsWith('weights_')) displayValue = Number(value) * 100.0;
-                if (snakeKey === 'ga_mutation_rate') displayValue = Number(value) * 100.0;
+                if (snakeKey === 'ga_mutation_rate' || snakeKey === 'ga_crossover_rate') displayValue = Number(value) * 100.0;
                 if (snakeKey === 'tuning_trial_duration_ms') displayValue = Number(value) / 1000.0;
                 if (el.type === 'checkbox') el.checked = !!displayValue; else el.value = displayValue;
                 try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
@@ -277,7 +280,7 @@
                 if (AppState && AppState.isApplyingConfig) return;
                 let value = rawValue;
                 // Convert display value back to firmware units
-                const divide100Keys = ['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha', 'weights_itae', 'weights_overshoot', 'weights_control_effort'];
+                const divide100Keys = ['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha', 'weights_itae', 'weights_overshoot', 'weights_control_effort', 'ga_mutation_rate', 'ga_crossover_rate'];
                 if (divide100Keys.includes(snakeKey)) value = Number(rawValue) / 100.0;
                 if (snakeKey === 'tuning_trial_duration_ms') value = Math.round(Number(rawValue) * 1000.0);
                 if (snakeKey === 'disable_magnetometer' && typeof rawValue === 'boolean') value = rawValue ? 0.0 : 1.0; // invert: UI true -> disable=0
@@ -310,6 +313,99 @@
             // Special handling: joystick/manual buttons already wired elsewhere; ensure they use sendBleMessage
             // Autotune toggles (include-ki-checkbox) - ensure change sends set_tuning_config_param
             const kiChk = document.getElementById('include-ki-checkbox'); if (kiChk) kiChk.addEventListener('change', (e) => { sendBleMessage({ type: 'set_tuning_config_param', key: 'search_ki', value: e.target.checked }); });
+            
+            // Fallback listeners for IMU & Model mapping (set_imu_mapping/set_model_mapping)
+            if (typeof window.gatherIMUMappingFromUI === 'undefined') {
+                window.getActiveSign = function (containerId) {
+                    try {
+                        const cont = document.getElementById(containerId);
+                        if (!cont) return 1;
+                        const active = cont.querySelector('button.active');
+                        if (!active) return 1;
+                        return parseInt(active.dataset.sign) || 1;
+                    } catch (e) { return 1; }
+                };
+                window.gatherIMUMappingFromUI = function () {
+                    return {
+                        pitch: { source: parseInt(document.getElementById('imuPitchSource')?.value || '0'), sign: parseInt(window.getActiveSign('imuPitchSign')) },
+                        yaw: { source: parseInt(document.getElementById('imuYawSource')?.value || '1'), sign: parseInt(window.getActiveSign('imuYawSign')) },
+                        roll: { source: parseInt(document.getElementById('imuRollSource')?.value || '2'), sign: parseInt(window.getActiveSign('imuRollSign')) }
+                    };
+                };
+            }
+            if (typeof window.gatherModelMappingFromUI === 'undefined') {
+                window.gatherModelMappingFromUI = function () {
+                    return {
+                        pitch: { source: parseInt(document.getElementById('modelPitchSource')?.value || '0'), sign: parseInt(window.getActiveSign('modelPitchSign')) },
+                        yaw: { source: parseInt(document.getElementById('modelYawSource')?.value || '1'), sign: parseInt(window.getActiveSign('modelYawSign')) },
+                        roll: { source: parseInt(document.getElementById('modelRollSource')?.value || '2'), sign: parseInt(window.getActiveSign('modelRollSign')) }
+                    };
+                };
+            }
+
+            // Attach listeners for IMU mapping selects and sign toggles (if not already bound by main.js)
+            ['imuPitchSource', 'imuYawSource', 'imuRollSource'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (el.__rbBound) return;
+                el.__rbBound = true;
+                el.addEventListener('change', () => {
+                    try {
+                        const mapping = window.gatherIMUMappingFromUI();
+                        window.sendBleMessage({ type: 'set_imu_mapping', mapping });
+                        addLogMessage('[UI] Wyslano mapowanie IMU (set_imu_mapping)', 'info');
+                    } catch (e) { /* ignore if no comm layer */ }
+                });
+            });
+            ['imuPitchSign', 'imuYawSign', 'imuRollSign'].forEach((containerId) => {
+                const cont = document.getElementById(containerId);
+                if (!cont) return;
+                if (cont.__rbBound) return;
+                cont.__rbBound = true;
+                cont.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+                    // toggle active class
+                    cont.querySelectorAll('button').forEach(bb => bb.classList.remove('active'));
+                    b.classList.add('active');
+                    try { const mapping = window.gatherIMUMappingFromUI(); window.sendBleMessage({ type: 'set_imu_mapping', mapping }); addLogMessage('[UI] Wyslano mapowanie IMU (set_imu_mapping)', 'info'); } catch (e) { }
+                }));
+            });
+
+            // Attach listeners for Model mapping selects and sign toggles
+            ['modelPitchSource', 'modelYawSource', 'modelRollSource'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (el.__rbBound) return;
+                el.__rbBound = true;
+                el.addEventListener('change', () => {
+                    try { const mapping = window.gatherModelMappingFromUI(); window.sendBleMessage({ type: 'set_model_mapping', mapping }); addLogMessage('[UI] Wyslano mapowanie modelu (set_model_mapping)', 'info'); } catch (e) { }
+                });
+            });
+            // Fallback axis selectors for gamepad mapping
+            ['axis-x-select', 'axis-y-select'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (el.__rbBound) return;
+                el.__rbBound = true;
+                el.addEventListener('change', (e) => {
+                    try {
+                        window.gamepadAxisMapping = window.gamepadAxisMapping || { x: -1, y: -1 };
+                        if (id === 'axis-x-select') window.gamepadAxisMapping.x = parseInt(e.target.value || -1);
+                        else window.gamepadAxisMapping.y = parseInt(e.target.value || -1);
+                        addLogMessage(`[UI] Gamepad axis mapping updated: ${JSON.stringify(window.gamepadAxisMapping)}`, 'info');
+                    } catch (e) { /* no-op */ }
+                });
+            });
+            ['modelPitchSign', 'modelYawSign', 'modelRollSign'].forEach((containerId) => {
+                const cont = document.getElementById(containerId);
+                if (!cont) return;
+                if (cont.__rbBound) return;
+                cont.__rbBound = true;
+                cont.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+                    cont.querySelectorAll('button').forEach(bb => bb.classList.remove('active'));
+                    b.classList.add('active');
+                    try { const mapping = window.gatherModelMappingFromUI(); window.sendBleMessage({ type: 'set_model_mapping', mapping }); addLogMessage('[UI] Wyslano mapowanie modelu (set_model_mapping)', 'info'); } catch (e) { }
+                }));
+            });
         };
     }
 
