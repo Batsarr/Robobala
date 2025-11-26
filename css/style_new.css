@@ -633,13 +633,12 @@ body {
     color: var(--text-primary);
 }
 
-.button-group {
-    display: flex;
-    gap: var(--spacing-sm);
-    margin-top: var(--spacing-md);
-}
-
-.button-group .btn {
+    .button-group {
+        display: flex;
+        gap: var(--spacing-sm);
+        margin-top: var(--spacing-md);
+        flex-wrap: wrap;
+    }.button-group .btn {
     flex: 1;
 }
 
@@ -1198,7 +1197,7 @@ input:checked + .slider:before {
         font-size: 0.875rem;
     }
     .signal-canvas {
-        height: 200px;
+        height: 400px;
     }
     .robot-3d-container {
         height: 200px;
@@ -1237,9 +1236,9 @@ input:checked + .slider:before {
         padding: 8px;
     }
     .btn-minus, .btn-plus {
-        width: 28px;
-        height: 28px;
-        font-size: 0.9rem;
+        width: 24px;
+        height: 24px;
+        font-size: 0.8rem;
         flex-shrink: 0;
     }
     .diagnostics-section {
