@@ -1298,6 +1298,57 @@ input:checked + .slider:before {
 /* ============================================================================
    ANIMATIONS & TRANSITIONS
    ============================================================================ */
+
+/* Modal styles (copied from archive for consistent look) */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.7);
+    z-index: 2000;
+    display: none; /* show with inline style display:flex */
+    justify-content: center;
+    align-items: center;
+    padding: 10px;
+}
+.modal-content {
+    background-color: var(--bg-card);
+    padding: 20px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    color: var(--text-primary);
+}
+.modal-content * { box-sizing: border-box; }
+.modal-content .help-text { font-size: 0.9rem; color: var(--text-secondary); }
+.modal-backdrop .modal-content { max-height: calc(100vh - 40px); overflow-y: auto; }
+
+/* Flash highlight used to visually indicate triggered UI elements from gamepad events */
+.gamepad-flash {
+    box-shadow: 0 0 10px rgba(247, 183, 49, 0.9) !important;
+    transform: scale(1.02);
+    transition: transform 0.12s ease-in-out, box-shadow 0.12s ease-in-out;
+}
+
+.axis-mapping-summary {
+    margin: 8px 0 12px 0;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+/* Small tweaks for inputs used in joystick settings */
+input.config-value, input[type="number"].config-value {
+    max-width: 140px;
+    min-width: 80px;
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

@@ -359,6 +359,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Gamepad mappings: wire modal and load existing stored mappings
+    try { setupGamepadMappingModal(); loadGamepadMappings(); renderMappingModal(); } catch (e) { /* no-op if not present */ }
+
     ['imuPitchSign', 'imuYawSign', 'imuRollSign'].forEach(containerId => {
         const el = document.getElementById(containerId);
         if (!el) return;
@@ -979,6 +982,15 @@ let availableTelemetry = {
     output: { label: 'Output', color: '#9b59b6' }
 };
 
+// Actions that can be mapped via gamepad - label shown in UI and elementId references the control
+const availableActions = {
+    'toggle_balance': { label: 'Włącz/Wyłącz Balansowanie', elementId: 'balanceToggle' },
+    'toggle_hold_position': { label: 'Włącz/Wyłącz Trzymanie Pozycji', elementId: 'holdPositionToggle' },
+    'toggle_speed_mode': { label: 'Włącz/Wyłącz Tryb Prędkości', elementId: 'speedModeToggle' },
+    'reset_pitch': { label: 'Ustaw punkt 0 (Pitch)', elementId: 'manualPitchSetZeroBtn' },
+    'reset_roll': { label: 'Ustaw punkt 0 (Roll)', elementId: 'manualRollSetZeroBtn' }
+};
+
 // no duplicate setupManualTuneButtons here; the real function is defined earlier
 let isChartPaused = false;
 let chartRangeSelection = { isSelecting: false, startIndex: null, endIndex: null };
@@ -1391,27 +1403,8 @@ function onDisconnected() {
     }
 
     const connectBtn = document.getElementById('connectBtn');
-    if (connectBtn) {
-        connectBtn.querySelector('span').textContent = 'Połącz z Robotem';
-        connectBtn.classList.remove('btn-secondary');
-        connectBtn.classList.add('btn-primary');
-    }
-
-    const connectionDot = document.getElementById('connectionDot');
-    const connectionText = document.getElementById('connectionText');
-    if (connectionDot) connectionDot.classList.remove('connected');
-    if (connectionText) connectionText.textContent = 'Rozłączony';
-
-    ['balanceToggle', 'holdPositionToggle', 'speedModeToggle'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.checked = false;
-    });
+    if (connectBtn) connectBtn.disabled = false;
 }
-
-function handleCancel() {
-    // Placeholder for cancel handling
-}
-
 document.addEventListener('DOMContentLoaded', () => {
     // ========================================================================
     // SPLASH SCREEN
@@ -1876,9 +1869,9 @@ document.addEventListener('DOMContentLoaded', () => {
         currentJoyY = 0;
 
         // Send zero values to robot
-    // Send both modern and legacy joystick stop messages (via wrapper)
-    sendBleMessage({ type: 'joystick', x: 0, y: 0 });
-    sendBleMessage({ type: 'joystick', x: 0, y: 0 });
+        // Send both modern and legacy joystick stop messages (via wrapper)
+        sendBleMessage({ type: 'joystick', x: 0, y: 0 });
+        sendBleMessage({ type: 'joystick', x: 0, y: 0 });
     }
 
     joystickCanvas.addEventListener('mousedown', handleJoystickStart);
@@ -1893,24 +1886,53 @@ document.addEventListener('DOMContentLoaded', () => {
     initJoystick();
 
     // ========================================================================
-    // GAMEPAD POLLING (like old version)
+    // GAMEPAD POLLING & MAPPING
     // ========================================================================
-    let gamepadIndex = null;
+    // Compatibility: basic variables and mapping storage
+    let gamepadIndex = null, lastGamepadState = [], gamepadMappings = {}; const GAMEPAD_MAPPING_KEY = 'pid_gamepad_mappings_v3';
+    let isMappingButton = false, actionToMap = null;
+    // Guard to avoid spawning multiple requestAnimationFrame loops
+    let isPollingGamepad = false;
 
     function pollGamepad() {
+        // Abort if polling disabled
+        if (!isPollingGamepad) return;
         if (gamepadIndex !== null) {
             const gp = navigator.getGamepads()[gamepadIndex];
             if (!gp) return;
 
-            let x = gp.axes[0] || 0;
-            let y = gp.axes[1] || 0;
-
-            // Apply deadzone
+            if (isMappingButton && actionToMap) {
+                gp.buttons.forEach((button, i) => {
+                    if (button.pressed && !lastGamepadState[i]) {
+                        Object.keys(gamepadMappings).forEach(key => { if (gamepadMappings[key] === actionToMap) delete gamepadMappings[key]; });
+                        gamepadMappings[i] = actionToMap;
+                        saveGamepadMappings();
+                        addLogMessage(`[UI] Akcja '${availableActions[actionToMap].label}' przypisana do przycisku ${i}.`, 'success');
+                        isMappingButton = false; actionToMap = null; renderMappingModal();
+                    }
+                });
+            } else {
+                gp.buttons.forEach((button, i) => {
+                    if (button.pressed && !lastGamepadState[i]) {
+                        const action = gamepadMappings[i];
+                        if (action && availableActions[action]) {
+                            const element = document.getElementById(availableActions[action].elementId);
+                            if (element && !element.disabled) {
+                                element.click(); flashElement(element);
+                            }
+                        }
+                    }
+                });
+            }
+            lastGamepadState = gp.buttons.map(b => b.pressed);
+            // Axis mapping: allow remapping the gamepad physical axes to logical X/Y axes via UI
+            const axisMap = (window.gamepadAxisMapping && typeof window.gamepadAxisMapping === 'object') ? window.gamepadAxisMapping : { x: 0, y: 1 };
+            const xIndex = (Number.isFinite(axisMap.x) && axisMap.x >= 0 && axisMap.x < gp.axes.length) ? axisMap.x : 0;
+            const yIndex = (Number.isFinite(axisMap.y) && axisMap.y >= 0 && axisMap.y < gp.axes.length) ? axisMap.y : 1;
+            let x = gp.axes[xIndex] || 0;
+            let y = gp.axes[yIndex] || 0;
             if (Math.abs(x) < 0.15) x = 0;
             if (Math.abs(y) < 0.15) y = 0;
-
-            // Send joystick values continuously
-            sendBleMessage({ type: 'joystick', x: x, y: -y });
             sendBleMessage({ type: 'joystick', x: x, y: -y });
         }
         requestAnimationFrame(pollGamepad);
@@ -1919,16 +1941,146 @@ document.addEventListener('DOMContentLoaded', () => {
     // Start polling when gamepad is connected
     window.addEventListener('gamepadconnected', (e) => {
         gamepadIndex = e.gamepad.index;
+        document.getElementById('gamepadStatus').textContent = 'Polaczony';
+        document.getElementById('gamepadStatus').style.color = '#a2f279';
         addLogMessage(`Podłączono gamepad: ${e.gamepad.id}`, 'info');
-        pollGamepad();
+        // reset last button state cache
+        lastGamepadState = [];
+        // Start polling loop if not already running
+        if (!isPollingGamepad) { isPollingGamepad = true; pollGamepad(); }
+        // Populate axis selects for mapping UI
+        try { populateAxisSelects(e.gamepad); } catch (err) { /* no-op */ }
     });
 
     window.addEventListener('gamepaddisconnected', (e) => {
         if (gamepadIndex === e.gamepad.index) {
             gamepadIndex = null;
         }
+        // Stop polling loop
+        isPollingGamepad = false;
+        document.getElementById('gamepadStatus').textContent = 'Brak';
+        document.getElementById('gamepadStatus').style.color = '#f7b731';
         addLogMessage(`Odłączono gamepad: ${e.gamepad.id}`, 'warn');
     });
+
+    // Mapping helper: render the modal list of available actions and currently mapped buttons
+    function renderMappingModal() {
+        const list = document.getElementById('gamepad-mapping-list');
+        if (!list) return;
+        list.innerHTML = '';
+        // Show current axis mapping summary at the top of list
+        const axisSummary = document.createElement('div');
+        axisSummary.className = 'axis-mapping-summary';
+        const axisMap = (window.gamepadAxisMapping && typeof window.gamepadAxisMapping === 'object') ? window.gamepadAxisMapping : { x: -1, y: -1 };
+        axisSummary.textContent = `Oś X: ${axisMap.x >= 0 ? axisMap.x : 'Brak'} | Oś Y: ${axisMap.y >= 0 ? axisMap.y : 'Brak'}`;
+        list.appendChild(axisSummary);
+        for (const [action, config] of Object.entries(availableActions)) {
+            const row = document.createElement('div');
+            row.className = 'mapping-row';
+            const buttonIndex = Object.keys(gamepadMappings).find(key => gamepadMappings[key] === action);
+            row.innerHTML = `<span class="mapping-label">${config.label}</span><span class="mapping-display">${buttonIndex !== undefined ? `Przycisk ${buttonIndex}` : 'Brak'}</span><button class="mapping-button" data-action="${action}">Przypisz</button><button class="mapping-clear" data-action="${action}">Wyczyść</button>`;
+            list.appendChild(row);
+        }
+        list.querySelectorAll('.mapping-button').forEach(button => {
+            button.addEventListener('click', (e) => { const action = e.target.dataset.action; startMapping(action, e.target); });
+        });
+        list.querySelectorAll('.mapping-clear').forEach(button => {
+            button.addEventListener('click', (e) => { const action = e.target.dataset.action; Object.keys(gamepadMappings).forEach(k => { if (gamepadMappings[k] === action) delete gamepadMappings[k]; }); saveGamepadMappings(); renderMappingModal(); addLogMessage(`[UI] Usunięto mapowanie akcji: ${availableActions[action].label}`, 'info'); });
+        });
+    }
+
+    function startMapping(action, buttonElement) {
+        if (gamepadIndex === null) { addLogMessage("Podłącz gamepada aby rozpoczac mapowanie!", "warn"); return; }
+        isMappingButton = true; actionToMap = action;
+        document.querySelectorAll('.mapping-button').forEach(btn => btn.textContent = "Przypisz");
+        buttonElement.textContent = "Czekam...";
+        addLogMessage(`[UI] Nasłuchuję na przycisk dla akcji: ${availableActions[action].label}...`, 'info');
+    }
+
+    function loadGamepadMappings() {
+        const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY);
+        gamepadMappings = {};
+        window.gamepadAxisMapping = window.gamepadAxisMapping || { x: -1, y: -1 };
+        if (!saved) return;
+        try {
+            const parsed = JSON.parse(saved);
+            if (parsed && typeof parsed === 'object') {
+                if (parsed.buttons && typeof parsed.buttons === 'object') {
+                    gamepadMappings = parsed.buttons;
+                } else if (Object.keys(parsed).length > 0) {
+                    // Legacy saved as flat mapping
+                    gamepadMappings = parsed;
+                }
+                if (parsed.axes && typeof parsed.axes === 'object') {
+                    window.gamepadAxisMapping = parsed.axes;
+                }
+            }
+        } catch (err) {
+            console.warn('[UI] loadGamepadMappings: parse error', err);
+        }
+        // Update selects if present
+        try {
+            const axisXSelect = document.getElementById('axis-x-select');
+            const axisYSelect = document.getElementById('axis-y-select');
+            if (axisXSelect && axisYSelect) {
+                // If we have an active gamepad, populate with axis options first
+                const gp = (gamepadIndex !== null) ? navigator.getGamepads()[gamepadIndex] : null;
+                if (gp) populateAxisSelects(gp);
+                axisXSelect.value = String((typeof window.gamepadAxisMapping.x === 'number') ? window.gamepadAxisMapping.x : -1);
+                axisYSelect.value = String((typeof window.gamepadAxisMapping.y === 'number') ? window.gamepadAxisMapping.y : -1);
+            }
+        } catch (e) { /* no-op */ }
+    }
+
+    function saveGamepadMappings() {
+        const payload = { buttons: gamepadMappings, axes: window.gamepadAxisMapping || { x: -1, y: -1 } };
+        localStorage.setItem(GAMEPAD_MAPPING_KEY, JSON.stringify(payload));
+    }
+
+    function setupGamepadMappingModal() {
+        const openBtn = document.getElementById('open-gamepad-modal-btn');
+        const closeBtn = document.getElementById('close-modal-btn');
+        const saveBtn = document.getElementById('save-mapping-btn');
+        const loadBtn = document.getElementById('load-mapping-btn');
+        const startBtn = document.getElementById('start-mapping-btn');
+        if (openBtn) openBtn.addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; renderMappingModal(); });
+        if (closeBtn) closeBtn.addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'none'; });
+        if (saveBtn) saveBtn.addEventListener('click', () => { saveGamepadMappings(); addLogMessage('[UI] Zapisano mapowanie gamepada', 'info'); });
+        if (loadBtn) loadBtn.addEventListener('click', () => { loadGamepadMappings(); renderMappingModal(); addLogMessage('[UI] Wczytano mapowanie gamepada', 'info'); });
+        if (startBtn) startBtn.addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; renderMappingModal(); });
+        // Populate axis selections if a gamepad is already connected
+        try { const gpIndex = gamepadIndex; if (gpIndex !== null) { const gp = navigator.getGamepads()[gpIndex]; if (gp) populateAxisSelects(gp); } } catch (e) { /* no-op */ }
+    }
+
+    function populateAxisSelects(gp) {
+        if (!gp) return;
+        const axisXSelect = document.getElementById('axis-x-select');
+        const axisYSelect = document.getElementById('axis-y-select');
+        if (!axisXSelect || !axisYSelect) return;
+        // Save current selected values
+        const curX = axisXSelect.value;
+        const curY = axisYSelect.value;
+        axisXSelect.innerHTML = '';
+        axisYSelect.innerHTML = '';
+        const makeOption = (value, label) => { const o = document.createElement('option'); o.value = String(value); o.textContent = label; return o; };
+        axisXSelect.appendChild(makeOption(-1, 'Brak'));
+        axisYSelect.appendChild(makeOption(-1, 'Brak'));
+        for (let i = 0; i < gp.axes.length; i++) {
+            axisXSelect.appendChild(makeOption(i, `Oś ${i}`));
+            axisYSelect.appendChild(makeOption(i, `Oś ${i}`));
+        }
+        // Restore previous selection if still valid
+        if (String(curX) && Array.from(axisXSelect.options).some(o => o.value === String(curX))) axisXSelect.value = String(curX);
+        if (String(curY) && Array.from(axisYSelect.options).some(o => o.value === String(curY))) axisYSelect.value = String(curY);
+    }
+
+    function flashElement(element) {
+        if (!element) return;
+        const target = element.tagName === 'INPUT' ? element.closest('.switch') || element.closest('.control-row') || element : element;
+        if (!target) return;
+        target.classList.add('gamepad-flash');
+        setTimeout(() => { try { target.classList.remove('gamepad-flash'); } catch (e) { /* ignore */ } }, 300);
+    }
 
     // ========================================================================
     // CONNECTION BUTTON
@@ -3418,6 +3570,76 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Autotuning functions
+    // initialize fitness modal for tuning weights
+    function initFitnessModal() {
+        const TOTAL_POINTS = 100;
+        const openBtn = document.getElementById('open-fitness-modal-btn');
+        const modal = document.getElementById('fitness-modal');
+        const closeBtn = document.getElementById('close-fitness-modal');
+        const applyBtn = document.getElementById('apply-fitness-btn');
+        const itaeInput = document.getElementById('ga-weight-itae');
+        const overshootInput = document.getElementById('ga-weight-overshoot');
+        const sseInput = document.getElementById('ga-weight-control-effort');
+        const remainingEl = document.getElementById('ga-weight-remaining');
+
+        if (!modal || !openBtn || !closeBtn || !applyBtn || !itaeInput || !overshootInput || !sseInput || !remainingEl) return;
+
+        function sanitizeAndClamp(v) {
+            let n = parseInt(v, 10);
+            if (Number.isNaN(n)) n = 0;
+            if (n < 0) n = 0;
+            if (n > TOTAL_POINTS) n = TOTAL_POINTS;
+            return n;
+        }
+
+        function updateWeightUi() {
+            const itae = sanitizeAndClamp(itaeInput.value);
+            const overs = sanitizeAndClamp(overshootInput.value);
+            const sse = sanitizeAndClamp(sseInput.value);
+            itaeInput.value = itae; overshootInput.value = overs; sseInput.value = sse;
+            const sum = itae + overs + sse;
+            const remaining = TOTAL_POINTS - sum;
+            remainingEl.textContent = remaining;
+            remainingEl.style.color = remaining === 0 ? 'var(--accent-primary)' : 'var(--accent-error)';
+            applyBtn.disabled = (remaining !== 0);
+        }
+
+        function initValuesFromState() {
+            const stateWeights = (typeof appStore !== 'undefined' && appStore.getState) ? appStore.getState('tuning.weights') : null;
+            const defaults = { itae: 50, overshoot: 30, sse: 20 };
+            const w = stateWeights || defaults;
+            itaeInput.value = sanitizeAndClamp(w.itae);
+            overshootInput.value = sanitizeAndClamp(w.overshoot);
+            sseInput.value = sanitizeAndClamp(w.sse);
+            updateWeightUi();
+        }
+
+        openBtn.addEventListener('click', () => { initValuesFromState(); modal.style.display = 'flex'; });
+        closeBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+        [itaeInput, overshootInput, sseInput].forEach(inp => inp.addEventListener('input', updateWeightUi));
+
+        applyBtn.addEventListener('click', () => {
+            const itae = sanitizeAndClamp(itaeInput.value);
+            const overs = sanitizeAndClamp(overshootInput.value);
+            const sse = sanitizeAndClamp(sseInput.value);
+            const sum = itae + overs + sse;
+            if (sum !== TOTAL_POINTS) {
+                try { addLogMessage('[UI] Musisz rozdzielić dokładnie 100 punktów pomiędzy wagi.', 'warn'); } catch (e) { }
+                return;
+            }
+            if (typeof appStore !== 'undefined' && appStore.setState) appStore.setState('tuning.weights', { itae, overshoot: overs, sse });
+            try {
+                // Convert percentages (0..100) to firmware decimals (0.0..1.0)
+                sendBleCommand('set_tuning_config_param', { key: 'weights_itae', value: itae / 100.0 });
+                sendBleCommand('set_tuning_config_param', { key: 'weights_overshoot', value: overs / 100.0 });
+                sendBleCommand('set_tuning_config_param', { key: 'weights_control_effort', value: sse / 100.0 });
+                addLogMessage('[UI] Wagi fitness zastosowane.', 'info');
+            } catch (e) {
+                console.warn('initFitnessModal apply error', e);
+            }
+            modal.style.display = 'none';
+        });
+    }
     let currentTuningAlgorithm = null;
 
     function initAutotuning() {
@@ -3462,10 +3684,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Apply best parameters button
-        const applyBestBtn = document.getElementById('applyBestBtn');
-        if (applyBestBtn) {
-            applyBestBtn.addEventListener('click', applyBestParameters);
-        }
+        // Older id 'applyBestBtn' not used; prefer 'apply-best-btn' in DOM - no-op if not present
+        const _applyBestBtnLegacy = document.getElementById('applyBestBtn');
+        if (_applyBestBtnLegacy) _applyBestBtnLegacy.addEventListener('click', applyBestParameters);
 
         // Loop selector
         const loopSelector = document.getElementById('tuningLoopSelector');
@@ -3692,9 +3913,59 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function applyBestParameters() {
-        // This function would apply the best parameters found during tuning
-        // Implementation depends on how best parameters are stored
-        addLogMessage('Zastosowano najlepsze parametry z strojenia', 'info');
+        // Apply the current tuning algorithm's global best (if present),
+        // or fall back to the best values shown in the UI (#best-kp, #best-ki, #best-kd)
+        try {
+            let kp, ki, kd;
+            if (currentTuningAlgorithm && currentTuningAlgorithm.globalBest && currentTuningAlgorithm.globalBest.position) {
+                const p = currentTuningAlgorithm.globalBest.position;
+                kp = Number(p.kp); ki = Number(p.ki); kd = Number(p.kd);
+            } else {
+                const elKp = document.getElementById('best-kp');
+                const elKi = document.getElementById('best-ki');
+                const elKd = document.getElementById('best-kd');
+                kp = elKp ? parseFloat(elKp.textContent) : NaN;
+                ki = elKi ? parseFloat(elKi.textContent) : NaN;
+                kd = elKd ? parseFloat(elKd.textContent) : NaN;
+            }
+            if (!Number.isFinite(kp) || !Number.isFinite(ki) || !Number.isFinite(kd)) {
+                addLogMessage('[UI] Brak dostępnych najlepszych parametrów do zastosowania.', 'warn');
+                return;
+            }
+            const loop = document.getElementById('tuningLoopSelector')?.value || 'balance';
+            const keys = (function getKeysForLoop(l) {
+                if (l === 'balance') return { kp: 'kp_b', ki: 'ki_b', kd: 'kd_b', kpInput: 'balanceKp', kiInput: 'balanceKi', kdInput: 'balanceKd' };
+                if (l === 'speed') return { kp: 'kp_s', ki: 'ki_s', kd: 'kd_s', kpInput: 'speedKp', kiInput: 'speedKi', kdInput: 'speedKd' };
+                if (l === 'position') return { kp: 'kp_p', ki: 'ki_p', kd: 'kd_p', kpInput: 'positionKp', kiInput: 'positionKi', kdInput: 'positionKd' };
+                return { kp: 'kp_b', ki: 'ki_b', kd: 'kd_b', kpInput: 'balanceKp', kiInput: 'balanceKi', kdInput: 'balanceKd' };
+            })(loop);
+            // Update UI inputs if present
+            try { if (document.getElementById(keys.kpInput)) document.getElementById(keys.kpInput).value = kp; } catch (e) { /* no-op */ }
+            try { if (document.getElementById(keys.kiInput)) document.getElementById(keys.kiInput).value = ki; } catch (e) { /* no-op */ }
+            try { if (document.getElementById(keys.kdInput)) document.getElementById(keys.kdInput).value = kd; } catch (e) { /* no-op */ }
+            // Update AppStore (if present)
+            try {
+                if (appStore && typeof appStore.setState === 'function') {
+                    appStore.setState(`pid.${loop}.kp`, kp);
+                    appStore.setState(`pid.${loop}.ki`, ki);
+                    appStore.setState(`pid.${loop}.kd`, kd);
+                }
+            } catch (e) { /* ignore */ }
+            // Send params to robot
+            try {
+                if (appStore.getState('connection.isConnected')) {
+                    commLayer.send({ type: 'set_param', key: keys.kp, value: kp });
+                    commLayer.send({ type: 'set_param', key: keys.ki, value: ki });
+                    commLayer.send({ type: 'set_param', key: keys.kd, value: kd });
+                }
+                addLogMessage(`[UI] Zastosowano najlepsze parametry (${loop}) - Kp=${kp} Ki=${ki} Kd=${kd}`, 'info');
+            } catch (e) {
+                addLogMessage('[UI] Błąd podczas wysyłania parametrów do robota', 'error');
+            }
+        } catch (err) {
+            console.error('applyBestParameters error', err);
+            addLogMessage('[UI] Nie udało się zastosować najlepszych parametrów.', 'error');
+        }
     }
 
     function updateTuningButtons(isActive) {
@@ -3722,8 +3993,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize autotuning when DOM is ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initAutotuning);
+        document.addEventListener('DOMContentLoaded', initFitnessModal);
     } else {
         initAutotuning();
+        initFitnessModal();
     }
 
     // Helper function to capture baseline PID parameters
@@ -4006,4 +4279,5 @@ if (typeof initHardwareSettings === 'function') window.initHardwareSettings = in
 if (typeof initImuSettings === 'function') window.initImuSettings = initImuSettings;
 if (typeof initSensorMappingPreview === 'function') window.initSensorMappingPreview = initSensorMappingPreview;
 if (typeof initAutotuning === 'function') window.initAutotuning = initAutotuning;
+if (typeof initFitnessModal === 'function') window.initFitnessModal = initFitnessModal;
 if (typeof setupDpadControls === 'function') window.setupDpadControls = setupDpadControls;

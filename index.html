@@ -971,7 +971,7 @@
                             </label>
                             <div class="input-group">
                                 <button class="btn-minus">−</button>
-                                <input type="number" id="maxSpeedJoystickInput" value="800" min="200" max="4000" step="100">
+                                <input type="number" id="maxSpeedJoystickInput" class="config-value" value="800" min="200" max="4000" step="100">
                                 <button class="btn-plus">+</button>
                             </div>
                         <div class="param-group">
@@ -1050,6 +1050,7 @@
                                 <button id="start-mapping-btn" class="btn btn-primary">Rozpocznij Mapowanie</button>
                                 <button id="save-mapping-btn" class="btn btn-secondary">Zapisz Mapowanie</button>
                                 <button id="load-mapping-btn" class="btn btn-secondary">Wczytaj Mapowanie</button>
+                                <button id="open-gamepad-modal-btn" class="btn btn-secondary">Otwórz Mapowanie (Okno)</button>
                             </div>
                         </div>
                     </div>
@@ -1258,6 +1259,49 @@
     </div>
 
     <!-- Load Scripts -->
+    <!-- Modal: Konfiguracja Fitness -->
+    <div id="fitness-modal" class="modal-backdrop" style="display:none;">
+        <div class="modal-content" style="max-width:480px;">
+            <h2>Konfiguracja Fitness (Rozdziel 100 punktów)</h2>
+            <div style="display:flex; gap:10px; flex-direction:column;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <label for="ga-weight-itae">ITAE</label>
+                    <input type="number" id="ga-weight-itae" min="0" max="100" value="50" style="width:110px;">
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <label for="ga-weight-overshoot">Przeregulowanie</label>
+                    <input type="number" id="ga-weight-overshoot" min="0" max="100" value="30" style="width:110px;">
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <label for="ga-weight-control-effort">SSE / Kontrola</label>
+                    <input type="number" id="ga-weight-control-effort" min="0" max="100" value="20" style="width:110px;">
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; font-weight:bold; color:var(--accent-primary);">
+                    <div>Pozostało:</div>
+                    <div id="ga-weight-remaining">0</div>
+                </div>
+                <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:8px;">
+                    <button id="close-fitness-modal" style="background:var(--accent-error);">Zamknij</button>
+                    <button id="apply-fitness-btn" style="background:var(--accent-secondary);" disabled>Zastosuj Wagi</button>
+                </div>
+            </div>
+                <!-- Modal: Mapowanie Gamepada -->
+                <div id="gamepad-mapping-modal" class="modal-backdrop" style="display:none;">
+                    <div class="modal-content" style="max-width:560px;">
+                        <h2>Mapowanie Gamepada <span class="help-icon" title="Przypisz akcje do przycisków gamepada">?</span></h2>
+                        <div class="mapping-list" id="gamepad-mapping-list" style="margin-top:8px;">
+                            <!-- dynamic content will be rendered here -->
+                        </div>
+                        <div style="display:flex; gap:10px; margin-top:12px; justify-content:space-between;">
+                            <div id="gamepadStatus" style="font-weight:600; color:var(--text-secondary);">Brak</div>
+                            <div style="display:flex; gap:8px;">
+                                <button id="close-modal-btn" class="btn btn-secondary">Zamknij</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+        </div>
+    </div>
     <!-- Sensor mapping modal -->
     <div id="sensor-mapping-modal" class="modal-backdrop" style="display:none;">
         <div class="modal-content">
