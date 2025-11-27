@@ -325,7 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try { initSignalAnalyzerChart(); setupSignalChartControls(); setupSignalAnalyzerControls(); } catch (e) { /* no-op if Chart.js not present */ }
     document.getElementById('sensorMappingBtnSettings')?.addEventListener('click', () => { openSensorMappingModal(); });
     // IMU calibration buttons
-    document.getElementById('calibrateMpuBtnSettings')?.addEventListener('click', showCalibrationModal);
+    // document.getElementById('calibrateMpuBtnSettings')?.addEventListener('click', showCalibrationModal);
     document.getElementById('calibrateZeroPointBtnSettings')?.addEventListener('click', () => { if (confirm("Upewnij sie, ze robot stoi na idealnie plaskiej powierzchni. Robot bedzie balansowal przez 10 sekund w celu znalezienia dokladnego punktu rownowagi. Kontynuowac?")) { sendBleMessage({ type: 'calibrate_zero_point' }); } });
     // Model mapping buttons
     document.getElementById('modelMappingBtn3D')?.addEventListener('click', () => { openModelMappingModal(); sendBleMessage({ type: 'get_model_mapping' }); });
