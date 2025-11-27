@@ -1285,34 +1285,72 @@ function processCompleteMessage(data) {
 
 // Helper functions for message processing
 function applySingleParam(key, value) {
-    // Map parameter keys to input IDs
-    const paramMap = {
-        'kp_b': 'balanceKp',
-        'ki_b': 'balanceKi',
-        'kd_b': 'balanceKd',
-        'balance_pid_derivative_filter_alpha': 'balanceFilterAlpha',
-        'balance_pid_integral_limit': 'balanceIntegralLimit'
-        , 'trim_angle': 'manualPitchCorrectionInput'
-        , 'roll_trim': 'manualRollCorrectionInput'
-    };
-
-    const inputId = paramMap[key];
+    // Map parameter keys to input IDs using the global parameterMapping
+    let inputId = null;
+    if (window.parameterMapping) {
+        inputId = Object.keys(window.parameterMapping).find(id => window.parameterMapping[id] === key);
+    }
+    if (!inputId) {
+        // Fallback to old hardcoded map for compatibility
+        const paramMap = {
+            'kp_b': 'balanceKp',
+            'ki_b': 'balanceKi',
+            'kd_b': 'balanceKd',
+            'balance_pid_derivative_filter_alpha': 'balanceFilterAlpha',
+            'balance_pid_integral_limit': 'balanceIntegralLimit',
+            'trim_angle': 'manualPitchCorrectionInput',
+            'roll_trim': 'manualRollCorrectionInput'
+        };
+        inputId = paramMap[key];
+    }
     if (inputId) {
         const input = document.getElementById(inputId);
         if (input) {
-            input.value = value;
+            // Convert firmware value back to display value
+            let displayValue = value;
+            const divide100Keys = ['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha', 'weights_itae', 'weights_overshoot', 'weights_control_effort', 'ga_mutation_rate', 'ga_crossover_rate'];
+            if (divide100Keys.includes(key)) displayValue = Number(value) * 100.0;
+            if (key === 'tuning_trial_duration_ms') displayValue = Number(value) / 1000.0;
+            if (key === 'disable_magnetometer') displayValue = value == 0.0; // invert: disable=0 -> UI true
+            if (input.type === 'checkbox') {
+                input.checked = displayValue;
+            } else {
+                input.value = displayValue;
+            }
             input.dispatchEvent(new Event('change'));
         }
     }
 }
 
 function applySingleAutotuneParam(key, value) {
-    // Handle autotune parameters
-    if (key === 'search_ki') {
-        const checkbox = document.getElementById('include-ki-checkbox');
-        if (checkbox) {
-            checkbox.checked = value;
-            updateSearchSpaceInputs();
+    // Map tuning parameter keys to input IDs using the global parameterMapping
+    let inputId = null;
+    if (window.parameterMapping) {
+        inputId = Object.keys(window.parameterMapping).find(id => window.parameterMapping[id] === key);
+    }
+    if (inputId) {
+        const input = document.getElementById(inputId);
+        if (input) {
+            // Convert firmware value back to display value
+            let displayValue = value;
+            const divide100Keys = ['weights_itae', 'weights_overshoot', 'weights_control_effort', 'ga_mutation_rate'];
+            if (divide100Keys.includes(key)) displayValue = Number(value) * 100.0;
+            if (key === 'tuning_trial_duration_ms') displayValue = Number(value) / 1000.0;
+            if (input.type === 'checkbox') {
+                input.checked = displayValue;
+            } else {
+                input.value = displayValue;
+            }
+            input.dispatchEvent(new Event('change'));
+        }
+    } else {
+        // Fallback for special cases
+        if (key === 'search_ki') {
+            const checkbox = document.getElementById('include-ki-checkbox');
+            if (checkbox) {
+                checkbox.checked = value;
+                updateSearchSpaceInputs();
+            }
         }
     }
 }
@@ -1956,11 +1994,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             lastGamepadState = gp.buttons.map(b => b.pressed);
             // Axis mapping: allow remapping the gamepad physical axes to logical X/Y axes via UI
-            const axisMap = (window.gamepadAxisMapping && typeof window.gamepadAxisMapping === 'object') ? window.gamepadAxisMapping : { x: 0, y: 1 };
+            const axisMap = (window.gamepadAxisMapping && typeof window.gamepadAxisMapping === 'object') ? window.gamepadAxisMapping : { x: 0, y: 1, invertX: false, invertY: false };
             const xIndex = (Number.isFinite(axisMap.x) && axisMap.x >= 0 && axisMap.x < gp.axes.length) ? axisMap.x : 0;
             const yIndex = (Number.isFinite(axisMap.y) && axisMap.y >= 0 && axisMap.y < gp.axes.length) ? axisMap.y : 1;
             let x = gp.axes[xIndex] || 0;
             let y = gp.axes[yIndex] || 0;
+            if (axisMap.invertX) x = -x;
+            if (axisMap.invertY) y = -y;
             if (Math.abs(x) < 0.15) x = 0;
             if (Math.abs(y) < 0.15) y = 0;
             sendBleMessage({ type: 'joystick', x: x, y: -y });
@@ -2030,7 +2070,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadGamepadMappings() {
         const saved = localStorage.getItem(GAMEPAD_MAPPING_KEY);
         gamepadMappings = {};
-        window.gamepadAxisMapping = window.gamepadAxisMapping || { x: -1, y: -1 };
+        window.gamepadAxisMapping = window.gamepadAxisMapping || { x: -1, y: -1, invertX: false, invertY: false };
         if (!saved) return;
         try {
             const parsed = JSON.parse(saved);
@@ -2042,22 +2082,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     gamepadMappings = parsed;
                 }
                 if (parsed.axes && typeof parsed.axes === 'object') {
-                    window.gamepadAxisMapping = parsed.axes;
+                    window.gamepadAxisMapping = { ...{ x: -1, y: -1, invertX: false, invertY: false }, ...parsed.axes };
                 }
             }
         } catch (err) {
             console.warn('[UI] loadGamepadMappings: parse error', err);
         }
-        // Update selects if present
+        // Update selects and checkboxes if present
         try {
             const axisXSelect = document.getElementById('axis-x-select');
             const axisYSelect = document.getElementById('axis-y-select');
-            if (axisXSelect && axisYSelect) {
+            const invertXCheckbox = document.getElementById('invert-x');
+            const invertYCheckbox = document.getElementById('invert-y');
+            if (axisXSelect && axisYSelect && invertXCheckbox && invertYCheckbox) {
                 // If we have an active gamepad, populate with axis options first
                 const gp = (gamepadIndex !== null) ? navigator.getGamepads()[gamepadIndex] : null;
                 if (gp) populateAxisSelects(gp);
                 axisXSelect.value = String((typeof window.gamepadAxisMapping.x === 'number') ? window.gamepadAxisMapping.x : -1);
                 axisYSelect.value = String((typeof window.gamepadAxisMapping.y === 'number') ? window.gamepadAxisMapping.y : -1);
+                invertXCheckbox.checked = Boolean(window.gamepadAxisMapping.invertX);
+                invertYCheckbox.checked = Boolean(window.gamepadAxisMapping.invertY);
             }
         } catch (e) { /* no-op */ }
     }
@@ -2080,6 +2124,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (startBtn) startBtn.addEventListener('click', () => { document.getElementById('gamepad-mapping-modal').style.display = 'flex'; renderMappingModal(); });
         // Populate axis selections if a gamepad is already connected
         try { const gpIndex = gamepadIndex; if (gpIndex !== null) { const gp = navigator.getGamepads()[gpIndex]; if (gp) populateAxisSelects(gp); } } catch (e) { /* no-op */ }
+        // Add listeners for axis mapping changes
+        const axisXSelect = document.getElementById('axis-x-select');
+        const axisYSelect = document.getElementById('axis-y-select');
+        const invertXCheckbox = document.getElementById('invert-x');
+        const invertYCheckbox = document.getElementById('invert-y');
+        if (axisXSelect) axisXSelect.addEventListener('change', () => { window.gamepadAxisMapping.x = parseInt(axisXSelect.value); saveGamepadMappings(); });
+        if (axisYSelect) axisYSelect.addEventListener('change', () => { window.gamepadAxisMapping.y = parseInt(axisYSelect.value); saveGamepadMappings(); });
+        if (invertXCheckbox) invertXCheckbox.addEventListener('change', () => { window.gamepadAxisMapping.invertX = invertXCheckbox.checked; saveGamepadMappings(); });
+        if (invertYCheckbox) invertYCheckbox.addEventListener('change', () => { window.gamepadAxisMapping.invertY = invertYCheckbox.checked; saveGamepadMappings(); });
     }
 
     function populateAxisSelects(gp) {

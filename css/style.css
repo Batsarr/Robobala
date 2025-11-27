@@ -1306,11 +1306,18 @@ input:checked + .slider:before {
     }
 
     /* Zmniejszone odstępy między sekcjami na mobile */
-    .accordion {
-        margin-bottom: var(--spacing-sm);
+    .accordion-content.active {
+        padding: var(--spacing-sm);
     }
     .param-group {
         margin-bottom: var(--spacing-sm);
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--spacing-xs);
+    }
+    .param-group label {
+        font-size: 0.8rem;
+        line-height: 1.2;
     }
     .config-section {
         margin-bottom: var(--spacing-md);

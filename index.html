@@ -1033,12 +1033,14 @@
                                                 <select id="axis-x-select">
                                                     <option value="-1">Brak</option>
                                                 </select>
+                                                <label style="margin-left:8px;"><input type="checkbox" id="invert-x"> Inwersja</label>
                                             </div>
                                             <div class="axis-item">
                                                 <label>Oś Y (Przód/Tył):</label>
                                                 <select id="axis-y-select">
                                                     <option value="-1">Brak</option>
                                                 </select>
+                                                <label style="margin-left:8px;"><input type="checkbox" id="invert-y"> Inwersja</label>
                                             </div>
                                         </div>
                                     </div>
@@ -1136,6 +1138,93 @@
                                 <input type="checkbox" id="magnetometerEnabledInput" checked>
                                 <span class="slider"></span>
                             </label>
+                        </div>
+                        <div class="param-group">
+                            <label for="fusionAlphaInput">
+                                Alfa fuzji IMU/encoder
+                                <span class="tooltip-icon" data-tooltip="Współczynnik fuzji między IMU a enkoderami dla estymacji prędkości. 0.95 = silne zaufanie do IMU, 0.05 = silne zaufanie do enkoderów.">?</span>
+                            </label>
+                            <div class="input-group">
+                                <button id="fusionAlphaMinus" class="btn-minus">−</button>
+                                <input type="number" id="fusionAlphaInput" value="0.95" min="0.0" max="1.0" step="0.01">
+                                <button id="fusionAlphaPlus" class="btn-plus">+</button>
+                            </div>
+                        </div>
+                        <div class="param-group">
+                            <label for="balanceGainInput">
+                                Wzmocnienie balansu
+                                <span class="tooltip-icon" data-tooltip="Ogólne wzmocnienie wyjścia balansu PID. Wyższa wartość = agresywniejszy balans, ale ryzyko oscylacji.">?</span>
+                            </label>
+                            <div class="input-group">
+                                <button id="balanceGainMinus" class="btn-minus">−</button>
+                                <input type="number" id="balanceGainInput" value="1000" min="100" max="5000" step="50">
+                                <button id="balanceGainPlus" class="btn-plus">+</button>
+                            </div>
+                        </div>
+                        <div class="param-group">
+                            <label for="pitchRateToImpPerSecInput">
+                                Skala prędkości kątowej (deg/s -> imp/s)
+                                <span class="tooltip-icon" data-tooltip="Przelicznik prędkości kątowej z IMU na impulsy enkodera na sekundę dla fuzji prędkości.">?</span>
+                            </label>
+                            <div class="input-group">
+                                <button id="pitchRateToImpPerSecMinus" class="btn-minus">−</button>
+                                <input type="number" id="pitchRateToImpPerSecInput" value="25.0" min="1.0" max="100.0" step="1.0">
+                                <button id="pitchRateToImpPerSecPlus" class="btn-plus">+</button>
+                            </div>
+                        </div>
+                        <div class="param-group">
+                            <label for="useAccelForSpeedFusionInput">
+                                Użyj akcelerometru w fuzji prędkości
+                                <span class="tooltip-icon" data-tooltip="Czy włączyć integrację akcelerometru do estymacji prędkości IMU (dodatkowo do żyroskopu).">?</span>
+                            </label>
+                            <label class="switch">
+                                <input type="checkbox" id="useAccelForSpeedFusionInput">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="param-group">
+                            <label for="imuVelocityLeakInput">
+                                Wyciek prędkości IMU (na sekundę)
+                                <span class="tooltip-icon" data-tooltip="Współczynnik wycieku dla zintegrowanej prędkości IMU, aby zapobiec dryfowi. Wyższa wartość = szybszy zanik błędów.">?</span>
+                            </label>
+                            <div class="input-group">
+                                <button id="imuVelocityLeakMinus" class="btn-minus">−</button>
+                                <input type="number" id="imuVelocityLeakInput" value="0.3" min="0.0" max="1.0" step="0.01">
+                                <button id="imuVelocityLeakPlus" class="btn-plus">+</button>
+                            </div>
+                        </div>
+                        <div class="param-group">
+                            <label for="balanceAccelKInput">
+                                K przyspieszenia balansu (imp/s²/deg)
+                                <span class="tooltip-icon" data-tooltip="Współczynnik proporcjonalny dla mapowania błędu kąta na przyspieszenie impulsów w trybie balansu jako przyspieszenia.">?</span>
+                            </label>
+                            <div class="input-group">
+                                <button id="balanceAccelKMinus" class="btn-minus">−</button>
+                                <input type="number" id="balanceAccelKInput" value="2.0" min="0.0" max="50.0" step="0.1">
+                                <button id="balanceAccelKPlus" class="btn-plus">+</button>
+                            </div>
+                        </div>
+                        <div class="param-group">
+                            <label for="balanceAccelKdInput">
+                                Kd przyspieszenia balansu (imp/s²/deg/s)
+                                <span class="tooltip-icon" data-tooltip="Współczynnik pochodny dla mapowania prędkości kątowej na przyspieszenie impulsów w trybie balansu jako przyspieszenia.">?</span>
+                            </label>
+                            <div class="input-group">
+                                <button id="balanceAccelKdMinus" class="btn-minus">−</button>
+                                <input type="number" id="balanceAccelKdInput" value="0.02" min="0.0" max="10.0" step="0.01">
+                                <button id="balanceAccelKdPlus" class="btn-plus">+</button>
+                            </div>
+                        </div>
+                        <div class="param-group">
+                            <label for="maxBalanceSpeedOffsetInput">
+                                Max offset prędkości z balansu (imp/s)
+                                <span class="tooltip-icon" data-tooltip="Maksymalny offset prędkości zintegrowany z przyspieszenia balansu, aby zapobiec nasyceniu.">?</span>
+                            </label>
+                            <div class="input-group">
+                                <button id="maxBalanceSpeedOffsetMinus" class="btn-minus">−</button>
+                                <input type="number" id="maxBalanceSpeedOffsetInput" value="200.0" min="0.0" max="1000.0" step="10.0">
+                                <button id="maxBalanceSpeedOffsetPlus" class="btn-plus">+</button>
+                            </div>
                         </div>
                         <hr style="border-color:#2a2a35;">
                         <div class="imu-tuning-chart-container">

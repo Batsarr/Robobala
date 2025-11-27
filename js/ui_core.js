@@ -193,7 +193,11 @@
             // Madgwick/IMU
             'useMadgwickFilterInput': 'use_madgwick_filter', 'madgwickBetaInput': 'madgwick_beta', 'madgwickZetaInput': 'madgwick_zeta',
             // Magnetometer (UI is positive = enabled) -> firmware is disable_magnetometer (inverse)
-            'magnetometerEnabledInput': 'disable_magnetometer'
+            'magnetometerEnabledInput': 'disable_magnetometer',
+            // Additional IMU fusion parameters
+            'fusionAlphaInput': 'fusion_alpha', 'balanceGainInput': 'balance_gain', 'pitchRateToImpPerSecInput': 'pitch_rate_to_imp_per_sec',
+            'useAccelForSpeedFusionInput': 'use_accel_for_speed_fusion', 'imuVelocityLeakInput': 'imu_velocity_leak',
+            'balanceAccelKInput': 'balance_accel_k', 'balanceAccelKdInput': 'balance_accel_kd', 'maxBalanceSpeedOffsetInput': 'max_balance_speed_offset'
         };
     }
 
