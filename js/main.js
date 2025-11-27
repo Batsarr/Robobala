@@ -1751,6 +1751,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let joystickInterval = null;
     let currentJoyX = 0;
     let currentJoyY = 0;
+    let lastJoystickSendTime = 0;
+    const JOYSTICK_SEND_INTERVAL = 20;
 
     function initJoystick() {
         const size = joystickCanvas.parentElement.offsetWidth;
@@ -1793,14 +1795,14 @@ document.addEventListener('DOMContentLoaded', () => {
         handleJoystickMove(e);
 
         // Start continuous sending
-        if (joystickInterval) clearInterval(joystickInterval);
-        joystickInterval = setInterval(() => {
-            if (appStore.getState('connection.isConnected')) {
-                // Send joystick values continuously
-                commLayer.send({ type: 'joystick', x: currentJoyX, y: currentJoyY });
-                commLayer.send({ type: 'joystick', x: currentJoyX, y: currentJoyY });
-            }
-        }, 20); // Send every 20ms
+        // if (joystickInterval) clearInterval(joystickInterval);
+        // joystickInterval = setInterval(() => {
+        //     if (appStore.getState('connection.isConnected')) {
+        //         // Send joystick values continuously
+        //         commLayer.send({ type: 'joystick', x: currentJoyX, y: currentJoyY });
+        //         commLayer.send({ type: 'joystick', x: currentJoyX, y: currentJoyY });
+        //     }
+        // }, 20); // Send every 20ms
     }
 
     function handleJoystickMove(e) {
@@ -1833,6 +1835,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update current values for continuous sending
         currentJoyX = normalizedX;
         currentJoyY = normalizedY;
+
+        // Send only if enough time has passed since last send
+        const now = Date.now();
+        if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) {
+            if (appStore.getState('connection.isConnected')) {
+                commLayer.send({ type: 'joystick', x: currentJoyX, y: currentJoyY });
+            }
+            lastJoystickSendTime = now;
+        }
     }
 
     function handleJoystickEnd(e) {
@@ -1844,10 +1855,10 @@ document.addEventListener('DOMContentLoaded', () => {
         drawJoystick();
 
         // Stop continuous sending and reset values
-        if (joystickInterval) {
-            clearInterval(joystickInterval);
-            joystickInterval = null;
-        }
+        // if (joystickInterval) {
+        //     clearInterval(joystickInterval);
+        //     joystickInterval = null;
+        // }
         currentJoyX = 0;
         currentJoyY = 0;
 
