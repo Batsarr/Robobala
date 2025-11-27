@@ -1139,6 +1139,21 @@
                                 <span class="slider"></span>
                             </label>
                         </div>
+                        <hr style="border-color:#2a2a35;">
+                        <div class="imu-tuning-chart-container">
+                            <h4>Wykres Strojenia IMU</h4>
+                            <canvas id="imuTuningChart" height="140" style="max-width:100%; width:100%"></canvas>
+                            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:8px; gap:12px;">
+                                <div style="flex:1;">
+                                    <label for="imuTuningTelemetryToggle" style="font-weight:600;">Telemetry: surowy kąt (akcelerometr) vs filtr Madgwicka</label>
+                                    <div style="font-size:0.85em; color:var(--text-secondary);">Użyj tej opcji aby włączyć/wyłączyć przesyłanie dedykowanej telemetrii IMU do strojenia.</div>
+                                </div>
+                                <label class="switch" style="margin-left:auto;">
+                                    <input type="checkbox" id="imuTuningTelemetryToggle">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

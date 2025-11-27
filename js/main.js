@@ -323,6 +323,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupManualTuneButtons();
     // Initialize signal analyzer chart and controls (idempotent guards inside)
     try { initSignalAnalyzerChart(); setupSignalChartControls(); setupSignalAnalyzerControls(); } catch (e) { /* no-op if Chart.js not present */ }
+    // Initialize IMU tuning chart controls (toggle, chart) for settings
+    try { setupImuTuningControls(); } catch (e) { /* no-op */ }
     document.getElementById('sensorMappingBtnSettings')?.addEventListener('click', () => { openSensorMappingModal(); });
     // IMU calibration buttons
     // document.getElementById('calibrateMpuBtnSettings')?.addEventListener('click', showCalibrationModal);
@@ -1004,6 +1006,12 @@ let sensorPreview = { scene: null, camera: null, renderer: null, cube: null, axe
 let sensorWizard = { step: 0, rotStartYaw: null, monitorId: null, progress: { upright: false, rotation: false, saved: false } };
 let sensorModalTelemetryMonitorId = null;
 let currentEncoderLeft = 0, currentEncoderRight = 0, lastEncoderAvg = 0;
+// IMU tuning chart variables
+let imuTuningChart = null;
+let imuTuningChartInitialized = false;
+let imuTuningBufferSize = 500; // number of points to keep on screen
+let imuTuningPlotIndex = 0;
+let imuTuningEnabledLocal = false; // UI local state
 
 // Setup communication layer message handlers
 function setupCommunicationHandlers() {
@@ -1027,6 +1035,24 @@ function setupCommunicationHandlers() {
         if (type !== 'disconnected') {
             processCompleteMessage(data);
         }
+    });
+
+    // IMU tuning telemetry message handler (dedicated compact telemetry)
+    commLayer.onMessage('telemetry_imu_tuning', (data) => {
+        try {
+            if (!imuTuningChartInitialized) initImuTuningChart();
+            if (typeof updateImuTuningChart === 'function') updateImuTuningChart(data);
+        } catch (e) { /* ignore */ }
+    });
+
+    // Also allow fallback chart updates from regular 'telemetry' messages
+    commLayer.onMessage('telemetry', (data) => {
+        const toggle = document.getElementById('imuTuningTelemetryToggle');
+        if (!toggle || !toggle.checked) return; // only update when UI toggle is enabled
+        try {
+            if (!imuTuningChartInitialized) initImuTuningChart();
+            if (typeof updateImuTuningChart === 'function') updateImuTuningChart({ ax: data.ax, ay: data.ay, az: data.az, pitch: data.pitch });
+        } catch (e) { /* ignore */ }
     });
 
     // Subscribe to state changes for UI updates
@@ -1549,6 +1575,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (typeof window.initHardwareSettings === 'function') {
                                 window.initHardwareSettings();
                                 addLogMessage('[UI] Ustawienia sprzętu zainicjalizowane przy przełączaniu zakładki', 'info');
+                            }
+                            if (typeof window.initImuSettings === 'function') {
+                                window.initImuSettings();
+                                addLogMessage('[UI] Ustawienia IMU zainicjalizowane przy przełączaniu zakładki', 'info');
                             }
                             break;
                         case 'calibration':
@@ -4267,6 +4297,85 @@ function exportChartDataToCsv(exportRange = false) {
 }
 function exportChartToPng() { const link = document.createElement('a'); link.download = 'telemetry_chart.png'; link.href = signalAnalyzerChart.toBase64Image(); link.click(); addLogMessage('[UI] Wykres wyeksportowany do PNG.', 'info'); }
 
+// ========================================================================
+// IMU TUNING CHART - minimal chart with raw accel angle vs Madgwick result
+// ========================================================================
+function initImuTuningChart() {
+    const canvasEl = document.getElementById('imuTuningChart');
+    if (!canvasEl) return;
+    if (typeof Chart === 'undefined') { addLogMessage('[UI] Chart.js not loaded - IMU tuning chart disabled', 'warn'); return; }
+    if (imuTuningChart) { try { imuTuningChart.resize(); } catch (e) { /* ignore */ } return; }
+
+    const ctx = canvasEl.getContext('2d');
+    const labels = Array(imuTuningBufferSize).fill('');
+    const data = {
+        labels: labels,
+        datasets: [
+            { label: 'Kąt (Akcelerometr)', data: Array(labels.length).fill(null), borderColor: '#61dafb', fill: false, tension: 0.1, pointRadius: 0, yAxisID: 'y-pitch' },
+            { label: 'Madgwick (filtrowany)', data: Array(labels.length).fill(null), borderColor: '#ff9f43', fill: false, tension: 0.1, pointRadius: 0, yAxisID: 'y-pitch' }
+        ]
+    };
+    const options = {
+        animation: false, responsive: false, maintainAspectRatio: false,
+        scales: {
+            x: { display: true, title: { display: true, text: 'Czas (s)', color: '#fff' }, ticks: { color: '#fff' } },
+            'y-pitch': { type: 'linear', display: true, position: 'left', ticks: { color: '#fff' }, title: { display: true, text: 'Kąt (°)', color: '#fff' } }
+        },
+        plugins: { legend: { labels: { color: '#fff' } }, tooltip: { mode: 'index', intersect: false } }
+    };
+    imuTuningChart = new Chart(ctx, { type: 'line', data: data, options: options });
+    imuTuningChartInitialized = true;
+}
+
+function updateImuTuningChart(payload) {
+    if (!imuTuningChart || !imuTuningChartInitialized) return;
+    if (isChartPaused) return;
+    const chartData = imuTuningChart.data;
+    const currentTimeLabel = (Date.now() / 1000).toFixed(1);
+    if (chartData.labels.length >= imuTuningBufferSize) { chartData.labels.shift(); chartData.datasets.forEach(ds => ds.data.shift()); }
+    chartData.labels.push(currentTimeLabel);
+    // Parse values - allow multiple formats (accel_pitch/madgwick_pitch or ax/ay/az + pitch)
+    let accelPitch = null, madgwickPitch = null;
+    if (typeof payload.accel_pitch === 'number') accelPitch = payload.accel_pitch;
+    else if (typeof payload.ax === 'number' && typeof payload.ay === 'number' && typeof payload.az === 'number') {
+        const ax = payload.ax, ay = payload.ay, az = payload.az;
+        accelPitch = Math.atan2(-ax, Math.sqrt(ay * ay + az * az)) * 180.0 / Math.PI; // approximate
+    }
+    if (typeof payload.madgwick_pitch === 'number') madgwickPitch = payload.madgwick_pitch;
+    else if (typeof payload.pitch === 'number') madgwickPitch = payload.pitch; // fallback
+
+    chartData.datasets[0].data.push(accelPitch);
+    chartData.datasets[1].data.push(madgwickPitch);
+    imuTuningChart.update('none');
+}
+
+function setupImuTuningControls() {
+    const toggle = document.getElementById('imuTuningTelemetryToggle');
+    if (!toggle) return;
+    const saved = localStorage.getItem('imuTuningTelemetryEnabled');
+    if (saved === '1') { toggle.checked = true; }
+    toggle.addEventListener('change', (e) => {
+        const enabled = e.target.checked;
+        localStorage.setItem('imuTuningTelemetryEnabled', enabled ? '1' : '0');
+        // Send parameter to robot so it can toggle sending compact telemetry for IMU tuning
+        sendBleMessage({ type: 'set_param', key: 'telemetry_imu_tuning', value: enabled ? 1 : 0 });
+        if (enabled) {
+            if (!imuTuningChartInitialized) initImuTuningChart();
+            addLogMessage('[UI] Włączono telemetry IMU strojenie (wysyłanie na robota)', 'info');
+        } else {
+            addLogMessage('[UI] Wyłączono telemetry IMU strojenie (nie będzie wysyłane)', 'info');
+        }
+    });
+    // If we are loading the page and saved value requests enabling, trigger it (send param)
+    if (toggle.checked) {
+        sendBleMessage({ type: 'set_param', key: 'telemetry_imu_tuning', value: 1 });
+        if (!imuTuningChartInitialized) initImuTuningChart();
+    }
+}
+
+// Make these functions globally accessible for initialization
+window.initImuTuningChart = initImuTuningChart; window.updateImuTuningChart = updateImuTuningChart; window.setupImuTuningControls = setupImuTuningControls;
+
 // Make chart functions globally available
 window.initSignalAnalyzerChart = initSignalAnalyzerChart;
 window.setupSignalChartControls = setupSignalChartControls;
@@ -4277,6 +4386,11 @@ if (typeof initPidSettings === 'function') window.initPidSettings = initPidSetti
 if (typeof initJoystickSettings === 'function') window.initJoystickSettings = initJoystickSettings;
 if (typeof initHardwareSettings === 'function') window.initHardwareSettings = initHardwareSettings;
 if (typeof initImuSettings === 'function') window.initImuSettings = initImuSettings;
+
+function initImuSettings() {
+    try { initImuTuningChart(); setupImuTuningControls(); } catch (e) { /* no-op */ }
+}
+window.initImuSettings = initImuSettings;
 if (typeof initSensorMappingPreview === 'function') window.initSensorMappingPreview = initSensorMappingPreview;
 if (typeof initAutotuning === 'function') window.initAutotuning = initAutotuning;
 if (typeof initFitnessModal === 'function') window.initFitnessModal = initFitnessModal;
