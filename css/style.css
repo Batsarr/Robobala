@@ -580,7 +580,7 @@ body {
 }
 #imuTuningChart {
     width: 100% !important;
-    max-height: 240px;
+    max-height: 480px; /* doubled vertical size for IMU tuning chart */
     display: block;
     margin: 0 auto;
 }
@@ -862,19 +862,20 @@ input:checked + .slider:before {
 
 .accordion-btn {
     width: 100%;
-    padding: var(--spacing-md);
+    padding: 12px 15px; /* Legacy padding from monolithic UI */
     background-color: var(--bg-tertiary);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
+    border-radius: 8px; /* slightly larger radius as in legacy UI */
     color: var(--text-primary);
-    font-size: 1rem;
-    font-weight: 600;
+    font-size: 1.05rem; /* slightly larger font for better readability */
+    font-weight: 700;
     text-align: left;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: space-between;
     transition: all var(--transition-fast);
+    margin-top: var(--spacing-sm);
 }
 
 .accordion-btn:hover {
@@ -1276,6 +1277,15 @@ input:checked + .slider:before {
     .tab {
         min-width: 120px;
         flex: none;
+    }
+    /* Mobile overrides for accordion and IMU chart height */
+    .accordion-btn {
+        padding: 10px 12px;
+        font-size: 1rem;
+        border-radius: 6px;
+    }
+    #imuTuningChart {
+        max-height: 360px;
     }
     /* PWM calibration mobile adjustments */
     .manual-tune-row {
@@ -1751,6 +1761,25 @@ input.config-value, input[type="number"].config-value {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: var(--spacing-sm);
 }
+
+/* Mapping modal rows (renderMappingModal output) */
+.mapping-list {
+    margin-top: 8px;
+}
+.mapping-row {
+    display: grid;
+    grid-template-columns: 1fr 120px 100px;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.mapping-label { text-align: left; font-weight: 700; }
+.mapping-display { background-color: var(--bg-primary); padding: 6px 8px; border-radius: var(--radius-sm); font-family: monospace; color: var(--text-secondary); }
+.mapping-button, .mapping-clear { padding: 6px 10px; border-radius: var(--radius-sm); border: none; cursor: pointer; font-weight: 600; }
+.mapping-button { background: var(--accent-primary); color: var(--bg-primary); }
+.mapping-button:hover { background: #4fa8d1; }
+.mapping-clear { background: var(--accent-error); color: #fff; }
+.mapping-clear:hover { background: #ff7a64; }
 
 .mapping-item {
     padding: var(--spacing-sm);

@@ -1018,39 +1018,37 @@
                     </div>
                 </div>
 
-                <!-- Joystick Mapping -->
+                <!-- Joystick Mapping (moved to modal) -->
                 <div class="accordion">
                     <button class="accordion-btn">Mapowanie Gamepada</button>
                     <div class="accordion-content">
                         <div class="joystick-mapping">
                             <div class="mapping-section">
-                                <h4>Przyciski Akcji</h4>
-                                <div class="mapping-grid" id="button-mapping-grid">
-                                    <!-- Button mappings will be populated by JavaScript -->
+                                <div style="display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+                                    <div style="flex:1; min-width:220px;">
+                                        <label style="font-weight:600; display:block;">Osie Sterowania</label>
+                                        <div class="axis-mapping">
+                                            <div class="axis-item">
+                                                <label>Oś X (Lewo/Prawo):</label>
+                                                <select id="axis-x-select">
+                                                    <option value="-1">Brak</option>
+                                                </select>
+                                            </div>
+                                            <div class="axis-item">
+                                                <label>Oś Y (Przód/Tył):</label>
+                                                <select id="axis-y-select">
+                                                    <option value="-1">Brak</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style="min-width:160px; display:flex; gap:8px; justify-content:flex-end;">
+                                        <button id="open-gamepad-modal-btn" class="btn btn-secondary">Otwórz Mapowanie</button>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="mapping-section">
-                                <h4>Osie Sterowania</h4>
-                                <div class="axis-mapping">
-                                    <div class="axis-item">
-                                        <label>Oś X (Lewo/Prawo):</label>
-                                        <select id="axis-x-select">
-                                            <option value="-1">Brak</option>
-                                        </select>
-                                    </div>
-                                    <div class="axis-item">
-                                        <label>Oś Y (Przód/Tył):</label>
-                                        <select id="axis-y-select">
-                                            <option value="-1">Brak</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="mapping-controls">
-                                <button id="start-mapping-btn" class="btn btn-primary">Rozpocznij Mapowanie</button>
-                                <button id="save-mapping-btn" class="btn btn-secondary">Zapisz Mapowanie</button>
-                                <button id="load-mapping-btn" class="btn btn-secondary">Wczytaj Mapowanie</button>
-                                <button id="open-gamepad-modal-btn" class="btn btn-secondary">Otwórz Mapowanie (Okno)</button>
+                            <div class="mapping-section" style="margin-top:12px; color:var(--text-secondary); font-size:0.95rem;">
+                                <div class="axis-mapping-summary">Mapowanie przycisków dostępne w wyskakującym oknie (użyj przycisku "Otwórz Mapowanie").</div>
                             </div>
                         </div>
                     </div>
@@ -1142,7 +1140,7 @@
                         <hr style="border-color:#2a2a35;">
                         <div class="imu-tuning-chart-container">
                             <h4>Wykres Strojenia IMU</h4>
-                            <canvas id="imuTuningChart" height="140" style="max-width:100%; width:100%"></canvas>
+                            <canvas id="imuTuningChart" height="280" style="max-width:100%; width:100%"></canvas>
                             <div style="display:flex; align-items:center; justify-content:space-between; margin-top:8px; gap:12px;">
                                 <div style="flex:1;">
                                     <label for="imuTuningTelemetryToggle" style="font-weight:600;">Telemetry: surowy kąt (akcelerometr) vs filtr Madgwicka</label>
@@ -1300,18 +1298,21 @@
                     <button id="apply-fitness-btn" style="background:var(--accent-secondary);" disabled>Zastosuj Wagi</button>
                 </div>
             </div>
-                <!-- Modal: Mapowanie Gamepada -->
+                <!-- Modal: Mapowanie Gamepada (top-level) -->
                 <div id="gamepad-mapping-modal" class="modal-backdrop" style="display:none;">
                     <div class="modal-content" style="max-width:560px;">
                         <h2>Mapowanie Gamepada <span class="help-icon" title="Przypisz akcje do przycisków gamepada">?</span></h2>
                         <div class="mapping-list" id="gamepad-mapping-list" style="margin-top:8px;">
                             <!-- dynamic content will be rendered here -->
                         </div>
+                        <div style="display:flex; gap:8px; margin-top:12px; justify-content:flex-end; flex-wrap:wrap;">
+                            <button id="start-mapping-btn" class="btn btn-primary">Rozpocznij Mapowanie</button>
+                            <button id="save-mapping-btn" class="btn btn-secondary">Zapisz Mapowanie</button>
+                            <button id="load-mapping-btn" class="btn btn-secondary">Wczytaj Mapowanie</button>
+                            <button id="close-modal-btn" class="btn btn-secondary">Zamknij</button>
+                        </div>
                         <div style="display:flex; gap:10px; margin-top:12px; justify-content:space-between;">
                             <div id="gamepadStatus" style="font-weight:600; color:var(--text-secondary);">Brak</div>
-                            <div style="display:flex; gap:8px;">
-                                <button id="close-modal-btn" class="btn btn-secondary">Zamknij</button>
-                            </div>
                         </div>
                     </div>
                 </div>
