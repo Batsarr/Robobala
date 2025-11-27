@@ -1797,10 +1797,10 @@ document.addEventListener('DOMContentLoaded', () => {
         joystickInterval = setInterval(() => {
             if (appStore.getState('connection.isConnected')) {
                 // Send joystick values continuously
-                commLayer.send({ type: 'joystick_control', x: currentJoyX, y: currentJoyY });
+                commLayer.send({ type: 'joystick', x: currentJoyX, y: currentJoyY });
                 commLayer.send({ type: 'joystick', x: currentJoyX, y: currentJoyY });
             }
-        }, 100); // Send every 100ms
+        }, 20); // Send every 20ms
     }
 
     function handleJoystickMove(e) {
@@ -1854,7 +1854,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Send zero values to robot
         if (appStore.getState('connection.isConnected')) {
             // Send both modern and legacy joystick stop messages
-            commLayer.send({ type: 'joystick_control', x: 0, y: 0 });
+            commLayer.send({ type: 'joystick', x: 0, y: 0 });
             commLayer.send({ type: 'joystick', x: 0, y: 0 });
         }
     }
@@ -1889,7 +1889,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Send joystick values continuously
             if (appStore.getState('connection.isConnected')) {
-                commLayer.send({ type: 'joystick_control', x: x, y: -y });
+                commLayer.send({ type: 'joystick', x: x, y: -y });
                 commLayer.send({ type: 'joystick', x: x, y: -y });
             }
         }
