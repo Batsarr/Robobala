@@ -2442,10 +2442,13 @@ input.config-value, input[type="number"].config-value {
     left: 0;
     width: 100%;
     height: 100%;
-    transition: transform var(--transition-base) ease-in-out;
+    transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     background-color: var(--bg-primary);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    padding-top: 60px; /* Dla fixed header */
+    box-sizing: border-box;
+    will-change: transform;
 }
 
 .page.active {
