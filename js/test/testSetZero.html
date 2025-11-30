@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RoboBala - Manual test: Set Zero (Pitch / Roll)</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <h2>Manual test: Set Zero (Pitch / Roll)</h2>
+  <div>
+    <p>Raw quaternion will be set to represent pitch = 10° before test</p>
+    <button id="runTestPitch">Run setPitchZero()</button>
+    <button id="runTestRoll">Run setRollZero()</button>
+  </div>
+  <div style="margin-top:10px">
+    <div>Korekta Pionu: <span id="trimValueDisplay">0.00</span>°</div>
+    <div>Korekta Roll: <span id="rollTrimValueDisplay">0.00</span>°</div>
+    <div>Dashboard angle: <span id="angleVal">0.0 °</span></div>
+    <div>Dashboard roll: <span id="rollVal">0.0 °</span></div>
+    <div>Robot3D pitch: <span id="robot3d-pitch">0.0°</span></div>
+    <div>Robot3D roll: <span id="robot3d-roll">0.0°</span></div>
+  </div>
+  <script>
+    // Create a lightweight fake environment for main.js functions to run
+    window.sentMessages = [];
+    window.sendBleMessage = function(msg) { window.sentMessages.push(msg); console.log('sendBleMessage ->', msg); };
+    // Set telemetry quaternion to represent 10 deg pitch (Euler XYZ convention)
+    const pitchDeg = 10;
+    const pitchRad = THREE.MathUtils.degToRad(pitchDeg);
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(pitchRad, 0, 0, 'XYZ'));
+    // Provide telemetry data as main.js expects (qw,qx,qy,qz)
+    window.telemetryData = { qw: q.w, qx: q.x, qy: q.y, qz: q.z };
+
+    // Minimal DOM elements expected by the code
+    // They are in the page as static spans
+    // Set initial raw pitch display
+    document.getElementById('robot3d-pitch').textContent = pitchDeg.toFixed(1) + '°';
+    // Load main script after we create the environment if needed (not the whole app)
+  </script>
+  <script src="../main.js"></script>
+  <script>
+    function runPitchTest(){
+      window.sentMessages.length = 0;
+      if (typeof setPitchZero === 'function') {
+        setPitchZero();
+      } else {
+        console.log('setPitchZero not found');
+      }
+      console.log('Sent messages after setPitchZero:', window.sentMessages);
+      console.log('trimValueDisplay:', document.getElementById('trimValueDisplay').textContent);
+      console.log('angleVal:', document.getElementById('angleVal').textContent);
+    }
+    function runRollTest(){
+      window.sentMessages.length = 0;
+      if (typeof setRollZero === 'function') {
+        setRollZero();
+      } else {
+        console.log('setRollZero not found');
+      }
+      console.log('Sent messages after setRollZero:', window.sentMessages);
+      console.log('rollTrimValueDisplay:', document.getElementById('rollTrimValueDisplay').textContent);
+      console.log('rollVal:', document.getElementById('rollVal').textContent);
+    }
+
+    document.getElementById('runTestPitch').addEventListener('click', runPitchTest);
+    document.getElementById('runTestRoll').addEventListener('click', runRollTest);
+  </script>
+</body>
+</html>

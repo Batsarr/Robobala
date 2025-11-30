@@ -102,10 +102,13 @@
     <!-- Right Panel Overlay -->
     <div id="panelRightOverlay" class="panel-right-overlay"></div>
 
-    <!-- Main Content -->
-    <main class="app-content">
-        <!-- Dashboard View (Default) -->
-        <section id="viewDashboard" class="view active">
+    <!-- View Pager -->
+    <div id="view-pager" class="view-pager">
+        <div id="main-page" class="page active">
+            <!-- Main Content -->
+            <main class="app-content">
+                <!-- Dashboard View (Default) -->
+                <section id="viewDashboard" class="view active">
             <!-- Connection Card -->
             <div class="card">
                 <button id="connectBtn" class="btn btn-primary btn-large">
@@ -1249,6 +1252,15 @@
             </div>
         </section>
     </main>
+        </div>
+        <div id="dynamic-page" class="page">
+            <!-- Druga strona - pusta na razie -->
+            <div class="card" style="text-align: center; padding: 2rem;">
+                <h2>Wybierz zakładkę z menu</h2>
+                <p>Tutaj będą ładowane dynamiczne treści.</p>
+            </div>
+        </div>
+    </div>
 
     <!-- Collapsible Log Sheet -->
     <div id="logSheet" class="log-sheet">
