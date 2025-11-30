@@ -2434,7 +2434,7 @@ input.config-value, input[type="number"].config-value {
     height: 100vh;
     overflow: hidden;
     display: flex;
-    perspective: 1000px; /* Dla 3D efektu */
+    perspective: 300px; /* Zmniejszone dla lepszego efektu */
     transform-style: preserve-3d;
 }
 
@@ -2458,7 +2458,7 @@ input.config-value, input[type="number"].config-value {
 }
 
 #dynamic-page {
-    transform: rotateY(90deg);
+    transform: rotateY(180deg); /* Test: obrócona o 180deg, żeby zobaczyć */
 }
 
 /* Dla urządzeń mobilnych - lepsza obsługa touch */
