@@ -795,7 +795,7 @@ input:checked + .slider:before {
    ============================================================================ */
 .robot-3d-container {
     width: 100%;
-    height: 300px;
+    height: 400px;
     background-color: var(--bg-tertiary);
     border-radius: var(--radius-md);
     margin-bottom: var(--spacing-md);
@@ -867,7 +867,7 @@ input:checked + .slider:before {
     border: 1px solid var(--border-color);
     border-radius: 8px; /* slightly larger radius as in legacy UI */
     color: var(--text-primary);
-    font-size: 1.05rem; /* slightly larger font for better readability */
+    font-size: 1.1em; /* slightly larger font for better readability */
     font-weight: 700;
     text-align: left;
     cursor: pointer;
@@ -891,7 +891,7 @@ input:checked + .slider:before {
 
 .accordion-btn::after {
     content: '+';
-    font-size: 1.5rem;
+    font-size: 1.4em;
     transition: transform var(--transition-base);
 }
 
@@ -912,12 +912,17 @@ input:checked + .slider:before {
 
 .accordion-content.active {
     max-height: 1000px;
-    padding: var(--spacing-md);
+    padding: 15px;
 }
 
-/* ============================================================================
-   PARAMETER INPUTS
-   ============================================================================ */
+.chart-hints {
+    background-color: var(--bg-secondary);
+    padding: 8px;
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--spacing-sm);
+    font-size: 0.85em;
+    border-left: 3px solid var(--accent-primary);
+}
 .param-group {
     display: flex;
     justify-content: space-between;
@@ -929,6 +934,7 @@ input:checked + .slider:before {
     margin-bottom: 0;
     font-weight: 500;
     color: var(--text-primary);
+    font-size: 0.9em;
 }
 
 .input-group {
@@ -939,12 +945,12 @@ input:checked + .slider:before {
 
 .input-group input[type="number"] {
     flex: 1;
-    padding: 10px;
+    padding: 4px;
     background-color: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
-    font-size: 1rem;
+    font-size: 1em;
     text-align: center;
 }
 
@@ -955,13 +961,13 @@ input:checked + .slider:before {
 
 .btn-minus,
 .btn-plus {
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
     background-color: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     color: var(--text-primary);
-    font-size: 1.25rem;
+    font-size: 0.9em;
     font-weight: 700;
     cursor: pointer;
     transition: all var(--transition-fast);
@@ -1253,8 +1259,8 @@ input:checked + .slider:before {
     .param-group input[type="number"] {
         min-width: 0;
         width: 100%;
-        font-size: 0.875rem;
-        padding: 8px;
+        font-size: 1em;
+        padding: 4px;
     }
     .btn-minus, .btn-plus {
         width: 24px;
@@ -1316,7 +1322,7 @@ input:checked + .slider:before {
         gap: var(--spacing-xs);
     }
     .param-group label {
-        font-size: 0.8rem;
+        font-size: 0.9rem;
         line-height: 1.2;
     }
     .config-section {

@@ -662,6 +662,22 @@ document.addEventListener('DOMContentLoaded', () => {
         initializeAccordions(dynamicPage);
         initializeModals(dynamicPage);
 
+        // Specjalna inicjalizacja dla zakładki 3D
+        if (tabId === '3d') {
+            setTimeout(() => {
+                try {
+                    if (typeof window.init3DVisualization === 'function') {
+                        window.init3DVisualization();
+                        window.setupControls3D?.();
+                        window.animate3D();
+                        console.log('[VIEW_PAGER] Wizualizacja 3D zainicjalizowana dla zakładki 3D');
+                    }
+                } catch (e) {
+                    console.error('[VIEW_PAGER] Błąd inicjalizacji 3D:', e);
+                }
+            }, 100);
+        }
+
         console.log('[VIEW_PAGER] Załadowano zakładkę:', tabId, 'z sekcji:', sectionId);
     };
 
@@ -758,4 +774,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     console.log('[UI_CORE] Pager zainicjalizowany');
+
+    // Inicjalizuj modals na głównym dokumencie
+    initializeModals(document);
 });

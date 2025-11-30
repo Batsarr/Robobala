@@ -859,6 +859,10 @@
                 <!-- Signal Analyzer -->
                 <div class="signal-analyzer">
                     <h3>Wykres Sygnałów</h3>
+                    <div class="chart-hints">
+                        <strong>💡 Wskazówki:</strong> 
+                        Ctrl+Scroll dla zoom | Ctrl+Przeciągnij dla przewijania | Shift+Przeciągnij dla zaznaczenia zakresu
+                    </div>
                     <div class="chart-controls" id="signalChartControls">
                         <!-- Checkboxes will be added here dynamically -->
                     </div>
@@ -866,6 +870,7 @@
                     <div class="button-group">
                         <button id="pauseChartBtn" class="btn btn-secondary">Pauza</button>
                         <button id="resumeChartBtn" class="btn btn-secondary" style="display: none;">Wznów</button>
+                        <button id="cursorABBtn" class="btn btn-secondary">Kursory A/B</button>
                         <button id="exportCsvBtn" class="btn btn-primary">Eksport CSV</button>
                         <button id="exportRangeCsvBtn" class="btn btn-primary">Eksport Zakresu CSV</button>
                         <button id="resetZoomBtn" class="btn btn-secondary">Reset Zoom</button>
