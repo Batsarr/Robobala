@@ -505,9 +505,6 @@ function showEepromModal(title, message) {
 // Create singleton instance
 const appStore = new AppStore();
 
-// Create singleton instance
-const appStore = new AppStore();
-
 // ========================================================================
 // COMMUNICATION LAYER - Abstract Communication Interface
 // ========================================================================

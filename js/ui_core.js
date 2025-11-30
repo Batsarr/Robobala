@@ -529,6 +529,11 @@
     });
 
     // ==== VIEW PAGER - Dwustronicowy pager ====
+})();
+
+// Inicjalizacja pager po załadowaniu DOM
+document.addEventListener('DOMContentLoaded', () => {
+    // ==== VIEW PAGER - Dwustronicowy pager ====
     let currentPage = 1; // 1 = main-page, 2 = dynamic-page
     let touchStartX = 0;
     let touchStartY = 0;
@@ -563,98 +568,6 @@
         currentDeltaX = 0;
         console.log('[VIEW_PAGER] Przełączono na stronę:', page);
     };
-
-    // Obsługa swipe gestów z płynną animacją
-    document.addEventListener('touchstart', (e) => {
-        const screenWidth = window.innerWidth;
-        const touchX = e.touches[0].clientX;
-
-        // Swipe tylko przy krawędziach ekranu (50px od brzegu)
-        const isNearEdge = touchX < 50 || touchX > screenWidth - 50;
-        if (!isNearEdge) return; // Ignoruj swipe nie przy krawędzi
-
-        touchStartX = touchX;
-        touchStartY = e.touches[0].clientY;
-        isSwiping = false;
-        // Usuń transition podczas drag
-        const mainPage = document.getElementById('main-page');
-        const dynamicPage = document.getElementById('dynamic-page');
-        mainPage.style.transition = 'none';
-        dynamicPage.style.transition = 'none';
-    });
-
-    document.addEventListener('touchmove', (e) => {
-        if (!touchStartX || !touchStartY) return;
-        const touchX = e.touches[0].clientX;
-        const touchY = e.touches[0].clientY;
-        const deltaX = touchX - touchStartX;
-        const deltaY = touchY - touchStartY;
-
-        // Sprawdź czy to poziomy swipe
-        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
-            isSwiping = true;
-            e.preventDefault(); // Zapobiegaj scrollowaniu
-
-            const mainPage = document.getElementById('main-page');
-            const dynamicPage = document.getElementById('dynamic-page');
-            const screenWidth = window.innerWidth;
-
-            // Oblicz przesunięcie z ograniczeniami
-            let translateX = deltaX;
-            currentDeltaX = translateX;
-
-            if (currentPage === 1) {
-                // Na stronie głównej: można swipować tylko w lewo (do strony 2), w prawo - brak przesunięcia
-                if (translateX > 0) {
-                    translateX = 0; // Pełne ograniczenie - brak przesunięcia w prawo
-                } else {
-                    translateX = Math.max(-screenWidth, translateX); // Ogranicz do maksymalnie szerokości ekranu w lewo
-                }
-                mainPage.style.transform = `translateX(${translateX}px)`;
-                dynamicPage.style.transform = `translateX(${screenWidth + translateX}px)`;
-            } else {
-                // Na stronie dynamicznej: można swipować tylko w prawo (do strony 1), w lewo - brak przesunięcia
-                if (translateX < 0) {
-                    translateX = 0; // Pełne ograniczenie - brak przesunięcia w lewo
-                } else {
-                    translateX = Math.min(screenWidth, translateX); // Ogranicz do maksymalnie szerokości ekranu w prawo
-                }
-                dynamicPage.style.transform = `translateX(${translateX}px)`;
-                mainPage.style.transform = `translateX(${-screenWidth + translateX}px)`;
-            }
-        }
-    });
-
-    document.addEventListener('touchend', (e) => {
-        if (!isSwiping || !touchStartX) return;
-        const touchEndX = e.changedTouches[0].clientX;
-        const deltaX = touchEndX - touchStartX;
-
-        // Przywróć transition
-        const mainPage = document.getElementById('main-page');
-        const dynamicPage = document.getElementById('dynamic-page');
-        mainPage.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-        dynamicPage.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-
-        if (Math.abs(deltaX) > window.innerWidth * 0.1) { // Minimalny dystans dla przełączenia (10% szerokości ekranu)
-            if (deltaX > 0 && currentPage === 2) {
-                // Swipe w prawo - wróć do strony głównej
-                window.switchToPage(1);
-            } else if (deltaX < 0 && currentPage === 1) {
-                // Swipe w lewo - przejdź do dynamicznej strony
-                window.switchToPage(2);
-            } else {
-                // Wróć do aktualnej strony
-                window.switchToPage(currentPage);
-            }
-        } else {
-            // Wróć do aktualnej strony
-            window.switchToPage(currentPage);
-        }
-        touchStartX = 0;
-        touchStartY = 0;
-        isSwiping = false;
-    });
 
     // Funkcja do ładowania treści na dynamicznej stronie
     window.loadDynamicContent = function (tabId) {
@@ -703,4 +616,97 @@
         console.log('[VIEW_PAGER] Załadowano zakładkę:', tabId, 'z sekcji:', sectionId);
     };
 
-})();
+    // Obsługa swipe gestów z płynną animacją
+    document.addEventListener('touchstart', (e) => {
+        const screenWidth = window.innerWidth;
+        const touchX = e.touches[0].clientX;
+
+        // Swipe tylko przy krawędziach ekranu (50px od brzegu)
+        const isNearEdge = touchX < 50 || touchX > screenWidth - 50;
+        if (!isNearEdge) return; // Ignoruj swipe nie przy krawędzi
+
+        touchStartX = touchX;
+        touchStartY = e.touches[0].clientY;
+        isSwiping = false;
+        // Usuń transition podczas drag
+        const mainPage = document.getElementById('main-page');
+        const dynamicPage = document.getElementById('dynamic-page');
+        mainPage.style.transition = 'none';
+        dynamicPage.style.transition = 'none';
+    });
+
+    document.addEventListener('touchmove', (e) => {
+        if (!touchStartX || !touchStartY) return;
+        const touchX = e.touches[0].clientX;
+        const touchY = e.touches[0].clientY;
+        const deltaX = touchX - touchStartX;
+        const deltaY = touchY - touchStartY;
+
+        // Sprawdź czy to poziomy swipe
+        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+            isSwiping = true;
+            e.preventDefault(); // Zapobiegaj scrollowaniu
+
+            const mainPage = document.getElementById('main-page');
+            const dynamicPage = document.getElementById('dynamic-page');
+            const screenWidth = window.innerWidth;
+
+            // Oblicz przesunięcie z ograniczeniami
+            let translateX = deltaX;
+            currentDeltaX = translateX;
+
+            if (currentPage === 1) {
+                // Na stronie głównej: można swipować tylko w lewo (do strony 2)
+                if (translateX > 0) {
+                    translateX = 0; // Pełne ograniczenie - brak przesunięcia w prawo
+                } else {
+                    translateX = Math.max(-screenWidth, translateX); // Ogranicz do maksymalnie szerokości ekranu w lewo
+                }
+                mainPage.style.transform = `translateX(${translateX}px)`;
+                dynamicPage.style.transform = `translateX(${screenWidth + translateX}px)`;
+            } else {
+                // Na stronie dynamicznej: można swipować tylko w prawo (do strony 1)
+                if (translateX < 0) {
+                    translateX = 0; // Pełne ograniczenie - brak przesunięcia w lewo
+                } else {
+                    translateX = Math.min(screenWidth, translateX); // Ogranicz do maksymalnie szerokości ekranu w prawo
+                }
+                dynamicPage.style.transform = `translateX(${translateX}px)`;
+                mainPage.style.transform = `translateX(${-screenWidth + translateX}px)`;
+            }
+        }
+    });
+
+    document.addEventListener('touchend', (e) => {
+        if (!isSwiping || !touchStartX) return;
+        const touchEndX = e.changedTouches[0].clientX;
+        const deltaX = touchEndX - touchStartX;
+
+        // Przywróć transition
+        const mainPage = document.getElementById('main-page');
+        const dynamicPage = document.getElementById('dynamic-page');
+        mainPage.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+        dynamicPage.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+
+        if (Math.abs(deltaX) > window.innerWidth * 0.1) { // Minimalny dystans dla przełączenia (10% szerokości ekranu)
+            if (deltaX > 0 && currentPage === 2) {
+                // Swipe w prawo - wróć do strony głównej
+                window.switchToPage(1);
+            } else if (deltaX < 0 && currentPage === 1) {
+                // Swipe w lewo - przejdź do dynamicznej strony
+                window.switchToPage(2);
+            } else {
+                // Wróć do aktualnej strony
+                window.switchToPage(currentPage);
+            }
+        } else {
+            // Wróć do aktualnej strony
+            window.switchToPage(currentPage);
+        }
+        touchStartX = 0;
+        touchStartY = 0;
+        isSwiping = false;
+    });
+
+    console.log('[UI_CORE] Pager zainicjalizowany');
+});
