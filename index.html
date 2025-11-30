@@ -1482,10 +1482,17 @@
         </div>
     </div>
 
-    <!-- Debug Info -->
-    <div id="debug-info" style="position: fixed; bottom: 10px; left: 10px; background: rgba(0,0,0,0.8); color: white; padding: 5px 10px; border-radius: 5px; font-size: 12px; z-index: 10000;">
-        Strona: 1 | Kąt: 0°
+
+
+    <!-- Modal: Potwierdzenie EEPROM -->
+    <div id="eeprom-modal" class="modal-backdrop" style="display:none;">
+        <div class="modal-content" style="max-width:400px;">
+            <h3 id="eeprom-modal-title">Potwierdzenie</h3>
+            <p id="eeprom-modal-message">Operacja EEPROM została wykonana pomyślnie.</p>
+            <button id="eeprom-modal-close" class="btn btn-primary" style="width:100%;">OK</button>
+        </div>
     </div>
+
 
     <script src="js/ui_core.js"></script>
     <script src="js/main.js"></script>

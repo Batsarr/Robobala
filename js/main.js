@@ -468,18 +468,42 @@ document.addEventListener('DOMContentLoaded', () => {
     // Sidebar EEPROM save/load
     document.getElementById('loadEepromBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
-        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+        if (!appStore.getState('connection.isConnected')) {
+            showEepromModal('Błąd', 'Najpierw połącz się z robotem');
+            return;
+        }
         commLayer.send({ type: 'request_full_config' });
-        addLogMessage('[UI] Żądanie odczytu EEPROM (request_full_config)', 'info');
+        showEepromModal('Sukces', 'Żądanie odczytu EEPROM zostało wysłane');
     });
     document.getElementById('saveEepromBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
-        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
-        if (!confirm('Czy zapisać bieżące parametry na robot (EEPROM)?')) return;
+        if (!appStore.getState('connection.isConnected')) {
+            showEepromModal('Błąd', 'Najpierw połącz się z robotem');
+            return;
+        }
         commLayer.send({ type: 'save_tunings' });
-        addLogMessage('[UI] Żądanie zapisu do EEPROM (save_tunings)', 'info');
+        showEepromModal('Sukces', 'Żądanie zapisu do EEPROM zostało wysłane');
     });
 });
+
+// Funkcja do pokazywania modalu EEPROM
+function showEepromModal(title, message) {
+    const modal = document.getElementById('eeprom-modal');
+    const titleEl = document.getElementById('eeprom-modal-title');
+    const messageEl = document.getElementById('eeprom-modal-message');
+    const closeBtn = document.getElementById('eeprom-modal-close');
+
+    if (titleEl) titleEl.textContent = title;
+    if (messageEl) messageEl.textContent = message;
+    if (modal) modal.style.display = 'flex';
+
+    if (closeBtn) {
+        closeBtn.onclick = () => { modal.style.display = 'none'; };
+    }
+}
+
+// Create singleton instance
+const appStore = new AppStore();
 
 // Create singleton instance
 const appStore = new AppStore();

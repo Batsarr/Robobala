@@ -536,16 +536,6 @@
     let currentDeltaX = 0; // Aktualne przesunięcie w px
 
     const viewPager = document.getElementById('view-pager');
-    const debugInfo = document.getElementById('debug-info');
-
-    function updateDebugInfo() {
-        if (debugInfo) {
-            debugInfo.textContent = `Strona: ${currentPage} | DeltaX: ${currentDeltaX.toFixed(1)}px`;
-        }
-    }
-
-    // Inicjalizacja debug info
-    updateDebugInfo();
 
     window.switchToPage = function (page, instant = false) {
         if (page === currentPage) return;
@@ -571,13 +561,19 @@
         dynamicPage.style.transform = '';
 
         currentDeltaX = 0;
-        updateDebugInfo();
         console.log('[VIEW_PAGER] Przełączono na stronę:', page);
     };
 
     // Obsługa swipe gestów z płynną animacją
     document.addEventListener('touchstart', (e) => {
-        touchStartX = e.touches[0].clientX;
+        const screenWidth = window.innerWidth;
+        const touchX = e.touches[0].clientX;
+
+        // Swipe tylko przy krawędziach ekranu (50px od brzegu)
+        const isNearEdge = touchX < 50 || touchX > screenWidth - 50;
+        if (!isNearEdge) return; // Ignoruj swipe nie przy krawędzi
+
+        touchStartX = touchX;
         touchStartY = e.touches[0].clientY;
         isSwiping = false;
         // Usuń transition podczas drag
@@ -626,8 +622,6 @@
                 dynamicPage.style.transform = `translateX(${translateX}px)`;
                 mainPage.style.transform = `translateX(${-screenWidth + translateX}px)`;
             }
-
-            updateDebugInfo();
         }
     });
 
@@ -662,20 +656,51 @@
         isSwiping = false;
     });
 
-    // Funkcja do ładowania treści na dynamicznej stronie (na razie placeholder)
+    // Funkcja do ładowania treści na dynamicznej stronie
     window.loadDynamicContent = function (tabId) {
         const dynamicPage = document.getElementById('dynamic-page');
         if (!dynamicPage) return;
 
-        // Na razie tylko placeholder
-        dynamicPage.innerHTML = `
-            <div class="card" style="text-align: center; padding: 2rem;">
-                <h2>Zakładka: ${tabId}</h2>
-                <p>Tutaj będą ładowane treści dla zakładki ${tabId}.</p>
-                <button onclick="switchToPage(1)" class="btn btn-secondary">Wróć do pulpitu</button>
-            </div>
-        `;
-        console.log('[VIEW_PAGER] Załadowano placeholder dla zakładki:', tabId);
+        // Mapowanie tabId na ID sekcji
+        const viewIdMap = {
+            'pid-tuning': 'viewPidTuning',
+            'calibration': 'viewCalibration',
+            'autonomous': 'viewAutonomous',
+            'autotuning': 'viewAutotuning',
+            'diagnostics': 'viewDiagnostics',
+            '3d': 'view3D',
+            'settings': 'viewSettings'
+        };
+
+        const sectionId = viewIdMap[tabId];
+        if (!sectionId) {
+            dynamicPage.innerHTML = `
+                <div class="card" style="text-align: center; padding: 2rem;">
+                    <h2>Zakładka: ${tabId}</h2>
+                    <p>Nie znaleziono treści dla tej zakładki.</p>
+                    <button onclick="switchToPage(1)" class="btn btn-secondary">Wróć do pulpitu</button>
+                </div>
+            `;
+            console.log('[VIEW_PAGER] Nieznana zakładka:', tabId);
+            return;
+        }
+
+        const sourceSection = document.getElementById(sectionId);
+        if (!sourceSection) {
+            dynamicPage.innerHTML = `
+                <div class="card" style="text-align: center; padding: 2rem;">
+                    <h2>Zakładka: ${tabId}</h2>
+                    <p>Sekcja ${sectionId} nie została znaleziona.</p>
+                    <button onclick="switchToPage(1)" class="btn btn-secondary">Wróć do pulpitu</button>
+                </div>
+            `;
+            console.log('[VIEW_PAGER] Sekcja nie znaleziona:', sectionId);
+            return;
+        }
+
+        // Skopiuj zawartość sekcji
+        dynamicPage.innerHTML = sourceSection.innerHTML;
+        console.log('[VIEW_PAGER] Załadowano zakładkę:', tabId, 'z sekcji:', sectionId);
     };
 
 })();
