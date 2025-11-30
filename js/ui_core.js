@@ -569,6 +569,45 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[VIEW_PAGER] Przełączono na stronę:', page);
     };
 
+    // Funkcja do inicjalizacji akordeonów w danym kontenerze
+    window.initializeAccordions = function (container = document) {
+        container.querySelectorAll('.accordion-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const content = btn.nextElementSibling;
+                const isActive = btn.classList.contains('active');
+
+                // Close all accordions in same container
+                const cardContainer = btn.closest('.card');
+                if (cardContainer) {
+                    cardContainer.querySelectorAll('.accordion-btn').forEach(b => {
+                        b.classList.remove('active');
+                        b.nextElementSibling.classList.remove('active');
+                    });
+                }
+
+                // Toggle current accordion
+                if (!isActive) {
+                    btn.classList.add('active');
+                    content.classList.add('active');
+                }
+            });
+        });
+    };
+
+    // Funkcja do inicjalizacji modals w danym kontenerze
+    window.initializeModals = function (container = document) {
+        // Gamepad mapping modal
+        const openGamepadBtn = container.querySelector('#open-gamepad-modal-btn');
+        if (openGamepadBtn) {
+            openGamepadBtn.addEventListener('click', () => {
+                document.getElementById('gamepad-mapping-modal').style.display = 'flex';
+                if (typeof renderMappingModal === 'function') renderMappingModal();
+            });
+        }
+
+        // Inne modals mogą być dodane tutaj w przyszłości
+    };
+
     // Funkcja do ładowania treści na dynamicznej stronie
     window.loadDynamicContent = function (tabId) {
         const dynamicPage = document.getElementById('dynamic-page');
@@ -613,6 +652,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Skopiuj zawartość sekcji
         dynamicPage.innerHTML = sourceSection.innerHTML;
+
+        // Reinicjalizuj akordeony i inne interaktywne elementy
+        initializeAccordions(dynamicPage);
+        initializeModals(dynamicPage);
+
         console.log('[VIEW_PAGER] Załadowano zakładkę:', tabId, 'z sekcji:', sectionId);
     };
 
