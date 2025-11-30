@@ -604,18 +604,18 @@
             currentDeltaX = translateX;
 
             if (currentPage === 1) {
-                // Na stronie głównej: można swipować tylko w lewo (do strony 2)
+                // Na stronie głównej: można swipować tylko w lewo (do strony 2), w prawo - brak przesunięcia
                 if (translateX > 0) {
-                    translateX = Math.max(0, translateX * 0.3); // Lekki feedback dla swipe w prawo, ale nie przesuwaj
+                    translateX = 0; // Pełne ograniczenie - brak przesunięcia w prawo
                 } else {
                     translateX = Math.max(-screenWidth, translateX); // Ogranicz do maksymalnie szerokości ekranu w lewo
                 }
                 mainPage.style.transform = `translateX(${translateX}px)`;
                 dynamicPage.style.transform = `translateX(${screenWidth + translateX}px)`;
             } else {
-                // Na stronie dynamicznej: można swipować tylko w prawo (do strony 1)
+                // Na stronie dynamicznej: można swipować tylko w prawo (do strony 1), w lewo - brak przesunięcia
                 if (translateX < 0) {
-                    translateX = Math.min(0, translateX * 0.3); // Lekki feedback dla swipe w lewo, ale nie przesuwaj
+                    translateX = 0; // Pełne ograniczenie - brak przesunięcia w lewo
                 } else {
                     translateX = Math.min(screenWidth, translateX); // Ogranicz do maksymalnie szerokości ekranu w prawo
                 }
