@@ -562,11 +562,9 @@
             dynamicPage.classList.add('active');
         }
 
-        // Wyczyść inline transformy po przełączeniu
-        setTimeout(() => {
-            mainPage.style.transform = '';
-            dynamicPage.style.transform = '';
-        }, instant ? 0 : 400);
+        // Wyczyść inline transformy natychmiast po przełączeniu
+        mainPage.style.transform = '';
+        dynamicPage.style.transform = '';
 
         currentDeltaX = 0;
         updateDebugInfo();
@@ -599,18 +597,30 @@
 
             const mainPage = document.getElementById('main-page');
             const dynamicPage = document.getElementById('dynamic-page');
+            const screenWidth = window.innerWidth;
 
-            // Oblicz przesunięcie
-            currentDeltaX = deltaX;
+            // Oblicz przesunięcie z ograniczeniami
+            let translateX = deltaX;
+            currentDeltaX = translateX;
 
             if (currentPage === 1) {
-                // Swipe w lewo: przesuń main-page w lewo, dynamic-page od prawej
-                mainPage.style.transform = `translateX(${currentDeltaX}px)`;
-                dynamicPage.style.transform = `translateX(${100 + currentDeltaX}%)`;
+                // Na stronie głównej: można swipować tylko w lewo (do strony 2)
+                if (translateX > 0) {
+                    translateX = Math.max(0, translateX * 0.3); // Lekki feedback dla swipe w prawo, ale nie przesuwaj
+                } else {
+                    translateX = Math.max(-screenWidth, translateX); // Ogranicz do maksymalnie szerokości ekranu w lewo
+                }
+                mainPage.style.transform = `translateX(${translateX}px)`;
+                dynamicPage.style.transform = `translateX(${100 + translateX}%)`;
             } else {
-                // Swipe w prawo: przesuń dynamic-page w prawo, main-page od lewej
-                dynamicPage.style.transform = `translateX(${currentDeltaX}px)`;
-                mainPage.style.transform = `translateX(${-100 + currentDeltaX}%)`;
+                // Na stronie dynamicznej: można swipować tylko w prawo (do strony 1)
+                if (translateX < 0) {
+                    translateX = Math.min(0, translateX * 0.3); // Lekki feedback dla swipe w lewo, ale nie przesuwaj
+                } else {
+                    translateX = Math.min(screenWidth, translateX); // Ogranicz do maksymalnie szerokości ekranu w prawo
+                }
+                dynamicPage.style.transform = `translateX(${translateX}px)`;
+                mainPage.style.transform = `translateX(${-100 + translateX}%)`;
             }
 
             updateDebugInfo();
@@ -628,7 +638,7 @@
         mainPage.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
         dynamicPage.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
 
-        if (Math.abs(deltaX) > 50) { // Minimalny dystans dla przełączenia
+        if (Math.abs(deltaX) > window.innerWidth * 0.1) { // Minimalny dystans dla przełączenia (10% szerokości ekranu)
             if (deltaX > 0 && currentPage === 2) {
                 // Swipe w prawo - wróć do strony głównej
                 window.switchToPage(1);
