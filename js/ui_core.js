@@ -553,6 +553,18 @@
         const targetAngle = page === 1 ? 0 : -90;
         currentAngle = targetAngle;
         currentPage = page;
+
+        // Ustaw z-index dla widoczności
+        const mainPage = document.getElementById('main-page');
+        const dynamicPage = document.getElementById('dynamic-page');
+        if (page === 1) {
+            mainPage.style.zIndex = '2';
+            dynamicPage.style.zIndex = '1';
+        } else {
+            mainPage.style.zIndex = '1';
+            dynamicPage.style.zIndex = '2';
+        }
+
         if (instant) {
             viewPager.style.transition = 'none';
             viewPager.style.transform = `rotateY(${currentAngle}deg)`;
