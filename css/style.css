@@ -2449,16 +2449,23 @@ input.config-value, input[type="number"].config-value {
     -webkit-overflow-scrolling: touch;
     padding-top: 60px; /* Dla fixed header */
     box-sizing: border-box;
-    /* backface-visibility: hidden; */ /* Tymczasowo usunięte dla debug */
     border: 2px solid red; /* Debug border */
 }
 
+.page.active {
+    transform: translateX(0);
+}
+
+.page:not(.active) {
+    transform: translateX(100%);
+}
+
 #main-page {
-    transform: rotateY(0deg);
+    z-index: 1;
 }
 
 #dynamic-page {
-    transform: rotateY(90deg);
+    z-index: 2;
 }
 
 /* Dla urządzeń mobilnych - lepsza obsługa touch */

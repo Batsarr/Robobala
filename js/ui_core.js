@@ -533,15 +533,14 @@
     let touchStartX = 0;
     let touchStartY = 0;
     let isSwiping = false;
-    let currentAngle = 0; // Aktualny kąt obrotu w stopniach
-    const maxAngle = 90; // Maksymalny kąt dla pełnego przejścia
+    let currentDeltaX = 0; // Aktualne przesunięcie w px
 
     const viewPager = document.getElementById('view-pager');
     const debugInfo = document.getElementById('debug-info');
 
     function updateDebugInfo() {
         if (debugInfo) {
-            debugInfo.textContent = `Strona: ${currentPage} | Kąt: ${currentAngle.toFixed(1)}°`;
+            debugInfo.textContent = `Strona: ${currentPage} | DeltaX: ${currentDeltaX.toFixed(1)}px`;
         }
     }
 
@@ -550,30 +549,28 @@
 
     window.switchToPage = function (page, instant = false) {
         if (page === currentPage) return;
-        const targetAngle = page === 1 ? 0 : -90;
-        currentAngle = targetAngle;
         currentPage = page;
 
-        // Ustaw z-index dla widoczności
         const mainPage = document.getElementById('main-page');
         const dynamicPage = document.getElementById('dynamic-page');
+
         if (page === 1) {
-            mainPage.style.zIndex = '2';
-            dynamicPage.style.zIndex = '1';
+            mainPage.classList.add('active');
+            dynamicPage.classList.remove('active');
         } else {
-            mainPage.style.zIndex = '1';
-            dynamicPage.style.zIndex = '2';
+            mainPage.classList.remove('active');
+            dynamicPage.classList.add('active');
         }
 
-        if (instant) {
-            viewPager.style.transition = 'none';
-            viewPager.style.transform = `rotateY(${currentAngle}deg)`;
-        } else {
-            viewPager.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-            viewPager.style.transform = `rotateY(${currentAngle}deg)`;
-        }
+        // Wyczyść inline transformy po przełączeniu
+        setTimeout(() => {
+            mainPage.style.transform = '';
+            dynamicPage.style.transform = '';
+        }, instant ? 0 : 400);
+
+        currentDeltaX = 0;
         updateDebugInfo();
-        console.log('[VIEW_PAGER] Przełączono na stronę:', page, 'kąt:', currentAngle);
+        console.log('[VIEW_PAGER] Przełączono na stronę:', page);
     };
 
     // Obsługa swipe gestów z płynną animacją
@@ -582,7 +579,10 @@
         touchStartY = e.touches[0].clientY;
         isSwiping = false;
         // Usuń transition podczas drag
-        viewPager.style.transition = 'none';
+        const mainPage = document.getElementById('main-page');
+        const dynamicPage = document.getElementById('dynamic-page');
+        mainPage.style.transition = 'none';
+        dynamicPage.style.transition = 'none';
     });
 
     document.addEventListener('touchmove', (e) => {
@@ -597,19 +597,22 @@
             isSwiping = true;
             e.preventDefault(); // Zapobiegaj scrollowaniu
 
-            // Oblicz kąt na podstawie deltaX (swipe w prawo zmniejsza kąt)
-            const angleChange = (deltaX / window.innerWidth) * maxAngle;
-            let newAngle = currentPage === 1 ? angleChange : -90 + angleChange;
+            const mainPage = document.getElementById('main-page');
+            const dynamicPage = document.getElementById('dynamic-page');
 
-            // Ogranicz zakres
+            // Oblicz przesunięcie
+            currentDeltaX = deltaX;
+
             if (currentPage === 1) {
-                newAngle = Math.max(-maxAngle, Math.min(maxAngle, newAngle));
+                // Swipe w lewo: przesuń main-page w lewo, dynamic-page od prawej
+                mainPage.style.transform = `translateX(${currentDeltaX}px)`;
+                dynamicPage.style.transform = `translateX(${100 + currentDeltaX}%)`;
             } else {
-                newAngle = Math.max(-maxAngle * 2, Math.min(0, newAngle));
+                // Swipe w prawo: przesuń dynamic-page w prawo, main-page od lewej
+                dynamicPage.style.transform = `translateX(${currentDeltaX}px)`;
+                mainPage.style.transform = `translateX(${-100 + currentDeltaX}%)`;
             }
 
-            currentAngle = newAngle;
-            viewPager.style.transform = `rotateY(${currentAngle}deg)`;
             updateDebugInfo();
         }
     });
@@ -620,7 +623,10 @@
         const deltaX = touchEndX - touchStartX;
 
         // Przywróć transition
-        viewPager.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+        const mainPage = document.getElementById('main-page');
+        const dynamicPage = document.getElementById('dynamic-page');
+        mainPage.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+        dynamicPage.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
 
         if (Math.abs(deltaX) > 50) { // Minimalny dystans dla przełączenia
             if (deltaX > 0 && currentPage === 2) {
@@ -637,7 +643,6 @@
             // Wróć do aktualnej strony
             window.switchToPage(currentPage);
         }
-        updateDebugInfo();
         touchStartX = 0;
         touchStartY = 0;
         isSwiping = false;
