@@ -2435,6 +2435,7 @@ input.config-value, input[type="number"].config-value {
     overflow: hidden;
     display: flex;
     perspective: 1000px; /* Dla 3D efektu */
+    transform-style: preserve-3d;
 }
 
 .page {
@@ -2443,31 +2444,20 @@ input.config-value, input[type="number"].config-value {
     left: 0;
     width: 100%;
     height: 100%;
-    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     background-color: var(--bg-primary);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding-top: 60px; /* Dla fixed header */
     box-sizing: border-box;
-    will-change: transform;
-    transform-style: preserve-3d;
     backface-visibility: hidden;
 }
 
-.page.active {
+#main-page {
     transform: rotateY(0deg);
 }
 
-.page:not(.active) {
-    transform: rotateY(-90deg);
-}
-
-#main-page {
-    z-index: 1;
-}
-
 #dynamic-page {
-    z-index: 2;
+    transform: rotateY(90deg);
 }
 
 /* Dla urządzeń mobilnych - lepsza obsługa touch */

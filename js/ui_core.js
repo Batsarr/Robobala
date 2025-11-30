@@ -533,29 +533,33 @@
     let touchStartX = 0;
     let touchStartY = 0;
     let isSwiping = false;
+    let currentAngle = 0; // Aktualny kąt obrotu w stopniach
+    const maxAngle = 90; // Maksymalny kąt dla pełnego przejścia
 
-    window.switchToPage = function (page) {
+    const viewPager = document.getElementById('view-pager');
+
+    window.switchToPage = function (page, instant = false) {
         if (page === currentPage) return;
-        const mainPage = document.getElementById('main-page');
-        const dynamicPage = document.getElementById('dynamic-page');
-        if (!mainPage || !dynamicPage) return;
-
-        if (page === 1) {
-            mainPage.classList.add('active');
-            dynamicPage.classList.remove('active');
-        } else if (page === 2) {
-            mainPage.classList.remove('active');
-            dynamicPage.classList.add('active');
-        }
+        const targetAngle = page === 1 ? 0 : -90;
+        currentAngle = targetAngle;
         currentPage = page;
-        console.log('[VIEW_PAGER] Przełączono na stronę:', page);
+        if (instant) {
+            viewPager.style.transition = 'none';
+            viewPager.style.transform = `rotateY(${currentAngle}deg)`;
+        } else {
+            viewPager.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+            viewPager.style.transform = `rotateY(${currentAngle}deg)`;
+        }
+        console.log('[VIEW_PAGER] Przełączono na stronę:', page, 'kąt:', currentAngle);
     };
 
-    // Obsługa swipe gestów
+    // Obsługa swipe gestów z płynną animacją
     document.addEventListener('touchstart', (e) => {
         touchStartX = e.touches[0].clientX;
         touchStartY = e.touches[0].clientY;
         isSwiping = false;
+        // Usuń transition podczas drag
+        viewPager.style.transition = 'none';
     });
 
     document.addEventListener('touchmove', (e) => {
@@ -565,10 +569,24 @@
         const deltaX = touchX - touchStartX;
         const deltaY = touchY - touchStartY;
 
-        // Sprawdź czy to poziomy swipe (większy deltaX niż deltaY)
-        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+        // Sprawdź czy to poziomy swipe
+        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
             isSwiping = true;
             e.preventDefault(); // Zapobiegaj scrollowaniu
+
+            // Oblicz kąt na podstawie deltaX (swipe w prawo zmniejsza kąt)
+            const angleChange = (deltaX / window.innerWidth) * maxAngle;
+            let newAngle = currentPage === 1 ? angleChange : -90 + angleChange;
+
+            // Ogranicz zakres
+            if (currentPage === 1) {
+                newAngle = Math.max(-maxAngle, Math.min(maxAngle, newAngle));
+            } else {
+                newAngle = Math.max(-maxAngle * 2, Math.min(0, newAngle));
+            }
+
+            currentAngle = newAngle;
+            viewPager.style.transform = `rotateY(${currentAngle}deg)`;
         }
     });
 
@@ -577,14 +595,23 @@
         const touchEndX = e.changedTouches[0].clientX;
         const deltaX = touchEndX - touchStartX;
 
-        if (Math.abs(deltaX) > 100) { // Minimalny dystans swipe
+        // Przywróć transition
+        viewPager.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+
+        if (Math.abs(deltaX) > 50) { // Minimalny dystans dla przełączenia
             if (deltaX > 0 && currentPage === 2) {
                 // Swipe w prawo - wróć do strony głównej
                 window.switchToPage(1);
             } else if (deltaX < 0 && currentPage === 1) {
                 // Swipe w lewo - przejdź do dynamicznej strony
                 window.switchToPage(2);
+            } else {
+                // Wróć do aktualnej strony
+                window.switchToPage(currentPage);
             }
+        } else {
+            // Wróć do aktualnej strony
+            window.switchToPage(currentPage);
         }
         touchStartX = 0;
         touchStartY = 0;
