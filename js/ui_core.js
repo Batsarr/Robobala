@@ -598,17 +598,22 @@ document.addEventListener('DOMContentLoaded', () => {
     window.initializeModals = function (container = document) {
         // Gamepad mapping modal
         const openGamepadBtn = container.querySelector('#open-gamepad-modal-btn');
+        console.log('[MODALS] Szukam przycisku gamepad w kontenerze:', container, 'znaleziono:', openGamepadBtn);
         if (openGamepadBtn) {
             openGamepadBtn.addEventListener('click', () => {
+                console.log('[MODALS] Kliknięto przycisk gamepad modal');
                 document.getElementById('gamepad-mapping-modal').style.display = 'flex';
-                if (typeof renderMappingModal === 'function') renderMappingModal();
+                if (typeof renderMappingModal === 'function') {
+                    renderMappingModal();
+                    console.log('[MODALS] Wywołano renderMappingModal');
+                } else {
+                    console.log('[MODALS] renderMappingModal nie jest dostępna');
+                }
             });
         }
 
         // Inne modals mogą być dodane tutaj w przyszłości
-    };
-
-    // Funkcja do ładowania treści na dynamicznej stronie
+    };    // Funkcja do ładowania treści na dynamicznej stronie
     window.loadDynamicContent = function (tabId) {
         const dynamicPage = document.getElementById('dynamic-page');
         if (!dynamicPage) return;

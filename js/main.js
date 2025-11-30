@@ -2158,6 +2158,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Make renderMappingModal globally available
+    window.renderMappingModal = renderMappingModal;
+
     function startMapping(action, buttonElement) {
         if (gamepadIndex === null) { addLogMessage("Podłącz gamepada aby rozpoczac mapowanie!", "warn"); return; }
         isMappingButton = true; actionToMap = action;
