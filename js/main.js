@@ -989,6 +989,7 @@ const availableActions = {
     'toggle_balance': { label: 'Włącz/Wyłącz Balansowanie', elementId: 'balanceToggle' },
     'toggle_hold_position': { label: 'Włącz/Wyłącz Trzymanie Pozycji', elementId: 'holdPositionToggle' },
     'toggle_speed_mode': { label: 'Włącz/Wyłącz Tryb Prędkości', elementId: 'speedModeToggle' },
+    'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyFab' },
     'reset_pitch': { label: 'Ustaw punkt 0 (Pitch)', elementId: 'manualPitchSetZeroBtn' },
     'reset_roll': { label: 'Ustaw punkt 0 (Roll)', elementId: 'manualRollSetZeroBtn' }
 };
