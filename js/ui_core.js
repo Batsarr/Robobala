@@ -537,6 +537,16 @@
     const maxAngle = 90; // Maksymalny kąt dla pełnego przejścia
 
     const viewPager = document.getElementById('view-pager');
+    const debugInfo = document.getElementById('debug-info');
+
+    function updateDebugInfo() {
+        if (debugInfo) {
+            debugInfo.textContent = `Strona: ${currentPage} | Kąt: ${currentAngle.toFixed(1)}°`;
+        }
+    }
+
+    // Inicjalizacja debug info
+    updateDebugInfo();
 
     window.switchToPage = function (page, instant = false) {
         if (page === currentPage) return;
@@ -550,6 +560,7 @@
             viewPager.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
             viewPager.style.transform = `rotateY(${currentAngle}deg)`;
         }
+        updateDebugInfo();
         console.log('[VIEW_PAGER] Przełączono na stronę:', page, 'kąt:', currentAngle);
     };
 
@@ -587,6 +598,7 @@
 
             currentAngle = newAngle;
             viewPager.style.transform = `rotateY(${currentAngle}deg)`;
+            updateDebugInfo();
         }
     });
 
@@ -613,6 +625,7 @@
             // Wróć do aktualnej strony
             window.switchToPage(currentPage);
         }
+        updateDebugInfo();
         touchStartX = 0;
         touchStartY = 0;
         isSwiping = false;

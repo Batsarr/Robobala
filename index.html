@@ -1254,10 +1254,13 @@
     </main>
         </div>
         <div id="dynamic-page" class="page">
-            <!-- Druga strona - pusta na razie -->
-            <div class="card" style="text-align: center; padding: 2rem;">
-                <h2>Wybierz zakładkę z menu</h2>
-                <p>Tutaj będą ładowane dynamiczne treści.</p>
+            <!-- Druga strona - stała treść testowa -->
+            <div class="card" style="text-align: center; padding: 2rem; margin: 1rem;">
+                <h2>Druga strona - test</h2>
+                <p>To jest druga strona pagera.</p>
+                <p>Jeśli widzisz ten tekst, strona działa prawidłowo.</p>
+                <p>Kostka się obraca z ruchem palca.</p>
+                <button onclick="switchToPage(1)" class="btn btn-secondary" style="margin-top: 1rem;">Wróć do strony głównej</button>
             </div>
         </div>
     </div>
@@ -1478,7 +1481,12 @@
             <button id="modelMappingCloseBtn" style="width:100%; margin-top:14px; background:#ff6347;">Zamknij</button>
         </div>
     </div>
-    
+
+    <!-- Debug Info -->
+    <div id="debug-info" style="position: fixed; bottom: 10px; left: 10px; background: rgba(0,0,0,0.8); color: white; padding: 5px 10px; border-radius: 5px; font-size: 12px; z-index: 10000;">
+        Strona: 1 | Kąt: 0°
+    </div>
+
     <script src="js/ui_core.js"></script>
     <script src="js/main.js"></script>
 </body>
