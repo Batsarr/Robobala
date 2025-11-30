@@ -2450,13 +2450,22 @@ input.config-value, input[type="number"].config-value {
     padding-top: 60px; /* Dla fixed header */
     box-sizing: border-box;
     border: 2px solid red; /* Debug border */
+    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-.page.active {
+.page.main-visible {
     transform: translateX(0);
 }
 
-.page:not(.active) {
+.page.dynamic-visible {
+    transform: translateX(0);
+}
+
+.page.main-hidden {
+    transform: translateX(-100%);
+}
+
+.page.dynamic-hidden {
     transform: translateX(100%);
 }
 

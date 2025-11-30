@@ -555,11 +555,15 @@
         const dynamicPage = document.getElementById('dynamic-page');
 
         if (page === 1) {
-            mainPage.classList.add('active');
-            dynamicPage.classList.remove('active');
+            mainPage.classList.add('main-visible');
+            mainPage.classList.remove('main-hidden');
+            dynamicPage.classList.add('dynamic-hidden');
+            dynamicPage.classList.remove('dynamic-visible');
         } else {
-            mainPage.classList.remove('active');
-            dynamicPage.classList.add('active');
+            mainPage.classList.add('main-hidden');
+            mainPage.classList.remove('main-visible');
+            dynamicPage.classList.add('dynamic-visible');
+            dynamicPage.classList.remove('dynamic-hidden');
         }
 
         // Wyczyść inline transformy natychmiast po przełączeniu
