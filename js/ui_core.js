@@ -611,7 +611,7 @@
                     translateX = Math.max(-screenWidth, translateX); // Ogranicz do maksymalnie szerokości ekranu w lewo
                 }
                 mainPage.style.transform = `translateX(${translateX}px)`;
-                dynamicPage.style.transform = `translateX(${100 + translateX}%)`;
+                dynamicPage.style.transform = `translateX(${screenWidth + translateX}px)`;
             } else {
                 // Na stronie dynamicznej: można swipować tylko w prawo (do strony 1)
                 if (translateX < 0) {
@@ -620,7 +620,7 @@
                     translateX = Math.min(screenWidth, translateX); // Ogranicz do maksymalnie szerokości ekranu w prawo
                 }
                 dynamicPage.style.transform = `translateX(${translateX}px)`;
-                mainPage.style.transform = `translateX(${-100 + translateX}%)`;
+                mainPage.style.transform = `translateX(${-screenWidth + translateX}px)`;
             }
 
             updateDebugInfo();
