@@ -1155,6 +1155,8 @@ function processCompleteMessage(data) {
         case 'telemetry':
             // Update watchdog timestamp on received telemetry
             lastTelemetryAt = Date.now();
+            // Update global telemetryData for 3D visualization and other components
+            window.telemetryData = data;
             // Jeśli dostępny jest kwaternion, policz kąty bez dodatkowego mapowania (Quaternion-First)
             if (typeof data.qw === 'number' && typeof data.qx === 'number' && typeof data.qy === 'number' && typeof data.qz === 'number') {
                 const eul = computeEulerFromQuaternion(data.qw, data.qx, data.qy, data.qz);
@@ -1657,6 +1659,12 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 try {
                     switch (viewId) {
+                        case 'dashboard':
+                            if (typeof window.initJoystick === 'function') {
+                                window.initJoystick();
+                                addLogMessage('[UI] Joystick zainicjalizowany przy przełączaniu zakładki', 'info');
+                            }
+                            break;
                         case 'pid-tuning':
                             if (typeof window.initPidSettings === 'function') {
                                 window.initPidSettings();

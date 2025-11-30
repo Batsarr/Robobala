@@ -88,7 +88,11 @@
                         'YXZ'
                     ));
                     window.robotPivot.quaternion.slerp(qMappedEuler, 0.35);
-                } catch (err) { /* no-op */ }
+                    // Debug log - usuń po sprawdzeniu
+                    console.log('[3D] Robot rotation updated:', { raw: eulRaw, mapped, quaternion: window.robotPivot.quaternion });
+                } catch (err) { console.error('[3D] Error updating rotation:', err); }
+            } else {
+                console.log('[3D] No quaternion data in telemetryData');
             }
             window.robotPivot.position.y = 4.4;
             const ppr = parseFloat(document.getElementById('encoderPprInput')?.value) || 820;
@@ -96,6 +100,8 @@
             const wheelRotationR = (window.currentEncoderRight / ppr) * 2 * Math.PI;
             if (window.leftWheel) window.leftWheel.rotation.z = -wheelRotationL;
             if (window.rightWheel) window.rightWheel.rotation.z = -wheelRotationR;
+            // Debug log for wheels
+            console.log('[3D] Wheel rotations:', { left: wheelRotationL, right: wheelRotationR, encoders: { left: window.currentEncoderLeft, right: window.currentEncoderRight } });
         };
     }
 

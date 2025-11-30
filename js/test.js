@@ -1064,8 +1064,8 @@ function setupCommunicationHandlers() {
         document.querySelectorAll('.dpad-btn').forEach(btn => {
             try { btn.disabled = !value; } catch (e) { }
         });
-    const connDot = document.getElementById('connectionDot');
-    if (connDot) connDot.className = 'status-dot ' + (value ? 'status-ok' : 'status-disconnected');
+        const connDot = document.getElementById('connectionDot');
+        if (connDot) connDot.className = 'status-dot ' + (value ? 'status-ok' : 'status-disconnected');
         const connTextEl = document.getElementById('connectionText');
         if (connTextEl) {
             const dev = appStore.getState('connection.deviceName');
