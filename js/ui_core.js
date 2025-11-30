@@ -114,9 +114,9 @@
     // ==== IMPLEMENTACJA setupControls3D JEŚLI BRAK ====
     if (typeof window.setupControls3D === 'undefined') {
         window.setupControls3D = function () {
-            const resetBtn = document.getElementById('reset3dViewBtn');
-            const animBtn = document.getElementById('toggle3dAnimationBtn');
-            const moveBtn = document.getElementById('toggle3dMovementBtn');
+            const resetBtn = document.getElementById('reset3dViewBtn') || document.getElementById('reset3DViewBtn');
+            const animBtn = document.getElementById('toggle3dAnimationBtn') || document.getElementById('toggle3DAnimationBtn');
+            const moveBtn = document.getElementById('toggle3dMovementBtn') || document.getElementById('toggle3DMovement') || document.getElementById('toggle3dMovement');
             if (resetBtn && !resetBtn.__rbBound) {
                 resetBtn.__rbBound = true;
                 resetBtn.addEventListener('click', () => {
@@ -132,10 +132,30 @@
             }
             if (moveBtn && !moveBtn.__rbBound) {
                 moveBtn.__rbBound = true;
-                moveBtn.addEventListener('click', () => { window.isMovement3DEnabled = !window.isMovement3DEnabled; window.lastEncoderAvg = (window.currentEncoderLeft + window.currentEncoderRight) / 2; });
+                moveBtn.addEventListener('click', () => {
+                    window.isMovement3DEnabled = !window.isMovement3DEnabled;
+                    // Reset baseline to avoid visual jumps when toggling movement
+                    window.lastEncoderAvg = (window.currentEncoderLeft + window.currentEncoderRight) / 2;
+                    try { addLogMessage(`[UI] 3D movement ${window.isMovement3DEnabled ? 'enabled' : 'disabled'}`, 'info'); } catch (e) { }
+                });
             }
         };
     }
+    // Fallback: update connection dot/text if main bundle isn't present and appStore exists
+    try {
+        if (typeof appStore !== 'undefined' && typeof appStore.subscribe === 'function') {
+            appStore.subscribe('connection.isConnected', (value) => {
+                try {
+                    document.body.classList.toggle('ui-locked', !value);
+                    const connDot = document.getElementById('connectionDot');
+                    if (connDot) connDot.className = 'status-dot ' + (value ? 'status-ok' : 'status-disconnected');
+                    const connText = document.getElementById('connectionText');
+                    if (connText) connText.textContent = value ? 'Połączony' : 'Rozłączony';
+                    document.querySelectorAll('.dpad-btn').forEach(btn => { try { btn.disabled = !value; } catch (e) { } });
+                } catch (e) { /* no-op */ }
+            });
+        }
+    } catch (e) { /* ignore if appStore missing */ }
 
     // ==== FALLBACK KOMUNIKACJI sendBleMessage / sendBleCommand / connectBLE JEŚLI BRAK ====
     if (typeof window.sendBleMessage === 'undefined') {

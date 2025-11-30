@@ -1001,6 +1001,11 @@ let cursorA = null, cursorB = null;
 // 3D Visualization variables
 let scene3D, camera3D, renderer3D, controls3D, robotPivot, leftWheel, rightWheel, groundMesh, groundTexture, skyDome;
 let isAnimation3DEnabled = false, isMovement3DEnabled = false, robotPerspectiveZoom = 40;
+// Connection watchdog for stale telemetry / implicit disconnects
+let lastTelemetryAt = 0;
+let connectionWatchdogId = null;
+const CONNECTION_HEARTBEAT_INTERVAL = 2000; // ms between checks
+const CONNECTION_TIMEOUT_MS = 7000; // if no telemetry for this time consider disconnected
 // Sensor mapping preview and wizard globals
 let sensorPreview = { scene: null, camera: null, renderer: null, cube: null, axes: null, animId: null, faceIndicator: null, xLabel: null, yLabel: null, zLabel: null, xArrow: null, yArrow: null, zArrow: null };
 let sensorWizard = { step: 0, rotStartYaw: null, monitorId: null, progress: { upright: false, rotation: false, saved: false } };
@@ -1024,6 +1029,8 @@ function setupCommunicationHandlers() {
     commLayer.onMessage('connected', (data) => {
         try {
             AppState.isConnected = true;
+            // New: mark the telemetry time to avoid watchdog false positives
+            lastTelemetryAt = Date.now();
             if (data && data.deviceName) appStore.setState('connection.deviceName', data.deviceName);
             appStore.setState('connection.isSynced', false);
         } catch (e) { /* ignore */ }
@@ -1035,6 +1042,11 @@ function setupCommunicationHandlers() {
         if (type !== 'disconnected') {
             processCompleteMessage(data);
         }
+    });
+    // Update lastTelemetryAt on telemetry to detect stale links (watchdog)
+    commLayer.onMessage('telemetry', (data) => {
+        try { lastTelemetryAt = Date.now(); } catch (e) { /* no-op */ }
+        // existing IMU tuning handlers also update charts; keep them
     });
 
     // IMU tuning telemetry message handler (dedicated compact telemetry)
@@ -1068,6 +1080,16 @@ function setupCommunicationHandlers() {
             globalActiveAutoTimers.clear();
             document.querySelectorAll('.manual-tune-row').forEach(row => { const ab = row.querySelector('.auto-btn'); if (ab) { ab.disabled = false; ab.textContent = 'Auto'; } });
         } catch (e) { /* no-op */ }
+        // Update top-right connection indicator (dot + text)
+        const connDot = document.getElementById('connectionDot');
+        if (connDot) {
+            connDot.className = 'status-dot ' + (value ? 'status-ok' : 'status-disconnected');
+        }
+        const connTextEl = document.getElementById('connectionText');
+        if (connTextEl) {
+            const dev = appStore.getState('connection.deviceName');
+            connTextEl.textContent = value ? (dev ? `Połączony - ${dev}` : 'Połączony') : 'Rozłączony';
+        }
     });
 
     appStore.subscribe('robot.state', (value) => {
@@ -1082,6 +1104,37 @@ function setupCommunicationHandlers() {
         setTuningUiLock(value, appStore.getState('tuning.activeMethod'));
         if (value && typeof refreshRecentList === 'function') refreshRecentList();
     });
+
+    // Start connection watchdog once
+    if (!connectionWatchdogId) {
+        connectionWatchdogId = setInterval(() => {
+            try {
+                const appConnected = appStore.getState('connection.isConnected');
+                // Low-level connection indicator
+                const lowLevelConnected = (commLayer && typeof commLayer.getConnectionStatus === 'function') ? commLayer.getConnectionStatus() : false;
+                // If app thinks connected but low-level not connected -> call onDisconnected
+                if (appConnected && !lowLevelConnected) {
+                    addLogMessage('[UI] Watchdog: warstwa BLE zgłasza brak połączenia. Aktualizuję UI.', 'warn');
+                    onDisconnected();
+                    return;
+                }
+                // If app thinks connected but telemetry stale -> mark as disconnected
+                if (appConnected && lastTelemetryAt && (Date.now() - lastTelemetryAt) > CONNECTION_TIMEOUT_MS) {
+                    addLogMessage('[UI] Watchdog: brak telemetrii > ' + Math.round(CONNECTION_TIMEOUT_MS / 1000) + 's — uznaję połączenie za zerwane.', 'warn');
+                    onDisconnected();
+                    return;
+                }
+                // If app not connected but comm layer believes it is -> recover
+                if (!appConnected && lowLevelConnected) {
+                    addLogMessage('[UI] Watchdog: warstwa BLE wydaje się połączona, aktualizuję UI.', 'info');
+                    AppState.isConnected = true;
+                    try { if (typeof commLayer.getDeviceName === 'function') appStore.setState('connection.deviceName', commLayer.getDeviceName()); } catch (e) { }
+                }
+            } catch (err) {
+                console.error('[UI] watchdog error', err);
+            }
+        }, CONNECTION_HEARTBEAT_INTERVAL);
+    }
 }
 
 function processCompleteMessage(data) {
@@ -1100,6 +1153,8 @@ function processCompleteMessage(data) {
     // The algorithms will detect the failed test, enter pause state, and restore baseline PID.
     switch (data.type) {
         case 'telemetry':
+            // Update watchdog timestamp on received telemetry
+            lastTelemetryAt = Date.now();
             // Jeśli dostępny jest kwaternion, policz kąty bez dodatkowego mapowania (Quaternion-First)
             if (typeof data.qw === 'number' && typeof data.qx === 'number' && typeof data.qy === 'number' && typeof data.qz === 'number') {
                 const eul = computeEulerFromQuaternion(data.qw, data.qx, data.qy, data.qz);
@@ -1458,7 +1513,10 @@ function onDisconnected() {
     // Update state
     AppState.isConnected = false;
     AppState.isSynced = false;
+    appStore.setState('connection.deviceName', null);
     appStore.setState('ui.isLocked', true);
+    // Reset telemetry watchdog timestamp
+    lastTelemetryAt = 0;
 
     document.body.classList.add('ui-locked');
 
@@ -2271,7 +2329,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Wire up placeholder buttons now; the real hooks are set up in setupControls3D()
     if (reset3DView) reset3DView.addEventListener('click', () => { addLogMessage('Widok 3D zresetowany', 'info'); });
     if (toggle3DAnimation) toggle3DAnimation.addEventListener('click', () => { isAnimation3DEnabled = !isAnimation3DEnabled; addLogMessage('Animacja 3D przełączona', 'info'); });
-    if (toggle3DMovement) toggle3DMovement.addEventListener('click', () => { isMovement3DEnabled = !isMovement3DEnabled; addLogMessage('Ruch 3D przełączony', 'info'); });
+    if (toggle3DMovement) toggle3DMovement.addEventListener('click', () => { isMovement3DEnabled = !isMovement3DEnabled; lastEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2; addLogMessage('Ruch 3D przełączony', 'info'); });
 
     // Implement THREE.js 3D scene initialization and robot model
     function init3DVisualization() {
