@@ -323,6 +323,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupManualTuneButtons();
     // Initialize signal analyzer chart and controls (idempotent guards inside)
     try { initSignalAnalyzerChart(); setupSignalChartControls(); setupSignalAnalyzerControls(); } catch (e) { /* no-op if Chart.js not present */ }
+    // Initialize 3D visualization if container exists
+    try { if (document.getElementById('robot3d-container')) { init3DVisualization(); setupControls3D?.(); animate3D(); } } catch (e) { /* no-op */ }
     // Initialize IMU tuning chart controls (toggle, chart) for settings
     try { setupImuTuningControls(); } catch (e) { /* no-op */ }
     document.getElementById('sensorMappingBtnSettings')?.addEventListener('click', () => { openSensorMappingModal(); });
@@ -1856,6 +1858,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ========================================================================
     document.querySelectorAll('.accordion-btn').forEach(btn => {
         btn.addEventListener('click', () => {
+            console.log('Accordion clicked:', btn.textContent);
             const content = btn.nextElementSibling;
             const isActive = btn.classList.contains('active');
 
