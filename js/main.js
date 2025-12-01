@@ -140,6 +140,15 @@ function showEepromModal(title, message) {
 // Create singleton instance
 const appStore = new AppStore();
 
+// Global error handler: in case of runtime errors prevent splash lock
+window.addEventListener('error', (event) => {
+    try {
+        const splash = document.getElementById('splashScreen');
+        if (splash) splash.style.display = 'none';
+    } catch (_) { }
+    try { console.error('[GlobalError]', event.error || event.message || event); } catch (_) { }
+});
+
 // ========================================================================
 // COMMUNICATION LAYER - Abstract Communication Interface
 // ========================================================================
@@ -1192,16 +1201,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // ========================================================================
     const splashScreen = document.getElementById('splashScreen');
 
-    // Hide splash after 2 seconds with smooth animation
+    // Hide splash after 2 seconds with smooth animation (defensive)
     setTimeout(() => {
-        splashScreen.classList.add('exiting');
-        setTimeout(() => {
-            splashScreen.classList.remove('active', 'exiting');
-        }, 500);
+        try {
+            if (!splashScreen) return;
+            splashScreen.classList.add('exiting');
+            setTimeout(() => {
+                try { splashScreen.classList.remove('active', 'exiting'); } catch (e) { /* ignore */ }
+            }, 500);
+        } catch (_) { /* ignore */ }
     }, 2000);
 
-    // Initialize communication handlers
-    setupCommunicationHandlers();
+    // Absolute fallback: force-hide splash after 5s even if something failed earlier
+    setTimeout(() => { try { if (splashScreen) splashScreen.style.display = 'none'; } catch (_) { } }, 5000);
+
+    // Initialize communication handlers (guarded)
+    try { setupCommunicationHandlers(); } catch (e) { console.error('setupCommunicationHandlers failed:', e); }
 
     // ========================================================================
     // SIDEBAR NAVIGATION
@@ -1350,6 +1365,50 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                             if (typeof window.initImuSettings === 'function') {
                                 window.initImuSettings();
+
+                                // ========================================================================
+                                // MODALS: Mapowanie Czujnika (IMU) i Modelu 3D – podpięcie przycisków
+                                // ========================================================================
+                                // Sensor mapping (IMU) modal open button (Settings)
+                                document.getElementById('sensorMappingBtnSettings')?.addEventListener('click', () => {
+                                    try { window.openSensorMappingModal?.(); } catch (e) { console.warn('openSensorMappingModal error:', e); }
+                                });
+                                // Model mapping (3D) modal open button (3D view)
+                                document.getElementById('modelMappingBtn3D')?.addEventListener('click', () => {
+                                    try {
+                                        window.openModelMappingModal?.();
+                                        window.sendBleMessage?.({ type: 'get_model_mapping' });
+                                    } catch (e) { console.warn('openModelMappingModal error:', e); }
+                                });
+
+                                // Model mapping modal: actions
+                                document.getElementById('modelMappingLoadBtn')?.addEventListener('click', () => {
+                                    try { window.sendBleMessage?.({ type: 'get_model_mapping' }); } catch (e) { console.warn(e); }
+                                });
+                                document.getElementById('modelMappingSaveBtn')?.addEventListener('click', () => {
+                                    try {
+                                        if (typeof window.gatherModelMappingFromUI === 'function') window.gatherModelMappingFromUI();
+                                        window.sendBleMessage?.({ type: 'set_model_mapping', mapping: window.modelMapping || {} });
+                                        addLogMessage('[UI] Wysłano mapowanie modelu 3D do robota', 'info');
+                                    } catch (e) { console.warn(e); }
+                                });
+                                document.getElementById('modelMappingResetBtn')?.addEventListener('click', () => {
+                                    try { window.resetModelMapping?.(); addLogMessage('[UI] Przywrócono domyślne mapowanie modelu (identity).', 'info'); } catch (e) { console.warn(e); }
+                                });
+                                document.getElementById('modelMappingCloseBtn')?.addEventListener('click', () => {
+                                    try { window.closeModelMappingModal?.(); } catch (e) { console.warn(e); }
+                                });
+
+                                // IMU mapping modal: load/save
+                                document.getElementById('imuMappingLoadBtn')?.addEventListener('click', () => {
+                                    try { window.sendBleMessage?.({ type: 'get_imu_mapping' }); } catch (e) { console.warn(e); }
+                                });
+                                document.getElementById('imuMappingSaveBtn')?.addEventListener('click', () => {
+                                    try {
+                                        const mapping = (typeof window.gatherIMUMappingFromUI === 'function') ? window.gatherIMUMappingFromUI() : null;
+                                        if (mapping) { window.sendBleMessage?.({ type: 'set_imu_mapping', mapping }); addLogMessage('[UI] Zapisano mapowanie IMU do robota', 'info'); }
+                                    } catch (e) { console.warn(e); }
+                                });
                                 addLogMessage('[UI] Ustawienia IMU zainicjalizowane przy przełączaniu zakładki', 'info');
                             }
                             break;
