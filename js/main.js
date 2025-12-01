@@ -803,6 +803,10 @@ let cursorA = null, cursorB = null;
 let scene3D, camera3D, renderer3D, controls3D, robotPivot, leftWheel, rightWheel, groundMesh, groundTexture, skyDome;
 let isAnimation3DEnabled = false, isMovement3DEnabled = false, robotPerspectiveZoom = 40;
 
+// Fallback dimensions for 3D container when it has 0 size (e.g., hidden views)
+const DEFAULT_3D_WIDTH = 400;
+const DEFAULT_3D_HEIGHT = 300;
+
 // Pre-export 3D functions as no-ops (will be replaced in DOMContentLoaded with real implementations)
 // These prevent errors if called before DOM is ready
 window.init3DVisualization = function () { /* placeholder - real function set in DOMContentLoaded */ };
@@ -2250,8 +2254,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!robot3DContainer) return;
 
         // Get container dimensions, with fallback for hidden containers
-        const containerWidth = robot3DContainer.clientWidth || 400;
-        const containerHeight = robot3DContainer.clientHeight || 300;
+        const containerWidth = robot3DContainer.clientWidth || DEFAULT_3D_WIDTH;
+        const containerHeight = robot3DContainer.clientHeight || DEFAULT_3D_HEIGHT;
 
         // If already initialized, resize renderer and return
         if (renderer3D && renderer3D.domElement && robot3DContainer.contains(renderer3D.domElement)) {
@@ -4364,10 +4368,9 @@ function updateCursorInfo() {
 }
 function getChartIndexFromX(xPixel) {
     if (!signalAnalyzerChart) return 0;
-    const chart = signalAnalyzerChart;
-    const xScale = chart.scales['x'];
+    const xScale = signalAnalyzerChart.scales['x'];
     if (!xScale) return 0;
-    const dataLength = chart.data.labels.length;
+    const dataLength = signalAnalyzerChart.data.labels.length;
 
     // Prevent division by zero
     const xStart = xScale.left;
