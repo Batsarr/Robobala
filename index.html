@@ -125,6 +125,23 @@
                 <div id="joystickContainer" class="joystick-container">
                     <canvas id="joystickCanvas"></canvas>
                 </div>
+                <!-- Inline trim controls -->
+                <div class="trim-controls-inline" style="margin-top:15px;">
+                    <div class="trim-row">
+                        <button id="inlinePitchMinus01" class="trim-btn">-0.1</button>
+                        <button id="inlinePitchMinus001" class="trim-btn">-0.01</button>
+                        <span style="font-size:0.9em;">Pitch: <strong id="inlineTrimPitchDisplay">0.00</strong>°</span>
+                        <button id="inlinePitchPlus001" class="trim-btn">+0.01</button>
+                        <button id="inlinePitchPlus01" class="trim-btn">+0.1</button>
+                    </div>
+                    <div class="trim-row" style="margin-top:8px;">
+                        <button id="inlineRollMinus01" class="trim-btn">-0.1</button>
+                        <button id="inlineRollMinus001" class="trim-btn">-0.01</button>
+                        <span style="font-size:0.9em;">Roll: <strong id="inlineTrimRollDisplay">0.00</strong>°</span>
+                        <button id="inlineRollPlus001" class="trim-btn">+0.01</button>
+                        <button id="inlineRollPlus01" class="trim-btn">+0.1</button>
+                    </div>
+                </div>
             </div>
 
             <!-- Main Toggles -->

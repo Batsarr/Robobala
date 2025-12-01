@@ -2348,6 +2348,43 @@ input.config-value, input[type="number"].config-value {
 }
 
 /* ============================================================================
+   INLINE TRIM CONTROLS (for main dashboard)
+   ============================================================================ */
+.trim-controls-inline {
+    text-align: center;
+}
+
+.trim-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.trim-btn {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    min-width: 40px;
+}
+
+.trim-btn:hover {
+    background-color: var(--accent-primary);
+    color: var(--bg-primary);
+    border-color: var(--accent-primary);
+}
+
+.trim-btn:active {
+    transform: scale(0.95);
+}
+
+/* ============================================================================
    D-PAD STYLES (like old version)
    ============================================================================ */
 .dpad-container {
@@ -2455,23 +2492,26 @@ input.config-value, input[type="number"].config-value {
     -webkit-overflow-scrolling: touch;
     padding-top: 60px; /* Dla fixed header */
     box-sizing: border-box;
-    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
 }
 
 .page.main-visible {
-    transform: translateX(0);
+    transform: translateX(0) translateZ(0);
 }
 
 .page.dynamic-visible {
-    transform: translateX(0);
+    transform: translateX(0) translateZ(0);
 }
 
 .page.main-hidden {
-    transform: translateX(-100%);
+    transform: translateX(-100%) translateZ(0);
 }
 
 .page.dynamic-hidden {
-    transform: translateX(100%);
+    transform: translateX(100%) translateZ(0);
 }
 
 #main-page {

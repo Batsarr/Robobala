@@ -328,6 +328,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize IMU tuning chart controls (toggle, chart) for settings
     try { setupImuTuningControls(); } catch (e) { /* no-op */ }
     document.getElementById('sensorMappingBtnSettings')?.addEventListener('click', () => { openSensorMappingModal(); });
+    // Sensor wizard navigation buttons
+    document.getElementById('sensorWizardCancelBtn')?.addEventListener('click', () => { 
+        sendBleMessage({ type: 'sensor_map_cancel' }); 
+        closeSensorMappingModal(); 
+    });
+    document.getElementById('sensorWizardBackBtn')?.addEventListener('click', () => {
+        if (sensorWizard.step === 0) return;
+        if (sensorWizard.step === 1) { if (sensorWizard.monitorId) { clearInterval(sensorWizard.monitorId); sensorWizard.monitorId = null; } }
+        sensorWizard.step -= 1; updateSensorWizardUI();
+    });
+    document.getElementById('sensorWizardNextBtn')?.addEventListener('click', async () => {
+        if (sensorWizard.step === 0) {
+            // Start and register upright position
+            sendBleMessage({ type: 'sensor_map_start' });
+            await window.RB?.helpers?.delay?.(80) || new Promise(r => setTimeout(r, 80));
+            sendBleMessage({ type: 'sensor_map_capture_upright' });
+            sensorWizard.progress.upright = true; setWizardProgress();
+            // Start rotation step and monitoring
+            sendBleMessage({ type: 'sensor_map_capture_rot_start' });
+            sensorWizard.step = 1; updateSensorWizardUI(); startRotationMonitor();
+        } else if (sensorWizard.step === 2) {
+            // Save
+            sendBleMessage({ type: 'sensor_map_commit' });
+            sensorWizard.progress.saved = true; setWizardProgress();
+            closeSensorMappingModal();
+        }
+    });
     // IMU calibration buttons
     // document.getElementById('calibrateMpuBtnSettings')?.addEventListener('click', showCalibrationModal);
     document.getElementById('calibrateZeroPointBtnSettings')?.addEventListener('click', () => { if (confirm("Upewnij sie, ze robot stoi na idealnie plaskiej powierzchni. Robot bedzie balansowal przez 10 sekund w celu znalezienia dokladnego punktu rownowagi. Kontynuowac?")) { sendBleMessage({ type: 'calibrate_zero_point' }); } });
@@ -466,6 +493,42 @@ document.addEventListener('DOMContentLoaded', () => {
         commLayer.send({ type: 'adjust_roll', value: delta });
         addLogMessage(`[UI] setRollZero() -> adjust_roll ${delta}`, 'info');
     }
+
+    // Inline trim buttons for dashboard (quick adjustments)
+    // Pitch adjustments
+    document.getElementById('inlinePitchMinus01')?.addEventListener('click', () => {
+        if (!appStore.getState('connection.isConnected')) return;
+        commLayer.send({ type: 'adjust_zero', value: -0.1 });
+    });
+    document.getElementById('inlinePitchMinus001')?.addEventListener('click', () => {
+        if (!appStore.getState('connection.isConnected')) return;
+        commLayer.send({ type: 'adjust_zero', value: -0.01 });
+    });
+    document.getElementById('inlinePitchPlus001')?.addEventListener('click', () => {
+        if (!appStore.getState('connection.isConnected')) return;
+        commLayer.send({ type: 'adjust_zero', value: 0.01 });
+    });
+    document.getElementById('inlinePitchPlus01')?.addEventListener('click', () => {
+        if (!appStore.getState('connection.isConnected')) return;
+        commLayer.send({ type: 'adjust_zero', value: 0.1 });
+    });
+    // Roll adjustments
+    document.getElementById('inlineRollMinus01')?.addEventListener('click', () => {
+        if (!appStore.getState('connection.isConnected')) return;
+        commLayer.send({ type: 'adjust_roll', value: -0.1 });
+    });
+    document.getElementById('inlineRollMinus001')?.addEventListener('click', () => {
+        if (!appStore.getState('connection.isConnected')) return;
+        commLayer.send({ type: 'adjust_roll', value: -0.01 });
+    });
+    document.getElementById('inlineRollPlus001')?.addEventListener('click', () => {
+        if (!appStore.getState('connection.isConnected')) return;
+        commLayer.send({ type: 'adjust_roll', value: 0.01 });
+    });
+    document.getElementById('inlineRollPlus01')?.addEventListener('click', () => {
+        if (!appStore.getState('connection.isConnected')) return;
+        commLayer.send({ type: 'adjust_roll', value: 0.1 });
+    });
 
     // Sidebar EEPROM save/load
     document.getElementById('loadEepromBtn')?.addEventListener('click', (e) => {
@@ -860,7 +923,6 @@ class MockCommunication extends CommunicationLayer {
 
         // Simulate sending and echo back (for testing)
         await this.delay(this.mockDelay);
-        console.log('Mock send:', message);
 
         // Simulate some responses
         if (message.type === 'request_full_config') {
@@ -1458,6 +1520,15 @@ function updateTelemetryUI(data) {
         const loopEl = document.getElementById('loopTimeValue');
         if (loopEl) loopEl.textContent = loopTime + ' μs';
     }
+    // Update inline trim displays on dashboard
+    if (data.trim_angle !== undefined) {
+        const inlinePitchDisplay = document.getElementById('inlineTrimPitchDisplay');
+        if (inlinePitchDisplay) inlinePitchDisplay.textContent = Number(data.trim_angle).toFixed(2);
+    }
+    if (data.roll_trim !== undefined) {
+        const inlineRollDisplay = document.getElementById('inlineTrimRollDisplay');
+        if (inlineRollDisplay) inlineRollDisplay.textContent = Number(data.roll_trim).toFixed(2);
+    }
 }
 
 function updateChart(data) {
@@ -1858,7 +1929,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // ========================================================================
     document.querySelectorAll('.accordion-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            console.log('Accordion clicked:', btn.textContent);
             const content = btn.nextElementSibling;
             const isActive = btn.classList.contains('active');
 
@@ -2761,6 +2831,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.applyRotationToIMUMapping = applyRotationToIMUMapping;
     window.openSensorMappingModal = openSensorMappingModal;
     window.closeSensorMappingModal = closeSensorMappingModal;
+    window.setWizardProgress = setWizardProgress;
+    window.updateSensorWizardUI = updateSensorWizardUI;
+    window.startRotationMonitor = startRotationMonitor;
 
 
     // ========================================================================
@@ -4229,11 +4302,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Store in global scope for tuning algorithms
             window.baselinePID = baselinePID;
-
-            console.log(`[Tuning] Captured baseline PID: Kp=${baselinePID.kp.toFixed(3)}, Ki=${baselinePID.ki.toFixed(3)}, Kd=${baselinePID.kd.toFixed(3)}`);
             addLogMessage(`Przechwycono parametry bazowe PID dla pętli ${loop}`, 'info');
         } else {
-            console.warn('[Tuning] Could not capture baseline PID - input elements not found');
             addLogMessage('Nie można przechwycić parametrów bazowych PID', 'warning');
         }
     }

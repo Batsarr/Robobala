@@ -88,11 +88,7 @@
                         'YXZ'
                     ));
                     window.robotPivot.quaternion.slerp(qMappedEuler, 0.35);
-                    // Debug log - usuń po sprawdzeniu
-                    console.log('[3D] Robot rotation updated:', { raw: eulRaw, mapped, quaternion: window.robotPivot.quaternion });
-                } catch (err) { console.error('[3D] Error updating rotation:', err); }
-            } else {
-                console.log('[3D] No quaternion data in telemetryData');
+                } catch (err) { /* no-op */ }
             }
             window.robotPivot.position.y = 4.4;
             const ppr = parseFloat(document.getElementById('encoderPprInput')?.value) || 820;
@@ -100,8 +96,6 @@
             const wheelRotationR = (window.currentEncoderRight / ppr) * 2 * Math.PI;
             if (window.leftWheel) window.leftWheel.rotation.z = -wheelRotationL;
             if (window.rightWheel) window.rightWheel.rotation.z = -wheelRotationR;
-            // Debug log for wheels
-            console.log('[3D] Wheel rotations:', { left: wheelRotationL, right: wheelRotationR, encoders: { left: window.currentEncoderLeft, right: window.currentEncoderRight } });
         };
     }
 
@@ -467,9 +461,7 @@
         // Diagnostyka obecności przycisku i modala BLE
         const dbgConnectBtn = document.getElementById('connectBleBtn');
         const dbgExistingModal = document.getElementById('ble-connect-modal');
-        console.log('[UI_CORE] BLE connect button found:', !!dbgConnectBtn, 'modal present:', !!dbgExistingModal);
         if (!dbgExistingModal) {
-            console.warn('[UI_CORE] #ble-connect-modal nie istnieje w HTML – tworzę fallback dynamicznie.');
             const m = document.createElement('div');
             m.id = 'ble-connect-modal';
             m.className = 'modal-backdrop';
@@ -503,7 +495,6 @@
                 bleModal.style.display = 'flex';
                 const line = document.getElementById('ble-status-line');
                 if (line) line.textContent = 'Status: Oczekuje na akcję...';
-                console.log('[UI_CORE] Otwarto modal BLE.');
             });
             const scanBtn = document.getElementById('ble-scan-btn');
             const cancelBtn = document.getElementById('ble-cancel-btn');
@@ -518,7 +509,6 @@
                     }
                     if (line) line.textContent = ok ? 'Status: Połączono.' : 'Status: Błąd połączenia.';
                     if (ok) setTimeout(() => { bleModal.style.display = 'none'; }, 800);
-                    console.log('[UI_CORE] Wynik próby połączenia BLE:', ok);
                 });
             }
             if (cancelBtn && !cancelBtn.__rbBleBound) {
@@ -566,7 +556,6 @@ document.addEventListener('DOMContentLoaded', () => {
         dynamicPage.style.transform = '';
 
         currentDeltaX = 0;
-        console.log('[VIEW_PAGER] Przełączono na stronę:', page);
     };
 
     // Funkcja do inicjalizacji akordeonów w danym kontenerze
@@ -598,16 +587,11 @@ document.addEventListener('DOMContentLoaded', () => {
     window.initializeModals = function (container = document) {
         // Gamepad mapping modal
         const openGamepadBtn = container.querySelector('#open-gamepad-modal-btn');
-        console.log('[MODALS] Szukam przycisku gamepad w kontenerze:', container, 'znaleziono:', openGamepadBtn);
         if (openGamepadBtn) {
             openGamepadBtn.addEventListener('click', () => {
-                console.log('[MODALS] Kliknięto przycisk gamepad modal');
                 document.getElementById('gamepad-mapping-modal').style.display = 'flex';
                 if (typeof renderMappingModal === 'function') {
                     renderMappingModal();
-                    console.log('[MODALS] Wywołano renderMappingModal');
-                } else {
-                    console.log('[MODALS] renderMappingModal nie jest dostępna');
                 }
             });
         }
@@ -638,7 +622,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button onclick="switchToPage(1)" class="btn btn-secondary">Wróć do pulpitu</button>
                 </div>
             `;
-            console.log('[VIEW_PAGER] Nieznana zakładka:', tabId);
             return;
         }
 
@@ -651,7 +634,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button onclick="switchToPage(1)" class="btn btn-secondary">Wróć do pulpitu</button>
                 </div>
             `;
-            console.log('[VIEW_PAGER] Sekcja nie znaleziona:', sectionId);
             return;
         }
 
@@ -670,15 +652,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         window.init3DVisualization();
                         window.setupControls3D?.();
                         window.animate3D();
-                        console.log('[VIEW_PAGER] Wizualizacja 3D zainicjalizowana dla zakładki 3D');
                     }
-                } catch (e) {
-                    console.error('[VIEW_PAGER] Błąd inicjalizacji 3D:', e);
-                }
+                } catch (e) { /* no-op */ }
             }, 100);
         }
-
-        console.log('[VIEW_PAGER] Załadowano zakładkę:', tabId, 'z sekcji:', sectionId);
     };
 
     // Obsługa swipe gestów z płynną animacją
@@ -772,8 +749,6 @@ document.addEventListener('DOMContentLoaded', () => {
         touchStartY = 0;
         isSwiping = false;
     });
-
-    console.log('[UI_CORE] Pager zainicjalizowany');
 
     // Inicjalizuj modals na głównym dokumencie
     initializeModals(document);
