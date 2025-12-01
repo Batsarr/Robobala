@@ -543,6 +543,126 @@ const RX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a9";
 const TX_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 const commLayer = new BLECommunication(SERVICE_UUID, RX_UUID, TX_UUID);
 
+// ========================================================================
+// LOG SYSTEM - Restored from archive version
+// ========================================================================
+const allLogsBuffer = [];
+const ALL_LOGS_MAX = 2000;
+
+function pushLog(message, level = 'info') {
+    const ts = new Date().toLocaleTimeString();
+    allLogsBuffer.push({ ts, level, message });
+    if (allLogsBuffer.length > ALL_LOGS_MAX) allLogsBuffer.shift();
+    const logCard = document.getElementById('log-card');
+    const autoEl = document.getElementById('logsAutoscroll');
+    if (logCard && logCard.classList.contains('open')) {
+        const shouldScroll = (autoEl && autoEl.checked) === true;
+        renderAllLogs(shouldScroll);
+    }
+}
+
+function renderAllLogs(keepScrollBottom = false) {
+    const box = document.getElementById('log-history');
+    if (!box) return;
+    const wasBottom = (box.scrollTop + box.clientHeight + 8) >= box.scrollHeight;
+    box.innerHTML = '';
+    for (const row of allLogsBuffer) {
+        const div = document.createElement('div');
+        let color = '#ccc';
+        if (row.level === 'error') color = '#ff6347';
+        else if (row.level === 'warn') color = '#f7b731';
+        else if (row.level === 'success') color = '#a2f279';
+        div.style.color = color;
+        div.textContent = `[${row.ts}] ${row.message}`;
+        box.appendChild(div);
+    }
+    if (keepScrollBottom || wasBottom) {
+        box.scrollTop = box.scrollHeight;
+    }
+}
+
+function clearLogs() {
+    if (typeof allLogsBuffer !== 'undefined') {
+        allLogsBuffer.length = 0;
+    }
+    const box = document.getElementById('log-history');
+    if (box) box.innerHTML = '';
+}
+
+// Expose globally
+window.pushLog = pushLog;
+window.renderAllLogs = renderAllLogs;
+window.clearLogs = clearLogs;
+
+// ========================================================================
+// PID PRESETS - Restored from archive version
+// ========================================================================
+const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v4_';
+const builtInPresetsData = {
+    '1': {
+        name: "1. PID Zbalansowany (Startowy)",
+        params: {
+            balanceKpInput: 95.0,
+            balanceKiInput: 0.0,
+            balanceKdInput: 3.23
+        }
+    },
+    '2': {
+        name: "2. PID Mieciutki (Plynny)",
+        params: {
+            balanceKpInput: 80.0,
+            balanceKiInput: 0.0,
+            balanceKdInput: 2.8
+        }
+    },
+    '3': {
+        name: "3. PID Agresywny (Sztywny)",
+        params: {
+            balanceKpInput: 110.0,
+            balanceKiInput: 0.0,
+            balanceKdInput: 4.0
+        }
+    }
+};
+
+// Expose globally for ui_components.js
+window.CUSTOM_PRESET_PREFIX = CUSTOM_PRESET_PREFIX;
+window.builtInPresetsData = builtInPresetsData;
+
+// ========================================================================
+// MOUNT CALIBRATION MODAL - Restored from archive version
+// ========================================================================
+function openMountCalibModal() {
+    const modal = document.getElementById('mount-calib-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        addLogMessage('[UI] Otwarto modal kalibracji montażu', 'info');
+    }
+}
+
+function closeMountCalibModal() {
+    const modal = document.getElementById('mount-calib-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        addLogMessage('[UI] Zamknięto modal kalibracji montażu', 'info');
+    }
+}
+
+// Expose globally
+window.openMountCalibModal = openMountCalibModal;
+window.closeMountCalibModal = closeMountCalibModal;
+
+// ========================================================================
+// TRACKING VARIABLES - Restored from archive version
+// ========================================================================
+let originalFirmwareTrimPitch = null; // tylko do celów informacyjnych/logów
+let originalFirmwareTrimRoll = null;
+let isCalibrationModalShown = false;
+let pitchHistory = [], speedHistory = [];
+const HISTORY_LENGTH = 600;
+let lastTelemetryUpdateTime = 0;
+const TELEMETRY_UPDATE_INTERVAL = 1000;
+
 /**
  * Backwards compatible send wrapper used across the UI
  * - Prefer appStore state but fall back to commLayer physical status
@@ -1169,25 +1289,29 @@ function applyModelMappingToEuler(e) {
 }
 
 function addLogMessage(message, level = 'info') {
+    // First, push to the log buffer (restored from archive)
+    pushLog(message, level);
+
+    // Then update the new UI elements (if they exist)
     const logMessages = document.getElementById('logMessages');
     const logBadge = document.getElementById('logBadge');
     const logAutoscroll = document.getElementById('logAutoscroll');
 
-    if (!logMessages || !logBadge) return;
+    if (logMessages && logBadge) {
+        const logEntry = document.createElement('div');
+        logEntry.className = `log-entry ${level}`;
 
-    const logEntry = document.createElement('div');
-    logEntry.className = `log-entry ${level}`;
+        const time = new Date().toLocaleTimeString('pl-PL');
+        logEntry.innerHTML = `<span class="log-time">${time}</span>${message}`;
 
-    const time = new Date().toLocaleTimeString('pl-PL');
-    logEntry.innerHTML = `<span class="log-time">${time}</span>${message}`;
+        logMessages.appendChild(logEntry);
+        const currentCount = parseInt(logBadge.textContent) || 0;
+        logBadge.textContent = currentCount + 1;
 
-    logMessages.appendChild(logEntry);
-    const currentCount = parseInt(logBadge.textContent) || 0;
-    logBadge.textContent = currentCount + 1;
-
-    // Auto-scroll if enabled
-    if (logAutoscroll && logAutoscroll.checked) {
-        logMessages.scrollTop = logMessages.scrollHeight;
+        // Auto-scroll if enabled
+        if (logAutoscroll && logAutoscroll.checked) {
+            logMessages.scrollTop = logMessages.scrollHeight;
+        }
     }
 }
 
