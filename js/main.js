@@ -2238,16 +2238,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Implement THREE.js 3D scene initialization and robot model
     function init3DVisualization() {
-        if (!robot3DContainer) return;
+        console.log('[3D-INIT] Called, robot3DContainer:', robot3DContainer);
+        if (!robot3DContainer) {
+            console.error('[3D-INIT] robot3DContainer is null!');
+            return;
+        }
+        console.log('[3D-INIT] Container size:', robot3DContainer.clientWidth, 'x', robot3DContainer.clientHeight);
 
         // If already initialized, resize renderer and return
         if (renderer3D && renderer3D.domElement && robot3DContainer.contains(renderer3D.domElement)) {
+            console.log('[3D-INIT] Already initialized, resizing');
             renderer3D.setSize(robot3DContainer.clientWidth, robot3DContainer.clientHeight);
             camera3D.aspect = robot3DContainer.clientWidth / robot3DContainer.clientHeight;
             camera3D.updateProjectionMatrix();
             return;
         }
 
+        console.log('[3D-INIT] Creating new scene');
         scene3D = new THREE.Scene();
         camera3D = new THREE.PerspectiveCamera(50, robot3DContainer.clientWidth / robot3DContainer.clientHeight, 0.1, 2000);
         camera3D.position.set(28, 22, 48);
@@ -2256,6 +2263,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderer3D.setSize(robot3DContainer.clientWidth, robot3DContainer.clientHeight);
         robot3DContainer.innerHTML = '';
         robot3DContainer.appendChild(renderer3D.domElement);
+        console.log('[3D-INIT] Renderer appended to DOM');
         controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
         controls3D.target.set(0, 8, 0);
         controls3D.maxPolarAngle = Math.PI / 2;
@@ -2449,6 +2457,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (controls3D && renderer3D && scene3D && camera3D) {
             controls3D.update();
             renderer3D.render(scene3D, camera3D);
+        } else {
+            // Log once what's missing
+            if (!window._3dDebugLogged) {
+                console.error('[3D-ANIMATE] Missing components:', {
+                    controls3D: !!controls3D,
+                    renderer3D: !!renderer3D,
+                    scene3D: !!scene3D,
+                    camera3D: !!camera3D
+                });
+                window._3dDebugLogged = true;
+            }
         }
     }
 
@@ -4108,14 +4127,24 @@ document.addEventListener('DOMContentLoaded', () => {
 // ========================================================================
 
 function initSignalAnalyzerChart() {
+    console.log('[CHART-INIT] Called');
     const canvasEl = document.getElementById('signalAnalyzerChart');
-    if (!canvasEl) { console.warn('[UI] signalAnalyzerChart canvas not found - skipping init.'); return; }
-    if (typeof Chart === 'undefined') { console.warn('[UI] Chart.js library is not loaded - telemetry chart disabled.'); return; }
+    if (!canvasEl) {
+        console.error('[CHART-INIT] signalAnalyzerChart canvas not found!');
+        return;
+    }
+    console.log('[CHART-INIT] Canvas found:', canvasEl);
+    if (typeof Chart === 'undefined') {
+        console.error('[CHART-INIT] Chart.js library not loaded!');
+        return;
+    }
     // If already initialized, just resize and skip re-creation (prevent duplicates)
     if (signalAnalyzerChart) {
+        console.log('[CHART-INIT] Already initialized, resizing');
         try { signalAnalyzerChart.resize(); } catch (e) { /* ignore */ }
         return;
     }
+    console.log('[CHART-INIT] Creating new chart');
     const ctx = canvasEl.getContext('2d');
     signalAnalyzerChart = new Chart(ctx, {
         type: 'line', data: { labels: Array(200).fill(''), datasets: [] },
