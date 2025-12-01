@@ -116,27 +116,26 @@ function setRollZero() {
     addLogMessage(`[UI] setRollZero() -> adjust_roll ${delta}`, 'info');
 }
 
-// Sidebar EEPROM save/load
-document.getElementById('loadEepromBtn')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    if (!appStore.getState('connection.isConnected')) {
-        showEepromModal('Błąd', 'Najpierw połącz się z robotem');
-        return;
+// Sidebar EEPROM save/load (restored from archive version)
+document.getElementById('saveEepromBtn')?.addEventListener('click', () => {
+    if (AppState.isConnected && confirm("Czy na pewno chcesz trwale zapisać bieżącą konfigurację z panelu do pamięci EEPROM robota?")) {
+        addLogMessage('[UI] Wysłano polecenie zapisu konfiguracji do EEPROM...', 'info');
+        sendBleMessage({ type: 'save_tunings' });
+    } else if (!AppState.isConnected) {
+        addLogMessage('[UI] Połącz z robotem przed zapisem konfiguracji.', 'warn');
     }
-    commLayer.send({ type: 'request_full_config' });
-    showEepromModal('Sukces', 'Żądanie odczytu EEPROM zostało wysłane');
-});
-document.getElementById('saveEepromBtn')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    if (!appStore.getState('connection.isConnected')) {
-        showEepromModal('Błąd', 'Najpierw połącz się z robotem');
-        return;
-    }
-    commLayer.send({ type: 'save_tunings' });
-    showEepromModal('Sukces', 'Żądanie zapisu do EEPROM zostało wysłane');
 });
 
-// Funkcja do pokazywania modalu EEPROM
+document.getElementById('loadEepromBtn')?.addEventListener('click', () => {
+    if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuować?")) {
+        AppState.isSynced = false;
+        AppState.tempParams = {};
+        AppState.tempStates = {};
+        sendBleMessage({ type: 'request_full_config' });
+    }
+});
+
+// Legacy function kept for compatibility (can be removed if not used elsewhere)
 function showEepromModal(title, message) {
     const modal = document.getElementById('eeprom-modal');
     const titleEl = document.getElementById('eeprom-modal-title');
@@ -152,8 +151,8 @@ function showEepromModal(title, message) {
     }
 }
 
-// Create singleton instance
-const appStore = new AppStore();
+// Note: appStore is already created in state_manager.js
+// We just use it here (it's available globally)
 
 // Global error handler: in case of runtime errors prevent splash lock
 window.addEventListener('error', (event) => {
@@ -2302,6 +2301,31 @@ document.addEventListener('DOMContentLoaded', () => {
     window.init3DVisualization = init3DVisualization;
     window.setupControls3D = setupControls3D;
     window.animate3D = animate3D;
+
+    // ========================================================================
+    // INITIALIZE 3D VISUALIZATION AND START ANIMATION
+    // ========================================================================
+    try {
+        init3DVisualization();
+        animate3D();
+        addLogMessage('[UI] Wizualizacja 3D zainicjalizowana', 'info');
+    } catch (e) {
+        console.error('Failed to initialize 3D visualization:', e);
+        addLogMessage('[ERROR] Nie udało się zainicjalizować wizualizacji 3D', 'error');
+    }
+
+    // ========================================================================
+    // INITIALIZE GAMEPAD MAPPING MODAL
+    // ========================================================================
+    try {
+        setupGamepadMappingModal();
+        loadGamepadMappings();
+        renderMappingModal();
+        addLogMessage('[UI] Modal mapowania gamepada zainicjalizowany', 'info');
+    } catch (e) {
+        console.error('Failed to setup gamepad mapping modal:', e);
+        addLogMessage('[ERROR] Nie udało się zainicjalizować modalu gamepada', 'error');
+    }
 
     // ========================================================================
     // SENSOR MAPPING PREVIEW & WIZARD (copied from dev implementation)
