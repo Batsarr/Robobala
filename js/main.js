@@ -1414,211 +1414,224 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.style.overflow = '';
     }
 
-    menuToggle.addEventListener('click', () => {
-        if (sidebar.classList.contains('active')) {
-            closeSidebar();
-        } else {
-            openSidebar();
-        }
-    });
+    // Add event listeners only if elements exist
+    if (menuToggle) {
+        menuToggle.addEventListener('click', () => {
+            if (sidebar.classList.contains('active')) {
+                closeSidebar();
+            } else {
+                openSidebar();
+            }
+        });
+    }
 
-    sidebarClose.addEventListener('click', closeSidebar);
-    sidebarOverlay.addEventListener('click', closeSidebar);
+    if (sidebarClose) {
+        sidebarClose.addEventListener('click', closeSidebar);
+    }
+
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', closeSidebar);
+    }
 
     // View Navigation
-    menuLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const viewId = link.getAttribute('data-view');
+    if (menuLinks && menuLinks.length > 0) {
+        menuLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const viewId = link.getAttribute('data-view');
 
-            // Update active menu item
-            menuLinks.forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
+                // Update active menu item
+                menuLinks.forEach(l => l.classList.remove('active'));
+                link.classList.add('active');
 
-            // Check if view pager is available (dev mode)
-            if (typeof window.switchToPage === 'function' && typeof window.loadDynamicContent === 'function') {
-                // Use view pager for navigation
-                if (viewId === 'dashboard') {
-                    window.switchToPage(1);
+                // Check if view pager is available (dev mode)
+                if (typeof window.switchToPage === 'function' && typeof window.loadDynamicContent === 'function') {
+                    // Use view pager for navigation
+                    if (viewId === 'dashboard') {
+                        window.switchToPage(1);
+                    } else {
+                        window.switchToPage(2);
+                        window.loadDynamicContent(viewId);
+                    }
                 } else {
-                    window.switchToPage(2);
-                    window.loadDynamicContent(viewId);
+                    // Fallback to original view switching
+                    document.querySelectorAll('.view').forEach(view => {
+                        view.classList.remove('active');
+                    });
+                    const newView = getViewElement(viewId);
+                    if (!newView) {
+                        console.warn(`[UI] No view element found for data-view='${viewId}'. Tried view${capitalize(viewId)} and view${viewId}`);
+                    } else {
+                        newView.classList.add('active');
+                    }
                 }
-            } else {
-                // Fallback to original view switching
-                document.querySelectorAll('.view').forEach(view => {
-                    view.classList.remove('active');
-                });
-                const newView = getViewElement(viewId);
-                if (!newView) {
-                    console.warn(`[UI] No view element found for data-view='${viewId}'. Tried view${capitalize(viewId)} and view${viewId}`);
-                } else {
-                    newView.classList.add('active');
-                }
-            }
 
-            // Initialize 3D visualization when switching to diagnostics OR 3D view
-            if (viewId === 'diagnostics' || viewId === '3d') {
+                // Initialize 3D visualization when switching to diagnostics OR 3D view
+                if (viewId === 'diagnostics' || viewId === '3d') {
+                    setTimeout(() => {
+                        try {
+                            if (typeof window.init3DVisualization === 'function') {
+                                window.init3DVisualization();
+                                window.setupControls3D?.();
+                                window.animate3D();
+                                addLogMessage('[UI] Wizualizacja 3D zainicjalizowana przy przełączaniu zakładki', 'info');
+                            }
+                            if (typeof window.initSignalAnalyzerChart === 'function') {
+                                window.initSignalAnalyzerChart();
+                                window.setupSignalChartControls?.();
+                                window.setupSignalAnalyzerControls?.();
+                                addLogMessage('[UI] Analizator sygnału zainicjalizowany przy przełączaniu zakładki', 'info');
+                            }
+                        } catch (e) {
+                            console.warn('Initialization error:', e);
+                            addLogMessage('Błąd inicjalizacji: ' + e.message, 'error');
+                        }
+                    }, 100);
+                }
+
+                // Initialize view-specific components
                 setTimeout(() => {
                     try {
-                        if (typeof window.init3DVisualization === 'function') {
-                            window.init3DVisualization();
-                            window.setupControls3D?.();
-                            window.animate3D();
-                            addLogMessage('[UI] Wizualizacja 3D zainicjalizowana przy przełączaniu zakładki', 'info');
-                        }
-                        if (typeof window.initSignalAnalyzerChart === 'function') {
-                            window.initSignalAnalyzerChart();
-                            window.setupSignalChartControls?.();
-                            window.setupSignalAnalyzerControls?.();
-                            addLogMessage('[UI] Analizator sygnału zainicjalizowany przy przełączaniu zakładki', 'info');
+                        switch (viewId) {
+                            case 'dashboard':
+                                if (typeof window.initJoystick === 'function') {
+                                    window.initJoystick();
+                                    addLogMessage('[UI] Joystick zainicjalizowany przy przełączaniu zakładki', 'info');
+                                }
+                                break;
+                            case 'pid-tuning':
+                                if (typeof window.initPidSettings === 'function') {
+                                    window.initPidSettings();
+                                    addLogMessage('[UI] Ustawienia PID zainicjalizowane przy przełączaniu zakładki', 'info');
+                                }
+                                break;
+                            case 'settings':
+                                if (typeof window.initJoystickSettings === 'function') {
+                                    window.initJoystickSettings();
+                                    addLogMessage('[UI] Ustawienia joysticka zainicjalizowane przy przełączaniu zakładki', 'info');
+                                }
+                                if (typeof window.initHardwareSettings === 'function') {
+                                    window.initHardwareSettings();
+                                    addLogMessage('[UI] Ustawienia sprzętu zainicjalizowane przy przełączaniu zakładki', 'info');
+                                }
+                                if (typeof window.initImuSettings === 'function') {
+                                    window.initImuSettings();
+
+                                    // ========================================================================
+                                    // MODALS: Mapowanie Czujnika (IMU) i Modelu 3D – podpięcie przycisków
+                                    // ========================================================================
+                                    // Sensor mapping (IMU) modal open button (Settings)
+                                    document.getElementById('sensorMappingBtnSettings')?.addEventListener('click', () => {
+                                        try { window.openSensorMappingModal?.(); } catch (e) { console.warn('openSensorMappingModal error:', e); }
+                                    });
+                                    // Model mapping (3D) modal open button (3D view)
+                                    document.getElementById('modelMappingBtn3D')?.addEventListener('click', () => {
+                                        try {
+                                            window.openModelMappingModal?.();
+                                            window.sendBleMessage?.({ type: 'get_model_mapping' });
+                                        } catch (e) { console.warn('openModelMappingModal error:', e); }
+                                    });
+
+                                    // Model mapping modal: actions
+                                    document.getElementById('modelMappingLoadBtn')?.addEventListener('click', () => {
+                                        try { window.sendBleMessage?.({ type: 'get_model_mapping' }); } catch (e) { console.warn(e); }
+                                    });
+                                    document.getElementById('modelMappingSaveBtn')?.addEventListener('click', () => {
+                                        try {
+                                            if (typeof window.gatherModelMappingFromUI === 'function') window.gatherModelMappingFromUI();
+                                            window.sendBleMessage?.({ type: 'set_model_mapping', mapping: window.modelMapping || {} });
+                                            addLogMessage('[UI] Wysłano mapowanie modelu 3D do robota', 'info');
+                                        } catch (e) { console.warn(e); }
+                                    });
+                                    document.getElementById('modelMappingResetBtn')?.addEventListener('click', () => {
+                                        try { window.resetModelMapping?.(); addLogMessage('[UI] Przywrócono domyślne mapowanie modelu (identity).', 'info'); } catch (e) { console.warn(e); }
+                                    });
+                                    document.getElementById('modelMappingCloseBtn')?.addEventListener('click', () => {
+                                        try { window.closeModelMappingModal?.(); } catch (e) { console.warn(e); }
+                                    });
+
+                                    // IMU mapping modal: load/save
+                                    document.getElementById('imuMappingLoadBtn')?.addEventListener('click', () => {
+                                        try { window.sendBleMessage?.({ type: 'get_imu_mapping' }); } catch (e) { console.warn(e); }
+                                    });
+                                    document.getElementById('imuMappingSaveBtn')?.addEventListener('click', () => {
+                                        try {
+                                            const mapping = (typeof window.gatherIMUMappingFromUI === 'function') ? window.gatherIMUMappingFromUI() : null;
+                                            if (mapping) { window.sendBleMessage?.({ type: 'set_imu_mapping', mapping }); addLogMessage('[UI] Zapisano mapowanie IMU do robota', 'info'); }
+                                        } catch (e) { console.warn(e); }
+                                    });
+                                    addLogMessage('[UI] Ustawienia IMU zainicjalizowane przy przełączaniu zakładki', 'info');
+                                }
+                                break;
+                            case 'calibration':
+                                if (typeof window.initSensorMappingPreview === 'function') {
+                                    window.initSensorMappingPreview();
+                                    addLogMessage('[UI] Podgląd mapowania czujników zainicjalizowany przy przełączaniu zakładki', 'info');
+                                }
+                                break;
+                            case 'autotuning':
+                                if (typeof window.initAutotuning === 'function') {
+                                    window.initAutotuning();
+                                    addLogMessage('[UI] Autostrojenie zainicjalizowane przy przełączaniu zakładki', 'info');
+                                }
+                                break;
+                            case 'autonomous':
+                                if (typeof window.initPathVisualization === 'function') {
+                                    window.initPathVisualization();
+                                    addLogMessage('[UI] Wizualizacja ścieżki zainicjalizowana przy przełączaniu zakładki', 'info');
+                                }
+                                if (typeof setupDpadControls === 'function') {
+                                    setupDpadControls();
+                                    addLogMessage('[UI] Kontrolki D-Pad zainicjalizowane przy przełączaniu zakładki', 'info');
+                                }
+                                break;
                         }
                     } catch (e) {
-                        console.warn('Initialization error:', e);
-                        addLogMessage('Błąd inicjalizacji: ' + e.message, 'error');
+                        console.warn('View initialization error:', e);
+                        addLogMessage('Błąd inicjalizacji widoku: ' + e.message, 'error');
                     }
-                }, 100);
-            }
+                }, 150);
 
-            // Initialize view-specific components
-            setTimeout(() => {
-                try {
-                    switch (viewId) {
-                        case 'dashboard':
-                            if (typeof window.initJoystick === 'function') {
-                                window.initJoystick();
-                                addLogMessage('[UI] Joystick zainicjalizowany przy przełączaniu zakładki', 'info');
-                            }
-                            break;
-                        case 'pid-tuning':
-                            if (typeof window.initPidSettings === 'function') {
-                                window.initPidSettings();
-                                addLogMessage('[UI] Ustawienia PID zainicjalizowane przy przełączaniu zakładki', 'info');
-                            }
-                            break;
-                        case 'settings':
-                            if (typeof window.initJoystickSettings === 'function') {
-                                window.initJoystickSettings();
-                                addLogMessage('[UI] Ustawienia joysticka zainicjalizowane przy przełączaniu zakładki', 'info');
-                            }
-                            if (typeof window.initHardwareSettings === 'function') {
-                                window.initHardwareSettings();
-                                addLogMessage('[UI] Ustawienia sprzętu zainicjalizowane przy przełączaniu zakładki', 'info');
-                            }
-                            if (typeof window.initImuSettings === 'function') {
-                                window.initImuSettings();
+                // Close sidebar on mobile
+                closeSidebar();
 
-                                // ========================================================================
-                                // MODALS: Mapowanie Czujnika (IMU) i Modelu 3D – podpięcie przycisków
-                                // ========================================================================
-                                // Sensor mapping (IMU) modal open button (Settings)
-                                document.getElementById('sensorMappingBtnSettings')?.addEventListener('click', () => {
-                                    try { window.openSensorMappingModal?.(); } catch (e) { console.warn('openSensorMappingModal error:', e); }
-                                });
-                                // Model mapping (3D) modal open button (3D view)
-                                document.getElementById('modelMappingBtn3D')?.addEventListener('click', () => {
-                                    try {
-                                        window.openModelMappingModal?.();
-                                        window.sendBleMessage?.({ type: 'get_model_mapping' });
-                                    } catch (e) { console.warn('openModelMappingModal error:', e); }
-                                });
-
-                                // Model mapping modal: actions
-                                document.getElementById('modelMappingLoadBtn')?.addEventListener('click', () => {
-                                    try { window.sendBleMessage?.({ type: 'get_model_mapping' }); } catch (e) { console.warn(e); }
-                                });
-                                document.getElementById('modelMappingSaveBtn')?.addEventListener('click', () => {
-                                    try {
-                                        if (typeof window.gatherModelMappingFromUI === 'function') window.gatherModelMappingFromUI();
-                                        window.sendBleMessage?.({ type: 'set_model_mapping', mapping: window.modelMapping || {} });
-                                        addLogMessage('[UI] Wysłano mapowanie modelu 3D do robota', 'info');
-                                    } catch (e) { console.warn(e); }
-                                });
-                                document.getElementById('modelMappingResetBtn')?.addEventListener('click', () => {
-                                    try { window.resetModelMapping?.(); addLogMessage('[UI] Przywrócono domyślne mapowanie modelu (identity).', 'info'); } catch (e) { console.warn(e); }
-                                });
-                                document.getElementById('modelMappingCloseBtn')?.addEventListener('click', () => {
-                                    try { window.closeModelMappingModal?.(); } catch (e) { console.warn(e); }
-                                });
-
-                                // IMU mapping modal: load/save
-                                document.getElementById('imuMappingLoadBtn')?.addEventListener('click', () => {
-                                    try { window.sendBleMessage?.({ type: 'get_imu_mapping' }); } catch (e) { console.warn(e); }
-                                });
-                                document.getElementById('imuMappingSaveBtn')?.addEventListener('click', () => {
-                                    try {
-                                        const mapping = (typeof window.gatherIMUMappingFromUI === 'function') ? window.gatherIMUMappingFromUI() : null;
-                                        if (mapping) { window.sendBleMessage?.({ type: 'set_imu_mapping', mapping }); addLogMessage('[UI] Zapisano mapowanie IMU do robota', 'info'); }
-                                    } catch (e) { console.warn(e); }
-                                });
-                                addLogMessage('[UI] Ustawienia IMU zainicjalizowane przy przełączaniu zakładki', 'info');
-                            }
-                            break;
-                        case 'calibration':
-                            if (typeof window.initSensorMappingPreview === 'function') {
-                                window.initSensorMappingPreview();
-                                addLogMessage('[UI] Podgląd mapowania czujników zainicjalizowany przy przełączaniu zakładki', 'info');
-                            }
-                            break;
-                        case 'autotuning':
-                            if (typeof window.initAutotuning === 'function') {
-                                window.initAutotuning();
-                                addLogMessage('[UI] Autostrojenie zainicjalizowane przy przełączaniu zakładki', 'info');
-                            }
-                            break;
-                        case 'autonomous':
-                            if (typeof window.initPathVisualization === 'function') {
-                                window.initPathVisualization();
-                                addLogMessage('[UI] Wizualizacja ścieżki zainicjalizowana przy przełączaniu zakładki', 'info');
-                            }
-                            if (typeof setupDpadControls === 'function') {
-                                setupDpadControls();
-                                addLogMessage('[UI] Kontrolki D-Pad zainicjalizowane przy przełączaniu zakładki', 'info');
-                            }
-                            break;
-                    }
-                } catch (e) {
-                    console.warn('View initialization error:', e);
-                    addLogMessage('Błąd inicjalizacji widoku: ' + e.message, 'error');
-                }
-            }, 150);
-
-            // Close sidebar on mobile
-            closeSidebar();
-
-            // Scroll to top
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+                // Scroll to top
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
         });
-    });
+    } // End of menuLinks check
 
     // ========================================================================
     // THEME TOGGLE
     // ========================================================================
     const themeToggle = document.getElementById('themeToggle');
-    const themeIcon = themeToggle.querySelector('.theme-icon');
-    const themeLabel = themeToggle.querySelector('.theme-label');
 
-    // Load saved theme
-    const savedTheme = localStorage.getItem('robobala-theme') || 'dark';
-    document.body.className = `theme-${savedTheme}`;
-    updateThemeButton(savedTheme);
+    if (themeToggle) {
+        const themeIcon = themeToggle.querySelector('.theme-icon');
+        const themeLabel = themeToggle.querySelector('.theme-label');
 
-    themeToggle.addEventListener('click', () => {
-        const currentTheme = document.body.classList.contains('theme-dark') ? 'dark' : 'light';
-        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        // Load saved theme
+        const savedTheme = localStorage.getItem('robobala-theme') || 'dark';
+        document.body.className = `theme-${savedTheme}`;
+        updateThemeButton(savedTheme);
 
-        document.body.className = `theme-${newTheme}`;
-        localStorage.setItem('robobala-theme', newTheme);
-        updateThemeButton(newTheme);
-    });
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = document.body.classList.contains('theme-dark') ? 'dark' : 'light';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
 
-    function updateThemeButton(theme) {
-        if (theme === 'dark') {
-            themeIcon.textContent = '🌙';
-            themeLabel.textContent = 'Tryb Ciemny';
-        } else {
-            themeIcon.textContent = '☀️';
-            themeLabel.textContent = 'Tryb Jasny';
+            document.body.className = `theme-${newTheme}`;
+            localStorage.setItem('robobala-theme', newTheme);
+            updateThemeButton(newTheme);
+        });
+
+        function updateThemeButton(theme) {
+            if (theme === 'dark') {
+                themeIcon.textContent = '🌙';
+                themeLabel.textContent = 'Tryb Ciemny';
+            } else {
+                themeIcon.textContent = '☀️';
+                themeLabel.textContent = 'Tryb Jasny';
+            }
         }
     }
 
@@ -1635,20 +1648,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let logCount = 0;
 
-    logHeader.addEventListener('click', () => {
-        logSheet.classList.toggle('expanded');
-    });
+    if (logHeader) {
+        logHeader.addEventListener('click', () => {
+            if (logSheet) logSheet.classList.toggle('expanded');
+        });
+    }
 
-    clearLogs.addEventListener('click', (e) => {
-        e.stopPropagation();
-        logMessages.innerHTML = '';
-        logCount = 0;
-        updateLogBadge();
-        addLogMessage('Logi wyczyszczone', 'info');
-    });
+    if (clearLogs) {
+        clearLogs.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (logMessages) logMessages.innerHTML = '';
+            logCount = 0;
+            updateLogBadge();
+            addLogMessage('Logi wyczyszczone', 'info');
+        });
+    }
 
     function updateLogBadge() {
-        logBadge.textContent = logCount;
+        if (logBadge) logBadge.textContent = logCount;
     }
 
     // Add initial log
@@ -1659,13 +1676,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // ========================================================================
     const emergencyFab = document.getElementById('emergencyFab');
 
-    emergencyFab.addEventListener('click', () => {
-        if (confirm('Czy na pewno chcesz wykonać awaryjne zatrzymanie robota?')) {
-            commLayer.send({ type: 'command_stop' });
-            addLogMessage('AWARYJNE ZATRZYMANIE wykonane', 'error');
-            alert('Robot zatrzymany awaryjnie!');
-        }
-    });
+    if (emergencyFab) {
+        emergencyFab.addEventListener('click', () => {
+            if (confirm('Czy na pewno chcesz wykonać awaryjne zatrzymanie robota?')) {
+                commLayer.send({ type: 'command_stop' });
+                addLogMessage('AWARYJNE ZATRZYMANIE wykonane', 'error');
+                alert('Robot zatrzymany awaryjnie!');
+            }
+        });
+    }
 
     // ========================================================================
     // TABS
@@ -1746,142 +1765,145 @@ document.addEventListener('DOMContentLoaded', () => {
     // JOYSTICK
     // ========================================================================
     const joystickCanvas = document.getElementById('joystickCanvas');
-    const joystickCtx = joystickCanvas.getContext('2d');
 
-    let joystickActive = false;
-    let joystickCenter = { x: 0, y: 0 };
-    let joystickKnob = { x: 0, y: 0 };
-    let joystickRadius = 0;
-    let knobRadius = 0;
-    let joystickInterval = null;
-    let currentJoyX = 0;
-    let currentJoyY = 0;
-    let lastJoystickSendTime = 0;
-    const JOYSTICK_SEND_INTERVAL = 20;
+    if (joystickCanvas) {
+        const joystickCtx = joystickCanvas.getContext('2d');
 
-    function initJoystick() {
-        const size = joystickCanvas.parentElement.offsetWidth;
-        joystickCanvas.width = size;
-        joystickCanvas.height = size;
+        let joystickActive = false;
+        let joystickCenter = { x: 0, y: 0 };
+        let joystickKnob = { x: 0, y: 0 };
+        let joystickRadius = 0;
+        let knobRadius = 0;
+        let joystickInterval = null;
+        let currentJoyX = 0;
+        let currentJoyY = 0;
+        let lastJoystickSendTime = 0;
+        const JOYSTICK_SEND_INTERVAL = 20;
 
-        joystickCenter = { x: size / 2, y: size / 2 };
-        joystickRadius = size / 2 * 0.75;
-        knobRadius = size / 2 * 0.25;
+        function initJoystick() {
+            const size = joystickCanvas.parentElement.offsetWidth;
+            joystickCanvas.width = size;
+            joystickCanvas.height = size;
 
-        joystickKnob = { ...joystickCenter };
-        drawJoystick();
-    }
+            joystickCenter = { x: size / 2, y: size / 2 };
+            joystickRadius = size / 2 * 0.75;
+            knobRadius = size / 2 * 0.25;
 
-    function drawJoystick() {
-        joystickCtx.clearRect(0, 0, joystickCanvas.width, joystickCanvas.height);
-
-        // Draw outer circle
-        joystickCtx.beginPath();
-        joystickCtx.arc(joystickCenter.x, joystickCenter.y, joystickRadius, 0, Math.PI * 2);
-        joystickCtx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        joystickCtx.fill();
-
-        // Draw knob
-        joystickCtx.beginPath();
-        joystickCtx.arc(joystickKnob.x, joystickKnob.y, knobRadius, 0, Math.PI * 2);
-        joystickCtx.fillStyle = '#61dafb';
-        joystickCtx.fill();
-
-        // Draw center dot
-        joystickCtx.beginPath();
-        joystickCtx.arc(joystickCenter.x, joystickCenter.y, 4, 0, Math.PI * 2);
-        joystickCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        joystickCtx.fill();
-    }
-
-    function handleJoystickStart(e) {
-        e.preventDefault();
-        joystickActive = true;
-        handleJoystickMove(e);
-
-        // Start continuous sending
-        // if (joystickInterval) clearInterval(joystickInterval);
-        // joystickInterval = setInterval(() => {
-        //     if (appStore.getState('connection.isConnected')) {
-        //         // Send joystick values continuously
-        //         commLayer.send({ type: 'joystick', x: currentJoyX, y: currentJoyY });
-        //         commLayer.send({ type: 'joystick', x: currentJoyX, y: currentJoyY });
-        //     }
-        // }, 20); // Send every 20ms
-    }
-
-    function handleJoystickMove(e) {
-        if (!joystickActive) return;
-        e.preventDefault();
-
-        const rect = joystickCanvas.getBoundingClientRect();
-        const touch = e.touches ? e.touches[0] : e;
-
-        let x = touch.clientX - rect.left;
-        let y = touch.clientY - rect.top;
-
-        const dx = x - joystickCenter.x;
-        const dy = y - joystickCenter.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (distance > joystickRadius) {
-            const angle = Math.atan2(dy, dx);
-            x = joystickCenter.x + Math.cos(angle) * joystickRadius;
-            y = joystickCenter.y + Math.sin(angle) * joystickRadius;
+            joystickKnob = { ...joystickCenter };
+            drawJoystick();
         }
 
-        joystickKnob = { x, y };
-        drawJoystick();
+        function drawJoystick() {
+            joystickCtx.clearRect(0, 0, joystickCanvas.width, joystickCanvas.height);
 
-        // Calculate normalized values (-1 to 1)
-        const normalizedX = (x - joystickCenter.x) / joystickRadius;
-        const normalizedY = -(y - joystickCenter.y) / joystickRadius;
+            // Draw outer circle
+            joystickCtx.beginPath();
+            joystickCtx.arc(joystickCenter.x, joystickCenter.y, joystickRadius, 0, Math.PI * 2);
+            joystickCtx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            joystickCtx.fill();
 
-        // Update current values for continuous sending
-        currentJoyX = normalizedX;
-        currentJoyY = normalizedY;
+            // Draw knob
+            joystickCtx.beginPath();
+            joystickCtx.arc(joystickKnob.x, joystickKnob.y, knobRadius, 0, Math.PI * 2);
+            joystickCtx.fillStyle = '#61dafb';
+            joystickCtx.fill();
 
-        // Send only if enough time has passed since last send
-        const now = Date.now();
-        if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) {
-            // Use wrapper which checks appStore OR physical comm layer state
-            sendBleMessage({ type: 'joystick', x: currentJoyX, y: currentJoyY });
-            lastJoystickSendTime = now;
+            // Draw center dot
+            joystickCtx.beginPath();
+            joystickCtx.arc(joystickCenter.x, joystickCenter.y, 4, 0, Math.PI * 2);
+            joystickCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            joystickCtx.fill();
         }
-    }
 
-    function handleJoystickEnd(e) {
-        if (!joystickActive) return;
-        e.preventDefault();
+        function handleJoystickStart(e) {
+            e.preventDefault();
+            joystickActive = true;
+            handleJoystickMove(e);
 
-        joystickActive = false;
-        joystickKnob = { ...joystickCenter };
-        drawJoystick();
+            // Start continuous sending
+            // if (joystickInterval) clearInterval(joystickInterval);
+            // joystickInterval = setInterval(() => {
+            //     if (appStore.getState('connection.isConnected')) {
+            //         // Send joystick values continuously
+            //         commLayer.send({ type: 'joystick', x: currentJoyX, y: currentJoyY });
+            //         commLayer.send({ type: 'joystick', x: currentJoyX, y: currentJoyY });
+            //     }
+            // }, 20); // Send every 20ms
+        }
 
-        // Stop continuous sending and reset values
-        // if (joystickInterval) {
-        //     clearInterval(joystickInterval);
-        //     joystickInterval = null;
-        // }
-        currentJoyX = 0;
-        currentJoyY = 0;
+        function handleJoystickMove(e) {
+            if (!joystickActive) return;
+            e.preventDefault();
 
-        // Send zero values to robot
-        // Send both modern and legacy joystick stop messages (via wrapper)
-        sendBleMessage({ type: 'joystick', x: 0, y: 0 });
-        sendBleMessage({ type: 'joystick', x: 0, y: 0 });
-    }
+            const rect = joystickCanvas.getBoundingClientRect();
+            const touch = e.touches ? e.touches[0] : e;
 
-    joystickCanvas.addEventListener('mousedown', handleJoystickStart);
-    joystickCanvas.addEventListener('mousemove', handleJoystickMove);
-    document.addEventListener('mouseup', handleJoystickEnd);
+            let x = touch.clientX - rect.left;
+            let y = touch.clientY - rect.top;
 
-    joystickCanvas.addEventListener('touchstart', handleJoystickStart, { passive: false });
-    joystickCanvas.addEventListener('touchmove', handleJoystickMove, { passive: false });
-    document.addEventListener('touchend', handleJoystickEnd);
+            const dx = x - joystickCenter.x;
+            const dy = y - joystickCenter.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
 
-    window.addEventListener('resize', initJoystick);
-    initJoystick();
+            if (distance > joystickRadius) {
+                const angle = Math.atan2(dy, dx);
+                x = joystickCenter.x + Math.cos(angle) * joystickRadius;
+                y = joystickCenter.y + Math.sin(angle) * joystickRadius;
+            }
+
+            joystickKnob = { x, y };
+            drawJoystick();
+
+            // Calculate normalized values (-1 to 1)
+            const normalizedX = (x - joystickCenter.x) / joystickRadius;
+            const normalizedY = -(y - joystickCenter.y) / joystickRadius;
+
+            // Update current values for continuous sending
+            currentJoyX = normalizedX;
+            currentJoyY = normalizedY;
+
+            // Send only if enough time has passed since last send
+            const now = Date.now();
+            if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) {
+                // Use wrapper which checks appStore OR physical comm layer state
+                sendBleMessage({ type: 'joystick', x: currentJoyX, y: currentJoyY });
+                lastJoystickSendTime = now;
+            }
+        }
+
+        function handleJoystickEnd(e) {
+            if (!joystickActive) return;
+            e.preventDefault();
+
+            joystickActive = false;
+            joystickKnob = { ...joystickCenter };
+            drawJoystick();
+
+            // Stop continuous sending and reset values
+            // if (joystickInterval) {
+            //     clearInterval(joystickInterval);
+            //     joystickInterval = null;
+            // }
+            currentJoyX = 0;
+            currentJoyY = 0;
+
+            // Send zero values to robot
+            // Send both modern and legacy joystick stop messages (via wrapper)
+            sendBleMessage({ type: 'joystick', x: 0, y: 0 });
+            sendBleMessage({ type: 'joystick', x: 0, y: 0 });
+        }
+
+        joystickCanvas.addEventListener('mousedown', handleJoystickStart);
+        joystickCanvas.addEventListener('mousemove', handleJoystickMove);
+        document.addEventListener('mouseup', handleJoystickEnd);
+
+        joystickCanvas.addEventListener('touchstart', handleJoystickStart, { passive: false });
+        joystickCanvas.addEventListener('touchmove', handleJoystickMove, { passive: false });
+        document.addEventListener('touchend', handleJoystickEnd);
+
+        window.addEventListener('resize', initJoystick);
+        initJoystick();
+    } // End of joystickCanvas check
 
     // ========================================================================
     // GAMEPAD POLLING & MAPPING
@@ -2107,60 +2129,62 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let isConnected = false;
 
-    connectBtn.addEventListener('click', async () => {
-        if (isConnected) {
-            // Disconnect
-            await commLayer.disconnect();
-            // Call standard disconnect handler to update UI and state
-            onDisconnected();
-            isConnected = false;
-            addLogMessage('Rozłączono z robotem', 'warn');
-        } else {
-            // Connect
-            addLogMessage('Próba połączenia z robotem...', 'info');
-
-            try {
-                const connected = await commLayer.connect();
-                if (connected) {
-                    const deviceName = commLayer.getDeviceName();
-                    appStore.setState('connection.deviceName', deviceName);
-
-                    // Keep AppState in sync (backwards compatible behaviour)
-                    AppState.isConnected = true;
-                    appStore.setState('connection.isSynced', false);
-
-                    isConnected = true;
-                    connectBtn.querySelector('span').textContent = 'Rozłącz';
-                    connectBtn.classList.remove('btn-primary');
-                    connectBtn.classList.add('btn-secondary');
-                    connectionDot.classList.add('connected');
-                    connectionText.textContent = 'Synchronizowanie...';
-                    addLogMessage(`Połączono z ${deviceName}`, 'success');
-
-                    // Request configuration
-                    commLayer.send({ type: 'request_full_config' });
-
-                    // Setup sync timeout
-                    const syncTimeout = setTimeout(() => {
-                        if (!appStore.getState('connection.isSynced') && appStore.getState('connection.isConnected')) {
-                            addLogMessage('BŁĄD: Timeout synchronizacji. Robot nie odpowiedział w czasie (20s).', 'error');
-                            connectionText.textContent = 'Błąd synchronizacji';
-                            connectBtn.querySelector('span').textContent = 'Spróbuj ponownie zsynchronizować';
-                            connectBtn.classList.remove('btn-secondary');
-                            connectBtn.classList.add('btn-primary');
-                        }
-                    }, 20000);
-
-                    appStore.setState('connection.syncTimeout', syncTimeout);
-                } else {
-                    throw new Error('Connection failed');
-                }
-            } catch (error) {
-                addLogMessage(`Błąd połączenia BLE: ${error.message}`, 'error');
+    if (connectBtn) {
+        connectBtn.addEventListener('click', async () => {
+            if (isConnected) {
+                // Disconnect
+                await commLayer.disconnect();
+                // Call standard disconnect handler to update UI and state
                 onDisconnected();
+                isConnected = false;
+                addLogMessage('Rozłączono z robotem', 'warn');
+            } else {
+                // Connect
+                addLogMessage('Próba połączenia z robotem...', 'info');
+
+                try {
+                    const connected = await commLayer.connect();
+                    if (connected) {
+                        const deviceName = commLayer.getDeviceName();
+                        appStore.setState('connection.deviceName', deviceName);
+
+                        // Keep AppState in sync (backwards compatible behaviour)
+                        AppState.isConnected = true;
+                        appStore.setState('connection.isSynced', false);
+
+                        isConnected = true;
+                        connectBtn.querySelector('span').textContent = 'Rozłącz';
+                        connectBtn.classList.remove('btn-primary');
+                        connectBtn.classList.add('btn-secondary');
+                        connectionDot.classList.add('connected');
+                        connectionText.textContent = 'Synchronizowanie...';
+                        addLogMessage(`Połączono z ${deviceName}`, 'success');
+
+                        // Request configuration
+                        commLayer.send({ type: 'request_full_config' });
+
+                        // Setup sync timeout
+                        const syncTimeout = setTimeout(() => {
+                            if (!appStore.getState('connection.isSynced') && appStore.getState('connection.isConnected')) {
+                                addLogMessage('BŁĄD: Timeout synchronizacji. Robot nie odpowiedział w czasie (20s).', 'error');
+                                connectionText.textContent = 'Błąd synchronizacji';
+                                connectBtn.querySelector('span').textContent = 'Spróbuj ponownie zsynchronizować';
+                                connectBtn.classList.remove('btn-secondary');
+                                connectBtn.classList.add('btn-primary');
+                            }
+                        }, 20000);
+
+                        appStore.setState('connection.syncTimeout', syncTimeout);
+                    } else {
+                        throw new Error('Connection failed');
+                    }
+                } catch (error) {
+                    addLogMessage(`Błąd połączenia BLE: ${error.message}`, 'error');
+                    onDisconnected();
+                }
             }
-        }
-    });
+        });
+    } // End of connectBtn check
 
     // ========================================================================
     // TOGGLES (Simulate State Changes)
@@ -2169,29 +2193,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const holdPositionToggle = document.getElementById('holdPositionToggle');
     const speedModeToggle = document.getElementById('speedModeToggle');
 
-    balanceToggle.addEventListener('change', (e) => {
-        const state = e.target.checked;
-        commLayer.send({ type: 'set_param', key: 'balancing', value: state });
-        // Backward compatibility: also send legacy toggle event
-        commLayer.send({ type: 'balance_toggle', enabled: state });
-        addLogMessage(`Balansowanie ${state ? 'włączono' : 'wyłączono'}`, state ? 'success' : 'warn');
-    });
+    if (balanceToggle) {
+        balanceToggle.addEventListener('change', (e) => {
+            const state = e.target.checked;
+            commLayer.send({ type: 'set_param', key: 'balancing', value: state });
+            // Backward compatibility: also send legacy toggle event
+            commLayer.send({ type: 'balance_toggle', enabled: state });
+            addLogMessage(`Balansowanie ${state ? 'włączono' : 'wyłączono'}`, state ? 'success' : 'warn');
+        });
+    }
 
-    holdPositionToggle.addEventListener('change', (e) => {
-        const state = e.target.checked;
-        commLayer.send({ type: 'set_param', key: 'holding_pos', value: state });
-        // Backward compatibility: also send legacy toggle event
-        commLayer.send({ type: 'hold_position_toggle', enabled: state });
-        addLogMessage(`Trzymanie pozycji ${state ? 'włączono' : 'wyłączono'}`, state ? 'success' : 'warn');
-    });
+    if (holdPositionToggle) {
+        holdPositionToggle.addEventListener('change', (e) => {
+            const state = e.target.checked;
+            commLayer.send({ type: 'set_param', key: 'holding_pos', value: state });
+            // Backward compatibility: also send legacy toggle event
+            commLayer.send({ type: 'hold_position_toggle', enabled: state });
+            addLogMessage(`Trzymanie pozycji ${state ? 'włączono' : 'wyłączono'}`, state ? 'success' : 'warn');
+        });
+    }
 
-    speedModeToggle.addEventListener('change', (e) => {
-        const state = e.target.checked;
-        commLayer.send({ type: 'set_param', key: 'speed_mode', value: state });
-        // Backward compatibility: also send legacy toggle event
-        commLayer.send({ type: 'speed_mode_toggle', enabled: state });
-        addLogMessage(`Tryb prędkości ${state ? 'włączono' : 'wyłączono'}`, state ? 'success' : 'warn');
-    });
+    if (speedModeToggle) {
+        speedModeToggle.addEventListener('change', (e) => {
+            const state = e.target.checked;
+            commLayer.send({ type: 'set_param', key: 'speed_mode', value: state });
+            // Backward compatibility: also send legacy toggle event
+            commLayer.send({ type: 'speed_mode_toggle', enabled: state });
+            addLogMessage(`Tryb prędkości ${state ? 'włączono' : 'wyłączono'}`, state ? 'success' : 'warn');
+        });
+    }
 
     // ========================================================================
     // 3D VISUALIZATION
@@ -2209,6 +2239,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Implement THREE.js 3D scene initialization and robot model
     function init3DVisualization() {
         if (!robot3DContainer) return;
+
         // If already initialized, resize renderer and return
         if (renderer3D && renderer3D.domElement && robot3DContainer.contains(renderer3D.domElement)) {
             renderer3D.setSize(robot3DContainer.clientWidth, robot3DContainer.clientHeight);
