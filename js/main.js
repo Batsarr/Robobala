@@ -8,35 +8,48 @@
 // ========================================================================
 // This module provides a centralized store for application state with
 
-// Manual correction panel wiring (right-side)
-const manualPanel = document.getElementById('dashboard-right-panel');
-const manualPanelOverlay = document.getElementById('panelRightOverlay');
-document.getElementById('openManualCorrectionPanel')?.addEventListener('click', () => {
-    if (!manualPanel) return;
-    manualPanel.style.display = 'block';
-    manualPanelOverlay.classList.add('active');
-    setTimeout(() => manualPanel.classList.add('open'), 20);
-    // Prefill inputs
-    const pInput = document.getElementById('manualPitchCorrectionInput');
-    const rInput = document.getElementById('manualRollCorrectionInput');
-    const curTrimPitch = (window.telemetryData && typeof window.telemetryData.trim_angle !== 'undefined') ? Number(window.telemetryData.trim_angle) : null;
-    const curTrimRoll = (window.telemetryData && typeof window.telemetryData.roll_trim !== 'undefined') ? Number(window.telemetryData.roll_trim) : null;
-    if (pInput) { pInput.value = (curTrimPitch !== null) ? curTrimPitch.toFixed(2) : (Number(window.telemetryData?.pitch || 0)).toFixed(2); pInput.dispatchEvent(new Event('change')); }
-    if (rInput) { rInput.value = (curTrimRoll !== null) ? curTrimRoll.toFixed(2) : (Number(window.telemetryData?.roll || 0)).toFixed(2); rInput.dispatchEvent(new Event('change')); }
-});
-document.getElementById('closeManualCorrectionPanel')?.addEventListener('click', () => {
-    if (!manualPanel) return;
-    manualPanel.classList.remove('open');
-    manualPanelOverlay.classList.remove('active');
-    setTimeout(() => manualPanel.style.display = 'none', 300);
-});
-// Close on overlay click
-manualPanelOverlay?.addEventListener('click', () => {
-    if (!manualPanel) return;
-    manualPanel.classList.remove('open');
-    manualPanelOverlay.classList.remove('active');
-    setTimeout(() => manualPanel.style.display = 'none', 300);
-});
+// Helper function to initialize manual correction panel
+function initManualCorrectionPanel() {
+    // Manual correction panel wiring (right-side)
+    const manualPanel = document.getElementById('dashboard-right-panel');
+    const manualPanelOverlay = document.getElementById('panelRightOverlay');
+
+    document.getElementById('openManualCorrectionPanel')?.addEventListener('click', () => {
+        if (!manualPanel) return;
+        manualPanel.style.display = 'block';
+        manualPanelOverlay.classList.add('active');
+        setTimeout(() => manualPanel.classList.add('open'), 20);
+        // Prefill inputs
+        const pInput = document.getElementById('manualPitchCorrectionInput');
+        const rInput = document.getElementById('manualRollCorrectionInput');
+        const curTrimPitch = (window.telemetryData && typeof window.telemetryData.trim_angle !== 'undefined') ? Number(window.telemetryData.trim_angle) : null;
+        const curTrimRoll = (window.telemetryData && typeof window.telemetryData.roll_trim !== 'undefined') ? Number(window.telemetryData.roll_trim) : null;
+        if (pInput) { pInput.value = (curTrimPitch !== null) ? curTrimPitch.toFixed(2) : (Number(window.telemetryData?.pitch || 0)).toFixed(2); pInput.dispatchEvent(new Event('change')); }
+        if (rInput) { rInput.value = (curTrimRoll !== null) ? curTrimRoll.toFixed(2) : (Number(window.telemetryData?.roll || 0)).toFixed(2); rInput.dispatchEvent(new Event('change')); }
+    });
+
+    document.getElementById('closeManualCorrectionPanel')?.addEventListener('click', () => {
+        if (!manualPanel) return;
+        manualPanel.classList.remove('open');
+        manualPanelOverlay.classList.remove('active');
+        setTimeout(() => manualPanel.style.display = 'none', 300);
+    });
+
+    // Close on overlay click
+    manualPanelOverlay?.addEventListener('click', () => {
+        if (!manualPanel) return;
+        manualPanel.classList.remove('open');
+        manualPanelOverlay.classList.remove('active');
+        setTimeout(() => manualPanel.style.display = 'none', 300);
+    });
+}
+
+// Helper function to get decimal places from a number
+function getDecimalPlaces(num) {
+    const match = ('' + num).match(/(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/);
+    if (!match) return 0;
+    return Math.max(0, (match[1] ? match[1].length : 0) - (match[2] ? +match[2] : 0));
+}
 
 function bindSpinner(minusId, plusId, inputId, step) {
     const minus = document.getElementById(minusId);
@@ -47,42 +60,44 @@ function bindSpinner(minusId, plusId, inputId, step) {
     if (plus) plus.addEventListener('click', () => { input.value = (parseFloat(input.value || 0) + step).toFixed(getDecimalPlaces(step)); input.dispatchEvent(new Event('change')); });
 }
 
-bindSpinner('pitchMinus', 'pitchPlus', 'manualPitchCorrectionInput', 0.1);
-bindSpinner('rollMinus', 'rollPlus', 'manualRollCorrectionInput', 0.1);
+function initManualCorrectionControls() {
+    bindSpinner('pitchMinus', 'pitchPlus', 'manualPitchCorrectionInput', 0.1);
+    bindSpinner('rollMinus', 'rollPlus', 'manualRollCorrectionInput', 0.1);
 
-// Pitch apply and set zero
-document.getElementById('manualPitchApplyBtn')?.addEventListener('click', () => {
-    if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
-    const v = parseFloat(document.getElementById('manualPitchCorrectionInput')?.value || 0);
-    commLayer.send({ type: 'set_param', key: 'trim_angle', value: v });
-    addLogMessage(`[UI] Zmieniono trim (Pitch) na ${v}`, 'info');
-});
-document.getElementById('manualPitchSetZeroBtn')?.addEventListener('click', () => {
-    if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
-    const currentPitch = Number(window.telemetryData?.pitch || 0);
-    const newTrim = -currentPitch;
-    // Apply runtime delta for immediate effect then persist trim value (keep set_param as last message)
-    commLayer.send({ type: 'adjust_zero', value: newTrim });
-    commLayer.send({ type: 'set_param', key: 'trim_angle', value: newTrim });
-    addLogMessage(`[UI] Ustawiono punkt 0 (Pitch). Nowy trim=${newTrim.toFixed(2)}`, 'info');
-});
+    // Pitch apply and set zero
+    document.getElementById('manualPitchApplyBtn')?.addEventListener('click', () => {
+        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+        const v = parseFloat(document.getElementById('manualPitchCorrectionInput')?.value || 0);
+        commLayer.send({ type: 'set_param', key: 'trim_angle', value: v });
+        addLogMessage(`[UI] Zmieniono trim (Pitch) na ${v}`, 'info');
+    });
+    document.getElementById('manualPitchSetZeroBtn')?.addEventListener('click', () => {
+        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+        const currentPitch = Number(window.telemetryData?.pitch || 0);
+        const newTrim = -currentPitch;
+        // Apply runtime delta for immediate effect then persist trim value (keep set_param as last message)
+        commLayer.send({ type: 'adjust_zero', value: newTrim });
+        commLayer.send({ type: 'set_param', key: 'trim_angle', value: newTrim });
+        addLogMessage(`[UI] Ustawiono punkt 0 (Pitch). Nowy trim=${newTrim.toFixed(2)}`, 'info');
+    });
 
-// Roll apply and set zero
-document.getElementById('manualRollApplyBtn')?.addEventListener('click', () => {
-    if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
-    const v = parseFloat(document.getElementById('manualRollCorrectionInput')?.value || 0);
-    commLayer.send({ type: 'set_param', key: 'roll_trim', value: v });
-    addLogMessage(`[UI] Zmieniono trim (Roll) na ${v}`, 'info');
-});
-document.getElementById('manualRollSetZeroBtn')?.addEventListener('click', () => {
-    if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
-    const currentRoll = Number(window.telemetryData?.roll || 0);
-    const newTrim = -currentRoll;
-    // Apply runtime delta for immediate effect then persist trim value (keep set_param as last message)
-    commLayer.send({ type: 'adjust_roll', value: newTrim });
-    commLayer.send({ type: 'set_param', key: 'roll_trim', value: newTrim });
-    addLogMessage(`[UI] Ustawiono punkt 0 (Roll). Nowy trim=${newTrim.toFixed(2)}`, 'info');
-});
+    // Roll apply and set zero
+    document.getElementById('manualRollApplyBtn')?.addEventListener('click', () => {
+        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+        const v = parseFloat(document.getElementById('manualRollCorrectionInput')?.value || 0);
+        commLayer.send({ type: 'set_param', key: 'roll_trim', value: v });
+        addLogMessage(`[UI] Zmieniono trim (Roll) na ${v}`, 'info');
+    });
+    document.getElementById('manualRollSetZeroBtn')?.addEventListener('click', () => {
+        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+        const currentRoll = Number(window.telemetryData?.roll || 0);
+        const newTrim = -currentRoll;
+        // Apply runtime delta for immediate effect then persist trim value (keep set_param as last message)
+        commLayer.send({ type: 'adjust_roll', value: newTrim });
+        commLayer.send({ type: 'set_param', key: 'roll_trim', value: newTrim });
+        addLogMessage(`[UI] Ustawiono punkt 0 (Roll). Nowy trim=${newTrim.toFixed(2)}`, 'info');
+    });
+}
 
 // Backward compatible Set Zero helpers (used by legacy UI modals)
 function setPitchZero() {
@@ -1215,6 +1230,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Absolute fallback: force-hide splash after 5s even if something failed earlier
     setTimeout(() => { try { if (splashScreen) splashScreen.style.display = 'none'; } catch (_) { } }, 5000);
 
+    // Initialize manual correction panel and controls
+    try { initManualCorrectionPanel(); } catch (e) { console.error('initManualCorrectionPanel failed:', e); }
+    try { initManualCorrectionControls(); } catch (e) { console.error('initManualCorrectionControls failed:', e); }
+
     // Initialize communication handlers (guarded)
     try { setupCommunicationHandlers(); } catch (e) { console.error('setupCommunicationHandlers failed:', e); }
 
@@ -1599,12 +1618,6 @@ document.addEventListener('DOMContentLoaded', () => {
             input.dispatchEvent(new Event('change'));
         });
     });
-
-    function getDecimalPlaces(num) {
-        const match = ('' + num).match(/(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/);
-        if (!match) return 0;
-        return Math.max(0, (match[1] ? match[1].length : 0) - (match[2] ? +match[2] : 0));
-    }
 
     // ========================================================================
     // JOYSTICK
@@ -4225,3 +4238,8 @@ if (typeof initSensorMappingPreview === 'function') window.initSensorMappingPrev
 if (typeof initAutotuning === 'function') window.initAutotuning = initAutotuning;
 if (typeof initFitnessModal === 'function') window.initFitnessModal = initFitnessModal;
 if (typeof setupDpadControls === 'function') window.setupDpadControls = setupDpadControls;
+
+// Debug log: confirm main.js loaded successfully
+console.log('[RoboBala] main.js loaded successfully');
+console.log('[RoboBala] AppStore:', typeof appStore !== 'undefined' ? 'OK' : 'MISSING');
+console.log('[RoboBala] CommLayer:', typeof commLayer !== 'undefined' ? 'OK' : 'MISSING');
