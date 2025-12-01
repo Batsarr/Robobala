@@ -1505,6 +1505,33 @@
     </div>
 
 
+    <!-- Modal: Kalibracja IMU -->
+    <div id="calibration-modal" class="modal-backdrop" style="display:none;">
+        <div class="modal-content" style="max-width:460px;">
+            <h2>Kalibracja IMU (Czujnik Nachylenia)</h2>
+            <p style="text-align:left; font-size:0.9em; line-height:1.4;">Aby skalibrować czujnik IMU, powoli obróć robota we wszystkich kierunkach: do przodu, do tyłu, na boki i wokół własnej osi pionowej. Wykonaj co najmniej 3 pełne obroty w każdej płaszczyznie.</p>
+            <p style="text-align:left; font-size:0.85em; color:#aaa;"><strong>Dla akcelerometru (Accel) ważne:</strong> Trzymaj robota nieruchomo na około 10 sekund w każdej z 6 pozycji (sześcian): góra, dół, przednia strona, tylna strona, lewa strona, prawa strona. Powtarzaj obroty i zatrzymania, aż progres osiągnie co najmniej 3/4 dla każdej osi.</p>
+            <div class="calib-axis" style="display: flex; align-items: center; margin: 10px 0; justify-content: space-between;">
+                <span>Sys (System):</span><progress id="calib-sys-bar" value="0" max="3" style="flex: 1; margin: 0 10px;"></progress><span id="calib-sys-text">0</span>/3
+            </div>
+            <div class="calib-axis" style="display: flex; align-items: center; margin: 10px 0; justify-content: space-between;">
+                <span>Accel (Przyspieszenie):</span><progress id="calib-accel-bar" value="0" max="3" style="flex: 1; margin: 0 10px;"></progress><span id="calib-accel-text">0</span>/3
+            </div>
+            <div class="calib-axis" style="display: flex; align-items: center; margin: 10px 0; justify-content: space-between;">
+                <span>Gyro (Obroty):</span><progress id="calib-gyro-bar" value="0" max="3" style="flex: 1; margin: 0 10px;"></progress><span id="calib-gyro-text">0</span>/3
+            </div>
+            <div class="calib-axis" style="display: flex; align-items: center; margin: 10px 0; justify-content: space-between;">
+                <span>Mag (Magnetyczne):</span><progress id="calib-mag-bar" value="0" max="3" style="flex: 1; margin: 0 10px;"></progress><span id="calib-mag-text">0</span>/3
+            </div>
+            <div style="display:flex; gap:8px; margin-top:12px;">
+                <button id="calib-update-btn" class="btn btn-primary" style="flex:1;">Aktualizuj Status</button>
+                <button id="calib-close-btn" class="btn btn-secondary" style="flex:1;">Zamknij</button>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+                <button id="calib-save-btn" class="btn btn-primary" style="display:none; background:#61dafb; padding:6px 12px; border-radius:6px;">Zapisz offset do EEPROM</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal: Potwierdzenie EEPROM -->
     <div id="eeprom-modal" class="modal-backdrop" style="display:none;">

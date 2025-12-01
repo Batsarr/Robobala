@@ -356,7 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     // IMU calibration buttons
-    // document.getElementById('calibrateMpuBtnSettings')?.addEventListener('click', showCalibrationModal);
+    document.getElementById('calibrateMpuBtnSettings')?.addEventListener('click', showCalibrationModal);
     document.getElementById('calibrateZeroPointBtnSettings')?.addEventListener('click', () => { if (confirm("Upewnij sie, ze robot stoi na idealnie plaskiej powierzchni. Robot bedzie balansowal przez 10 sekund w celu znalezienia dokladnego punktu rownowagi. Kontynuowac?")) { sendBleMessage({ type: 'calibrate_zero_point' }); } });
     // Model mapping buttons
     document.getElementById('modelMappingBtn3D')?.addEventListener('click', () => { openModelMappingModal(); sendBleMessage({ type: 'get_model_mapping' }); });
@@ -1420,6 +1420,107 @@ function processCompleteMessage(data) {
             document.getElementById('connectionDot').classList.add('connected');
             addLogMessage('[UI] Synchronizacja zakończona pomyślnie', 'success');
             break;
+        case 'ga_status':
+            // Handle GA tuning progress from firmware
+            if (data.generation !== undefined) {
+                const genSpan = document.getElementById('current-generation');
+                if (genSpan) genSpan.textContent = data.generation;
+                const bestFitnessSpan = document.getElementById('best-fitness');
+                if (bestFitnessSpan && data.best_fitness !== undefined) {
+                    bestFitnessSpan.textContent = data.best_fitness.toFixed(4);
+                }
+                addLogMessage(`[GA] Pokolenie ${data.generation}: najlepszy fitness = ${data.best_fitness?.toFixed(4) || '---'}`, 'info');
+            }
+            break;
+        case 'ga_best':
+            // Handle new best parameters found by GA
+            if (data.kp !== undefined) {
+                const kpSpan = document.getElementById('best-kp');
+                const kiSpan = document.getElementById('best-ki');
+                const kdSpan = document.getElementById('best-kd');
+                const fitnessSpan = document.getElementById('best-fitness');
+                if (kpSpan) kpSpan.textContent = data.kp.toFixed(4);
+                if (kiSpan) kiSpan.textContent = data.ki?.toFixed(4) || '0.0000';
+                if (kdSpan) kdSpan.textContent = data.kd.toFixed(4);
+                if (fitnessSpan && data.fitness !== undefined) fitnessSpan.textContent = data.fitness.toFixed(4);
+                addLogMessage(`[GA] Nowe najlepsze: Kp=${data.kp.toFixed(3)} Ki=${data.ki?.toFixed(4) || '0.0000'} Kd=${data.kd.toFixed(3)} Fitness=${data.fitness?.toFixed(4) || '---'}`, 'success');
+            }
+            break;
+        case 'ga_result':
+            // GA session completed
+            addLogMessage('[GA] Sesja algorytmu genetycznego zakończona', 'success');
+            appStore.setState('tuning.isActive', false);
+            appStore.setState('tuning.activeMethod', '');
+            const applyBestBtn = document.getElementById('apply-best-btn');
+            if (applyBestBtn) applyBestBtn.disabled = false;
+            break;
+        case 'pso_status':
+            // Handle PSO tuning progress from firmware
+            if (data.iteration !== undefined) {
+                const iterSpan = document.getElementById('current-iteration');
+                if (iterSpan) iterSpan.textContent = data.iteration;
+                const bestFitnessSpan = document.getElementById('best-fitness');
+                if (bestFitnessSpan && data.best_fitness !== undefined) {
+                    bestFitnessSpan.textContent = data.best_fitness.toFixed(4);
+                }
+                addLogMessage(`[PSO] Iteracja ${data.iteration}: najlepszy fitness = ${data.best_fitness?.toFixed(4) || '---'}`, 'info');
+            }
+            break;
+        case 'pso_best':
+            // Handle new best parameters found by PSO
+            if (data.kp !== undefined) {
+                const kpSpan = document.getElementById('best-kp');
+                const kiSpan = document.getElementById('best-ki');
+                const kdSpan = document.getElementById('best-kd');
+                const fitnessSpan = document.getElementById('best-fitness');
+                if (kpSpan) kpSpan.textContent = data.kp.toFixed(4);
+                if (kiSpan) kiSpan.textContent = data.ki?.toFixed(4) || '0.0000';
+                if (kdSpan) kdSpan.textContent = data.kd.toFixed(4);
+                if (fitnessSpan && data.fitness !== undefined) fitnessSpan.textContent = data.fitness.toFixed(4);
+                addLogMessage(`[PSO] Nowe najlepsze: Kp=${data.kp.toFixed(3)} Ki=${data.ki?.toFixed(4) || '0.0000'} Kd=${data.kd.toFixed(3)} Fitness=${data.fitness?.toFixed(4) || '---'}`, 'success');
+            }
+            break;
+        case 'pso_result':
+            // PSO session completed
+            addLogMessage('[PSO] Sesja PSO zakończona', 'success');
+            appStore.setState('tuning.isActive', false);
+            appStore.setState('tuning.activeMethod', '');
+            const psoApplyBestBtn = document.getElementById('apply-best-btn');
+            if (psoApplyBestBtn) psoApplyBestBtn.disabled = false;
+            break;
+        case 'zn_status':
+            // Handle Ziegler-Nichols relay tuning status
+            if (data.state) {
+                addLogMessage(`[ZN] Status: ${data.state}, Kp=${data.kp?.toFixed(3) || '---'}, Amplitude=${data.amplitude?.toFixed(3) || '---'}`, 'info');
+            }
+            break;
+        case 'zn_result':
+            // Ziegler-Nichols relay tuning completed
+            if (data.ku !== undefined && data.tu !== undefined) {
+                addLogMessage(`[ZN] Wynik: Ku=${data.ku.toFixed(3)}, Tu=${data.tu.toFixed(3)}`, 'success');
+                addLogMessage(`[ZN] Zalecane wartości: Kp=${data.kp?.toFixed(3) || '---'}, Kd=${data.kd?.toFixed(3) || '---'}`, 'success');
+                const kpSpan = document.getElementById('best-kp');
+                const kdSpan = document.getElementById('best-kd');
+                if (kpSpan) kpSpan.textContent = data.kp?.toFixed(4) || '---';
+                if (kdSpan) kdSpan.textContent = data.kd?.toFixed(4) || '---';
+                const applyBtn = document.getElementById('apply-best-btn');
+                if (applyBtn) applyBtn.disabled = false;
+            }
+            appStore.setState('tuning.isActive', false);
+            appStore.setState('tuning.activeMethod', '');
+            break;
+        case 'test_result':
+            // Handle step response test results from firmware
+            if (data.test_type === 'step_response') {
+                addLogMessage(`[TEST] Wynik step response: overshoot=${data.overshoot?.toFixed(2) || '---'}%, rise_time=${data.rise_time?.toFixed(1) || '---'}ms, settling_time=${data.settling_time?.toFixed(1) || '---'}ms, ITAE=${data.itae?.toFixed(4) || '---'}`, 'info');
+            }
+            break;
+        case 'calibration_status':
+            // Handle IMU calibration status updates from firmware
+            if (typeof updateCalibrationStatus === 'function') {
+                updateCalibrationStatus(data);
+            }
+            break;
         default:
             // Handle other message types if needed
             break;
@@ -1898,7 +1999,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     emergencyFab.addEventListener('click', () => {
         if (confirm('Czy na pewno chcesz wykonać awaryjne zatrzymanie robota?')) {
-            commLayer.send({ type: 'command_stop' });
+            commLayer.send({ type: 'emergency_stop' });
             addLogMessage('AWARYJNE ZATRZYMANIE wykonane', 'error');
             alert('Robot zatrzymany awaryjnie!');
         }
@@ -2736,7 +2837,12 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('setModalRollZeroBtn')?.addEventListener('click', () => { setRollZero(); });
         document.getElementById('clearModalPitchZeroBtn')?.addEventListener('click', () => { addLogMessage('[UI] Trym (Pitch) jest częścią montażu (qcorr) i nie podlega czyszczeniu wartością 0. Użyj przycisków ± lub Ustaw punkt 0.', 'warn'); });
         document.getElementById('clearModalRollZeroBtn')?.addEventListener('click', () => { addLogMessage('[UI] Trym (Roll) jest częścią montażu (qcorr) i nie podlega czyszczeniu wartością 0. Użyj przycisków ± lub Ustaw punkt 0.', 'warn'); });
-        const rotate90 = (axis, steps) => { sendBleMessage({ type: 'rotate_mount_90', axis, steps }); addLogMessage(`[UI] Obrót montażu 90°: axis=${axis.toUpperCase()} steps=${steps}`, 'info'); };
+        const rotate90 = (axis, steps) => { 
+            // Handle local rotation only (no firmware command)
+            const deg = steps * 90;
+            rotateSensorCube(axis, deg);
+            addLogMessage(`[UI] Obrót montażu 90°: axis=${axis.toUpperCase()} steps=${steps}`, 'info'); 
+        };
         document.getElementById('mountXMinus90Btn')?.addEventListener('click', () => rotate90('x', -1));
         document.getElementById('mountXPlus90Btn')?.addEventListener('click', () => rotate90('x', 1));
         document.getElementById('mountYMinus90Btn')?.addEventListener('click', () => rotate90('y', -1));
@@ -4619,6 +4725,84 @@ function initImuSettings() {
     try { initImuTuningChart(); setupImuTuningControls(); } catch (e) { /* no-op */ }
 }
 window.initImuSettings = initImuSettings;
+
+// ========================================================================
+// IMU CALIBRATION MODAL
+// ========================================================================
+let isCalibrationModalShown = false;
+
+function showCalibrationModal() {
+    const modal = document.getElementById('calibration-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    isCalibrationModalShown = true;
+    sendBleMessage({ type: 'set_rgb_blink', colors: ['00FF00', 'FFA500'] });
+    addLogMessage('[UI] Rozpocznij proces kalibracji IMU - obracaj robota powoli we wszystkich kierunkach.', 'info');
+}
+
+function hideCalibrationModal() {
+    const modal = document.getElementById('calibration-modal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    isCalibrationModalShown = false;
+    sendBleMessage({ type: 'stop_rgb_blink' });
+    addLogMessage('[UI] Asystent kalibracji zamknięty.', 'info');
+}
+
+function updateCalibrationStatus(data) {
+    const modal = document.getElementById('calibration-modal');
+    if (!modal || modal.style.display !== 'flex') return;
+    
+    const sysBar = document.getElementById('calib-sys-bar');
+    const sysText = document.getElementById('calib-sys-text');
+    const accelBar = document.getElementById('calib-accel-bar');
+    const accelText = document.getElementById('calib-accel-text');
+    const gyroBar = document.getElementById('calib-gyro-bar');
+    const gyroText = document.getElementById('calib-gyro-text');
+    const magBar = document.getElementById('calib-mag-bar');
+    const magText = document.getElementById('calib-mag-text');
+    const saveBtn = document.getElementById('calib-save-btn');
+    
+    if (data.sys !== undefined && sysBar && sysText) {
+        sysBar.value = data.sys;
+        sysText.textContent = data.sys;
+    }
+    if (data.accel !== undefined && accelBar && accelText) {
+        accelBar.value = data.accel;
+        accelText.textContent = data.accel;
+    }
+    if (data.gyro !== undefined && gyroBar && gyroText) {
+        gyroBar.value = data.gyro;
+        gyroText.textContent = data.gyro;
+    }
+    if (data.mag !== undefined && magBar && magText) {
+        magBar.value = data.mag;
+        magText.textContent = data.mag;
+    }
+    
+    // Show save button when system calibration is complete (3)
+    if (data.sys >= 3 && saveBtn) {
+        saveBtn.style.display = 'inline-block';
+    }
+}
+
+// Setup calibration modal buttons
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('calib-update-btn')?.addEventListener('click', () => {
+        sendBleMessage({ type: 'calibrate_mpu' });
+    });
+    document.getElementById('calib-close-btn')?.addEventListener('click', hideCalibrationModal);
+    document.getElementById('calib-save-btn')?.addEventListener('click', () => {
+        sendBleMessage({ type: 'save_tunings' });
+        addLogMessage('[UI] Wysłano żądanie zapisu kalibracji do EEPROM.', 'info');
+    });
+});
+
+// Make calibration functions globally available
+window.showCalibrationModal = showCalibrationModal;
+window.hideCalibrationModal = hideCalibrationModal;
+window.updateCalibrationStatus = updateCalibrationStatus;
+
 if (typeof initSensorMappingPreview === 'function') window.initSensorMappingPreview = initSensorMappingPreview;
 if (typeof initAutotuning === 'function') window.initAutotuning = initAutotuning;
 if (typeof initFitnessModal === 'function') window.initFitnessModal = initFitnessModal;
