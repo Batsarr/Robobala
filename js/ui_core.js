@@ -489,10 +489,13 @@
                 jc.addEventListener('touchstart', handleJoystickStart, { passive: false }); document.addEventListener('touchmove', handleJoystickMove, { passive: false }); document.addEventListener('touchend', handleJoystickEnd); document.addEventListener('touchcancel', handleJoystickEnd);
             }
         }
-        // Wizualizacja 3D
-        if (typeof window.init3DVisualization === 'function') {
-            try { window.init3DVisualization(); window.setupControls3D?.(); window.animate3D(); addLogMessage('[UI] 3D wizualizacja zainicjalizowana.', 'info'); } catch (e) { console.warn('init3DVisualization error', e); }
-        }
+        // Wizualizacja 3D - defer to ensure main.js has defined real functions
+        // (main.js DOMContentLoaded runs after ui_core.js and sets up the real init3DVisualization)
+        setTimeout(() => {
+            if (typeof window.init3DVisualization === 'function') {
+                try { window.init3DVisualization(); window.setupControls3D?.(); window.animate3D(); addLogMessage('[UI] 3D wizualizacja zainicjalizowana.', 'info'); } catch (e) { console.warn('init3DVisualization error', e); }
+            }
+        }, 50);
 
         // ==== Fallback modal BLE (otwieranie) ====
         const bleBtn = document.getElementById('connectBleBtn');
