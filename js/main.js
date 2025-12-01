@@ -769,6 +769,7 @@ function resetModelMapping() {
 // Signal analyzer chart variables
 let signalAnalyzerChart;
 let signalAnalyzerChartInitialized = false;
+let signalChartControlsBound = false;
 let signalAnalyzerControlsBound = false;
 let signalChartMouseHandlersBound = false;
 // Global map to track pending autotune timers per motor/direction so we can clear them from other handlers
@@ -802,11 +803,12 @@ let cursorA = null, cursorB = null;
 let scene3D, camera3D, renderer3D, controls3D, robotPivot, leftWheel, rightWheel, groundMesh, groundTexture, skyDome;
 let isAnimation3DEnabled = false, isMovement3DEnabled = false, robotPerspectiveZoom = 40;
 
-// Pre-export 3D functions (will be defined later in DOMContentLoaded, but need to be accessible immediately)
-window.init3DVisualization = function () { console.warn('[3D] init3DVisualization called before DOM ready'); };
-window.setupControls3D = function () { console.warn('[3D] setupControls3D called before DOM ready'); };
-window.animate3D = function () { console.warn('[3D] animate3D called before DOM ready'); };
-window.initSignalAnalyzerChart = function () { console.warn('[CHART] initSignalAnalyzerChart called before DOM ready'); };
+// Pre-export 3D functions as no-ops (will be replaced in DOMContentLoaded with real implementations)
+// These prevent errors if called before DOM is ready
+window.init3DVisualization = function () { /* placeholder - real function set in DOMContentLoaded */ };
+window.setupControls3D = function () { /* placeholder - real function set in DOMContentLoaded */ };
+window.animate3D = function () { /* placeholder - real function set in DOMContentLoaded */ };
+window.initSignalAnalyzerChart = function () { /* placeholder - replaced below after function definition */ };
 
 // Connection watchdog for stale telemetry / implicit disconnects
 let lastTelemetryAt = 0;
@@ -2247,19 +2249,23 @@ document.addEventListener('DOMContentLoaded', () => {
     function init3DVisualization() {
         if (!robot3DContainer) return;
 
+        // Get container dimensions, with fallback for hidden containers
+        const containerWidth = robot3DContainer.clientWidth || 400;
+        const containerHeight = robot3DContainer.clientHeight || 300;
+
         // If already initialized, resize renderer and return
         if (renderer3D && renderer3D.domElement && robot3DContainer.contains(renderer3D.domElement)) {
-            renderer3D.setSize(robot3DContainer.clientWidth, robot3DContainer.clientHeight);
-            camera3D.aspect = robot3DContainer.clientWidth / robot3DContainer.clientHeight;
+            renderer3D.setSize(containerWidth, containerHeight);
+            camera3D.aspect = containerWidth / containerHeight;
             camera3D.updateProjectionMatrix();
             return;
         }
         scene3D = new THREE.Scene();
-        camera3D = new THREE.PerspectiveCamera(50, robot3DContainer.clientWidth / robot3DContainer.clientHeight, 0.1, 2000);
+        camera3D = new THREE.PerspectiveCamera(50, containerWidth / containerHeight, 0.1, 2000);
         camera3D.position.set(28, 22, 48);
         camera3D.lookAt(0, 8, 0);
         renderer3D = new THREE.WebGLRenderer({ antialias: true });
-        renderer3D.setSize(robot3DContainer.clientWidth, robot3DContainer.clientHeight);
+        renderer3D.setSize(containerWidth, containerHeight);
         robot3DContainer.innerHTML = '';
         robot3DContainer.appendChild(renderer3D.domElement);
         controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
@@ -4189,12 +4195,12 @@ function initSignalAnalyzerChart() {
 }
 
 function setupSignalChartControls() {
-    if (signalAnalyzerControlsBound) return;
+    if (signalChartControlsBound) return;
     if (!signalAnalyzerChart) {
         console.warn('[CHART] setupSignalChartControls called before chart initialized');
         return;
     }
-    signalAnalyzerControlsBound = true;
+    signalChartControlsBound = true;
     const container = document.getElementById('signalChartControls');
     if (!container) return;
     container.innerHTML = '';
@@ -4203,6 +4209,11 @@ function setupSignalChartControls() {
         const label = document.createElement('label'); const checkbox = document.createElement('input');
         checkbox.type = 'checkbox'; checkbox.value = key; checkbox.checked = defaultChecked.includes(key);
         checkbox.addEventListener('change', (e) => {
+            // Guard: ensure chart is still available when event fires
+            if (!signalAnalyzerChart) {
+                console.warn('[CHART] Chart not available during checkbox change event');
+                return;
+            }
             const varName = e.target.value, datasetLabel = availableTelemetry[varName].label, datasetColor = availableTelemetry[varName].color;
             let dataset = signalAnalyzerChart.data.datasets.find(ds => ds.label === datasetLabel);
             if (e.target.checked) {
@@ -4275,12 +4286,87 @@ function setupSignalAnalyzerControls() {
     if (exportPngBtn) exportPngBtn.addEventListener('click', exportChartToPng);
 }
 
-function toggleCursors() { const cursorInfo = document.getElementById('cursorInfo'); if (cursorInfo.style.display === 'none') { cursorInfo.style.display = 'flex'; cursorA = { index: Math.floor(signalAnalyzerChart.data.labels.length * 0.25) }; cursorB = { index: Math.floor(signalAnalyzerChart.data.labels.length * 0.75) }; updateCursorInfo(); } else { cursorInfo.style.display = 'none'; cursorA = null; cursorB = null; } signalAnalyzerChart.update(); }
-function handleChartClick(event) { if (!cursorA && !cursorB) return; const activePoints = signalAnalyzerChart.getElementsAtEventForMode(event, 'index', { intersect: false }, true); if (activePoints.length > 0) { const clickedIndex = activePoints[0].index; if (cursorA && cursorB) { const distA = Math.abs(clickedIndex - cursorA.index); const distB = Math.abs(clickedIndex - cursorB.index); if (distA < distB) { cursorA.index = clickedIndex; } else { cursorB.index = clickedIndex; } } else if (cursorA) { cursorA.index = clickedIndex; } updateCursorInfo(); signalAnalyzerChart.update(); } }
-function updateCursorInfo() { if (!cursorA && !cursorB) { document.getElementById('cursorInfo').style.display = 'none'; return; } document.getElementById('cursorInfo').style.display = 'flex'; const labels = signalAnalyzerChart.data.labels; const datasets = signalAnalyzerChart.data.datasets; if (cursorA) { document.getElementById('cursorAX').textContent = labels[cursorA.index] || '---'; document.getElementById('cursorAY').textContent = datasets.length > 0 && datasets[0].data[cursorA.index] !== undefined ? datasets[0].data[cursorA.index].toFixed(2) : '---'; } if (cursorB) { document.getElementById('cursorBX').textContent = labels[cursorB.index] || '---'; document.getElementById('cursorBY').textContent = datasets.length > 0 && datasets[0].data[cursorB.index] !== undefined ? datasets[0].data[cursorB.index].toFixed(2) : '---'; } if (cursorA && cursorB) { const timeA = parseFloat(labels[cursorA.index]); const timeB = parseFloat(labels[cursorB.index]); document.getElementById('cursorDeltaT').textContent = `${Math.abs(timeB - timeA).toFixed(2)}s`; datasets.forEach(ds => { const valA = ds.data[cursorA.index]; const valB = ds.data[cursorB.index]; if (valA !== null && valB !== null) { if (ds.yAxisID === 'y-pitch') document.getElementById('cursorDeltaYPitch').textContent = `${(valB - valA).toFixed(2)}°`; else if (ds.yAxisID === 'y-speed') document.getElementById('cursorDeltaYSpeed').textContent = `${(valB - valA).toFixed(0)} imp/s`; } }); } }
+function toggleCursors() { 
+    if (!signalAnalyzerChart) return;
+    const cursorInfo = document.getElementById('cursorInfo'); 
+    if (cursorInfo.style.display === 'none') { 
+        cursorInfo.style.display = 'flex'; 
+        cursorA = { index: Math.floor(signalAnalyzerChart.data.labels.length * 0.25) }; 
+        cursorB = { index: Math.floor(signalAnalyzerChart.data.labels.length * 0.75) }; 
+        updateCursorInfo(); 
+    } else { 
+        cursorInfo.style.display = 'none'; 
+        cursorA = null; 
+        cursorB = null; 
+    } 
+    signalAnalyzerChart.update(); 
+}
+function handleChartClick(event) { 
+    if (!cursorA && !cursorB) return; 
+    if (!signalAnalyzerChart) return;
+    const activePoints = signalAnalyzerChart.getElementsAtEventForMode(event, 'index', { intersect: false }, true); 
+    if (activePoints.length > 0) { 
+        const clickedIndex = activePoints[0].index; 
+        if (cursorA && cursorB) { 
+            const distA = Math.abs(clickedIndex - cursorA.index); 
+            const distB = Math.abs(clickedIndex - cursorB.index); 
+            if (distA < distB) { cursorA.index = clickedIndex; } 
+            else { cursorB.index = clickedIndex; } 
+        } else if (cursorA) { 
+            cursorA.index = clickedIndex; 
+        } 
+        updateCursorInfo(); 
+        signalAnalyzerChart.update(); 
+    } 
+}
+function updateCursorInfo() { 
+    if (!cursorA && !cursorB) { 
+        const cursorInfoEl = document.getElementById('cursorInfo');
+        if (cursorInfoEl) cursorInfoEl.style.display = 'none'; 
+        return; 
+    } 
+    if (!signalAnalyzerChart) return;
+    const cursorInfoEl = document.getElementById('cursorInfo');
+    if (cursorInfoEl) cursorInfoEl.style.display = 'flex'; 
+    const labels = signalAnalyzerChart.data.labels; 
+    const datasets = signalAnalyzerChart.data.datasets; 
+    if (cursorA) { 
+        const cursorAXEl = document.getElementById('cursorAX');
+        const cursorAYEl = document.getElementById('cursorAY');
+        if (cursorAXEl) cursorAXEl.textContent = labels[cursorA.index] || '---'; 
+        if (cursorAYEl) cursorAYEl.textContent = datasets.length > 0 && datasets[0].data[cursorA.index] !== undefined ? datasets[0].data[cursorA.index].toFixed(2) : '---'; 
+    } 
+    if (cursorB) { 
+        const cursorBXEl = document.getElementById('cursorBX');
+        const cursorBYEl = document.getElementById('cursorBY');
+        if (cursorBXEl) cursorBXEl.textContent = labels[cursorB.index] || '---'; 
+        if (cursorBYEl) cursorBYEl.textContent = datasets.length > 0 && datasets[0].data[cursorB.index] !== undefined ? datasets[0].data[cursorB.index].toFixed(2) : '---'; 
+    } 
+    if (cursorA && cursorB) { 
+        const timeA = parseFloat(labels[cursorA.index]); 
+        const timeB = parseFloat(labels[cursorB.index]); 
+        const deltaTEl = document.getElementById('cursorDeltaT');
+        if (deltaTEl) deltaTEl.textContent = `${Math.abs(timeB - timeA).toFixed(2)}s`; 
+        datasets.forEach(ds => { 
+            const valA = ds.data[cursorA.index]; 
+            const valB = ds.data[cursorB.index]; 
+            if (valA !== null && valB !== null) { 
+                if (ds.yAxisID === 'y-pitch') {
+                    const el = document.getElementById('cursorDeltaYPitch');
+                    if (el) el.textContent = `${(valB - valA).toFixed(2)}°`; 
+                } else if (ds.yAxisID === 'y-speed') {
+                    const el = document.getElementById('cursorDeltaYSpeed');
+                    if (el) el.textContent = `${(valB - valA).toFixed(0)} imp/s`; 
+                }
+            } 
+        }); 
+    } 
+}
 function getChartIndexFromX(xPixel) {
+    if (!signalAnalyzerChart) return 0;
     const chart = signalAnalyzerChart;
     const xScale = chart.scales['x'];
+    if (!xScale) return 0;
     const dataLength = chart.data.labels.length;
 
     // Prevent division by zero
@@ -4309,6 +4395,10 @@ function highlightSelectedRange() {
 }
 
 function exportChartDataToCsv(exportRange = false) {
+    if (!signalAnalyzerChart) {
+        addLogMessage('[UI] Wykres nie jest zainicjalizowany.', 'warn');
+        return;
+    }
     const data = signalAnalyzerChart.data;
     let csvContent = "data:text/csv;charset=utf-8,";
     let headers = ['Time'];
@@ -4344,7 +4434,17 @@ function exportChartDataToCsv(exportRange = false) {
     const message = exportRange ? '[UI] Zaznaczony zakres wyeksportowany do CSV.' : '[UI] Dane wykresu wyeksportowane do CSV.';
     addLogMessage(message, 'info');
 }
-function exportChartToPng() { const link = document.createElement('a'); link.download = 'telemetry_chart.png'; link.href = signalAnalyzerChart.toBase64Image(); link.click(); addLogMessage('[UI] Wykres wyeksportowany do PNG.', 'info'); }
+function exportChartToPng() { 
+    if (!signalAnalyzerChart) {
+        addLogMessage('[UI] Wykres nie jest zainicjalizowany.', 'warn');
+        return;
+    }
+    const link = document.createElement('a'); 
+    link.download = 'telemetry_chart.png'; 
+    link.href = signalAnalyzerChart.toBase64Image(); 
+    link.click(); 
+    addLogMessage('[UI] Wykres wyeksportowany do PNG.', 'info'); 
+}
 
 // ========================================================================
 // IMU TUNING CHART - minimal chart with raw accel angle vs Madgwick result
