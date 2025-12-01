@@ -7,485 +7,118 @@
 // STATE MANAGER - Centralized State Management
 // ========================================================================
 // This module provides a centralized store for application state with
-// observer pattern for reactive updates. It replaces scattered global
-// variables with a single source of truth.
-// ========================================================================
 
-/**
- * AppStore - Centralized application state manager
- * Implements observer pattern for reactive state updates
- */
-class AppStore {
-    constructor() {
-        this.state = {
-            // Connection state
-            connection: {
-                isConnected: false,
-                isSynced: false,
-                deviceName: null,
-                syncTimeout: null
-            },
+// Manual correction panel wiring (right-side)
+const manualPanel = document.getElementById('dashboard-right-panel');
+const manualPanelOverlay = document.getElementById('panelRightOverlay');
+document.getElementById('openManualCorrectionPanel')?.addEventListener('click', () => {
+    if (!manualPanel) return;
+    manualPanel.style.display = 'block';
+    manualPanelOverlay.classList.add('active');
+    setTimeout(() => manualPanel.classList.add('open'), 20);
+    // Prefill inputs
+    const pInput = document.getElementById('manualPitchCorrectionInput');
+    const rInput = document.getElementById('manualRollCorrectionInput');
+    const curTrimPitch = (window.telemetryData && typeof window.telemetryData.trim_angle !== 'undefined') ? Number(window.telemetryData.trim_angle) : null;
+    const curTrimRoll = (window.telemetryData && typeof window.telemetryData.roll_trim !== 'undefined') ? Number(window.telemetryData.roll_trim) : null;
+    if (pInput) { pInput.value = (curTrimPitch !== null) ? curTrimPitch.toFixed(2) : (Number(window.telemetryData?.pitch || 0)).toFixed(2); pInput.dispatchEvent(new Event('change')); }
+    if (rInput) { rInput.value = (curTrimRoll !== null) ? curTrimRoll.toFixed(2) : (Number(window.telemetryData?.roll || 0)).toFixed(2); rInput.dispatchEvent(new Event('change')); }
+});
+document.getElementById('closeManualCorrectionPanel')?.addEventListener('click', () => {
+    if (!manualPanel) return;
+    manualPanel.classList.remove('open');
+    manualPanelOverlay.classList.remove('active');
+    setTimeout(() => manualPanel.style.display = 'none', 300);
+});
+// Close on overlay click
+manualPanelOverlay?.addEventListener('click', () => {
+    if (!manualPanel) return;
+    manualPanel.classList.remove('open');
+    manualPanelOverlay.classList.remove('active');
+    setTimeout(() => manualPanel.style.display = 'none', 300);
+});
 
-            // Robot state
-            robot: {
-                state: 'IDLE', // IDLE, BALANCING, EMERGENCY_STOP, etc.
-                balancing: false,
-                holdingPosition: false,
-                speedMode: false
-            },
-
-            // Telemetry data
-            telemetry: {
-                pitch: 0,
-                roll: 0,
-                yaw: 0,
-                speed: 0,
-                encoderLeft: 0,
-                encoderRight: 0,
-                loopTime: 0,
-                qw: 0,
-                qx: 0,
-                qy: 0,
-                qz: 0
-            },
-
-            // UI state
-            ui: {
-                isApplyingConfig: false,
-                isSyncingConfig: false,
-                isLocked: true
-            },
-
-            // Tuning state
-            tuning: {
-                isActive: false,
-                activeMethod: '',
-                isPaused: false
-            },
-
-            // Sequence state
-            sequence: {
-                isRunning: false,
-                currentStep: 0
-            },
-
-            // Temporary sync data
-            sync: {
-                tempParams: {},
-                tempTuningParams: {},
-                tempStates: {}
-            },
-
-            // Joystick state
-            joystick: {
-                isDragging: false,
-                lastSendTime: 0
-            },
-
-            // Gamepad state
-            gamepad: {
-                index: null,
-                lastState: [],
-                mappings: {},
-                isMappingButton: false,
-                actionToMap: null
-            }
-        };
-
-        this.listeners = new Map();
-        this.nextListenerId = 0;
-    }
-
-    /**
-     * Get current state or a specific path in the state
-     * @param {string} path - Optional dot-notation path (e.g., 'connection.isConnected')
-     * @returns {any} State value
-     */
-
-    getState(path = null) {
-        if (!path) return this.state;
-
-        const keys = path.split('.');
-        let value = this.state;
-        for (const key of keys) {
-            if (value && typeof value === 'object' && key in value) {
-                value = value[key];
-            } else {
-                return undefined;
-            }
-        }
-        return value;
-    }
-
-    /**
-     * Update state and notify listeners
-     * @param {string} path - Dot-notation path or object with updates
-     * @param {any} value - New value (if path is string)
-     */
-    setState(path, value = undefined) {
-        let updates = {};
-
-        if (typeof path === 'object' && value === undefined) {
-            // Direct object update: setState({ 'connection.isConnected': true })
-            updates = path;
-        } else {
-            // Path update: setState('connection.isConnected', true)
-            updates[path] = value;
-        }
-
-        // Apply updates
-        const changedPaths = [];
-        for (const [updatePath, updateValue] of Object.entries(updates)) {
-            const keys = updatePath.split('.');
-            let current = this.state;
-
-            for (let i = 0; i < keys.length - 1; i++) {
-                const key = keys[i];
-                if (!(key in current)) {
-                    current[key] = {};
-                }
-                current = current[key];
-            }
-
-            const lastKey = keys[keys.length - 1];
-            if (current[lastKey] !== updateValue) {
-                current[lastKey] = updateValue;
-                changedPaths.push(updatePath);
-            }
-        }
-
-        // Notify listeners for changed paths
-        if (changedPaths.length > 0) {
-            this.notifyListeners(changedPaths);
-        }
-    }
-
-    /**
-     * Subscribe to state changes
-     * @param {string|Array<string>} paths - Path(s) to watch (e.g., 'connection.isConnected')
-     * @param {Function} callback - Callback function(newValue, oldValue, path)
-     * @returns {number} Listener ID for unsubscribing
-     */
-    subscribe(paths, callback) {
-        const id = this.nextListenerId++;
-        const pathArray = Array.isArray(paths) ? paths : [paths];
-
-        this.listeners.set(id, {
-            paths: pathArray,
-            callback
-        });
-
-        return id;
-    }
-
-    /**
-     * Unsubscribe from state changes
-     * @param {number} id - Listener ID returned from subscribe()
-     */
-    unsubscribe(id) {
-        this.listeners.delete(id);
-    }
-
-    /**
-     * Notify listeners about state changes
-     * @param {Array<string>} changedPaths - Paths that changed
-     */
-    notifyListeners(changedPaths) {
-        for (const [id, listener] of this.listeners.entries()) {
-            const { paths, callback } = listener;
-
-            // Check if any watched path was changed
-            for (const watchPath of paths) {
-                for (const changedPath of changedPaths) {
-                    // Match exact path or parent path (e.g., 'connection' matches 'connection.isConnected')
-                    if (changedPath === watchPath ||
-                        changedPath.startsWith(watchPath + '.') ||
-                        watchPath.startsWith(changedPath + '.')) {
-                        try {
-                            const newValue = this.getState(changedPath);
-                            callback(newValue, changedPath);
-                        } catch (error) {
-                            console.error(`Error in state listener ${id}:`, error);
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Reset state to initial values
-     */
-    reset() {
-        this.setState({
-            'connection.isConnected': false,
-            'connection.isSynced': false,
-            'connection.deviceName': null,
-            'robot.state': 'IDLE',
-            'robot.balancing': false,
-            'robot.holdingPosition': false,
-            'robot.speedMode': false,
-            'ui.isLocked': true,
-            'tuning.isActive': false,
-            'tuning.activeMethod': '',
-            'tuning.isPaused': false,
-            'sequence.isRunning': false,
-            'sequence.currentStep': 0
-        });
-    }
-
-    /**
-     * Batch update multiple state values
-     * More efficient than multiple setState calls
-     * @param {Object} updates - Object with path: value pairs
-     */
-    batchUpdate(updates) {
-        this.setState(updates);
-    }
+function bindSpinner(minusId, plusId, inputId, step) {
+    const minus = document.getElementById(minusId);
+    const plus = document.getElementById(plusId);
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    if (minus) minus.addEventListener('click', () => { input.value = (parseFloat(input.value || 0) - step).toFixed(getDecimalPlaces(step)); input.dispatchEvent(new Event('change')); });
+    if (plus) plus.addEventListener('click', () => { input.value = (parseFloat(input.value || 0) + step).toFixed(getDecimalPlaces(step)); input.dispatchEvent(new Event('change')); });
 }
 
-// Attach sensor mapping modal controls and IMU mapping buttons when DOM is ready
-// Setup manual/auto PWM tuning buttons (start/test/stop) before DomContentLoaded
-function setupManualTuneButtons() {
-    const activeTestTimers = new Map();
-    document.querySelectorAll('.manual-tune-row').forEach(row => {
-        const motor = row.dataset.motor;
-        const direction = row.dataset.direction;
-        const rowKey = `${motor}-${direction}`;
-        const input = row.querySelector('.tune-input');
-        const testBtn = row.querySelector('.test-btn');
-        const stopBtn = row.querySelector('.stop-btn');
-        const autoBtn = row.querySelector('.auto-btn');
+bindSpinner('pitchMinus', 'pitchPlus', 'manualPitchCorrectionInput', 0.1);
+bindSpinner('rollMinus', 'rollPlus', 'manualRollCorrectionInput', 0.1);
 
-        if (testBtn) testBtn.addEventListener('click', () => {
-            const pwm = parseInt(input.value) || 0;
-            if (pwm <= 0) { addLogMessage('[UI] Wpisz dodatni PWM do testu.', 'warn'); return; }
-            commLayer.send({ type: 'manual_tune_motor', motor, direction, pwm });
-            addLogMessage(`[UI] Test ${motor} ${direction} rozpoczęty na 5s (PWM=${pwm}).`, 'info');
-            if (activeTestTimers.has(rowKey)) clearTimeout(activeTestTimers.get(rowKey));
-            const timeoutId = setTimeout(() => {
-                commLayer.send({ type: 'manual_tune_motor', motor, direction, pwm: 0 });
-                addLogMessage(`[UI] Test ${motor} ${direction} zakończony automatycznie po 5s.`, 'info');
-                activeTestTimers.delete(rowKey);
-            }, 5000);
-            activeTestTimers.set(rowKey, timeoutId);
-        });
+// Pitch apply and set zero
+document.getElementById('manualPitchApplyBtn')?.addEventListener('click', () => {
+    if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+    const v = parseFloat(document.getElementById('manualPitchCorrectionInput')?.value || 0);
+    commLayer.send({ type: 'set_param', key: 'trim_angle', value: v });
+    addLogMessage(`[UI] Zmieniono trim (Pitch) na ${v}`, 'info');
+});
+document.getElementById('manualPitchSetZeroBtn')?.addEventListener('click', () => {
+    if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+    const currentPitch = Number(window.telemetryData?.pitch || 0);
+    const newTrim = -currentPitch;
+    // Apply runtime delta for immediate effect then persist trim value (keep set_param as last message)
+    commLayer.send({ type: 'adjust_zero', value: newTrim });
+    commLayer.send({ type: 'set_param', key: 'trim_angle', value: newTrim });
+    addLogMessage(`[UI] Ustawiono punkt 0 (Pitch). Nowy trim=${newTrim.toFixed(2)}`, 'info');
+});
 
-        if (stopBtn) stopBtn.addEventListener('click', () => {
-            if (activeTestTimers.has(rowKey)) { clearTimeout(activeTestTimers.get(rowKey)); activeTestTimers.delete(rowKey); }
-            commLayer.send({ type: 'manual_tune_motor', motor, direction, pwm: 0 });
-            addLogMessage(`[UI] Test ${motor} ${direction} zatrzymany.`, 'warn');
-        });
+// Roll apply and set zero
+document.getElementById('manualRollApplyBtn')?.addEventListener('click', () => {
+    if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+    const v = parseFloat(document.getElementById('manualRollCorrectionInput')?.value || 0);
+    commLayer.send({ type: 'set_param', key: 'roll_trim', value: v });
+    addLogMessage(`[UI] Zmieniono trim (Roll) na ${v}`, 'info');
+});
+document.getElementById('manualRollSetZeroBtn')?.addEventListener('click', () => {
+    if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+    const currentRoll = Number(window.telemetryData?.roll || 0);
+    const newTrim = -currentRoll;
+    // Apply runtime delta for immediate effect then persist trim value (keep set_param as last message)
+    commLayer.send({ type: 'adjust_roll', value: newTrim });
+    commLayer.send({ type: 'set_param', key: 'roll_trim', value: newTrim });
+    addLogMessage(`[UI] Ustawiono punkt 0 (Roll). Nowy trim=${newTrim.toFixed(2)}`, 'info');
+});
 
-        if (autoBtn) autoBtn.addEventListener('click', (e) => {
-            // If an autotune for this row is already in progress, ignore repeat presses
-            if (autoBtn.disabled) { addLogMessage(`[UI] Auto-strojenie już trwa dla ${motor} ${direction}`, 'warn'); return; }
-            if (!confirm('UWAGA! Upewnij sie, ze robot jest uniesiony, a kola moga sie swobodnie obracac. Kontynuowac?')) return;
-            if (!appStore.getState('connection.isConnected')) { addLogMessage('[UI] Najpierw połącz się z robotem', 'warn'); return; }
-            const startValue = parseInt(document.getElementById('pwmTuneStartInput')?.value || 1200);
-            commLayer.send({ type: 'autotune_single_pwm', motor, direction, start_pwm: startValue });
-            if (autoBtn) { autoBtn.disabled = true; autoBtn.textContent = 'Szukanie...'; autoBtn.classList.add('running'); }
-            addLogMessage(`[UI] Rozpoczynam auto-strojenie dla ${motor} ${direction}...`, 'info');
-            // Add a safety timeout that re-enables the button after 30s
-            const rowKeyAuto = `${motor}-${direction}`;
-            if (globalActiveAutoTimers.has(rowKeyAuto)) clearTimeout(globalActiveAutoTimers.get(rowKeyAuto));
-            const autoTimeoutId = setTimeout(() => {
-                try { if (autoBtn) { autoBtn.disabled = false; autoBtn.textContent = 'Auto'; autoBtn.classList.remove('running'); } addLogMessage(`[UI] Auto-strojenie ${motor} ${direction} przerwane (timeout).`, 'warn'); } finally { globalActiveAutoTimers.delete(rowKeyAuto); }
-            }, 30000);
-            globalActiveAutoTimers.set(rowKeyAuto, autoTimeoutId);
-        });
-    });
-
-    const stopAll = document.getElementById('manualTuneStopAll');
-    if (stopAll) stopAll.addEventListener('click', () => {
-        commLayer.send({ type: 'manual_tune_stop_all' });
-        addLogMessage('[UI] Zatrzymano wszystkie silniki.', 'warn');
-        // clear test timers (manual 5s tests)
-        try { activeTestTimers.forEach((t) => clearTimeout(t)); activeTestTimers.clear(); } catch (e) { /* no-op */ }
-        // Clear any active auto timers and re-enable Auto buttons
-        try {
-            globalActiveAutoTimers.forEach((tId, key) => { clearTimeout(tId); });
-            globalActiveAutoTimers.clear();
-            document.querySelectorAll('.manual-tune-row').forEach(row => { const ab = row.querySelector('.auto-btn'); if (ab) { ab.disabled = false; ab.textContent = 'Auto'; ab.classList.remove('running'); } });
-        } catch (e) { /* no-op */ }
-    });
-
-    const startMinus = document.getElementById('pwmTuneStartMinus');
-    const startPlus = document.getElementById('pwmTuneStartPlus');
-    const startInput = document.getElementById('pwmTuneStartInput');
-    if (startMinus && startInput) startMinus.addEventListener('click', () => { startInput.value = Math.max(parseInt(startInput.value || 0) - 10, 1); });
-    if (startPlus && startInput) startPlus.addEventListener('click', () => { startInput.value = Math.min(parseInt(startInput.value || 0) + 10, 2047); });
+// Backward compatible Set Zero helpers (used by legacy UI modals)
+function setPitchZero() {
+    if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+    const currentPitch = Number(window.telemetryData?.pitch || 0);
+    const delta = -currentPitch;
+    commLayer.send({ type: 'adjust_zero', value: delta });
+    addLogMessage(`[UI] setPitchZero() -> adjust_zero ${delta}`, 'info');
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    // Initialize PWM tuning button handlers (if present)
-    setupManualTuneButtons();
-    // Initialize signal analyzer chart and controls (idempotent guards inside)
-    try { initSignalAnalyzerChart(); setupSignalChartControls(); setupSignalAnalyzerControls(); } catch (e) { /* no-op if Chart.js not present */ }
-    // Initialize 3D visualization if container exists
-    try { if (document.getElementById('robot3d-container')) { init3DVisualization(); setupControls3D?.(); animate3D(); } } catch (e) { /* no-op */ }
-    // Initialize IMU tuning chart controls (toggle, chart) for settings
-    try { setupImuTuningControls(); } catch (e) { /* no-op */ }
-    document.getElementById('sensorMappingBtnSettings')?.addEventListener('click', () => { openSensorMappingModal(); });
-    // IMU calibration buttons
-    // document.getElementById('calibrateMpuBtnSettings')?.addEventListener('click', showCalibrationModal);
-    document.getElementById('calibrateZeroPointBtnSettings')?.addEventListener('click', () => { if (confirm("Upewnij sie, ze robot stoi na idealnie plaskiej powierzchni. Robot bedzie balansowal przez 10 sekund w celu znalezienia dokladnego punktu rownowagi. Kontynuowac?")) { sendBleMessage({ type: 'calibrate_zero_point' }); } });
-    // Model mapping buttons
-    document.getElementById('modelMappingBtn3D')?.addEventListener('click', () => { openModelMappingModal(); sendBleMessage({ type: 'get_model_mapping' }); });
-    document.getElementById('modelMappingLoadBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'get_model_mapping' }); });
-    document.getElementById('modelMappingSaveBtn')?.addEventListener('click', () => {
-        if (!AppState.isConnected) { addLogMessage('[UI] Musisz być połączony z robotem aby zapisać mapowanie modelu 3D.', 'warn'); return; }
-        if (!confirm('Zapisz mapowanie modelu 3D do pamięci EEPROM robota?')) return;
-        gatherModelMappingFromUI();
-        sendBleMessage({ type: 'set_model_mapping', mapping: modelMapping });
-        addLogMessage('[UI] Wyslano mapowanie modelu 3D do robota.', 'info');
-    });
-    document.getElementById('modelMappingResetBtn')?.addEventListener('click', () => { resetModelMapping(); addLogMessage('[UI] Przywrócono domyślne mapowanie modelu (identity).', 'info'); });
-    document.getElementById('modelMappingCloseBtn')?.addEventListener('click', () => { closeModelMappingModal(); });
-    document.getElementById('imuMappingLoadBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'get_imu_mapping' }); });
-    document.getElementById('imuMappingSaveBtn')?.addEventListener('click', () => {
-        if (!AppState.isConnected) { addLogMessage('[UI] Musisz być połączony z robotem aby zapisać mapowanie IMU.', 'warn'); return; }
-        if (!confirm('Zapisz mapowanie IMU do pamięci EEPROM robota?')) return;
-        const mapping = gatherIMUMappingFromUI();
-        sendBleMessage({ type: 'set_imu_mapping', mapping });
-        addLogMessage('[UI] Wysłano mapowanie IMU do robota (set_imu_mapping).', 'info');
-    });
+function setRollZero() {
+    if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
+    const currentRoll = Number(window.telemetryData?.roll || 0);
+    const delta = -currentRoll;
+    commLayer.send({ type: 'adjust_roll', value: delta });
+    addLogMessage(`[UI] setRollZero() -> adjust_roll ${delta}`, 'info');
+}
 
-    ['imuPitchSource', 'imuYawSource', 'imuRollSource'].forEach(selectId => {
-        const s = document.getElementById(selectId);
-        if (!s) return;
-        s.addEventListener('change', () => {
-            if (AppState.isConnected) {
-                const mapping = gatherIMUMappingFromUI();
-                sendBleMessage({ type: 'set_imu_mapping', mapping });
-            }
-        });
-    });
-
-    // Gamepad mappings: wire modal and load existing stored mappings
-    try { setupGamepadMappingModal(); loadGamepadMappings(); renderMappingModal(); } catch (e) { /* no-op if not present */ }
-
-    ['imuPitchSign', 'imuYawSign', 'imuRollSign'].forEach(containerId => {
-        const el = document.getElementById(containerId);
-        if (!el) return;
-        el.querySelectorAll('button').forEach(btn => {
-            btn.addEventListener('click', () => { const sign = parseInt(btn.dataset.sign); setSignButtons(containerId, sign); });
-        });
-    });
-
-    // Manual correction panel wiring (right-side)
-    const manualPanel = document.getElementById('dashboard-right-panel');
-    const manualPanelOverlay = document.getElementById('panelRightOverlay');
-    document.getElementById('openManualCorrectionPanel')?.addEventListener('click', () => {
-        if (!manualPanel) return;
-        manualPanel.style.display = 'block';
-        manualPanelOverlay.classList.add('active');
-        setTimeout(() => manualPanel.classList.add('open'), 20);
-        // Prefill inputs
-        const pInput = document.getElementById('manualPitchCorrectionInput');
-        const rInput = document.getElementById('manualRollCorrectionInput');
-        const curTrimPitch = (window.telemetryData && typeof window.telemetryData.trim_angle !== 'undefined') ? Number(window.telemetryData.trim_angle) : null;
-        const curTrimRoll = (window.telemetryData && typeof window.telemetryData.roll_trim !== 'undefined') ? Number(window.telemetryData.roll_trim) : null;
-        if (pInput) { pInput.value = (curTrimPitch !== null) ? curTrimPitch.toFixed(2) : (Number(window.telemetryData?.pitch || 0)).toFixed(2); pInput.dispatchEvent(new Event('change')); }
-        if (rInput) { rInput.value = (curTrimRoll !== null) ? curTrimRoll.toFixed(2) : (Number(window.telemetryData?.roll || 0)).toFixed(2); rInput.dispatchEvent(new Event('change')); }
-    });
-    document.getElementById('closeManualCorrectionPanel')?.addEventListener('click', () => {
-        if (!manualPanel) return;
-        manualPanel.classList.remove('open');
-        manualPanelOverlay.classList.remove('active');
-        setTimeout(() => manualPanel.style.display = 'none', 300);
-    });
-    // Close on overlay click
-    manualPanelOverlay?.addEventListener('click', () => {
-        if (!manualPanel) return;
-        manualPanel.classList.remove('open');
-        manualPanelOverlay.classList.remove('active');
-        setTimeout(() => manualPanel.style.display = 'none', 300);
-    });
-
-    function bindSpinner(minusId, plusId, inputId, step) {
-        const minus = document.getElementById(minusId);
-        const plus = document.getElementById(plusId);
-        const input = document.getElementById(inputId);
-        if (!input) return;
-        if (minus) minus.addEventListener('click', () => { input.value = (parseFloat(input.value || 0) - step).toFixed(getDecimalPlaces(step)); input.dispatchEvent(new Event('change')); });
-        if (plus) plus.addEventListener('click', () => { input.value = (parseFloat(input.value || 0) + step).toFixed(getDecimalPlaces(step)); input.dispatchEvent(new Event('change')); });
+// Sidebar EEPROM save/load
+document.getElementById('loadEepromBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (!appStore.getState('connection.isConnected')) {
+        showEepromModal('Błąd', 'Najpierw połącz się z robotem');
+        return;
     }
-
-    bindSpinner('pitchMinus', 'pitchPlus', 'manualPitchCorrectionInput', 0.1);
-    bindSpinner('rollMinus', 'rollPlus', 'manualRollCorrectionInput', 0.1);
-
-    // Pitch apply and set zero
-    document.getElementById('manualPitchApplyBtn')?.addEventListener('click', () => {
-        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
-        const v = parseFloat(document.getElementById('manualPitchCorrectionInput')?.value || 0);
-        commLayer.send({ type: 'set_param', key: 'trim_angle', value: v });
-        addLogMessage(`[UI] Zmieniono trim (Pitch) na ${v}`, 'info');
-    });
-    document.getElementById('manualPitchSetZeroBtn')?.addEventListener('click', () => {
-        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
-        const currentPitch = Number(window.telemetryData?.pitch || 0);
-        const newTrim = -currentPitch;
-        // Apply runtime delta for immediate effect then persist trim value (keep set_param as last message)
-        commLayer.send({ type: 'adjust_zero', value: newTrim });
-        commLayer.send({ type: 'set_param', key: 'trim_angle', value: newTrim });
-        addLogMessage(`[UI] Ustawiono punkt 0 (Pitch). Nowy trim=${newTrim.toFixed(2)}`, 'info');
-    });
-
-    // Roll apply and set zero
-    document.getElementById('manualRollApplyBtn')?.addEventListener('click', () => {
-        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
-        const v = parseFloat(document.getElementById('manualRollCorrectionInput')?.value || 0);
-        commLayer.send({ type: 'set_param', key: 'roll_trim', value: v });
-        addLogMessage(`[UI] Zmieniono trim (Roll) na ${v}`, 'info');
-    });
-    document.getElementById('manualRollSetZeroBtn')?.addEventListener('click', () => {
-        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
-        const currentRoll = Number(window.telemetryData?.roll || 0);
-        const newTrim = -currentRoll;
-        // Apply runtime delta for immediate effect then persist trim value (keep set_param as last message)
-        commLayer.send({ type: 'adjust_roll', value: newTrim });
-        commLayer.send({ type: 'set_param', key: 'roll_trim', value: newTrim });
-        addLogMessage(`[UI] Ustawiono punkt 0 (Roll). Nowy trim=${newTrim.toFixed(2)}`, 'info');
-    });
-
-    // Backward compatible Set Zero helpers (used by legacy UI modals)
-    function setPitchZero() {
-        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
-        const currentPitch = Number(window.telemetryData?.pitch || 0);
-        const delta = -currentPitch;
-        commLayer.send({ type: 'adjust_zero', value: delta });
-        addLogMessage(`[UI] setPitchZero() -> adjust_zero ${delta}`, 'info');
+    commLayer.send({ type: 'request_full_config' });
+    showEepromModal('Sukces', 'Żądanie odczytu EEPROM zostało wysłane');
+});
+document.getElementById('saveEepromBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (!appStore.getState('connection.isConnected')) {
+        showEepromModal('Błąd', 'Najpierw połącz się z robotem');
+        return;
     }
-
-    function setRollZero() {
-        if (!appStore.getState('connection.isConnected')) { addLogMessage('Najpierw połącz się z robotem', 'warn'); return; }
-        const currentRoll = Number(window.telemetryData?.roll || 0);
-        const delta = -currentRoll;
-        commLayer.send({ type: 'adjust_roll', value: delta });
-        addLogMessage(`[UI] setRollZero() -> adjust_roll ${delta}`, 'info');
-    }
-
-    // Sidebar EEPROM save/load
-    document.getElementById('loadEepromBtn')?.addEventListener('click', (e) => {
-        e.preventDefault();
-        if (!appStore.getState('connection.isConnected')) {
-            showEepromModal('Błąd', 'Najpierw połącz się z robotem');
-            return;
-        }
-        commLayer.send({ type: 'request_full_config' });
-        showEepromModal('Sukces', 'Żądanie odczytu EEPROM zostało wysłane');
-    });
-    document.getElementById('saveEepromBtn')?.addEventListener('click', (e) => {
-        e.preventDefault();
-        if (!appStore.getState('connection.isConnected')) {
-            showEepromModal('Błąd', 'Najpierw połącz się z robotem');
-            return;
-        }
-        commLayer.send({ type: 'save_tunings' });
-        showEepromModal('Sukces', 'Żądanie zapisu do EEPROM zostało wysłane');
-    });
+    commLayer.send({ type: 'save_tunings' });
+    showEepromModal('Sukces', 'Żądanie zapisu do EEPROM zostało wysłane');
 });
 
 // Funkcja do pokazywania modalu EEPROM
