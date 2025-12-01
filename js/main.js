@@ -801,6 +801,13 @@ let cursorA = null, cursorB = null;
 // 3D Visualization variables
 let scene3D, camera3D, renderer3D, controls3D, robotPivot, leftWheel, rightWheel, groundMesh, groundTexture, skyDome;
 let isAnimation3DEnabled = false, isMovement3DEnabled = false, robotPerspectiveZoom = 40;
+
+// Pre-export 3D functions (will be defined later in DOMContentLoaded, but need to be accessible immediately)
+window.init3DVisualization = function () { console.warn('[3D] init3DVisualization called before DOM ready'); };
+window.setupControls3D = function () { console.warn('[3D] setupControls3D called before DOM ready'); };
+window.animate3D = function () { console.warn('[3D] animate3D called before DOM ready'); };
+window.initSignalAnalyzerChart = function () { console.warn('[CHART] initSignalAnalyzerChart called before DOM ready'); };
+
 // Connection watchdog for stale telemetry / implicit disconnects
 let lastTelemetryAt = 0;
 let connectionWatchdogId = null;
