@@ -141,8 +141,8 @@ function runMetricsTest(kp, ki, kd) {
         }
 
         window.addEventListener('ble_message', handler);
-        // Wyślij komendę
-        sendBleCommand('run_metrics_test', { kp, ki, kd, testId });
+        // Wyślij komendę - ZAKOMENTOWANE, bo robot nie obsługuje run_metrics_test
+        // sendBleCommand('run_metrics_test', { kp, ki, kd, testId });
     });
 }
 
@@ -1195,10 +1195,7 @@ class ZieglerNicholsRelay {
                 window.addEventListener('ble_message', ackHandlerZN);
 
                 try { addLogMessage(`[ZN] Sending run_relay_test: testId=${testId} amplitude=${this.amplitude}`, 'info'); } catch (e) { console.debug('[ZN] log failed', e); }
-                sendBleCommand('run_relay_test', {
-                    amplitude: this.amplitude,
-                    testId: testId
-                });
+                // sendBleCommand('run_relay_test', { amplitude: this.amplitude, testId: testId }); - ZAKOMENTOWANE, bo robot nie obsługuje
             });
         } catch (err) {
             this.isRunning = false;
@@ -1330,21 +1327,9 @@ class ZieglerNicholsRelay {
 
     stop() {
         this.isRunning = false;
-        sendBleCommand('cancel_test', {});
+        // sendBleCommand('cancel_test', {}); - ZAKOMENTOWANE, bo robot nie obsługuje
         // Restore baseline PID when stopping
         sendBaselinePIDToRobot();
-    }
-
-    pause() {
-        // ZN test is typically short, but implement pause for consistency
-        this.isRunning = false;
-        sendBleCommand('cancel_test', {});
-        sendBaselinePIDToRobot();
-    }
-
-    resume() {
-        // ZN test cannot be resumed - would need to restart
-        this.isRunning = false;
     }
 }
 
@@ -1364,7 +1349,6 @@ class BayesianOptimization {
         this.samples = [];
         this.iteration = 0;
         this.isRunning = false;
-        this.isPaused = false;
         this.neuralNetwork = null;
         this.testCounter = 0;
     }
@@ -1626,13 +1610,6 @@ class BayesianOptimization {
             await this.initialize();
 
             while (this.iteration < this.iterations && this.isRunning) {
-                // Pause handling - keep loop alive while paused
-                while (this.isPaused && this.isRunning) {
-                    await RB.helpers.delay(100);
-                }
-
-                if (!this.isRunning) break;
-
                 // 1. Select next sample using acquisition function
                 const nextSample = await this.acquireNext();
 
@@ -1693,20 +1670,6 @@ class BayesianOptimization {
             try { addLogMessage(`[Bayes] run() error: ${err && err.message ? err.message : String(err)}`, 'error'); } catch (e) { console.debug('[Bayes] log failed', e); }
             throw err;
         }
-    }
-
-    pause() {
-        this.isPaused = true;
-        // Restore baseline PID when pausing
-        setTimeout(() => {
-            if (this.isPaused) {
-                sendBaselinePIDToRobot();
-            }
-        }, 100);
-    }
-
-    resume() {
-        this.isPaused = false;
     }
 
     stop() {

@@ -391,7 +391,7 @@ function showSequenceReport() { document.getElementById('sequence-report-panel')
 
 if (typeof window.initJoystick === 'undefined') {
     window.initJoystick = function () {
-        const wrapper = document.getElementById('joystickContainer');
+        const wrapper = document.getElementById('joystickWrapper');
         const size = wrapper.clientWidth;
         const joystickCanvas = document.getElementById('joystickCanvas');
         const joystickCtx = joystickCanvas.getContext('2d');
