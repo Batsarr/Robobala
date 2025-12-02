@@ -337,10 +337,8 @@
                     </div>
                 </div>
                 
-        <!-- NOWY, ZINTEGROWANY PANEL OPTYMALIZACJI - PROSZĘ WSTAW TUTAJ -->
-        <div class="card" id="autotuning-card">
-            <button class="accordion-header" onclick="toggleAccordion(this)">7. Zaawansowana Optymalizacja PID</button>
-            <div class="accordion-content autotune-pane" id="autotuning-card-content">
+                <button class="accordion-header" onclick="toggleAccordion(this)">7. Zaawansowana Optymalizacja PID</button>
+                <div class="accordion-content autotune-pane" id="autotuning-card-content">
                 <div id="autotuning-config-panel">
                     <!-- Główne zakładki panelu -->
                     <div class="autotune-main-tabs">
@@ -456,7 +454,7 @@
                     </div>
                 </div>
 
-                <!-- Główne Przyciski Sterujące (widoczne tylko w zakładce 'Metody Optymalizacji') -->
+                <!-- Główne Przyciski Sterujące -->
                 <div class="tuning-controls" id="tuning-controls-bar">
                     <button id="start-tuning-btn">🚀 Rozpocznij Strojenie</button>
                     <button id="pause-tuning-btn" disabled>⏸️ Pauza</button>
@@ -466,59 +464,50 @@
             </div>
         </div>
         
-        <!-- AKORDEON: Identyfikacja Obiektu (System Identification) -->
-        <div class="card" id="sysid-card">
-            <button class="accordion-header" onclick="toggleAccordion(this)">8. Identyfikacja Obiektu (System ID)</button>
-            <div class="accordion-content" id="sysid-content">
-                <div class="config-section" style="margin-bottom: 15px;">
-                    <p style="color: #aaa; font-size: 0.9em; margin-bottom: 10px;">
+                <button class="accordion-header" onclick="toggleAccordion(this)">8. Identyfikacja Obiektu (System ID)</button>
+                <div class="accordion-content" id="sysid-content">
+                    <p style="color: #aaa; font-size: 0.9em; margin-bottom: 15px;">
                         📊 Nagraj odpowiedź skokową robota przy ustawionym Kp (bez Ki/Kd). 
+                        Impuls PWM zostanie wysłany 1s po rozpoczęciu nagrywania.
                         Eksportuj dane do MATLAB/Python aby stworzyć model i obliczyć optymalne PID.
                     </p>
-                </div>
-                
-                <div class="config-section">
-                    <h4>⚙️ Konfiguracja Nagrywania</h4>
-                    <div class="sysid-config-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
-                        <div class="setting-container">
-                            <label for="sysid-kp">Kp (tylko proporcjonalny):</label>
-                            <input type="number" id="sysid-kp" value="50" min="1" max="200" step="1" style="width: 100%; padding: 8px; background: #20232a; border: 1px solid #61dafb; border-radius: 4px; color: #fff;">
-                        </div>
-                        <div class="setting-container">
-                            <label for="sysid-duration">Czas nagrywania (s):</label>
-                            <input type="number" id="sysid-duration" value="5" min="2" max="30" step="1" style="width: 100%; padding: 8px; background: #20232a; border: 1px solid #61dafb; border-radius: 4px; color: #fff;">
-                        </div>
-                        <div class="setting-container">
-                            <label for="sysid-impulse">Impuls zakłócający (°):</label>
-                            <input type="number" id="sysid-impulse" value="5" min="1" max="15" step="0.5" style="width: 100%; padding: 8px; background: #20232a; border: 1px solid #61dafb; border-radius: 4px; color: #fff;">
-                        </div>
-                        <div class="setting-container">
-                            <label for="sysid-sample-rate">Próbkowanie (Hz):</label>
-                            <select id="sysid-sample-rate" style="width: 100%; padding: 8px; background: #20232a; border: 1px solid #61dafb; border-radius: 4px; color: #fff;">
-                                <option value="100">100 Hz</option>
-                                <option value="200" selected>200 Hz</option>
-                                <option value="500">500 Hz (pełna telemetria)</option>
-                            </select>
-                        </div>
+                    
+                    <div class="setting-container">
+                        <label for="sysid-kp">Kp (tylko proporcjonalny)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="sysid-kp" min="1" max="200" step="1" value="50"><button>+</button></div>
+                        <div class="help-text">Wartość wzmocnienia proporcjonalnego używana podczas testu. Ki i Kd będą ustawione na 0. Po zakończeniu nagrywania oryginalne wartości PID zostaną przywrócone.</div>
                     </div>
-                </div>
-                
-                <div class="config-section" style="margin-top: 15px;">
-                    <h4>📈 Status Nagrywania</h4>
-                    <div id="sysid-status" style="background: #20232a; border: 1px solid #4a4f58; border-radius: 6px; padding: 12px; margin-top: 10px;">
+                    <div class="setting-container">
+                        <label for="sysid-duration">Czas nagrywania (s)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="sysid-duration" min="2" max="30" step="1" value="5"><button>+</button></div>
+                        <div class="help-text">Całkowity czas nagrywania odpowiedzi skokowej. Impuls zostanie zastosowany 1s po starcie nagrywania, więc zalecany czas to min. 5s.</div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="sysid-impulse">Impuls zakłócający (PWM)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="sysid-impulse" min="50" max="1000" step="10" value="200"><button>+</button></div>
+                        <div class="help-text">Wartość impulsu PWM dodawanego do sterowania silników. Wyższa wartość = silniejsze zakłócenie. Typowy zakres: 100-400 PWM. Impuls trwa 200ms i jest wysyłany 1s po rozpoczęciu nagrywania.</div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="sysid-sample-rate">Próbkowanie (Hz)<span class="help-icon">?</span></label>
+                        <select id="sysid-sample-rate" class="config-value" style="width: 100%; padding: 8px; background: #20232a; border: 1px solid #61dafb; border-radius: 4px; color: #fff;">
+                            <option value="100">100 Hz</option>
+                            <option value="200" selected>200 Hz</option>
+                            <option value="500">500 Hz (pełna telemetria)</option>
+                        </select>
+                        <div class="help-text">Częstotliwość próbkowania danych. Wyższa wartość = więcej danych, lepsza rozdzielczość czasowa, ale większy plik.</div>
+                    </div>
+                    
+                    <div style="background: #20232a; border: 1px solid #4a4f58; border-radius: 6px; padding: 12px; margin: 15px 0;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span>Status: <strong id="sysid-status-text">Gotowy</strong></span>
+                            <span>Status: <strong id="sysid-status-text" style="color: #aaa;">Gotowy</strong></span>
                             <span>Próbki: <strong id="sysid-sample-count">0</strong></span>
                         </div>
                         <div style="margin-top: 8px;">
                             <progress id="sysid-progress" value="0" max="100" style="width: 100%; height: 20px;"></progress>
                         </div>
                     </div>
-                </div>
-                
-                <div class="config-section" style="margin-top: 15px;">
-                    <h4>🎛️ Kontrolki</h4>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+                    
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin: 15px 0;">
                         <button id="sysid-start-btn" style="flex: 1; min-width: 120px; padding: 12px; background: #61dafb; color: #000; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">
                             ▶️ Rozpocznij Nagrywanie
                         </button>
@@ -526,14 +515,11 @@
                             ⏹️ Zatrzymaj
                         </button>
                     </div>
-                </div>
-                
-                <div class="config-section" style="margin-top: 15px;">
-                    <h4>💾 Eksport Danych</h4>
+                    
                     <p style="color: #888; font-size: 0.85em; margin-bottom: 10px;">
-                        Dane zawierają: czas, kąt rzeczywisty, kąt zadany (setpoint), wyjście PWM, prędkość kół
+                        💾 Dane zawierają: czas, kąt rzeczywisty, impuls PWM, prędkość kół, gyro
                     </p>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;">
                         <button id="sysid-export-csv-btn" style="flex: 1; min-width: 100px; padding: 10px; background: #a2f279; color: #000; border: none; border-radius: 6px; cursor: pointer;" disabled>
                             📊 Eksport CSV
                         </button>
@@ -544,18 +530,15 @@
                             🗑️ Wyczyść Dane
                         </button>
                     </div>
-                </div>
-                
-                <div class="config-section" style="margin-top: 15px;">
-                    <h4>📉 Podgląd Nagrania</h4>
+                    
                     <canvas id="sysid-preview-chart" height="150" style="width: 100%; background: #101014; border: 1px solid #2a2a35; border-radius: 6px;"></canvas>
                 </div>
             </div>
         </div>
-        
-        <div class="button-group" style="display:flex; gap:10px; justify-content:center; margin-top:20px; grid-column: 1 / -1;">
-            <button id="loadBtn">Wczytaj z Robota</button>
-            <button id="saveBtn">Zapisz na Robocie</button>
+            <div class="button-group" style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
+                <button id="loadBtn">Wczytaj z Robota</button>
+                <button id="saveBtn">Zapisz na Robocie</button>
+            </div>
         </div>
     <div class="card" id="log-card" style="position: fixed; left: 0; right: 0; bottom: 0; z-index: 3000; margin: 0; border-radius: 0; padding-bottom: 0; box-shadow: 0 -4px 10px rgba(0,0,0,0.35);">
             <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" id="log-toggle-bar" title="Rozwiń/Zwiń logi">

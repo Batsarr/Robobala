@@ -4712,7 +4712,9 @@ const SysIdState = {
     duration: 5000,
     sampleRate: 200,
     kp: 50,
-    impulse: 5,
+    impulse: 200,  // PWM value instead of degrees
+    impulseApplied: false,
+    impulseStartTime: 0,
     chart: null,
     chartCtx: null,
     telemetryHandler: null
@@ -4762,8 +4764,10 @@ async function startSysIdRecording() {
     // Get config
     SysIdState.kp = parseFloat(document.getElementById('sysid-kp')?.value) || 50;
     SysIdState.duration = (parseFloat(document.getElementById('sysid-duration')?.value) || 5) * 1000;
-    SysIdState.impulse = parseFloat(document.getElementById('sysid-impulse')?.value) || 5;
+    SysIdState.impulse = parseFloat(document.getElementById('sysid-impulse')?.value) || 200;  // PWM value
     SysIdState.sampleRate = parseInt(document.getElementById('sysid-sample-rate')?.value) || 200;
+    SysIdState.impulseApplied = false;
+    SysIdState.impulseStartTime = 0;
 
     // Save current PID and apply Kp-only mode
     const currentKp = parseFloat(document.getElementById('balanceKpInput')?.value) || SysIdState.kp;
@@ -4792,10 +4796,21 @@ async function startSysIdRecording() {
         const data = evt.detail || evt;
         if (data.type === 'telemetry') {
             const elapsed = performance.now() - SysIdState.startTime;
+            const elapsedSec = elapsed / 1000;
+
+            // Determine current impulse value for recording
+            let currentImpulse = 0;
+            if (SysIdState.impulseApplied && SysIdState.impulseStartTime > 0) {
+                const impulseElapsed = elapsed - SysIdState.impulseStartTime;
+                if (impulseElapsed >= 0 && impulseElapsed < 200) {  // 200ms impulse duration
+                    currentImpulse = SysIdState.impulse;
+                }
+            }
+
             SysIdState.data.push({
-                time: elapsed / 1000,
+                time: elapsedSec,
                 angle: data.pitch ?? data.angle ?? 0,
-                setpoint: data.setpoint ?? data.targetAngle ?? 0,
+                impulse_pwm: currentImpulse,
                 pwm: data.pwm ?? data.pwmLeft ?? 0,
                 speed: data.speed ?? data.encoderSpeed ?? 0,
                 gyroY: data.gyroY ?? 0
@@ -4817,26 +4832,25 @@ async function startSysIdRecording() {
     };
     window.addEventListener('ble_message', SysIdState.telemetryHandler);
 
-    // Apply impulse after brief stabilization
+    // Apply PWM impulse after 1 second from start
     setTimeout(() => {
         if (SysIdState.isRecording) {
-            addLogMessage(`[SysID] Stosowanie impulsu zakłócającego: ${SysIdState.impulse}°`, 'info');
-            sendBleMessage({ type: 'set_param', param: 'trim', value: SysIdState.impulse });
-
-            // Return to zero after 500ms
-            setTimeout(() => {
-                sendBleMessage({ type: 'set_param', param: 'trim', value: 0 });
-            }, 500);
+            SysIdState.impulseApplied = true;
+            SysIdState.impulseStartTime = performance.now() - SysIdState.startTime;
+            addLogMessage(`[SysID] Stosowanie impulsu PWM: ${SysIdState.impulse}`, 'info');
+            sendBleMessage({ type: 'sysid_impulse', pwm: SysIdState.impulse, duration: 200 });
         }
-    }, 500);
+    }, 1000);
 
-    addLogMessage(`[SysID] Nagrywanie rozpoczęte (${SysIdState.duration / 1000}s)`, 'info');
+    addLogMessage(`[SysID] Nagrywanie rozpoczęte (${SysIdState.duration / 1000}s). Impuls za 1s.`, 'info');
 }
 
 function stopSysIdRecording() {
     if (!SysIdState.isRecording) return;
 
     SysIdState.isRecording = false;
+    SysIdState.impulseApplied = false;
+    SysIdState.impulseStartTime = 0;
 
     // Remove telemetry handler
     if (SysIdState.telemetryHandler) {
@@ -4851,9 +4865,6 @@ function stopSysIdRecording() {
         sendBleMessage({ type: 'set_param', param: 'kd_b', value: SysIdState.savedPID.kd });
         addLogMessage(`[SysID] Przywrócono PID: Kp=${SysIdState.savedPID.kp}, Ki=${SysIdState.savedPID.ki}, Kd=${SysIdState.savedPID.kd}`, 'info');
     }
-
-    // Reset trim
-    sendBleMessage({ type: 'set_param', param: 'trim', value: 0 });
 
     // Update UI
     updateSysIdUI('stopped');
@@ -4903,24 +4914,25 @@ function drawSysIdChart() {
 
     if (data.length < 2) return;
 
-    const padding = { left: 50, right: 20, top: 20, bottom: 30 };
+    const padding = { left: 50, right: 60, top: 20, bottom: 30 };
     const width = canvas.width - padding.left - padding.right;
     const height = canvas.height - padding.top - padding.bottom;
 
-    // Find min/max
+    // Find min/max for angle
     const times = data.map(d => d.time);
     const angles = data.map(d => d.angle);
-    const setpoints = data.map(d => d.setpoint);
+    const impulses = data.map(d => d.impulse_pwm || 0);
 
     const minTime = Math.min(...times);
     const maxTime = Math.max(...times);
-    const allValues = [...angles, ...setpoints];
-    const minVal = Math.min(...allValues) - 1;
-    const maxVal = Math.max(...allValues) + 1;
+    const minAngle = Math.min(...angles) - 1;
+    const maxAngle = Math.max(...angles) + 1;
+    const maxImpulse = Math.max(...impulses, 1);
 
     // Scale functions
     const scaleX = (t) => padding.left + ((t - minTime) / (maxTime - minTime + 0.001)) * width;
-    const scaleY = (v) => padding.top + height - ((v - minVal) / (maxVal - minVal + 0.001)) * height;
+    const scaleYAngle = (v) => padding.top + height - ((v - minAngle) / (maxAngle - minAngle + 0.001)) * height;
+    const scaleYImpulse = (v) => padding.top + height - (v / maxImpulse) * height * 0.5;  // Scale impulse to half height
 
     // Draw grid
     ctx.strokeStyle = '#333';
@@ -4933,30 +4945,32 @@ function drawSysIdChart() {
     }
     ctx.stroke();
 
-    // Draw zero line
-    if (minVal < 0 && maxVal > 0) {
+    // Draw zero line for angle
+    if (minAngle < 0 && maxAngle > 0) {
         ctx.strokeStyle = '#666';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        const zeroY = scaleY(0);
+        const zeroY = scaleYAngle(0);
         ctx.moveTo(padding.left, zeroY);
         ctx.lineTo(canvas.width - padding.right, zeroY);
         ctx.stroke();
     }
 
-    // Draw setpoint (dashed)
-    ctx.strokeStyle = '#61dafb';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([5, 5]);
+    // Draw impulse (filled area)
+    ctx.fillStyle = 'rgba(247, 183, 49, 0.3)';
+    ctx.strokeStyle = '#f7b731';
+    ctx.lineWidth = 2;
     ctx.beginPath();
+    ctx.moveTo(scaleX(data[0].time), padding.top + height);
     data.forEach((d, i) => {
         const x = scaleX(d.time);
-        const y = scaleY(d.setpoint);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        const y = scaleYImpulse(d.impulse_pwm || 0);
+        ctx.lineTo(x, y);
     });
+    ctx.lineTo(scaleX(data[data.length - 1].time), padding.top + height);
+    ctx.closePath();
+    ctx.fill();
     ctx.stroke();
-    ctx.setLineDash([]);
 
     // Draw angle (solid)
     ctx.strokeStyle = '#a2f279';
@@ -4964,7 +4978,7 @@ function drawSysIdChart() {
     ctx.beginPath();
     data.forEach((d, i) => {
         const x = scaleX(d.time);
-        const y = scaleY(d.angle);
+        const y = scaleYAngle(d.angle);
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
     });
@@ -4978,14 +4992,15 @@ function drawSysIdChart() {
     ctx.fillText(`${maxTime.toFixed(1)}s`, canvas.width - padding.right, canvas.height - 5);
 
     ctx.textAlign = 'right';
-    ctx.fillText(`${maxVal.toFixed(1)}°`, padding.left - 5, padding.top + 10);
-    ctx.fillText(`${minVal.toFixed(1)}°`, padding.left - 5, canvas.height - padding.bottom);
+    ctx.fillText(`${maxAngle.toFixed(1)}°`, padding.left - 5, padding.top + 10);
+    ctx.fillText(`${minAngle.toFixed(1)}°`, padding.left - 5, canvas.height - padding.bottom);
 
     // Legend
+    ctx.textAlign = 'left';
     ctx.fillStyle = '#a2f279';
-    ctx.fillText('● Kąt', canvas.width - 60, 15);
-    ctx.fillStyle = '#61dafb';
-    ctx.fillText('● Setpoint', canvas.width - 60, 28);
+    ctx.fillText('● Kąt', canvas.width - 55, 15);
+    ctx.fillStyle = '#f7b731';
+    ctx.fillText('● Impuls PWM', canvas.width - 55, 28);
 }
 
 function exportSysIdCSV() {
@@ -4994,9 +5009,9 @@ function exportSysIdCSV() {
         return;
     }
 
-    const header = 'time_s,angle_deg,setpoint_deg,pwm,speed_enc,gyro_y\n';
+    const header = 'time_s,angle_deg,impulse_pwm,pwm_output,speed_enc,gyro_y\n';
     const rows = SysIdState.data.map(d =>
-        `${d.time.toFixed(4)},${d.angle.toFixed(4)},${d.setpoint.toFixed(4)},${d.pwm.toFixed(2)},${d.speed.toFixed(2)},${d.gyroY.toFixed(4)}`
+        `${d.time.toFixed(4)},${d.angle.toFixed(4)},${d.impulse_pwm.toFixed(2)},${d.pwm.toFixed(2)},${d.speed.toFixed(2)},${d.gyroY.toFixed(4)}`
     ).join('\n');
 
     const csv = header + rows;
@@ -5021,7 +5036,7 @@ function exportSysIdMAT() {
     // Create MATLAB script with embedded data
     const time = SysIdState.data.map(d => d.time.toFixed(4)).join(', ');
     const angle = SysIdState.data.map(d => d.angle.toFixed(4)).join(', ');
-    const setpoint = SysIdState.data.map(d => d.setpoint.toFixed(4)).join(', ');
+    const impulse_pwm = SysIdState.data.map(d => d.impulse_pwm.toFixed(2)).join(', ');
     const pwm = SysIdState.data.map(d => d.pwm.toFixed(2)).join(', ');
     const speed = SysIdState.data.map(d => d.speed.toFixed(2)).join(', ');
     const gyroY = SysIdState.data.map(d => d.gyroY.toFixed(4)).join(', ');
@@ -5029,40 +5044,46 @@ function exportSysIdMAT() {
     const matlabScript = `%% System Identification Data - RoboBala
 % Generated: ${new Date().toISOString()}
 % Kp used: ${SysIdState.kp}
-% Impulse: ${SysIdState.impulse}°
+% Impulse PWM: ${SysIdState.impulse}
 % Sample rate: ${SysIdState.sampleRate} Hz
 % Duration: ${SysIdState.duration / 1000} s
+% Impulse applied at: 1.0s (duration: 200ms)
 
 % Data arrays
-time = [${time}];           % Time in seconds
-angle = [${angle}];         % Measured angle in degrees
-setpoint = [${setpoint}];   % Setpoint (reference) in degrees
-pwm = [${pwm}];             % PWM output
-speed = [${speed}];         % Encoder speed
-gyro_y = [${gyroY}];        % Gyroscope Y axis
+time = [${time}];               % Time in seconds
+angle = [${angle}];             % Measured angle in degrees
+impulse_pwm = [${impulse_pwm}]; % Impulse PWM input signal
+pwm = [${pwm}];                 % PWM output
+speed = [${speed}];             % Encoder speed
+gyro_y = [${gyroY}];            % Gyroscope Y axis
 
 % Create iddata object for System Identification Toolbox
-% y = output (angle), u = input (setpoint or pwm)
+% y = output (angle), u = input (impulse_pwm)
 Ts = ${(1 / SysIdState.sampleRate).toFixed(6)};  % Sample time
-data = iddata(angle', setpoint', Ts);
-data.InputName = 'Setpoint';
+data = iddata(angle', impulse_pwm', Ts);
+data.InputName = 'Impulse_PWM';
 data.OutputName = 'Angle';
-data.InputUnit = 'deg';
+data.InputUnit = 'PWM';
 data.OutputUnit = 'deg';
 
 % Plot data
 figure;
-subplot(2,1,1);
-plot(time, angle, 'b-', time, setpoint, 'r--');
+subplot(3,1,1);
+plot(time, angle, 'b-');
 xlabel('Time [s]'); ylabel('Angle [deg]');
-legend('Measured Angle', 'Setpoint');
-title('Step Response Data');
+title('Measured Angle Response');
 grid on;
 
-subplot(2,1,2);
+subplot(3,1,2);
+plot(time, impulse_pwm, 'r-', 'LineWidth', 2);
+xlabel('Time [s]'); ylabel('PWM');
+title('Impulse Input Signal');
+grid on;
+
+subplot(3,1,3);
 plot(time, pwm, 'g-');
 xlabel('Time [s]'); ylabel('PWM');
-title('Control Effort');
+title('Control Effort (PWM Output)');
 grid on;
 
 % System identification example:
@@ -5071,6 +5092,7 @@ grid on;
 
 disp('Data loaded successfully!');
 disp(['Samples: ' num2str(length(time))]);
+disp(['Impulse PWM: ${SysIdState.impulse}']);
 `;
 
     const blob = new Blob([matlabScript], { type: 'text/plain' });
