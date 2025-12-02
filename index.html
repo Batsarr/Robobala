@@ -382,7 +382,6 @@
                         <div class="method-tabs">
                             <button class="method-tab active" data-method="ga">🧬 Algorytm Genetyczny</button>
                             <button class="method-tab" data-method="pso">🌀 PSO</button>
-                            <button class="method-tab" data-method="zn">📊 Ziegler-Nichols</button>
                             <button class="method-tab" data-method="bayesian">🧠 Optymalizacja Bayesowska</button>
                         </div>
                         <div class="method-content active" data-method="ga">
@@ -401,12 +400,6 @@
                                 <div><label for="pso-inertia">Waga bezwładności:</label><input type="number" id="pso-inertia" value="0.7" min="0" max="1" step="0.01"></div>
                                 <div><label for="pso-cognitive">Waga poznawcza:</label><input type="number" id="pso-cognitive" value="1.5" min="0" max="3" step="0.1"></div>
                                 <div><label for="pso-social">Waga społeczna:</label><input type="number" id="pso-social" value="1.5" min="0" max="3" step="0.1"></div>
-                            </div>
-                        </div>
-                        <div class="method-content" data-method="zn">
-                             <div class="method-config">
-                                <div><label for="zn-amplitude">Amplituda przekaźnika:</label><input type="number" id="zn-amplitude" value="2.0" min="0.5" max="10" step="0.5"></div>
-                                <div><label for="zn-min-cycles">Minimalna liczba cykli:</label><input type="number" id="zn-min-cycles" value="3" min="2" max="10"></div>
                             </div>
                         </div>
                         <div class="method-content" data-method="bayesian">
@@ -472,6 +465,94 @@
                 </div>
             </div>
         </div>
+        
+        <!-- AKORDEON: Identyfikacja Obiektu (System Identification) -->
+        <div class="card" id="sysid-card">
+            <button class="accordion-header" onclick="toggleAccordion(this)">8. Identyfikacja Obiektu (System ID)</button>
+            <div class="accordion-content" id="sysid-content">
+                <div class="config-section" style="margin-bottom: 15px;">
+                    <p style="color: #aaa; font-size: 0.9em; margin-bottom: 10px;">
+                        📊 Nagraj odpowiedź skokową robota przy ustawionym Kp (bez Ki/Kd). 
+                        Eksportuj dane do MATLAB/Python aby stworzyć model i obliczyć optymalne PID.
+                    </p>
+                </div>
+                
+                <div class="config-section">
+                    <h4>⚙️ Konfiguracja Nagrywania</h4>
+                    <div class="sysid-config-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                        <div class="setting-container">
+                            <label for="sysid-kp">Kp (tylko proporcjonalny):</label>
+                            <input type="number" id="sysid-kp" value="50" min="1" max="200" step="1" style="width: 100%; padding: 8px; background: #20232a; border: 1px solid #61dafb; border-radius: 4px; color: #fff;">
+                        </div>
+                        <div class="setting-container">
+                            <label for="sysid-duration">Czas nagrywania (s):</label>
+                            <input type="number" id="sysid-duration" value="5" min="2" max="30" step="1" style="width: 100%; padding: 8px; background: #20232a; border: 1px solid #61dafb; border-radius: 4px; color: #fff;">
+                        </div>
+                        <div class="setting-container">
+                            <label for="sysid-impulse">Impuls zakłócający (°):</label>
+                            <input type="number" id="sysid-impulse" value="5" min="1" max="15" step="0.5" style="width: 100%; padding: 8px; background: #20232a; border: 1px solid #61dafb; border-radius: 4px; color: #fff;">
+                        </div>
+                        <div class="setting-container">
+                            <label for="sysid-sample-rate">Próbkowanie (Hz):</label>
+                            <select id="sysid-sample-rate" style="width: 100%; padding: 8px; background: #20232a; border: 1px solid #61dafb; border-radius: 4px; color: #fff;">
+                                <option value="100">100 Hz</option>
+                                <option value="200" selected>200 Hz</option>
+                                <option value="500">500 Hz (pełna telemetria)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="config-section" style="margin-top: 15px;">
+                    <h4>📈 Status Nagrywania</h4>
+                    <div id="sysid-status" style="background: #20232a; border: 1px solid #4a4f58; border-radius: 6px; padding: 12px; margin-top: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Status: <strong id="sysid-status-text">Gotowy</strong></span>
+                            <span>Próbki: <strong id="sysid-sample-count">0</strong></span>
+                        </div>
+                        <div style="margin-top: 8px;">
+                            <progress id="sysid-progress" value="0" max="100" style="width: 100%; height: 20px;"></progress>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="config-section" style="margin-top: 15px;">
+                    <h4>🎛️ Kontrolki</h4>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+                        <button id="sysid-start-btn" style="flex: 1; min-width: 120px; padding: 12px; background: #61dafb; color: #000; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">
+                            ▶️ Rozpocznij Nagrywanie
+                        </button>
+                        <button id="sysid-stop-btn" style="flex: 1; min-width: 120px; padding: 12px; background: #ff6347; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;" disabled>
+                            ⏹️ Zatrzymaj
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="config-section" style="margin-top: 15px;">
+                    <h4>💾 Eksport Danych</h4>
+                    <p style="color: #888; font-size: 0.85em; margin-bottom: 10px;">
+                        Dane zawierają: czas, kąt rzeczywisty, kąt zadany (setpoint), wyjście PWM, prędkość kół
+                    </p>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+                        <button id="sysid-export-csv-btn" style="flex: 1; min-width: 100px; padding: 10px; background: #a2f279; color: #000; border: none; border-radius: 6px; cursor: pointer;" disabled>
+                            📊 Eksport CSV
+                        </button>
+                        <button id="sysid-export-mat-btn" style="flex: 1; min-width: 100px; padding: 10px; background: #f7b731; color: #000; border: none; border-radius: 6px; cursor: pointer;" disabled>
+                            📐 Eksport MAT
+                        </button>
+                        <button id="sysid-clear-btn" style="flex: 1; min-width: 100px; padding: 10px; background: #4a4f58; color: #fff; border: none; border-radius: 6px; cursor: pointer;" disabled>
+                            🗑️ Wyczyść Dane
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="config-section" style="margin-top: 15px;">
+                    <h4>📉 Podgląd Nagrania</h4>
+                    <canvas id="sysid-preview-chart" height="150" style="width: 100%; background: #101014; border: 1px solid #2a2a35; border-radius: 6px;"></canvas>
+                </div>
+            </div>
+        </div>
+        
         <div class="button-group" style="display:flex; gap:10px; justify-content:center; margin-top:20px; grid-column: 1 / -1;">
             <button id="loadBtn">Wczytaj z Robota</button>
             <button id="saveBtn">Zapisz na Robocie</button>

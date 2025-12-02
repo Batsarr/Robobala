@@ -830,7 +830,7 @@ const parameterMapping = {
     'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b', 'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 'balanceIntegralLimitInput': 'balance_pid_integral_limit', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s', 'speedFilterAlphaInput': 'speed_pid_filter_alpha', 'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedIntegralLimitInput': 'speed_pid_integral_limit', 'speedDeadbandInput': 'speed_pid_deadband', 'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p', 'positionFilterAlphaInput': 'position_pid_filter_alpha', 'maxTargetSpeedInput': 'max_target_speed_from_pos_pid', 'positionIntegralLimitInput': 'position_pid_integral_limit', 'positionDeadbandInput': 'position_pid_deadband', 'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r', 'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h', 'rotationToPwmScaleInput': 'rotation_to_pwm_scale',
     // Joystick and mechanical parameters
     'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'maxAccelJoystickInput': 'max_accel_joystick', 'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd',
-    // Auto-tuning parameters (safety, space, weights, GA, PSO, ZN)
+    // Auto-tuning parameters (safety, space, weights, GA, PSO)
     'safetyMaxAngle': 'safety_max_angle', 'safetyMaxSpeed': 'safety_max_speed', 'safetyMaxPwm': 'safety_max_pwm',
     'ga-kp-min': 'space_kp_min', 'ga-kp-max': 'space_kp_max', 'ga-ki-min': 'space_ki_min', 'ga-ki-max': 'space_ki_max', 'ga-kd-min': 'space_kd_min', 'ga-kd-max': 'space_kd_max',
     'include-ki-checkbox': 'search_ki',
@@ -838,9 +838,8 @@ const parameterMapping = {
     'ga-weight-itae': 'weights_itae', 'ga-weight-overshoot': 'weights_overshoot', 'ga-weight-control-effort': 'weights_control_effort',
     'ga-generations': 'ga_generations', 'ga-population': 'ga_population', 'ga-mutation-rate': 'ga_mutation_rate', 'ga-elitism': 'ga_elitism', 'ga-adaptive': 'ga_adaptive', 'ga-convergence-check': 'ga_convergence_check',
     'pso-iterations': 'pso_iterations', 'pso-particles': 'pso_particles', 'pso-inertia': 'pso_inertia', 'pso-adaptive-inertia': 'pso_adaptive_inertia', 'pso-velocity-clamp': 'pso_velocity_clamp', 'pso-neighborhood': 'pso_neighborhood',
-    'zn-trial-duration': 'tuning_trial_duration_ms',
     // Madgwick filter parameters
-    'useMadgwickFilterInput': 'use_madgwick_filter', 'madgwickBetaInput': 'madgwick_beta', 'madgwickZetaInput': 'madgwick_zeta', 'zn-max-amplitude': 'zn_amplitude'
+    'useMadgwickFilterInput': 'use_madgwick_filter', 'madgwickBetaInput': 'madgwick_beta', 'madgwickZetaInput': 'madgwick_zeta'
 };
 // Map toggle for disabling magnetometer (now included in parameterMapping)
 
@@ -1692,8 +1691,7 @@ function relocateAutotuneChart(method) {
     const chartWrapper = document.querySelector('.autotune-tuning-chart-wrapper');
     if (!chartWrapper) return;
     let targetBtn = null;
-    if (method === 'zn-relay' || method === 'zn') targetBtn = document.getElementById('run-zn-test');
-    else if (method === 'ga-genetic' || method === 'ga') targetBtn = document.getElementById('run-ga-tune');
+    if (method === 'ga-genetic' || method === 'ga') targetBtn = document.getElementById('run-ga-tune');
     else if (method === 'pso-particle' || method === 'pso') targetBtn = document.getElementById('run-pso-tune');
     else if (method === 'single-tests') targetBtn = document.querySelector('.run-test-btn[data-test-type="step_response"]');
     if (!targetBtn) return;
@@ -4578,17 +4576,6 @@ async function startTuning() {
                 setTuningUiLock(false, '');
                 return;
             }
-        } else if (method === 'zn' || method === 'zn-relay') {
-            config = {
-                amplitude: parseFloat(document.getElementById('zn-amplitude').value),
-                minCycles: parseInt(document.getElementById('zn-min-cycles').value)
-            };
-            currentTuningSession = new ZieglerNicholsRelay(config);
-            if (isNaN(config.minCycles) || config.minCycles <= 0 || isNaN(config.amplitude) || config.amplitude <= 0) {
-                addLogMessage('[UI] Niepoprawna konfiguracja ZN: amplitude i minCycles muszą być > 0', 'error');
-                setTuningUiLock(false, '');
-                return;
-            }
         } else if (method === 'bayesian') {
             config = {
                 iterations: parseInt(document.getElementById('bayesian-iterations').value),
@@ -4703,10 +4690,416 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     // Preload algorithms in background to avoid delay on first start
     ensureTuningDependencies().then(() => {
-        try { addLogMessage('[UI] Moduly strojenia (GA/PSO/ZN) zaladowane i gotowe.', 'info'); } catch (e) { }
+        try { addLogMessage('[UI] Moduly strojenia (GA/PSO) zaladowane i gotowe.', 'info'); } catch (e) { }
     }).catch((err) => {
         try { addLogMessage('[UI] Ostrzezenie: Nie mozna wstępnie zaladowac modulow strojenia: ' + err.message, 'warn'); } catch (e) { }
     });
+
+    // ========================================================================
+    // SYSTEM IDENTIFICATION (SYSID) MODULE
+    // ========================================================================
+    initSystemIdentification();
 });
 
+// ========================================================================
+// SYSTEM IDENTIFICATION - Telemetry Recording for Model Identification
+// ========================================================================
 
+const SysIdState = {
+    isRecording: false,
+    data: [],
+    startTime: 0,
+    duration: 5000,
+    sampleRate: 200,
+    kp: 50,
+    impulse: 5,
+    chart: null,
+    chartCtx: null,
+    telemetryHandler: null
+};
+
+function initSystemIdentification() {
+    const startBtn = document.getElementById('sysid-start-btn');
+    const stopBtn = document.getElementById('sysid-stop-btn');
+    const exportCsvBtn = document.getElementById('sysid-export-csv-btn');
+    const exportMatBtn = document.getElementById('sysid-export-mat-btn');
+    const clearBtn = document.getElementById('sysid-clear-btn');
+
+    if (startBtn) startBtn.addEventListener('click', startSysIdRecording);
+    if (stopBtn) stopBtn.addEventListener('click', stopSysIdRecording);
+    if (exportCsvBtn) exportCsvBtn.addEventListener('click', exportSysIdCSV);
+    if (exportMatBtn) exportMatBtn.addEventListener('click', exportSysIdMAT);
+    if (clearBtn) clearBtn.addEventListener('click', clearSysIdData);
+
+    // Initialize chart context
+    const canvas = document.getElementById('sysid-preview-chart');
+    if (canvas) {
+        SysIdState.chartCtx = canvas.getContext('2d');
+    }
+}
+
+async function startSysIdRecording() {
+    if (SysIdState.isRecording) return;
+
+    // Check connection
+    if (!AppState.isConnected) {
+        addLogMessage('[SysID] Błąd: Połącz się z robotem.', 'error');
+        return;
+    }
+
+    // Check robot state
+    if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState)) {
+        const ok = confirm(`Robot musi balansować. Aktualny stan: '${AppState.lastKnownRobotState}'.\nCzy włączyć balansowanie?`);
+        if (ok) {
+            const bsEl = document.getElementById('balanceSwitch');
+            if (bsEl) { bsEl.checked = true; bsEl.dispatchEvent(new Event('change')); }
+            await new Promise(r => setTimeout(r, 2000));
+        } else {
+            return;
+        }
+    }
+
+    // Get config
+    SysIdState.kp = parseFloat(document.getElementById('sysid-kp')?.value) || 50;
+    SysIdState.duration = (parseFloat(document.getElementById('sysid-duration')?.value) || 5) * 1000;
+    SysIdState.impulse = parseFloat(document.getElementById('sysid-impulse')?.value) || 5;
+    SysIdState.sampleRate = parseInt(document.getElementById('sysid-sample-rate')?.value) || 200;
+
+    // Save current PID and apply Kp-only mode
+    const currentKp = parseFloat(document.getElementById('balanceKpInput')?.value) || SysIdState.kp;
+    const currentKi = parseFloat(document.getElementById('balanceKiInput')?.value) || 0;
+    const currentKd = parseFloat(document.getElementById('balanceKdInput')?.value) || 0;
+    SysIdState.savedPID = { kp: currentKp, ki: currentKi, kd: currentKd };
+
+    // Apply Kp-only (no Ki, no Kd)
+    sendBleMessage({ type: 'set_param', param: 'kp_b', value: SysIdState.kp });
+    sendBleMessage({ type: 'set_param', param: 'ki_b', value: 0 });
+    sendBleMessage({ type: 'set_param', param: 'kd_b', value: 0 });
+
+    addLogMessage(`[SysID] Ustawiono Kp=${SysIdState.kp}, Ki=0, Kd=0`, 'info');
+
+    // Clear data
+    SysIdState.data = [];
+    SysIdState.isRecording = true;
+    SysIdState.startTime = performance.now();
+
+    // Update UI
+    updateSysIdUI('recording');
+
+    // Subscribe to telemetry
+    SysIdState.telemetryHandler = (evt) => {
+        if (!SysIdState.isRecording) return;
+        const data = evt.detail || evt;
+        if (data.type === 'telemetry') {
+            const elapsed = performance.now() - SysIdState.startTime;
+            SysIdState.data.push({
+                time: elapsed / 1000,
+                angle: data.pitch ?? data.angle ?? 0,
+                setpoint: data.setpoint ?? data.targetAngle ?? 0,
+                pwm: data.pwm ?? data.pwmLeft ?? 0,
+                speed: data.speed ?? data.encoderSpeed ?? 0,
+                gyroY: data.gyroY ?? 0
+            });
+
+            // Update progress
+            const progress = Math.min(100, (elapsed / SysIdState.duration) * 100);
+            const progressEl = document.getElementById('sysid-progress');
+            if (progressEl) progressEl.value = progress;
+
+            const countEl = document.getElementById('sysid-sample-count');
+            if (countEl) countEl.textContent = SysIdState.data.length;
+
+            // Auto-stop when duration reached
+            if (elapsed >= SysIdState.duration) {
+                stopSysIdRecording();
+            }
+        }
+    };
+    window.addEventListener('ble_message', SysIdState.telemetryHandler);
+
+    // Apply impulse after brief stabilization
+    setTimeout(() => {
+        if (SysIdState.isRecording) {
+            addLogMessage(`[SysID] Stosowanie impulsu zakłócającego: ${SysIdState.impulse}°`, 'info');
+            sendBleMessage({ type: 'set_param', param: 'trim', value: SysIdState.impulse });
+
+            // Return to zero after 500ms
+            setTimeout(() => {
+                sendBleMessage({ type: 'set_param', param: 'trim', value: 0 });
+            }, 500);
+        }
+    }, 500);
+
+    addLogMessage(`[SysID] Nagrywanie rozpoczęte (${SysIdState.duration / 1000}s)`, 'info');
+}
+
+function stopSysIdRecording() {
+    if (!SysIdState.isRecording) return;
+
+    SysIdState.isRecording = false;
+
+    // Remove telemetry handler
+    if (SysIdState.telemetryHandler) {
+        window.removeEventListener('ble_message', SysIdState.telemetryHandler);
+        SysIdState.telemetryHandler = null;
+    }
+
+    // Restore original PID
+    if (SysIdState.savedPID) {
+        sendBleMessage({ type: 'set_param', param: 'kp_b', value: SysIdState.savedPID.kp });
+        sendBleMessage({ type: 'set_param', param: 'ki_b', value: SysIdState.savedPID.ki });
+        sendBleMessage({ type: 'set_param', param: 'kd_b', value: SysIdState.savedPID.kd });
+        addLogMessage(`[SysID] Przywrócono PID: Kp=${SysIdState.savedPID.kp}, Ki=${SysIdState.savedPID.ki}, Kd=${SysIdState.savedPID.kd}`, 'info');
+    }
+
+    // Reset trim
+    sendBleMessage({ type: 'set_param', param: 'trim', value: 0 });
+
+    // Update UI
+    updateSysIdUI('stopped');
+
+    // Draw chart
+    drawSysIdChart();
+
+    addLogMessage(`[SysID] Nagrywanie zakończone. Zebrano ${SysIdState.data.length} próbek.`, 'success');
+}
+
+function updateSysIdUI(state) {
+    const startBtn = document.getElementById('sysid-start-btn');
+    const stopBtn = document.getElementById('sysid-stop-btn');
+    const exportCsvBtn = document.getElementById('sysid-export-csv-btn');
+    const exportMatBtn = document.getElementById('sysid-export-mat-btn');
+    const clearBtn = document.getElementById('sysid-clear-btn');
+    const statusText = document.getElementById('sysid-status-text');
+
+    if (state === 'recording') {
+        if (startBtn) startBtn.disabled = true;
+        if (stopBtn) stopBtn.disabled = false;
+        if (exportCsvBtn) exportCsvBtn.disabled = true;
+        if (exportMatBtn) exportMatBtn.disabled = true;
+        if (clearBtn) clearBtn.disabled = true;
+        if (statusText) statusText.textContent = 'Nagrywanie...';
+        if (statusText) statusText.style.color = '#61dafb';
+    } else if (state === 'stopped') {
+        if (startBtn) startBtn.disabled = false;
+        if (stopBtn) stopBtn.disabled = true;
+        const hasData = SysIdState.data.length > 0;
+        if (exportCsvBtn) exportCsvBtn.disabled = !hasData;
+        if (exportMatBtn) exportMatBtn.disabled = !hasData;
+        if (clearBtn) clearBtn.disabled = !hasData;
+        if (statusText) statusText.textContent = hasData ? 'Gotowy do eksportu' : 'Gotowy';
+        if (statusText) statusText.style.color = hasData ? '#a2f279' : '#aaa';
+    }
+}
+
+function drawSysIdChart() {
+    const canvas = document.getElementById('sysid-preview-chart');
+    if (!canvas || !SysIdState.chartCtx) return;
+
+    const ctx = SysIdState.chartCtx;
+    const data = SysIdState.data;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (data.length < 2) return;
+
+    const padding = { left: 50, right: 20, top: 20, bottom: 30 };
+    const width = canvas.width - padding.left - padding.right;
+    const height = canvas.height - padding.top - padding.bottom;
+
+    // Find min/max
+    const times = data.map(d => d.time);
+    const angles = data.map(d => d.angle);
+    const setpoints = data.map(d => d.setpoint);
+
+    const minTime = Math.min(...times);
+    const maxTime = Math.max(...times);
+    const allValues = [...angles, ...setpoints];
+    const minVal = Math.min(...allValues) - 1;
+    const maxVal = Math.max(...allValues) + 1;
+
+    // Scale functions
+    const scaleX = (t) => padding.left + ((t - minTime) / (maxTime - minTime + 0.001)) * width;
+    const scaleY = (v) => padding.top + height - ((v - minVal) / (maxVal - minVal + 0.001)) * height;
+
+    // Draw grid
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    for (let i = 0; i <= 5; i++) {
+        const y = padding.top + (height / 5) * i;
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(canvas.width - padding.right, y);
+    }
+    ctx.stroke();
+
+    // Draw zero line
+    if (minVal < 0 && maxVal > 0) {
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const zeroY = scaleY(0);
+        ctx.moveTo(padding.left, zeroY);
+        ctx.lineTo(canvas.width - padding.right, zeroY);
+        ctx.stroke();
+    }
+
+    // Draw setpoint (dashed)
+    ctx.strokeStyle = '#61dafb';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    data.forEach((d, i) => {
+        const x = scaleX(d.time);
+        const y = scaleY(d.setpoint);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw angle (solid)
+    ctx.strokeStyle = '#a2f279';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    data.forEach((d, i) => {
+        const x = scaleX(d.time);
+        const y = scaleY(d.angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Draw labels
+    ctx.fillStyle = '#aaa';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${minTime.toFixed(1)}s`, padding.left, canvas.height - 5);
+    ctx.fillText(`${maxTime.toFixed(1)}s`, canvas.width - padding.right, canvas.height - 5);
+
+    ctx.textAlign = 'right';
+    ctx.fillText(`${maxVal.toFixed(1)}°`, padding.left - 5, padding.top + 10);
+    ctx.fillText(`${minVal.toFixed(1)}°`, padding.left - 5, canvas.height - padding.bottom);
+
+    // Legend
+    ctx.fillStyle = '#a2f279';
+    ctx.fillText('● Kąt', canvas.width - 60, 15);
+    ctx.fillStyle = '#61dafb';
+    ctx.fillText('● Setpoint', canvas.width - 60, 28);
+}
+
+function exportSysIdCSV() {
+    if (SysIdState.data.length === 0) {
+        addLogMessage('[SysID] Brak danych do eksportu.', 'warn');
+        return;
+    }
+
+    const header = 'time_s,angle_deg,setpoint_deg,pwm,speed_enc,gyro_y\n';
+    const rows = SysIdState.data.map(d =>
+        `${d.time.toFixed(4)},${d.angle.toFixed(4)},${d.setpoint.toFixed(4)},${d.pwm.toFixed(2)},${d.speed.toFixed(2)},${d.gyroY.toFixed(4)}`
+    ).join('\n');
+
+    const csv = header + rows;
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sysid_data_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    addLogMessage(`[SysID] Eksportowano ${SysIdState.data.length} próbek do CSV.`, 'success');
+}
+
+function exportSysIdMAT() {
+    if (SysIdState.data.length === 0) {
+        addLogMessage('[SysID] Brak danych do eksportu.', 'warn');
+        return;
+    }
+
+    // Create MATLAB script with embedded data
+    const time = SysIdState.data.map(d => d.time.toFixed(4)).join(', ');
+    const angle = SysIdState.data.map(d => d.angle.toFixed(4)).join(', ');
+    const setpoint = SysIdState.data.map(d => d.setpoint.toFixed(4)).join(', ');
+    const pwm = SysIdState.data.map(d => d.pwm.toFixed(2)).join(', ');
+    const speed = SysIdState.data.map(d => d.speed.toFixed(2)).join(', ');
+    const gyroY = SysIdState.data.map(d => d.gyroY.toFixed(4)).join(', ');
+
+    const matlabScript = `%% System Identification Data - RoboBala
+% Generated: ${new Date().toISOString()}
+% Kp used: ${SysIdState.kp}
+% Impulse: ${SysIdState.impulse}°
+% Sample rate: ${SysIdState.sampleRate} Hz
+% Duration: ${SysIdState.duration / 1000} s
+
+% Data arrays
+time = [${time}];           % Time in seconds
+angle = [${angle}];         % Measured angle in degrees
+setpoint = [${setpoint}];   % Setpoint (reference) in degrees
+pwm = [${pwm}];             % PWM output
+speed = [${speed}];         % Encoder speed
+gyro_y = [${gyroY}];        % Gyroscope Y axis
+
+% Create iddata object for System Identification Toolbox
+% y = output (angle), u = input (setpoint or pwm)
+Ts = ${(1 / SysIdState.sampleRate).toFixed(6)};  % Sample time
+data = iddata(angle', setpoint', Ts);
+data.InputName = 'Setpoint';
+data.OutputName = 'Angle';
+data.InputUnit = 'deg';
+data.OutputUnit = 'deg';
+
+% Plot data
+figure;
+subplot(2,1,1);
+plot(time, angle, 'b-', time, setpoint, 'r--');
+xlabel('Time [s]'); ylabel('Angle [deg]');
+legend('Measured Angle', 'Setpoint');
+title('Step Response Data');
+grid on;
+
+subplot(2,1,2);
+plot(time, pwm, 'g-');
+xlabel('Time [s]'); ylabel('PWM');
+title('Control Effort');
+grid on;
+
+% System identification example:
+% sys = tfest(data, 2);  % Estimate 2nd order transfer function
+% compare(data, sys);
+
+disp('Data loaded successfully!');
+disp(['Samples: ' num2str(length(time))]);
+`;
+
+    const blob = new Blob([matlabScript], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sysid_data_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.m`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    addLogMessage(`[SysID] Eksportowano ${SysIdState.data.length} próbek do skryptu MATLAB (.m).`, 'success');
+}
+
+function clearSysIdData() {
+    SysIdState.data = [];
+    updateSysIdUI('stopped');
+
+    // Clear chart
+    const canvas = document.getElementById('sysid-preview-chart');
+    if (canvas && SysIdState.chartCtx) {
+        SysIdState.chartCtx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    const countEl = document.getElementById('sysid-sample-count');
+    if (countEl) countEl.textContent = '0';
+
+    const progressEl = document.getElementById('sysid-progress');
+    if (progressEl) progressEl.value = 0;
+
+    addLogMessage('[SysID] Dane wyczyszczone.', 'info');
+}
