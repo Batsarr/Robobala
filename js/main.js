@@ -4764,13 +4764,13 @@ function testSysIdImpulse() {
         testBtn.textContent = '⏳ Test...';
     }
 
-    addLogMessage(`[SysID] Test impulsu: PWM=${pwmValue} na oba silniki (200ms)`, 'info');
+    addLogMessage(`[SysID] Test impulsu: PWM=${pwmValue} na oba silniki (350ms)`, 'info');
 
     // Send impulse to both motors
     sendBleMessage({ type: 'manual_tune_motor', motor: 'left', direction: 'fwd', pwm: pwmValue });
     sendBleMessage({ type: 'manual_tune_motor', motor: 'right', direction: 'fwd', pwm: pwmValue });
 
-    // Stop after 200ms
+    // Stop after 350ms
     setTimeout(() => {
         sendBleMessage({ type: 'manual_tune_stop_all' });
         addLogMessage(`[SysID] Test impulsu zakończony`, 'success');
@@ -4780,7 +4780,7 @@ function testSysIdImpulse() {
             testBtn.disabled = false;
             testBtn.textContent = '🔧 Testuj';
         }
-    }, 200);
+    }, 350);
 }
 
 async function startSysIdRecording() {
@@ -4845,7 +4845,7 @@ async function startSysIdRecording() {
             let currentImpulse = 0;
             if (SysIdState.impulseApplied && SysIdState.impulseStartTime > 0) {
                 const impulseElapsed = elapsed - SysIdState.impulseStartTime;
-                if (impulseElapsed >= 0 && impulseElapsed < 200) {  // 200ms impulse duration
+                if (impulseElapsed >= 0 && impulseElapsed < 350) {  // 350ms impulse duration
                     currentImpulse = SysIdState.impulse;
                 }
             }
@@ -4881,17 +4881,17 @@ async function startSysIdRecording() {
             SysIdState.impulseApplied = true;
             SysIdState.impulseStartTime = performance.now() - SysIdState.startTime;
             const pwmValue = SysIdState.impulse;
-            addLogMessage(`[SysID] Stosowanie zakłócenia PWM: ${pwmValue} na oba silniki (200ms)`, 'info');
+            addLogMessage(`[SysID] Stosowanie zakłócenia PWM: ${pwmValue} na oba silniki (350ms)`, 'info');
 
             // Start disturbance on both motors (forward direction)
             sendBleMessage({ type: 'manual_tune_motor', motor: 'left', direction: 'fwd', pwm: pwmValue });
             sendBleMessage({ type: 'manual_tune_motor', motor: 'right', direction: 'fwd', pwm: pwmValue });
 
-            // Stop after 200ms
+            // Stop after 350ms
             setTimeout(() => {
                 sendBleMessage({ type: 'manual_tune_stop_all' });
                 addLogMessage(`[SysID] Zakłócenie zakończone`, 'info');
-            }, 200);
+            }, 350);
         }
     }, 1000);
 
@@ -5076,7 +5076,7 @@ function exportSysIdCSV() {
         `# generated: ${new Date().toISOString()}`,
         `# kp_used: ${SysIdState.kp}`,
         `# impulse_pwm: ${SysIdState.impulse}`,
-        `# impulse_duration_ms: 200`,
+        `# impulse_duration_ms: 350`,
         `# sample_rate_hz: ${SysIdState.sampleRate}`,
         `# recording_duration_s: ${SysIdState.duration / 1000}`,
         `# encoder_ppr: ${encoderPpr}`,
@@ -5124,7 +5124,7 @@ function exportSysIdMAT() {
 % Impulse PWM: ${SysIdState.impulse}
 % Sample rate: ${SysIdState.sampleRate} Hz
 % Duration: ${SysIdState.duration / 1000} s
-% Impulse applied at: 1.0s (duration: 200ms)
+% Impulse applied at: 1.0s (duration: 350ms)
 
 % Data arrays
 time = [${time}];               % Time in seconds
