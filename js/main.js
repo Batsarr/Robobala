@@ -4726,18 +4726,61 @@ function initSystemIdentification() {
     const exportCsvBtn = document.getElementById('sysid-export-csv-btn');
     const exportMatBtn = document.getElementById('sysid-export-mat-btn');
     const clearBtn = document.getElementById('sysid-clear-btn');
+    const testImpulseBtn = document.getElementById('sysid-test-impulse-btn');
 
     if (startBtn) startBtn.addEventListener('click', startSysIdRecording);
     if (stopBtn) stopBtn.addEventListener('click', stopSysIdRecording);
     if (exportCsvBtn) exportCsvBtn.addEventListener('click', exportSysIdCSV);
     if (exportMatBtn) exportMatBtn.addEventListener('click', exportSysIdMAT);
     if (clearBtn) clearBtn.addEventListener('click', clearSysIdData);
+    if (testImpulseBtn) testImpulseBtn.addEventListener('click', testSysIdImpulse);
 
     // Initialize chart context
     const canvas = document.getElementById('sysid-preview-chart');
     if (canvas) {
         SysIdState.chartCtx = canvas.getContext('2d');
     }
+}
+
+// Test impulse without recording - allows user to check impulse strength
+function testSysIdImpulse() {
+    if (!AppState.isConnected) {
+        addLogMessage('[SysID] Błąd: Połącz się z robotem.', 'error');
+        return;
+    }
+
+    // Check robot state - robot musi balansować
+    if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState)) {
+        addLogMessage(`[SysID] Robot musi balansować. Aktualny stan: '${AppState.lastKnownRobotState}'.`, 'warn');
+        return;
+    }
+
+    const pwmValue = parseFloat(document.getElementById('sysid-impulse')?.value) || 200;
+    const testBtn = document.getElementById('sysid-test-impulse-btn');
+
+    // Disable button during test
+    if (testBtn) {
+        testBtn.disabled = true;
+        testBtn.textContent = '⏳ Test...';
+    }
+
+    addLogMessage(`[SysID] Test impulsu: PWM=${pwmValue} na oba silniki (200ms)`, 'info');
+
+    // Send impulse to both motors
+    sendBleMessage({ type: 'manual_tune_motor', motor: 'left', direction: 'fwd', pwm: pwmValue });
+    sendBleMessage({ type: 'manual_tune_motor', motor: 'right', direction: 'fwd', pwm: pwmValue });
+
+    // Stop after 200ms
+    setTimeout(() => {
+        sendBleMessage({ type: 'manual_tune_stop_all' });
+        addLogMessage(`[SysID] Test impulsu zakończony`, 'success');
+
+        // Re-enable button
+        if (testBtn) {
+            testBtn.disabled = false;
+            testBtn.textContent = '🔧 Testuj';
+        }
+    }, 200);
 }
 
 async function startSysIdRecording() {
@@ -5022,12 +5065,33 @@ function exportSysIdCSV() {
         return;
     }
 
+    // Get mechanical parameters from UI
+    const encoderPpr = document.getElementById('encoderPprInput')?.value || 820;
+    const wheelDiameter = document.getElementById('wheelDiameterInput')?.value || 8.2;
+    const trackWidth = document.getElementById('trackWidthInput')?.value || 15;
+
+    // Create header with metadata (commented lines starting with #)
+    const metadata = [
+        `# RoboBala System Identification Data`,
+        `# generated: ${new Date().toISOString()}`,
+        `# kp_used: ${SysIdState.kp}`,
+        `# impulse_pwm: ${SysIdState.impulse}`,
+        `# impulse_duration_ms: 200`,
+        `# sample_rate_hz: ${SysIdState.sampleRate}`,
+        `# recording_duration_s: ${SysIdState.duration / 1000}`,
+        `# encoder_ppr: ${encoderPpr}`,
+        `# wheel_diameter_cm: ${wheelDiameter}`,
+        `# track_width_cm: ${trackWidth}`,
+        `# samples_count: ${SysIdState.data.length}`,
+        ``
+    ].join('\n');
+
     const header = 'time_s,angle_deg,impulse_pwm,pwm_output,speed_enc,gyro_y\n';
     const rows = SysIdState.data.map(d =>
         `${d.time.toFixed(4)},${d.angle.toFixed(4)},${d.impulse_pwm.toFixed(2)},${d.pwm.toFixed(2)},${d.speed.toFixed(2)},${d.gyroY.toFixed(4)}`
     ).join('\n');
 
-    const csv = header + rows;
+    const csv = metadata + header + rows;
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
 
@@ -5037,7 +5101,7 @@ function exportSysIdCSV() {
     a.click();
     URL.revokeObjectURL(url);
 
-    addLogMessage(`[SysID] Eksportowano ${SysIdState.data.length} próbek do CSV.`, 'success');
+    addLogMessage(`[SysID] Eksportowano ${SysIdState.data.length} próbek do CSV (z parametrami mechanicznymi).`, 'success');
 }
 
 function exportSysIdMAT() {
