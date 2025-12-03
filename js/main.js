@@ -4846,8 +4846,7 @@ async function startSysIdRecording() {
 
             // Stop after 200ms
             setTimeout(() => {
-                sendBleMessage({ type: 'manual_tune_motor', motor: 'left', direction: 'fwd', pwm: 0 });
-                sendBleMessage({ type: 'manual_tune_motor', motor: 'right', direction: 'fwd', pwm: 0 });
+                sendBleMessage({ type: 'manual_tune_stop_all' });
                 addLogMessage(`[SysID] Zakłócenie zakończone`, 'info');
             }, 200);
         }
@@ -4868,6 +4867,9 @@ function stopSysIdRecording() {
         window.removeEventListener('ble_message', SysIdState.telemetryHandler);
         SysIdState.telemetryHandler = null;
     }
+
+    // Stop any manual motor control
+    sendBleMessage({ type: 'manual_tune_stop_all' });
 
     // Restore original PID (use 'key' not 'param')
     if (SysIdState.savedPID) {
