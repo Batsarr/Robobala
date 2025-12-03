@@ -4749,7 +4749,7 @@ async function startSysIdRecording() {
         return;
     }
 
-    // Check robot state
+    // Check robot state - robot musi balansować żeby reagował na zakłócenie
     if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState)) {
         const ok = confirm(`Robot musi balansować. Aktualny stan: '${AppState.lastKnownRobotState}'.\nCzy włączyć balansowanie?`);
         if (ok) {
@@ -4775,10 +4775,10 @@ async function startSysIdRecording() {
     const currentKd = parseFloat(document.getElementById('balanceKdInput')?.value) || 0;
     SysIdState.savedPID = { kp: currentKp, ki: currentKi, kd: currentKd };
 
-    // Apply Kp-only (no Ki, no Kd)
-    sendBleMessage({ type: 'set_param', param: 'kp_b', value: SysIdState.kp });
-    sendBleMessage({ type: 'set_param', param: 'ki_b', value: 0 });
-    sendBleMessage({ type: 'set_param', param: 'kd_b', value: 0 });
+    // Apply Kp-only (no Ki, no Kd) - use 'key' not 'param' (firmware expects 'key')
+    sendBleMessage({ type: 'set_param', key: 'kp_b', value: SysIdState.kp });
+    sendBleMessage({ type: 'set_param', key: 'ki_b', value: 0 });
+    sendBleMessage({ type: 'set_param', key: 'kd_b', value: 0 });
 
     addLogMessage(`[SysID] Ustawiono Kp=${SysIdState.kp}, Ki=0, Kd=0`, 'info');
 
@@ -4832,17 +4832,28 @@ async function startSysIdRecording() {
     };
     window.addEventListener('ble_message', SysIdState.telemetryHandler);
 
-    // Apply PWM impulse after 1 second from start
+    // Apply PWM disturbance after 1 second using manual_tune_motor (works during balancing)
     setTimeout(() => {
         if (SysIdState.isRecording) {
             SysIdState.impulseApplied = true;
             SysIdState.impulseStartTime = performance.now() - SysIdState.startTime;
-            addLogMessage(`[SysID] Stosowanie impulsu PWM: ${SysIdState.impulse}`, 'info');
-            sendBleMessage({ type: 'sysid_impulse', pwm: SysIdState.impulse, duration: 200 });
+            const pwmValue = SysIdState.impulse;
+            addLogMessage(`[SysID] Stosowanie zakłócenia PWM: ${pwmValue} na oba silniki (200ms)`, 'info');
+
+            // Start disturbance on both motors (forward direction)
+            sendBleMessage({ type: 'manual_tune_motor', motor: 'left', direction: 'fwd', pwm: pwmValue });
+            sendBleMessage({ type: 'manual_tune_motor', motor: 'right', direction: 'fwd', pwm: pwmValue });
+
+            // Stop after 200ms
+            setTimeout(() => {
+                sendBleMessage({ type: 'manual_tune_motor', motor: 'left', direction: 'fwd', pwm: 0 });
+                sendBleMessage({ type: 'manual_tune_motor', motor: 'right', direction: 'fwd', pwm: 0 });
+                addLogMessage(`[SysID] Zakłócenie zakończone`, 'info');
+            }, 200);
         }
     }, 1000);
 
-    addLogMessage(`[SysID] Nagrywanie rozpoczęte (${SysIdState.duration / 1000}s). Impuls za 1s.`, 'info');
+    addLogMessage(`[SysID] Nagrywanie rozpoczęte (${SysIdState.duration / 1000}s). Zakłócenie za 1s.`, 'info');
 }
 
 function stopSysIdRecording() {
@@ -4858,11 +4869,11 @@ function stopSysIdRecording() {
         SysIdState.telemetryHandler = null;
     }
 
-    // Restore original PID
+    // Restore original PID (use 'key' not 'param')
     if (SysIdState.savedPID) {
-        sendBleMessage({ type: 'set_param', param: 'kp_b', value: SysIdState.savedPID.kp });
-        sendBleMessage({ type: 'set_param', param: 'ki_b', value: SysIdState.savedPID.ki });
-        sendBleMessage({ type: 'set_param', param: 'kd_b', value: SysIdState.savedPID.kd });
+        sendBleMessage({ type: 'set_param', key: 'kp_b', value: SysIdState.savedPID.kp });
+        sendBleMessage({ type: 'set_param', key: 'ki_b', value: SysIdState.savedPID.ki });
+        sendBleMessage({ type: 'set_param', key: 'kd_b', value: SysIdState.savedPID.kd });
         addLogMessage(`[SysID] Przywrócono PID: Kp=${SysIdState.savedPID.kp}, Ki=${SysIdState.savedPID.ki}, Kd=${SysIdState.savedPID.kd}`, 'info');
     }
 
