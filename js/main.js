@@ -2277,6 +2277,7 @@ function normalizeTelemetryData(d) {
     if (d.el !== undefined && d.encoder_left === undefined) d.encoder_left = d.el;
     if (d.er !== undefined && d.encoder_right === undefined) d.encoder_right = d.er;
     if (d.o !== undefined && d.output === undefined) d.output = d.o;
+    if (d.gy !== undefined && d.gyroY === undefined) d.gyroY = d.gy;  // prędkość kątowa pitch
     if (d.cs !== undefined && d.calib_sys === undefined) d.calib_sys = d.cs;
     if (d.cg !== undefined && d.calib_gyro === undefined) d.calib_gyro = d.cg;
     if (d.ca !== undefined && d.calib_accel === undefined) d.calib_accel = d.ca;
@@ -4850,13 +4851,18 @@ async function startSysIdRecording() {
                 }
             }
 
+            // Normalize telemetry data (mapuje krótkie klucze na długie)
+            const normData = (typeof normalizeTelemetryData === 'function') ? normalizeTelemetryData(data) : data;
+
             SysIdState.data.push({
                 time: elapsedSec,
-                angle: data.pitch ?? data.angle ?? 0,
+                angle: normData.pitch ?? normData.angle ?? 0,
                 impulse_pwm: currentImpulse,
-                pwm: data.pwm ?? data.pwmLeft ?? 0,
-                speed: data.speed ?? data.encoderSpeed ?? 0,
-                gyroY: data.gyroY ?? 0
+                pwm_output: normData.output ?? 0,  // balance_output z firmware (klucz "o")
+                speed: normData.speed ?? 0,
+                encoder_left: normData.encoder_left ?? 0,
+                encoder_right: normData.encoder_right ?? 0,
+                gyroY: normData.gyroY ?? 0  // TODO: wymaga dodania do firmware
             });
 
             // Update progress
@@ -4875,13 +4881,14 @@ async function startSysIdRecording() {
     };
     window.addEventListener('ble_message', SysIdState.telemetryHandler);
 
-    // Apply PWM disturbance after 1 second using manual_tune_motor (works during balancing)
+    // Prosty impuls po 1 sekundzie - bez czekania na stabilizację
     setTimeout(() => {
         if (SysIdState.isRecording) {
             SysIdState.impulseApplied = true;
             SysIdState.impulseStartTime = performance.now() - SysIdState.startTime;
             const pwmValue = SysIdState.impulse;
-            addLogMessage(`[SysID] Stosowanie zakłócenia PWM: ${pwmValue} na oba silniki (350ms)`, 'info');
+
+            addLogMessage(`[SysID] Wysyłam impuls ${pwmValue} PWM (350ms)`, 'info');
 
             // Start disturbance on both motors (forward direction)
             sendBleMessage({ type: 'manual_tune_motor', motor: 'left', direction: 'fwd', pwm: pwmValue });
@@ -4890,12 +4897,12 @@ async function startSysIdRecording() {
             // Stop after 350ms
             setTimeout(() => {
                 sendBleMessage({ type: 'manual_tune_stop_all' });
-                addLogMessage(`[SysID] Zakłócenie zakończone`, 'info');
+                addLogMessage(`[SysID] Impuls zakończony`, 'info');
             }, 350);
         }
     }, 1000);
 
-    addLogMessage(`[SysID] Nagrywanie rozpoczęte (${SysIdState.duration / 1000}s). Zakłócenie za 1s.`, 'info');
+    addLogMessage(`[SysID] Nagrywanie rozpoczęte (${SysIdState.duration / 1000}s). Impuls za 1s.`, 'info');
 }
 
 function stopSysIdRecording() {
@@ -5086,9 +5093,9 @@ function exportSysIdCSV() {
         ``
     ].join('\n');
 
-    const header = 'time_s,angle_deg,impulse_pwm,pwm_output,speed_enc,gyro_y\n';
+    const header = 'time_s,angle_deg,impulse_pwm,pwm_output,speed_enc,encoder_left,encoder_right,gyro_y\n';
     const rows = SysIdState.data.map(d =>
-        `${d.time.toFixed(4)},${d.angle.toFixed(4)},${d.impulse_pwm.toFixed(2)},${d.pwm.toFixed(2)},${d.speed.toFixed(2)},${d.gyroY.toFixed(4)}`
+        `${d.time.toFixed(4)},${d.angle.toFixed(4)},${d.impulse_pwm.toFixed(2)},${d.pwm_output.toFixed(2)},${d.speed.toFixed(2)},${d.encoder_left},${d.encoder_right},${d.gyroY.toFixed(4)}`
     ).join('\n');
 
     const csv = metadata + header + rows;
@@ -5114,8 +5121,10 @@ function exportSysIdMAT() {
     const time = SysIdState.data.map(d => d.time.toFixed(4)).join(', ');
     const angle = SysIdState.data.map(d => d.angle.toFixed(4)).join(', ');
     const impulse_pwm = SysIdState.data.map(d => d.impulse_pwm.toFixed(2)).join(', ');
-    const pwm = SysIdState.data.map(d => d.pwm.toFixed(2)).join(', ');
+    const pwm_output = SysIdState.data.map(d => d.pwm_output.toFixed(2)).join(', ');
     const speed = SysIdState.data.map(d => d.speed.toFixed(2)).join(', ');
+    const encoder_left = SysIdState.data.map(d => d.encoder_left).join(', ');
+    const encoder_right = SysIdState.data.map(d => d.encoder_right).join(', ');
     const gyroY = SysIdState.data.map(d => d.gyroY.toFixed(4)).join(', ');
 
     const matlabScript = `%% System Identification Data - RoboBala
@@ -5127,12 +5136,14 @@ function exportSysIdMAT() {
 % Impulse applied at: 1.0s (duration: 350ms)
 
 % Data arrays
-time = [${time}];               % Time in seconds
-angle = [${angle}];             % Measured angle in degrees
-impulse_pwm = [${impulse_pwm}]; % Impulse PWM input signal
-pwm = [${pwm}];                 % PWM output
-speed = [${speed}];             % Encoder speed
-gyro_y = [${gyroY}];            % Gyroscope Y axis
+time = [${time}];                     % Time in seconds
+angle = [${angle}];                   % Measured angle in degrees
+impulse_pwm = [${impulse_pwm}];       % Impulse PWM input signal
+pwm_output = [${pwm_output}];         % Balance output (PID output)
+speed = [${speed}];                   % Encoder speed
+encoder_left = [${encoder_left}];     % Left encoder position
+encoder_right = [${encoder_right}];   % Right encoder position
+gyro_y = [${gyroY}];                  % Gyroscope Y axis (pitch velocity)
 
 % Create iddata object for System Identification Toolbox
 % y = output (angle), u = input (impulse_pwm)
@@ -5158,9 +5169,9 @@ title('Impulse Input Signal');
 grid on;
 
 subplot(3,1,3);
-plot(time, pwm, 'g-');
+plot(time, pwm_output, 'g-');
 xlabel('Time [s]'); ylabel('PWM');
-title('Control Effort (PWM Output)');
+title('Control Effort (Balance Output)');
 grid on;
 
 % System identification example:
