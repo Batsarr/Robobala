@@ -1554,39 +1554,39 @@ function getRawEuler() {
 }
 
 // GLOBALNE: ustawianie punktu 0 dla Pitch i Roll.
-// UWAGA: Kwaternion z telemetrii ma już zastosowane trymy (firmware wysyła q_final),
-// więc aby uzyskać surowy fizyczny kąt przed trybem, odejmujemy aktualny trim.
+// Firmware: adjust_zero dodaje deltę do baseTargetAngleTrim.
+// Telemetria pitch to już kąt po trymach, więc delta = -pitch spowoduje że następny odczyt będzie 0.
 function setPitchZero() {
     if (!window.telemetryData) {
         addLogMessage('[UI] Brak danych telemetrii (pitch).', 'warn');
         return;
     }
-    // Oblicz skorygowany kąt bezpośrednio z kwaternionu (q_final z firmware)
-    let correctedPitch = Number(window.telemetryData.pitch);
-    if (typeof correctedPitch !== 'number' || isNaN(correctedPitch)) {
+    // Odczytaj aktualny pitch z telemetrii (już po trymach)
+    let currentPitch = Number(window.telemetryData.pitch);
+    if (typeof currentPitch !== 'number' || isNaN(currentPitch)) {
         if (typeof window.telemetryData.qw === 'number') {
             const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
-            correctedPitch = eul ? eul.pitch : 0;
+            currentPitch = eul ? eul.pitch : 0;
         } else {
-            correctedPitch = 0;
+            addLogMessage('[UI] Nieprawidłowy odczyt pitch.', 'error');
+            return;
         }
     }
-    const currentTrim = Number(window.telemetryData.trim_angle || 0);
     // Zaokrąglij lekko, by uniknąć flipa znaku przy ±0.00x
-    correctedPitch = Math.round(correctedPitch * 100) / 100;
-    const rawPitch = correctedPitch - currentTrim; // surowy kąt przed trimem
-    if (isNaN(rawPitch)) {
+    currentPitch = Math.round(currentPitch * 100) / 100;
+    if (isNaN(currentPitch)) {
         addLogMessage('[UI] Nieprawidlowy odczyt pitch.', 'error');
         return;
     }
-    const delta = -rawPitch; // obróć montaż o -pitch aby uzyskać 0°
+    // Delta = -currentPitch -> po dodaniu do trim, następny odczyt pitch = 0
+    const delta = -currentPitch;
     sendBleMessage({ type: 'adjust_zero', value: delta });
     const val = document.getElementById('angleVal');
     if (val) val.textContent = '0.0 °';
     pitchHistory.push(0);
     if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
     updateChart({ pitch: 0 });
-    addLogMessage(`[UI] Punkt 0 (Pitch) ustawiony. Obrót montażu Y+=${delta.toFixed(2)}° (persist).`, 'success');
+    addLogMessage(`[UI] Punkt 0 (Pitch) ustawiony. Delta trim=${delta.toFixed(2)}°.`, 'success');
 }
 
 function setRollZero() {
@@ -1594,28 +1594,29 @@ function setRollZero() {
         addLogMessage('[UI] Brak danych telemetrii (roll).', 'warn');
         return;
     }
-    let correctedRoll = Number(window.telemetryData.roll);
-    if (typeof correctedRoll !== 'number' || isNaN(correctedRoll)) {
+    // Odczytaj aktualny roll z telemetrii (już po trymach)
+    let currentRoll = Number(window.telemetryData.roll);
+    if (typeof currentRoll !== 'number' || isNaN(currentRoll)) {
         if (typeof window.telemetryData.qw === 'number') {
             const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
-            correctedRoll = eul ? eul.roll : 0;
+            currentRoll = eul ? eul.roll : 0;
         } else {
-            correctedRoll = 0;
+            addLogMessage('[UI] Nieprawidłowy odczyt roll.', 'error');
+            return;
         }
     }
-    const currentRollTrim = Number(window.telemetryData.roll_trim || 0);
-    correctedRoll = Math.round(correctedRoll * 100) / 100;
-    const rawRoll = correctedRoll - currentRollTrim;
-    if (isNaN(rawRoll)) {
+    currentRoll = Math.round(currentRoll * 100) / 100;
+    if (isNaN(currentRoll)) {
         addLogMessage('[UI] Nieprawidlowy odczyt roll.', 'error');
         return;
     }
-    const delta = -rawRoll;
+    // Delta = -currentRoll -> po dodaniu do trim, następny odczyt roll = 0
+    const delta = -currentRoll;
     sendBleMessage({ type: 'adjust_roll_trim', value: delta });
     const val = document.getElementById('rollVal');
     if (val) val.textContent = '0.0 °';
     updateChart({ roll: 0 });
-    addLogMessage(`[UI] Punkt 0 (Roll) ustawiony. Obrót montażu X+=${delta.toFixed(2)}° (persist).`, 'success');
+    addLogMessage(`[UI] Punkt 0 (Roll) ustawiony. Delta trim=${delta.toFixed(2)}°.`, 'success');
 }
 
 function adjustTrim(axis, delta) {
@@ -3905,39 +3906,69 @@ function setupNumericInputs() {
         const step = parseFloat(input.step) || 1;
         const isFloat = input.step.includes('.');
 
-        // Add automatic value clamping on input
-        input.addEventListener('input', (e) => {
-            let value = parseFloat(e.target.value);
-            if (isNaN(value)) return;
+        // Funkcja sprawdzająca czy wartość jest w zakresie i oznaczająca pole
+        const validateAndMark = (inputEl) => {
+            const value = parseFloat(inputEl.value);
+            const min = parseFloat(inputEl.min);
+            const max = parseFloat(inputEl.max);
 
-            const min = parseFloat(e.target.min);
-            const max = parseFloat(e.target.max);
-
-            if (!isNaN(min) && value < min) {
-                e.target.value = min;
-            }
-            if (!isNaN(max) && value > max) {
-                e.target.value = max;
-            }
-        });
-
-        // Also clamp on blur (when user leaves the field)
-        input.addEventListener('blur', (e) => {
-            let value = parseFloat(e.target.value);
-            if (isNaN(value)) {
-                e.target.value = parseFloat(e.target.min) || 0;
+            if (inputEl.value === '' || inputEl.value === '-') {
+                // Pole puste lub tylko minus - pozwól na edycję, nie zaznaczaj na czerwono
+                inputEl.style.borderColor = '';
+                inputEl.style.backgroundColor = '';
                 return;
             }
 
+            if (isNaN(value)) {
+                inputEl.style.borderColor = '#ff6b6b';
+                inputEl.style.backgroundColor = 'rgba(255, 107, 107, 0.1)';
+                return;
+            }
+
+            const outOfRange = (!isNaN(min) && value < min) || (!isNaN(max) && value > max);
+            if (outOfRange) {
+                inputEl.style.borderColor = '#ff6b6b';
+                inputEl.style.backgroundColor = 'rgba(255, 107, 107, 0.1)';
+            } else {
+                inputEl.style.borderColor = '';
+                inputEl.style.backgroundColor = '';
+            }
+        };
+
+        // Walidacja podczas pisania - tylko zaznaczenie kolorem, bez clampowania
+        input.addEventListener('input', (e) => {
+            validateAndMark(e.target);
+        });
+
+        // Clampowanie tylko gdy użytkownik opuszcza pole z wartością poza zakresem
+        input.addEventListener('blur', (e) => {
+            let value = parseFloat(e.target.value);
             const min = parseFloat(e.target.min);
             const max = parseFloat(e.target.max);
 
+            // Jeśli pole puste, ustaw domyślną wartość (min lub 0)
+            if (e.target.value === '' || isNaN(value)) {
+                e.target.value = !isNaN(min) ? min : 0;
+                e.target.style.borderColor = '';
+                e.target.style.backgroundColor = '';
+                e.target.dispatchEvent(new Event('change', { bubbles: true }));
+                return;
+            }
+
+            // Clampuj wartość przy blur jeśli poza zakresem
+            let clamped = false;
             if (!isNaN(min) && value < min) {
                 e.target.value = min;
-                e.target.dispatchEvent(new Event('change', { bubbles: true }));
+                clamped = true;
             }
             if (!isNaN(max) && value > max) {
                 e.target.value = max;
+                clamped = true;
+            }
+
+            if (clamped) {
+                e.target.style.borderColor = '';
+                e.target.style.backgroundColor = '';
                 e.target.dispatchEvent(new Event('change', { bubbles: true }));
             }
         });
@@ -3955,6 +3986,8 @@ function setupNumericInputs() {
             if (!isNaN(min)) newValue = Math.max(min, newValue);
             if (!isNaN(max)) newValue = Math.min(max, newValue);
             input.value = newValue;
+            input.style.borderColor = '';
+            input.style.backgroundColor = '';
             input.dispatchEvent(new Event('change', { bubbles: true }));
         };
         minusBtn.addEventListener('click', () => updateValue(-step));
@@ -4003,7 +4036,21 @@ function setupParameterListeners() {
         }
     };
     const debouncedSendSingleParam = debounce(sendSingleParam, 400);
-    document.querySelectorAll('.config-value').forEach(input => { input.addEventListener('change', (e) => { debouncedSendSingleParam(e.target.id, parseFloat(e.target.value)); }); });
+    // Obsługa wszystkich pól .config-value (number i checkbox)
+    document.querySelectorAll('.config-value').forEach(input => {
+        input.addEventListener('change', (e) => {
+            if (e.target.type === 'checkbox') {
+                // Dla checkboxów: wyślij 1.0 lub 0.0
+                const snakeKey = parameterMapping[e.target.id];
+                if (snakeKey) {
+                    sendBleMessage({ type: 'set_param', key: snakeKey, value: e.target.checked ? 1.0 : 0.0 });
+                }
+            } else {
+                // Dla pól numerycznych
+                debouncedSendSingleParam(e.target.id, parseFloat(e.target.value));
+            }
+        });
+    });
     // AUTOTUNING: wysyłanie parametrów metod (GA/PSO/ZN) jako set_tuning_config_param z odpowiednimi konwersjami
     const sendTuningParam = (snakeKey, rawValue) => {
         if (AppState.isApplyingConfig) return;
@@ -4765,13 +4812,13 @@ function testSysIdImpulse() {
         testBtn.textContent = '⏳ Test...';
     }
 
-    addLogMessage(`[SysID] Test impulsu: PWM=${pwmValue} na oba silniki (350ms)`, 'info');
+    addLogMessage(`[SysID] Test impulsu: PWM=${pwmValue} na oba silniki (50ms)`, 'info');
 
     // Send impulse to both motors
     sendBleMessage({ type: 'manual_tune_motor', motor: 'left', direction: 'fwd', pwm: pwmValue });
     sendBleMessage({ type: 'manual_tune_motor', motor: 'right', direction: 'fwd', pwm: pwmValue });
 
-    // Stop after 350ms
+    // Stop after 50ms
     setTimeout(() => {
         sendBleMessage({ type: 'manual_tune_stop_all' });
         addLogMessage(`[SysID] Test impulsu zakończony`, 'success');
@@ -4781,7 +4828,7 @@ function testSysIdImpulse() {
             testBtn.disabled = false;
             testBtn.textContent = '🔧 Testuj';
         }
-    }, 350);
+    }, 50);
 }
 
 async function startSysIdRecording() {
@@ -4846,7 +4893,7 @@ async function startSysIdRecording() {
             let currentImpulse = 0;
             if (SysIdState.impulseApplied && SysIdState.impulseStartTime > 0) {
                 const impulseElapsed = elapsed - SysIdState.impulseStartTime;
-                if (impulseElapsed >= 0 && impulseElapsed < 350) {  // 350ms impulse duration
+                if (impulseElapsed >= 0 && impulseElapsed < 50) {  // 50ms impulse duration
                     currentImpulse = SysIdState.impulse;
                 }
             }
@@ -4888,17 +4935,17 @@ async function startSysIdRecording() {
             SysIdState.impulseStartTime = performance.now() - SysIdState.startTime;
             const pwmValue = SysIdState.impulse;
 
-            addLogMessage(`[SysID] Wysyłam impuls ${pwmValue} PWM (350ms)`, 'info');
+            addLogMessage(`[SysID] Wysyłam impuls ${pwmValue} PWM (50ms)`, 'info');
 
             // Start disturbance on both motors (forward direction)
             sendBleMessage({ type: 'manual_tune_motor', motor: 'left', direction: 'fwd', pwm: pwmValue });
             sendBleMessage({ type: 'manual_tune_motor', motor: 'right', direction: 'fwd', pwm: pwmValue });
 
-            // Stop after 350ms
+            // Stop after 50ms
             setTimeout(() => {
                 sendBleMessage({ type: 'manual_tune_stop_all' });
                 addLogMessage(`[SysID] Impuls zakończony`, 'info');
-            }, 350);
+            }, 50);
         }
     }, 1000);
 
@@ -5083,7 +5130,7 @@ function exportSysIdCSV() {
         `# generated: ${new Date().toISOString()}`,
         `# kp_used: ${SysIdState.kp}`,
         `# impulse_pwm: ${SysIdState.impulse}`,
-        `# impulse_duration_ms: 350`,
+        `# impulse_duration_ms: 50`,
         `# sample_rate_hz: ${SysIdState.sampleRate}`,
         `# recording_duration_s: ${SysIdState.duration / 1000}`,
         `# encoder_ppr: ${encoderPpr}`,
@@ -5133,7 +5180,7 @@ function exportSysIdMAT() {
 % Impulse PWM: ${SysIdState.impulse}
 % Sample rate: ${SysIdState.sampleRate} Hz
 % Duration: ${SysIdState.duration / 1000} s
-% Impulse applied at: 1.0s (duration: 350ms)
+% Impulse applied at: 1.0s (duration: 50ms)
 
 % Data arrays
 time = [${time}];                     % Time in seconds
