@@ -129,6 +129,11 @@ const builtInPresetsData = { '1': { name: "1. PID Zbalansowany (Startowy)", para
 let skyDome;
 let scene3D, camera3D, renderer3D, controls3D, robotPivot, leftWheel, rightWheel, groundMesh, groundTexture, robotPerspectiveZoom = 40;
 let currentEncoderLeft = 0, currentEncoderRight = 0;
+// Connection watchdog variables (stale telemetry / implicit disconnect detection)
+let lastTelemetryAt = 0;
+let connectionWatchdogId = null;
+const CONNECTION_HEARTBEAT_INTERVAL = 2000;
+const CONNECTION_TIMEOUT_MS = 7000;
 let isAnimation3DEnabled = true, isMovement3DEnabled = false, lastEncoderAvg = 0;
 window.telemetryData = {};
 let isCalibrationModalShown = false;
@@ -222,7 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (d !== null && d >= 90) {
                 clearInterval(sensorWizard.monitorId); sensorWizard.monitorId = null;
                 // auto-zamknięcie kroku rotacji
-                sendBleMessage({ type: 'mount_calib2_capture_rot_end' });
+                sendBleMessage({ type: 'sensor_map_capture_rot_end' });
                 sensorWizard.progress.rotation = true;
                 sensorWizard.step = 2; updateSensorWizardUI(); setWizardProgress();
                 addLogMessage('[UI] Wykryto rotację ≥ 90°. Przechodzę do kroku Zapis.', 'success');
@@ -262,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('markFrontFaceChk')?.addEventListener('change', (e) => {
         try { if (sensorPreview && sensorPreview.faceIndicator) sensorPreview.faceIndicator.visible = e.target.checked; } catch (err) { /* no-op */ }
     });
-    document.getElementById('sensorWizardCancelBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'mount_calib2_cancel' }); closeSensorMappingModal(); });
+    document.getElementById('sensorWizardCancelBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'sensor_map_cancel' }); closeSensorMappingModal(); });
     document.getElementById('sensorWizardBackBtn')?.addEventListener('click', () => {
         if (sensorWizard.step === 0) return; // nic
         if (sensorWizard.step === 1) { if (sensorWizard.monitorId) { clearInterval(sensorWizard.monitorId); sensorWizard.monitorId = null; } }
@@ -271,16 +276,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('sensorWizardNextBtn')?.addEventListener('click', async () => {
         if (sensorWizard.step === 0) {
             // Start i rejestracja pozycji pionowej
-            sendBleMessage({ type: 'mount_calib2_start' });
+            sendBleMessage({ type: 'sensor_map_start' });
             await RB.helpers.delay(80);
-            sendBleMessage({ type: 'mount_calib2_capture_upright' });
+            sendBleMessage({ type: 'sensor_map_capture_upright' });
             sensorWizard.progress.upright = true; setWizardProgress();
             // Rozpocznij krok rotacji i monitoring
-            sendBleMessage({ type: 'mount_calib2_capture_rot_start' });
+            sendBleMessage({ type: 'sensor_map_capture_rot_start' });
             sensorWizard.step = 1; updateSensorWizardUI(); startRotationMonitor();
         } else if (sensorWizard.step === 2) {
             // Zapis
-            sendBleMessage({ type: 'mount_calib2_commit' });
+            sendBleMessage({ type: 'sensor_map_commit' });
             sensorWizard.progress.saved = true; setWizardProgress();
             closeSensorMappingModal();
         }
@@ -474,8 +479,7 @@ function initSensorMappingPreview() {
     document.getElementById('clearModalRollZeroBtn')?.addEventListener('click', () => {
         addLogMessage('[UI] Trym (Roll) jest częścią montażu (qcorr) i nie podlega czyszczeniu wartością 0. Użyj przycisków ± lub Ustaw punkt 0.', 'warn');
     });
-    // Nowe: przyciski obrotu montażu (qcorr) o 90° wokół osi X/Y/Z - ZAKOMENTOWANE, bo robot nie obsługuje rotate_mount_90
-    /*
+    // Nowe: przyciski obrotu montażu (qcorr) o 90° wokół osi X/Y/Z
     const rotate90 = (axis, steps) => {
         sendBleMessage({ type: 'rotate_mount_90', axis, steps });
         addLogMessage(`[UI] Obrót montażu 90°: axis=${axis.toUpperCase()} steps=${steps}`, 'info');
@@ -486,7 +490,6 @@ function initSensorMappingPreview() {
     document.getElementById('mountYPlus90Btn')?.addEventListener('click', () => rotate90('y', 1));
     document.getElementById('mountZMinus90Btn')?.addEventListener('click', () => rotate90('z', -1));
     document.getElementById('mountZPlus90Btn')?.addEventListener('click', () => rotate90('z', 1));
-    */
 }
 
 // Gather IMU mapping from sensor mapping modal
@@ -825,7 +828,7 @@ function setRollZero() {
         return;
     }
     const delta = -rawRoll;
-    sendBleMessage({ type: 'adjust_roll_trim', value: delta });
+    sendBleMessage({ type: 'adjust_roll', value: delta });
     const val = document.getElementById('rollVal');
     if (val) val.textContent = '0.0 °';
     updateChart({ roll: 0 });
@@ -979,7 +982,10 @@ function onDisconnected() {
     // Update state
     AppState.isConnected = false;
     AppState.isSynced = false;
+    appStore.setState('connection.deviceName', null);
     appStore.setState('ui.isLocked', true);
+    // Reset telemetry watchdog timestamp
+    lastTelemetryAt = 0;
 
     document.body.classList.add('ui-locked');
 
@@ -1029,12 +1035,26 @@ function setupCommunicationHandlers() {
         onDisconnected();
     });
 
+    // Update AppState when comm layer notifies of connection
+    commLayer.onMessage('connected', (data) => {
+        try {
+            AppState.isConnected = true;
+            if (data && data.deviceName) appStore.setState('connection.deviceName', data.deviceName);
+            lastTelemetryAt = Date.now();
+        } catch (e) { /* no-op */ }
+    });
+
     // Handle all incoming messages by routing them to processCompleteMessage
     commLayer.onMessage('*', (type, data) => {
         // Skip the 'disconnected' type as it's handled separately
         if (type !== 'disconnected') {
             processCompleteMessage(data);
         }
+    });
+
+    // Update last telemetry time on telemetry messages
+    commLayer.onMessage('telemetry', (data) => {
+        try { lastTelemetryAt = Date.now(); } catch (e) { }
     });
 
     // Subscribe to state changes for UI updates
@@ -1044,6 +1064,13 @@ function setupCommunicationHandlers() {
         document.querySelectorAll('.dpad-btn').forEach(btn => {
             try { btn.disabled = !value; } catch (e) { }
         });
+        const connDot = document.getElementById('connectionDot');
+        if (connDot) connDot.className = 'status-dot ' + (value ? 'status-ok' : 'status-disconnected');
+        const connTextEl = document.getElementById('connectionText');
+        if (connTextEl) {
+            const dev = appStore.getState('connection.deviceName');
+            connTextEl.textContent = value ? (dev ? `Połączony - ${dev}` : 'Połączony') : 'Rozłączony';
+        }
     });
 
     appStore.subscribe('robot.state', (value) => {
@@ -1058,6 +1085,31 @@ function setupCommunicationHandlers() {
         setTuningUiLock(value, appStore.getState('tuning.activeMethod'));
         if (value && typeof refreshRecentList === 'function') refreshRecentList();
     });
+
+    // Start connection watchdog once per page
+    if (!connectionWatchdogId) {
+        connectionWatchdogId = setInterval(() => {
+            try {
+                const appConnected = appStore.getState('connection.isConnected');
+                const lowLevelConnected = (commLayer && typeof commLayer.getConnectionStatus === 'function') ? commLayer.getConnectionStatus() : false;
+                if (appConnected && !lowLevelConnected) {
+                    addLogMessage('[UI] Watchdog: warstwa BLE zgłasza brak połączenia. Aktualizuję UI.', 'warn');
+                    onDisconnected();
+                    return;
+                }
+                if (appConnected && lastTelemetryAt && (Date.now() - lastTelemetryAt) > CONNECTION_TIMEOUT_MS) {
+                    addLogMessage('[UI] Watchdog: brak telemetrii > ' + Math.round(CONNECTION_TIMEOUT_MS / 1000) + 's — uznaję połączenie za zerwane.', 'warn');
+                    onDisconnected();
+                    return;
+                }
+                if (!appConnected && lowLevelConnected) {
+                    addLogMessage('[UI] Watchdog: warstwa BLE wydaje się połączona, aktualizuję UI.', 'info');
+                    AppState.isConnected = true;
+                    try { if (typeof commLayer.getDeviceName === 'function') appStore.setState('connection.deviceName', commLayer.getDeviceName()); } catch (e) { }
+                }
+            } catch (err) { console.error('[UI] watchdog error', err); }
+        }, CONNECTION_HEARTBEAT_INTERVAL);
+    }
 }
 
 function processCompleteMessage(data) {
@@ -1076,6 +1128,8 @@ function processCompleteMessage(data) {
     // The algorithms will detect the failed test, enter pause state, and restore baseline PID.
     switch (data.type) {
         case 'telemetry':
+            // Update watchdog timestamp on received telemetry
+            lastTelemetryAt = Date.now();
             // Jeśli dostępny jest kwaternion, policz kąty bez dodatkowego mapowania (Quaternion-First)
             if (typeof data.qw === 'number' && typeof data.qx === 'number' && typeof data.qy === 'number' && typeof data.qz === 'number') {
                 const eul = computeEulerFromQuaternion(data.qw, data.qx, data.qy, data.qz);
@@ -2329,8 +2383,8 @@ async function runDynamicTest(testType) {
     const kp = parseFloat(document.getElementById('balanceKpInput')?.value) || 0;
     const ki = parseFloat(document.getElementById('balanceKiInput')?.value) || 0;
     const kd = parseFloat(document.getElementById('balanceKdInput')?.value) || 0;
-    // Ujednolicenie: firmware oczekuje komendy 'run_metrics_test' - ZAKOMENTOWANE, bo robot nie obsługuje
-    // sendBleCommand('run_metrics_test', { kp, ki, kd, testId });
+    // Ujednolicenie: firmware oczekuje komendy 'run_metrics_test'
+    sendBleCommand('run_metrics_test', { kp, ki, kd, testId });
     setTuningUiLock(true, 'single-tests');
 }
 function handleDynamicTestResult(raw) {
@@ -2761,7 +2815,12 @@ function createSkyDome() {
     return skyDome;
 }
 function setupControls3D() {
-    document.getElementById('reset3dViewBtn').addEventListener('click', () => { camera3D.position.set(28, 22, 48); controls3D.target.set(0, 8, 0); controls3D.update(); }); document.getElementById('toggle3dAnimationBtn').addEventListener('click', () => isAnimation3DEnabled = !isAnimation3DEnabled); document.getElementById('toggle3dMovementBtn').addEventListener('click', () => {
+    const resetBtn = document.getElementById('reset3dViewBtn') || document.getElementById('reset3DViewBtn');
+    const animBtn = document.getElementById('toggle3dAnimationBtn') || document.getElementById('toggle3DAnimationBtn');
+    const moveBtn = document.getElementById('toggle3DMovement') || document.getElementById('toggle3dMovement') || document.getElementById('toggle3dMovementBtn');
+    if (resetBtn) resetBtn.addEventListener('click', () => { camera3D.position.set(28, 22, 48); controls3D.target.set(0, 8, 0); controls3D.update(); });
+    if (animBtn) animBtn.addEventListener('click', () => isAnimation3DEnabled = !isAnimation3DEnabled);
+    if (moveBtn) moveBtn.addEventListener('click', () => {
         isMovement3DEnabled = !isMovement3DEnabled; // Reset baseline to current encoder average to avoid jumps when toggling movement
         lastEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
     });
