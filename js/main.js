@@ -4843,7 +4843,15 @@ const SysIdState = {
     impulseStartTime: 0,
     chart: null,
     chartCtx: null,
-    telemetryHandler: null
+    telemetryHandler: null,
+    // Nowe pola dla różnych typów testów
+    testType: 'balance',  // 'balance', 'speed', 'position'
+    stepValue: 50,        // Wartość skoku dla speed/position
+    stepApplied: false,
+    savedPID: null,       // Zapisane PID do przywrócenia
+    savedSpeedPID: null,  // Zapisane PID prędkości
+    savedPositionPID: null, // Zapisane PID pozycji
+    currentSetpoint: 0    // Aktualny setpoint (prędkość/pozycja)
 };
 
 function initSystemIdentification() {
@@ -4853,6 +4861,7 @@ function initSystemIdentification() {
     const exportMatBtn = document.getElementById('sysid-export-mat-btn');
     const clearBtn = document.getElementById('sysid-clear-btn');
     const testImpulseBtn = document.getElementById('sysid-test-impulse-btn');
+    const testTypeSelect = document.getElementById('sysid-test-type');
 
     if (startBtn) startBtn.addEventListener('click', startSysIdRecording);
     if (stopBtn) stopBtn.addEventListener('click', stopSysIdRecording);
@@ -4860,11 +4869,65 @@ function initSystemIdentification() {
     if (exportMatBtn) exportMatBtn.addEventListener('click', exportSysIdMAT);
     if (clearBtn) clearBtn.addEventListener('click', clearSysIdData);
     if (testImpulseBtn) testImpulseBtn.addEventListener('click', testSysIdImpulse);
+    if (testTypeSelect) testTypeSelect.addEventListener('change', handleSysIdTestTypeChange);
 
     // Initialize chart context
     const canvas = document.getElementById('sysid-preview-chart');
     if (canvas) {
         SysIdState.chartCtx = canvas.getContext('2d');
+    }
+    
+    // Initialize UI visibility based on default test type
+    handleSysIdTestTypeChange();
+}
+
+// Obsługa zmiany typu testu - pokazuje/ukrywa odpowiednie kontrolki
+function handleSysIdTestTypeChange() {
+    const testType = document.getElementById('sysid-test-type')?.value || 'balance';
+    SysIdState.testType = testType;
+    
+    const kpContainer = document.getElementById('sysid-kp-container');
+    const impulseContainer = document.getElementById('sysid-impulse-container');
+    const stepContainer = document.getElementById('sysid-step-container');
+    const stepInput = document.getElementById('sysid-step-value');
+    
+    if (testType === 'balance') {
+        // Test balansu - pokaż Kp i impuls
+        if (kpContainer) kpContainer.style.display = '';
+        if (impulseContainer) impulseContainer.style.display = '';
+        if (stepContainer) stepContainer.style.display = 'none';
+    } else if (testType === 'speed') {
+        // Test prędkości - ukryj Kp, pokaż step value
+        if (kpContainer) kpContainer.style.display = 'none';
+        if (impulseContainer) impulseContainer.style.display = 'none';
+        if (stepContainer) {
+            stepContainer.style.display = '';
+            // Zmień etykietę i zakres dla prędkości
+            const label = stepContainer.querySelector('label');
+            if (label) label.innerHTML = 'Setpoint prędkości [imp/s]<span class="help-icon">?</span>';
+            if (stepInput) {
+                stepInput.value = 100;
+                stepInput.min = 10;
+                stepInput.max = 500;
+                stepInput.step = 10;
+            }
+        }
+    } else if (testType === 'position') {
+        // Test pozycji - ukryj Kp, pokaż step value
+        if (kpContainer) kpContainer.style.display = 'none';
+        if (impulseContainer) impulseContainer.style.display = 'none';
+        if (stepContainer) {
+            stepContainer.style.display = '';
+            // Zmień etykietę i zakres dla pozycji
+            const label = stepContainer.querySelector('label');
+            if (label) label.innerHTML = 'Setpoint pozycji [cm]<span class="help-icon">?</span>';
+            if (stepInput) {
+                stepInput.value = 30;
+                stepInput.min = 5;
+                stepInput.max = 200;
+                stepInput.step = 5;
+            }
+        }
     }
 }
 
@@ -4923,6 +4986,9 @@ async function startSysIdRecording() {
         return;
     }
 
+    // Pobierz typ testu
+    SysIdState.testType = document.getElementById('sysid-test-type')?.value || 'balance';
+    
     // Check robot state - robot musi balansować żeby reagował na zakłócenie
     if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState)) {
         const ok = confirm(`Robot musi balansować. Aktualny stan: '${AppState.lastKnownRobotState}'.\nCzy włączyć balansowanie?`);
@@ -4935,27 +5001,56 @@ async function startSysIdRecording() {
         }
     }
 
-    // Get config
-    SysIdState.kp = parseFloat(document.getElementById('sysid-kp')?.value) || 50;
+    // Get common config
     SysIdState.duration = (parseFloat(document.getElementById('sysid-duration')?.value) || 5) * 1000;
-    SysIdState.impulse = (parseFloat(document.getElementById('sysid-impulse')?.value) || 25) / 100;  // % joysticka (np. 25 -> 0.25)
     SysIdState.sampleRate = parseInt(document.getElementById('sysid-sample-rate')?.value) || 200;
+    SysIdState.stepApplied = false;
     SysIdState.impulseApplied = false;
     SysIdState.impulseStartTime = 0;
-    SysIdState.impulsePhase = 0;  // 0=brak, 1=przód, 2=tył
+    SysIdState.impulsePhase = 0;
+    SysIdState.currentSetpoint = 0;
 
-    // Save current PID and apply Kp-only mode
-    const currentKp = parseFloat(document.getElementById('balanceKpInput')?.value) || SysIdState.kp;
-    const currentKi = parseFloat(document.getElementById('balanceKiInput')?.value) || 0;
-    const currentKd = parseFloat(document.getElementById('balanceKdInput')?.value) || 0;
-    SysIdState.savedPID = { kp: currentKp, ki: currentKi, kd: currentKd };
+    // Konfiguracja specyficzna dla typu testu
+    if (SysIdState.testType === 'balance') {
+        // Test balansu - Kp-only mode
+        SysIdState.kp = parseFloat(document.getElementById('sysid-kp')?.value) || 50;
+        SysIdState.impulse = (parseFloat(document.getElementById('sysid-impulse')?.value) || 25) / 100;
+        
+        // Zapisz i ustaw PID
+        const currentKp = parseFloat(document.getElementById('balanceKpInput')?.value) || SysIdState.kp;
+        const currentKi = parseFloat(document.getElementById('balanceKiInput')?.value) || 0;
+        const currentKd = parseFloat(document.getElementById('balanceKdInput')?.value) || 0;
+        SysIdState.savedPID = { kp: currentKp, ki: currentKi, kd: currentKd };
 
-    // Apply Kp-only (no Ki, no Kd) - use 'key' not 'param' (firmware expects 'key')
-    sendBleMessage({ type: 'set_param', key: 'kp_b', value: SysIdState.kp });
-    sendBleMessage({ type: 'set_param', key: 'ki_b', value: 0 });
-    sendBleMessage({ type: 'set_param', key: 'kd_b', value: 0 });
-
-    addLogMessage(`[SysID] Ustawiono Kp=${SysIdState.kp}, Ki=0, Kd=0`, 'info');
+        sendBleMessage({ type: 'set_param', key: 'kp_b', value: SysIdState.kp });
+        sendBleMessage({ type: 'set_param', key: 'ki_b', value: 0 });
+        sendBleMessage({ type: 'set_param', key: 'kd_b', value: 0 });
+        addLogMessage(`[SysID Balance] Ustawiono Kp=${SysIdState.kp}, Ki=0, Kd=0`, 'info');
+        
+    } else if (SysIdState.testType === 'speed') {
+        // Test pętli prędkości - skok setpointu prędkości
+        SysIdState.stepValue = parseFloat(document.getElementById('sysid-step-value')?.value) || 100;
+        
+        // Zapisz aktualne PID prędkości (opcjonalnie możemy je wyzerować dla testu)
+        const currentKpS = parseFloat(document.getElementById('speedKpInput')?.value) || 0;
+        const currentKiS = parseFloat(document.getElementById('speedKiInput')?.value) || 0;
+        const currentKdS = parseFloat(document.getElementById('speedKdInput')?.value) || 0;
+        SysIdState.savedSpeedPID = { kp: currentKpS, ki: currentKiS, kd: currentKdS };
+        
+        addLogMessage(`[SysID Speed] Test pętli prędkości, skok: ${SysIdState.stepValue} imp/s`, 'info');
+        
+    } else if (SysIdState.testType === 'position') {
+        // Test pętli pozycji - skok setpointu pozycji
+        SysIdState.stepValue = parseFloat(document.getElementById('sysid-step-value')?.value) || 30;
+        
+        // Zapisz aktualne PID pozycji
+        const currentKpP = parseFloat(document.getElementById('positionKpInput')?.value) || 0;
+        const currentKiP = parseFloat(document.getElementById('positionKiInput')?.value) || 0;
+        const currentKdP = parseFloat(document.getElementById('positionKdInput')?.value) || 0;
+        SysIdState.savedPositionPID = { kp: currentKpP, ki: currentKiP, kd: currentKdP };
+        
+        addLogMessage(`[SysID Position] Test pętli pozycji, skok: ${SysIdState.stepValue} cm`, 'info');
+    }
 
     // Clear data
     SysIdState.data = [];
@@ -4973,32 +5068,60 @@ async function startSysIdRecording() {
             const elapsed = performance.now() - SysIdState.startTime;
             const elapsedSec = elapsed / 1000;
 
-            // Determine current impulse value for recording (podwójny impuls: przód +, tył -)
-            let currentImpulse = 0;
-            if (SysIdState.impulseApplied && SysIdState.impulseStartTime > 0) {
-                const impulseElapsed = elapsed - SysIdState.impulseStartTime;
-                if (impulseElapsed >= 0 && impulseElapsed < 100) {
-                    // Faza 1: impuls do przodu (0-100ms)
-                    currentImpulse = SysIdState.impulse * 100;  // Zapisz jako % (np. 25)
-                } else if (impulseElapsed >= 100 && impulseElapsed < 200) {
-                    // Faza 2: impuls do tyłu (100-200ms)
-                    currentImpulse = -SysIdState.impulse * 100;  // Ujemny dla tyłu
-                }
-            }
-
-            // Normalize telemetry data (mapuje krótkie klucze na długie)
+            // Normalize telemetry data
             const normData = (typeof normalizeTelemetryData === 'function') ? normalizeTelemetryData(data) : data;
 
-            SysIdState.data.push({
+            // Zbierz dane w zależności od typu testu
+            const record = {
                 time: elapsedSec,
                 angle: normData.pitch ?? normData.angle ?? 0,
-                impulse_pwm: currentImpulse,  // Teraz jest to % joysticka (+przód, -tył)
-                pwm_output: normData.output ?? 0,  // balance_output z firmware (klucz "o")
                 speed: normData.speed ?? 0,
                 encoder_left: normData.encoder_left ?? 0,
                 encoder_right: normData.encoder_right ?? 0,
-                gyroY: normData.gyroY ?? 0
-            });
+                gyroY: normData.gyroY ?? 0,
+                pwm_output: normData.output ?? 0,
+                // Pola specyficzne dla typu testu
+                test_type: SysIdState.testType,
+                setpoint: SysIdState.currentSetpoint,
+                input_signal: 0  // Sygnał wejściowy (impuls/step)
+            };
+
+            if (SysIdState.testType === 'balance') {
+                // Impuls joysticka
+                let currentImpulse = 0;
+                if (SysIdState.impulseApplied && SysIdState.impulseStartTime > 0) {
+                    const impulseElapsed = elapsed - SysIdState.impulseStartTime;
+                    if (impulseElapsed >= 0 && impulseElapsed < 100) {
+                        currentImpulse = SysIdState.impulse * 100;
+                    } else if (impulseElapsed >= 100 && impulseElapsed < 200) {
+                        currentImpulse = -SysIdState.impulse * 100;
+                    }
+                }
+                record.input_signal = currentImpulse;
+                record.impulse_pwm = currentImpulse;  // Kompatybilność wsteczna
+                
+            } else if (SysIdState.testType === 'speed') {
+                // Setpoint prędkości
+                record.input_signal = SysIdState.stepApplied ? SysIdState.stepValue : 0;
+                record.setpoint_speed = record.input_signal;
+                record.speed_error = record.input_signal - record.speed;
+                
+            } else if (SysIdState.testType === 'position') {
+                // Setpoint pozycji - oblicz pozycję z enkoderów
+                const avgEncoder = (record.encoder_left + record.encoder_right) / 2;
+                // Konwersja enkodera na cm (wymaga parametrów mechanicznych)
+                const encoderPpr = parseFloat(document.getElementById('encoderPprInput')?.value) || 820;
+                const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput')?.value) || 8.2;
+                const wheelCircum = Math.PI * wheelDiameter; // cm
+                const positionCm = (avgEncoder / encoderPpr) * wheelCircum;
+                
+                record.position_cm = positionCm;
+                record.input_signal = SysIdState.stepApplied ? SysIdState.stepValue : 0;
+                record.setpoint_position = record.input_signal;
+                record.position_error = record.input_signal - positionCm;
+            }
+
+            SysIdState.data.push(record);
 
             // Update progress
             const progress = Math.min(100, (elapsed / SysIdState.duration) * 100);
@@ -5016,36 +5139,77 @@ async function startSysIdRecording() {
     };
     window.addEventListener('ble_message', SysIdState.telemetryHandler);
 
-    // Podwójny impuls po 1 sekundzie: przód → tył (żeby robot nie odjechał)
+    // Zastosuj skok/impuls po 1 sekundzie
     setTimeout(() => {
-        if (SysIdState.isRecording) {
+        if (!SysIdState.isRecording) return;
+        
+        if (SysIdState.testType === 'balance') {
+            // Podwójny impuls joysticka
             SysIdState.impulseApplied = true;
             SysIdState.impulseStartTime = performance.now() - SysIdState.startTime;
-            const impulsePercent = SysIdState.impulse;  // Już jako ułamek (np. 0.25)
+            const impulsePercent = SysIdState.impulse;
 
-            addLogMessage(`[SysID] Wysyłam podwójny impuls joystick ${impulsePercent * 100}% (przód→tył, 100ms każdy)`, 'info');
+            addLogMessage(`[SysID] Impuls joystick ${impulsePercent * 100}% (przód→tył)`, 'info');
 
-            // Faza 1: Impuls do przodu przez joystick
             sendBleMessage({ type: 'joystick', x: 0, y: impulsePercent });
-
-            // Faza 2: Po 100ms impuls do tyłu
             setTimeout(() => {
                 if (SysIdState.isRecording) {
                     sendBleMessage({ type: 'joystick', x: 0, y: -impulsePercent });
                 }
             }, 100);
-
-            // Faza 3: Po 200ms stop (joystick neutralny)
             setTimeout(() => {
                 if (SysIdState.isRecording) {
                     sendBleMessage({ type: 'joystick', x: 0, y: 0 });
                     addLogMessage(`[SysID] Impuls zakończony`, 'info');
                 }
             }, 200);
+            
+        } else if (SysIdState.testType === 'speed') {
+            // Skok setpointu prędkości - włączamy tryb TRZYMA_POZYCJE z zadaną prędkością
+            SysIdState.stepApplied = true;
+            SysIdState.currentSetpoint = SysIdState.stepValue;
+            
+            addLogMessage(`[SysID] Skok prędkości: ${SysIdState.stepValue} imp/s`, 'info');
+            
+            // Wyślij setpoint prędkości przez joystick (proporcjonalnie)
+            // Maksymalny joystick = 100%, więc normalizujemy do max_speed
+            const maxSpeed = parseFloat(document.getElementById('maxSpeedInput')?.value) || 200;
+            const joystickY = Math.min(1.0, SysIdState.stepValue / maxSpeed);
+            sendBleMessage({ type: 'joystick', x: 0, y: joystickY });
+            
+            // Po połowie czasu nagrywania zeruj setpoint (żeby zobaczyć odpowiedź na skok w dół)
+            setTimeout(() => {
+                if (SysIdState.isRecording) {
+                    SysIdState.currentSetpoint = 0;
+                    sendBleMessage({ type: 'joystick', x: 0, y: 0 });
+                    addLogMessage(`[SysID] Zerowanie prędkości`, 'info');
+                }
+            }, SysIdState.duration / 2 - 1000);
+            
+        } else if (SysIdState.testType === 'position') {
+            // Skok setpointu pozycji
+            SysIdState.stepApplied = true;
+            SysIdState.currentSetpoint = SysIdState.stepValue;
+            
+            addLogMessage(`[SysID] Skok pozycji: ${SysIdState.stepValue} cm`, 'info');
+            
+            // Wyślij komendę position_setpoint (jeśli firmware obsługuje)
+            // Alternatywnie: krótki impuls joysticka żeby robot ruszył
+            sendBleMessage({ type: 'set_param', key: 'pos_setpoint', value: SysIdState.stepValue });
+            
+            // Po połowie czasu zeruj setpoint
+            setTimeout(() => {
+                if (SysIdState.isRecording) {
+                    SysIdState.currentSetpoint = 0;
+                    sendBleMessage({ type: 'set_param', key: 'pos_setpoint', value: 0 });
+                    addLogMessage(`[SysID] Zerowanie pozycji`, 'info');
+                }
+            }, SysIdState.duration / 2 - 1000);
         }
     }, 1000);
 
-    addLogMessage(`[SysID] Nagrywanie rozpoczęte (${SysIdState.duration / 1000}s). Podwójny impuls za 1s.`, 'info');
+    const testNames = { balance: 'Balans', speed: 'Prędkość', position: 'Pozycja' };
+    addLogMessage(`[SysID] Nagrywanie ${testNames[SysIdState.testType]} (${SysIdState.duration / 1000}s). Skok za 1s.`, 'info');
 }
 
 function stopSysIdRecording() {
@@ -5053,7 +5217,9 @@ function stopSysIdRecording() {
 
     SysIdState.isRecording = false;
     SysIdState.impulseApplied = false;
+    SysIdState.stepApplied = false;
     SysIdState.impulseStartTime = 0;
+    SysIdState.currentSetpoint = 0;
 
     // Remove telemetry handler
     if (SysIdState.telemetryHandler) {
@@ -5064,12 +5230,18 @@ function stopSysIdRecording() {
     // Upewnij się że joystick jest w pozycji neutralnej
     sendBleMessage({ type: 'joystick', x: 0, y: 0 });
 
-    // Restore original PID (use 'key' not 'param')
-    if (SysIdState.savedPID) {
+    // Przywróć ustawienia w zależności od typu testu
+    if (SysIdState.testType === 'balance' && SysIdState.savedPID) {
         sendBleMessage({ type: 'set_param', key: 'kp_b', value: SysIdState.savedPID.kp });
         sendBleMessage({ type: 'set_param', key: 'ki_b', value: SysIdState.savedPID.ki });
         sendBleMessage({ type: 'set_param', key: 'kd_b', value: SysIdState.savedPID.kd });
-        addLogMessage(`[SysID] Przywrócono PID: Kp=${SysIdState.savedPID.kp}, Ki=${SysIdState.savedPID.ki}, Kd=${SysIdState.savedPID.kd}`, 'info');
+        addLogMessage(`[SysID] Przywrócono PID balansu: Kp=${SysIdState.savedPID.kp}`, 'info');
+        SysIdState.savedPID = null;
+    }
+    
+    if (SysIdState.testType === 'position') {
+        // Zeruj setpoint pozycji
+        sendBleMessage({ type: 'set_param', key: 'pos_setpoint', value: 0 });
     }
 
     // Update UI
@@ -5078,7 +5250,8 @@ function stopSysIdRecording() {
     // Draw chart
     drawSysIdChart();
 
-    addLogMessage(`[SysID] Nagrywanie zakończone. Zebrano ${SysIdState.data.length} próbek.`, 'success');
+    const testNames = { balance: 'Balans', speed: 'Prędkość', position: 'Pozycja' };
+    addLogMessage(`[SysID ${testNames[SysIdState.testType]}] Zakończone. Zebrano ${SysIdState.data.length} próbek.`, 'success');
 }
 
 function updateSysIdUI(state) {
@@ -5124,21 +5297,39 @@ function drawSysIdChart() {
     const width = canvas.width - padding.left - padding.right;
     const height = canvas.height - padding.top - padding.bottom;
 
-    // Find min/max for angle
     const times = data.map(d => d.time);
-    const angles = data.map(d => d.angle);
-    const impulses = data.map(d => d.impulse_pwm || 0);
-
     const minTime = Math.min(...times);
     const maxTime = Math.max(...times);
-    const minAngle = Math.min(...angles) - 1;
-    const maxAngle = Math.max(...angles) + 1;
-    const maxImpulse = Math.max(...impulses, 1);
+
+    // Dane do wykresu w zależności od typu testu
+    let primaryData, secondaryData, primaryLabel, secondaryLabel;
+    const testType = SysIdState.testType || 'balance';
+    
+    if (testType === 'balance') {
+        primaryData = data.map(d => d.angle);
+        secondaryData = data.map(d => d.impulse_pwm || d.input_signal || 0);
+        primaryLabel = '● Kąt';
+        secondaryLabel = '● Impuls';
+    } else if (testType === 'speed') {
+        primaryData = data.map(d => d.speed);
+        secondaryData = data.map(d => d.setpoint_speed || d.input_signal || 0);
+        primaryLabel = '● Prędkość';
+        secondaryLabel = '● Setpoint';
+    } else if (testType === 'position') {
+        primaryData = data.map(d => d.position_cm || 0);
+        secondaryData = data.map(d => d.setpoint_position || d.input_signal || 0);
+        primaryLabel = '● Pozycja';
+        secondaryLabel = '● Setpoint';
+    }
+
+    const minPrimary = Math.min(...primaryData) - 1;
+    const maxPrimary = Math.max(...primaryData) + 1;
+    const maxSecondary = Math.max(...secondaryData.map(Math.abs), 1);
 
     // Scale functions
     const scaleX = (t) => padding.left + ((t - minTime) / (maxTime - minTime + 0.001)) * width;
-    const scaleYAngle = (v) => padding.top + height - ((v - minAngle) / (maxAngle - minAngle + 0.001)) * height;
-    const scaleYImpulse = (v) => padding.top + height - (v / maxImpulse) * height * 0.5;  // Scale impulse to half height
+    const scaleYPrimary = (v) => padding.top + height - ((v - minPrimary) / (maxPrimary - minPrimary + 0.001)) * height;
+    const scaleYSecondary = (v) => padding.top + height - (v / maxSecondary) * height * 0.5;
 
     // Draw grid
     ctx.strokeStyle = '#333';
@@ -5151,18 +5342,18 @@ function drawSysIdChart() {
     }
     ctx.stroke();
 
-    // Draw zero line for angle
-    if (minAngle < 0 && maxAngle > 0) {
+    // Draw zero line
+    if (minPrimary < 0 && maxPrimary > 0) {
         ctx.strokeStyle = '#666';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        const zeroY = scaleYAngle(0);
+        const zeroY = scaleYPrimary(0);
         ctx.moveTo(padding.left, zeroY);
         ctx.lineTo(canvas.width - padding.right, zeroY);
         ctx.stroke();
     }
 
-    // Draw impulse (filled area)
+    // Draw secondary data (filled area) - setpoint/impulse
     ctx.fillStyle = 'rgba(247, 183, 49, 0.3)';
     ctx.strokeStyle = '#f7b731';
     ctx.lineWidth = 2;
@@ -5170,7 +5361,7 @@ function drawSysIdChart() {
     ctx.moveTo(scaleX(data[0].time), padding.top + height);
     data.forEach((d, i) => {
         const x = scaleX(d.time);
-        const y = scaleYImpulse(d.impulse_pwm || 0);
+        const y = scaleYSecondary(secondaryData[i]);
         ctx.lineTo(x, y);
     });
     ctx.lineTo(scaleX(data[data.length - 1].time), padding.top + height);
@@ -5178,13 +5369,13 @@ function drawSysIdChart() {
     ctx.fill();
     ctx.stroke();
 
-    // Draw angle (solid)
+    // Draw primary data (solid line) - angle/speed/position
     ctx.strokeStyle = '#a2f279';
     ctx.lineWidth = 2;
     ctx.beginPath();
     data.forEach((d, i) => {
         const x = scaleX(d.time);
-        const y = scaleYAngle(d.angle);
+        const y = scaleYPrimary(primaryData[i]);
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
     });
@@ -5198,15 +5389,16 @@ function drawSysIdChart() {
     ctx.fillText(`${maxTime.toFixed(1)}s`, canvas.width - padding.right, canvas.height - 5);
 
     ctx.textAlign = 'right';
-    ctx.fillText(`${maxAngle.toFixed(1)}°`, padding.left - 5, padding.top + 10);
-    ctx.fillText(`${minAngle.toFixed(1)}°`, padding.left - 5, canvas.height - padding.bottom);
+    const unitSuffix = testType === 'balance' ? '°' : (testType === 'speed' ? '' : 'cm');
+    ctx.fillText(`${maxPrimary.toFixed(1)}${unitSuffix}`, padding.left - 5, padding.top + 10);
+    ctx.fillText(`${minPrimary.toFixed(1)}${unitSuffix}`, padding.left - 5, canvas.height - padding.bottom);
 
     // Legend
     ctx.textAlign = 'left';
     ctx.fillStyle = '#a2f279';
-    ctx.fillText('● Kąt', canvas.width - 55, 15);
+    ctx.fillText(primaryLabel, canvas.width - 70, 15);
     ctx.fillStyle = '#f7b731';
-    ctx.fillText('● Impuls PWM', canvas.width - 55, 28);
+    ctx.fillText(secondaryLabel, canvas.width - 70, 28);
 }
 
 function exportSysIdCSV() {
@@ -5219,28 +5411,57 @@ function exportSysIdCSV() {
     const encoderPpr = document.getElementById('encoderPprInput')?.value || 820;
     const wheelDiameter = document.getElementById('wheelDiameterInput')?.value || 8.2;
     const trackWidth = document.getElementById('trackWidthInput')?.value || 15;
+    
+    // Typ testu
+    const testType = SysIdState.testType || 'balance';
 
     // Create header with metadata (commented lines starting with #)
-    const metadata = [
+    const metadataLines = [
         `# RoboBala System Identification Data`,
         `# generated: ${new Date().toISOString()}`,
-        `# kp_used: ${SysIdState.kp}`,
-        `# impulse_joystick_percent: ${SysIdState.impulse * 100}`,
-        `# impulse_type: double_pulse_fwd_bwd`,
-        `# impulse_duration_ms: 200`,
+        `# test_type: ${testType}`,
         `# sample_rate_hz: ${SysIdState.sampleRate}`,
         `# recording_duration_s: ${SysIdState.duration / 1000}`,
         `# encoder_ppr: ${encoderPpr}`,
         `# wheel_diameter_cm: ${wheelDiameter}`,
         `# track_width_cm: ${trackWidth}`,
-        `# samples_count: ${SysIdState.data.length}`,
-        ``
-    ].join('\n');
+        `# samples_count: ${SysIdState.data.length}`
+    ];
+    
+    // Dodatkowe metadane specyficzne dla typu testu
+    if (testType === 'balance') {
+        metadataLines.push(`# kp_used: ${SysIdState.kp}`);
+        metadataLines.push(`# impulse_joystick_percent: ${SysIdState.impulse * 100}`);
+        metadataLines.push(`# impulse_type: double_pulse_fwd_bwd`);
+        metadataLines.push(`# impulse_duration_ms: 200`);
+    } else if (testType === 'speed') {
+        metadataLines.push(`# step_value_speed: ${SysIdState.stepValue}`);
+    } else if (testType === 'position') {
+        metadataLines.push(`# step_value_position: ${SysIdState.stepValue}`);
+    }
+    metadataLines.push('');
+    
+    const metadata = metadataLines.join('\n');
 
-    const header = 'time_s,angle_deg,impulse_percent,pwm_output,speed_enc,encoder_left,encoder_right,gyro_y\n';
-    const rows = SysIdState.data.map(d =>
-        `${d.time.toFixed(4)},${d.angle.toFixed(4)},${d.impulse_pwm.toFixed(2)},${d.pwm_output.toFixed(2)},${d.speed.toFixed(2)},${d.encoder_left},${d.encoder_right},${d.gyroY.toFixed(4)}`
-    ).join('\n');
+    // Nagłówek i dane w zależności od typu testu
+    let header, rows;
+    
+    if (testType === 'balance') {
+        header = 'time_s,angle_deg,impulse_percent,pwm_output,speed_enc,encoder_left,encoder_right,gyro_y\n';
+        rows = SysIdState.data.map(d =>
+            `${d.time.toFixed(4)},${d.angle.toFixed(4)},${(d.impulse_pwm || 0).toFixed(2)},${d.pwm_output.toFixed(2)},${d.speed.toFixed(2)},${d.encoder_left},${d.encoder_right},${d.gyroY.toFixed(4)}`
+        ).join('\n');
+    } else if (testType === 'speed') {
+        header = 'time_s,setpoint_speed,speed_actual,speed_error,angle_deg,pwm_output,encoder_left,encoder_right\n';
+        rows = SysIdState.data.map(d =>
+            `${d.time.toFixed(4)},${(d.setpoint_speed || d.input_signal || 0).toFixed(2)},${d.speed.toFixed(2)},${(d.speed_error || 0).toFixed(2)},${d.angle.toFixed(4)},${d.pwm_output.toFixed(2)},${d.encoder_left},${d.encoder_right}`
+        ).join('\n');
+    } else if (testType === 'position') {
+        header = 'time_s,setpoint_position,position_actual,position_error,speed_enc,angle_deg,encoder_left,encoder_right\n';
+        rows = SysIdState.data.map(d =>
+            `${d.time.toFixed(4)},${(d.setpoint_position || d.input_signal || 0).toFixed(2)},${(d.position_cm || 0).toFixed(2)},${(d.position_error || 0).toFixed(2)},${d.speed.toFixed(2)},${d.angle.toFixed(4)},${d.encoder_left},${d.encoder_right}`
+        ).join('\n');
+    }
 
     const csv = metadata + header + rows;
     const blob = new Blob([csv], { type: 'text/csv' });

@@ -501,28 +501,49 @@
                 <button class="accordion-header" onclick="toggleAccordion(this)">8. Identyfikacja Obiektu (System ID)</button>
                 <div class="accordion-content" id="sysid-content">
                     <p style="color: #aaa; font-size: 0.9em; margin-bottom: 15px;">
-                        📊 Nagraj odpowiedź skokową robota przy ustawionym Kp (bez Ki/Kd). 
-                        Impuls PWM zostanie wysłany 1s po rozpoczęciu nagrywania.
-                        Eksportuj dane do MATLAB/Python aby stworzyć model i obliczyć optymalne PID.
+                        📊 Nagraj odpowiedź skokową dla wybranej pętli. 
+                        Eksportuj dane do Python aby obliczyć optymalne PID.
                     </p>
                     
                     <div class="setting-container">
+                        <label for="sysid-test-type">Typ testu<span class="help-icon">?</span></label>
+                        <select id="sysid-test-type" class="config-value" style="width: 100%; padding: 8px; background: #20232a; border: 1px solid #61dafb; border-radius: 4px; color: #fff;">
+                            <option value="balance" selected>🔄 Pętla balansu (kąt)</option>
+                            <option value="speed">⚡ Pętla prędkości</option>
+                            <option value="position">📍 Pętla pozycji</option>
+                        </select>
+                        <div class="help-text">
+                            <b>Balans:</b> Impuls joysticka, mierzy odpowiedź kąta (500Hz).<br>
+                            <b>Prędkość:</b> Skok setpointu prędkości, mierzy odpowiedź speed (250Hz).<br>
+                            <b>Pozycja:</b> Skok setpointu pozycji, mierzy odpowiedź pozycji (125Hz).
+                        </div>
+                    </div>
+                    
+                    <div class="setting-container" id="sysid-kp-container">
                         <label for="sysid-kp">Kp (tylko proporcjonalny)<span class="help-icon">?</span></label>
                         <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="sysid-kp" min="1" max="200" step="1" value="50"><button>+</button></div>
-                        <div class="help-text">Wartość wzmocnienia proporcjonalnego używana podczas testu. Ki i Kd będą ustawione na 0. Po zakończeniu nagrywania oryginalne wartości PID zostaną przywrócone.</div>
+                        <div class="help-text">Wartość wzmocnienia proporcjonalnego używana podczas testu balansu. Ki i Kd będą ustawione na 0.</div>
                     </div>
                     <div class="setting-container">
                         <label for="sysid-duration">Czas nagrywania (s)<span class="help-icon">?</span></label>
                         <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="sysid-duration" min="2" max="30" step="1" value="5"><button>+</button></div>
-                        <div class="help-text">Całkowity czas nagrywania odpowiedzi skokowej. Impuls zostanie zastosowany 1s po starcie nagrywania, więc zalecany czas to min. 5s.</div>
+                        <div class="help-text">Całkowity czas nagrywania odpowiedzi skokowej. Skok/impuls zostanie zastosowany 1s po starcie.</div>
                     </div>
-                    <div class="setting-container">
+                    <div class="setting-container" id="sysid-impulse-container">
                         <label for="sysid-impulse">Impuls joysticka (%)<span class="help-icon">?</span></label>
                         <div style="display: flex; gap: 8px; align-items: center;">
                             <div class="numeric-input-wrapper" style="flex: 1;"><button>-</button><input type="number" class="config-value" id="sysid-impulse" min="5" max="100" step="5" value="25"><button>+</button></div>
                             <button id="sysid-test-impulse-btn" style="padding: 8px 12px; background: #f7b731; color: #000; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; white-space: nowrap;" title="Jednorazowy test impulsu (podwójny przód→tył)">🔧 Testuj</button>
                         </div>
-                        <div class="help-text">Siła impulsu jako % wychylenia joysticka. Podwójny impuls: 100ms przód + 100ms tył, żeby robot nie odjechał. Wyższa wartość = silniejsze zakłócenie. Typowy zakres: 15-40%. Użyj przycisku "Testuj" aby sprawdzić siłę impulsu przed nagrywaniem.</div>
+                        <div class="help-text">Siła impulsu jako % joysticka. Podwójny impuls: 100ms przód + 100ms tył. Typowy zakres: 15-40%.</div>
+                    </div>
+                    <div class="setting-container" id="sysid-step-container" style="display: none;">
+                        <label for="sysid-step-value">Wartość skoku<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="sysid-step-value" min="5" max="500" step="5" value="50"><button>+</button></div>
+                        <div class="help-text">
+                            Dla pętli prędkości: setpoint prędkości [imp/s lub cm/s].<br>
+                            Dla pętli pozycji: setpoint pozycji [cm].
+                        </div>
                     </div>
                     <div class="setting-container">
                         <label for="sysid-sample-rate">Próbkowanie (Hz)<span class="help-icon">?</span></label>
