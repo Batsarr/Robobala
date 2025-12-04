@@ -4803,7 +4803,8 @@ function testSysIdImpulse() {
         return;
     }
 
-    const pwmValue = parseFloat(document.getElementById('sysid-impulse')?.value) || 200;
+    // Pobierz wartość impulsu jako % joysticka (25% = 0.25)
+    const impulsePercent = (parseFloat(document.getElementById('sysid-impulse')?.value) || 25) / 100;
     const testBtn = document.getElementById('sysid-test-impulse-btn');
 
     // Disable button during test
@@ -4812,15 +4813,19 @@ function testSysIdImpulse() {
         testBtn.textContent = '⏳ Test...';
     }
 
-    addLogMessage(`[SysID] Test impulsu: PWM=${pwmValue} na oba silniki (50ms)`, 'info');
+    addLogMessage(`[SysID] Test impulsu: Joystick ${impulsePercent * 100}% (podwójny: przód→tył)`, 'info');
 
-    // Send impulse to both motors
-    sendBleMessage({ type: 'manual_tune_motor', motor: 'left', direction: 'fwd', pwm: pwmValue });
-    sendBleMessage({ type: 'manual_tune_motor', motor: 'right', direction: 'fwd', pwm: pwmValue });
+    // Impuls do przodu przez joystick
+    sendBleMessage({ type: 'joystick', x: 0, y: impulsePercent });
 
-    // Stop after 50ms
+    // Po 100ms impuls do tyłu
     setTimeout(() => {
-        sendBleMessage({ type: 'manual_tune_stop_all' });
+        sendBleMessage({ type: 'joystick', x: 0, y: -impulsePercent });
+    }, 100);
+
+    // Po 200ms stop (joystick neutralny)
+    setTimeout(() => {
+        sendBleMessage({ type: 'joystick', x: 0, y: 0 });
         addLogMessage(`[SysID] Test impulsu zakończony`, 'success');
 
         // Re-enable button
@@ -4828,7 +4833,7 @@ function testSysIdImpulse() {
             testBtn.disabled = false;
             testBtn.textContent = '🔧 Testuj';
         }
-    }, 50);
+    }, 200);
 }
 
 async function startSysIdRecording() {
@@ -4855,10 +4860,11 @@ async function startSysIdRecording() {
     // Get config
     SysIdState.kp = parseFloat(document.getElementById('sysid-kp')?.value) || 50;
     SysIdState.duration = (parseFloat(document.getElementById('sysid-duration')?.value) || 5) * 1000;
-    SysIdState.impulse = parseFloat(document.getElementById('sysid-impulse')?.value) || 200;  // PWM value
+    SysIdState.impulse = (parseFloat(document.getElementById('sysid-impulse')?.value) || 25) / 100;  // % joysticka (np. 25 -> 0.25)
     SysIdState.sampleRate = parseInt(document.getElementById('sysid-sample-rate')?.value) || 200;
     SysIdState.impulseApplied = false;
     SysIdState.impulseStartTime = 0;
+    SysIdState.impulsePhase = 0;  // 0=brak, 1=przód, 2=tył
 
     // Save current PID and apply Kp-only mode
     const currentKp = parseFloat(document.getElementById('balanceKpInput')?.value) || SysIdState.kp;
@@ -4889,12 +4895,16 @@ async function startSysIdRecording() {
             const elapsed = performance.now() - SysIdState.startTime;
             const elapsedSec = elapsed / 1000;
 
-            // Determine current impulse value for recording
+            // Determine current impulse value for recording (podwójny impuls: przód +, tył -)
             let currentImpulse = 0;
             if (SysIdState.impulseApplied && SysIdState.impulseStartTime > 0) {
                 const impulseElapsed = elapsed - SysIdState.impulseStartTime;
-                if (impulseElapsed >= 0 && impulseElapsed < 50) {  // 50ms impulse duration
-                    currentImpulse = SysIdState.impulse;
+                if (impulseElapsed >= 0 && impulseElapsed < 100) {
+                    // Faza 1: impuls do przodu (0-100ms)
+                    currentImpulse = SysIdState.impulse * 100;  // Zapisz jako % (np. 25)
+                } else if (impulseElapsed >= 100 && impulseElapsed < 200) {
+                    // Faza 2: impuls do tyłu (100-200ms)
+                    currentImpulse = -SysIdState.impulse * 100;  // Ujemny dla tyłu
                 }
             }
 
@@ -4904,12 +4914,12 @@ async function startSysIdRecording() {
             SysIdState.data.push({
                 time: elapsedSec,
                 angle: normData.pitch ?? normData.angle ?? 0,
-                impulse_pwm: currentImpulse,
+                impulse_pwm: currentImpulse,  // Teraz jest to % joysticka (+przód, -tył)
                 pwm_output: normData.output ?? 0,  // balance_output z firmware (klucz "o")
                 speed: normData.speed ?? 0,
                 encoder_left: normData.encoder_left ?? 0,
                 encoder_right: normData.encoder_right ?? 0,
-                gyroY: normData.gyroY ?? 0  // TODO: wymaga dodania do firmware
+                gyroY: normData.gyroY ?? 0
             });
 
             // Update progress
@@ -4928,28 +4938,36 @@ async function startSysIdRecording() {
     };
     window.addEventListener('ble_message', SysIdState.telemetryHandler);
 
-    // Prosty impuls po 1 sekundzie - bez czekania na stabilizację
+    // Podwójny impuls po 1 sekundzie: przód → tył (żeby robot nie odjechał)
     setTimeout(() => {
         if (SysIdState.isRecording) {
             SysIdState.impulseApplied = true;
             SysIdState.impulseStartTime = performance.now() - SysIdState.startTime;
-            const pwmValue = SysIdState.impulse;
+            const impulsePercent = SysIdState.impulse;  // Już jako ułamek (np. 0.25)
 
-            addLogMessage(`[SysID] Wysyłam impuls ${pwmValue} PWM (50ms)`, 'info');
+            addLogMessage(`[SysID] Wysyłam podwójny impuls joystick ${impulsePercent * 100}% (przód→tył, 100ms każdy)`, 'info');
 
-            // Start disturbance on both motors (forward direction)
-            sendBleMessage({ type: 'manual_tune_motor', motor: 'left', direction: 'fwd', pwm: pwmValue });
-            sendBleMessage({ type: 'manual_tune_motor', motor: 'right', direction: 'fwd', pwm: pwmValue });
+            // Faza 1: Impuls do przodu przez joystick
+            sendBleMessage({ type: 'joystick', x: 0, y: impulsePercent });
 
-            // Stop after 50ms
+            // Faza 2: Po 100ms impuls do tyłu
             setTimeout(() => {
-                sendBleMessage({ type: 'manual_tune_stop_all' });
-                addLogMessage(`[SysID] Impuls zakończony`, 'info');
-            }, 50);
+                if (SysIdState.isRecording) {
+                    sendBleMessage({ type: 'joystick', x: 0, y: -impulsePercent });
+                }
+            }, 100);
+
+            // Faza 3: Po 200ms stop (joystick neutralny)
+            setTimeout(() => {
+                if (SysIdState.isRecording) {
+                    sendBleMessage({ type: 'joystick', x: 0, y: 0 });
+                    addLogMessage(`[SysID] Impuls zakończony`, 'info');
+                }
+            }, 200);
         }
     }, 1000);
 
-    addLogMessage(`[SysID] Nagrywanie rozpoczęte (${SysIdState.duration / 1000}s). Impuls za 1s.`, 'info');
+    addLogMessage(`[SysID] Nagrywanie rozpoczęte (${SysIdState.duration / 1000}s). Podwójny impuls za 1s.`, 'info');
 }
 
 function stopSysIdRecording() {
@@ -4965,8 +4983,8 @@ function stopSysIdRecording() {
         SysIdState.telemetryHandler = null;
     }
 
-    // Stop any manual motor control
-    sendBleMessage({ type: 'manual_tune_stop_all' });
+    // Upewnij się że joystick jest w pozycji neutralnej
+    sendBleMessage({ type: 'joystick', x: 0, y: 0 });
 
     // Restore original PID (use 'key' not 'param')
     if (SysIdState.savedPID) {
@@ -5129,8 +5147,9 @@ function exportSysIdCSV() {
         `# RoboBala System Identification Data`,
         `# generated: ${new Date().toISOString()}`,
         `# kp_used: ${SysIdState.kp}`,
-        `# impulse_pwm: ${SysIdState.impulse}`,
-        `# impulse_duration_ms: 50`,
+        `# impulse_joystick_percent: ${SysIdState.impulse * 100}`,
+        `# impulse_type: double_pulse_fwd_bwd`,
+        `# impulse_duration_ms: 200`,
         `# sample_rate_hz: ${SysIdState.sampleRate}`,
         `# recording_duration_s: ${SysIdState.duration / 1000}`,
         `# encoder_ppr: ${encoderPpr}`,
@@ -5140,7 +5159,7 @@ function exportSysIdCSV() {
         ``
     ].join('\n');
 
-    const header = 'time_s,angle_deg,impulse_pwm,pwm_output,speed_enc,encoder_left,encoder_right,gyro_y\n';
+    const header = 'time_s,angle_deg,impulse_percent,pwm_output,speed_enc,encoder_left,encoder_right,gyro_y\n';
     const rows = SysIdState.data.map(d =>
         `${d.time.toFixed(4)},${d.angle.toFixed(4)},${d.impulse_pwm.toFixed(2)},${d.pwm_output.toFixed(2)},${d.speed.toFixed(2)},${d.encoder_left},${d.encoder_right},${d.gyroY.toFixed(4)}`
     ).join('\n');
