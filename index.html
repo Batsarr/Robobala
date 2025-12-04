@@ -1,1346 +1,584 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RoboBala - Sterowanie</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RoboBala</title>
     <link rel="stylesheet" href="css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
-<body class="theme-dark">
-    <!-- Splash Screen -->
-    <div id="splashScreen" class="splash-screen active">
-        <div class="splash-content">
-            <div class="splash-logo">🤖</div>
-            <h1 class="splash-title">RoboBala</h1>
-            <p class="splash-subtitle">Panel Sterowania</p>
-            <div class="splash-spinner"></div>
+<body class="ui-locked">
+    <div id="emergency-banner">ZATRZYMANIE AWARYJNE</div>
+    <div id="gamepad-mapping-modal" class="modal-backdrop">
+        <div class="modal-content">
+            <h2>Mapowanie Przyciskow Gamepada</h2>
+            <div id="gamepad-mapping-list"></div>
+            <button id="close-modal-btn" style="margin-top: 20px;">Zamknij</button>
+        </div>
+    </div>
+    <div id="calibration-modal" class="modal-backdrop">
+        <div class="modal-content">
+            <h2>Kalibracja IMU (Czujnik Nachylenia)</h2>
+            <p>Aby skalibrowac czujnik IMU, powoli obroc robota we wszystkich kierunkach: do przodu, do tylu, na boki i wokol wlasnej osi pionowej. Wykonaj co najmniej 3 pelne obroty w kazdej plaszczyznie.</p>
+            <p><strong>Dla akcelerometru (Accel) wazne:</strong> Trzymaj robota nieruchomo na okolo 10 sekund w kazdej z 6 pozycji (szescian): gora, dol, przednia strona, tylna strona, lewa strona, prawa strona. Powtarzaj obroty i zatrzymania, az progres osiagnie co najmniej 3/4 dla kazdej osi. Obroty powinny byc wolne i plynne.</p>
+            <div class="calib-axis" style="display: flex; align-items: center; margin: 10px 0; justify-content: space-between;">
+                <span>Sys (System):</span><progress id="calib-sys-bar" value="0" max="3" style="flex: 1; margin: 0 10px;"></progress><span id="calib-sys-text">0</span>/3
+            </div>
+            <div class="calib-axis" style="display: flex; align-items: center; margin: 10px 0; justify-content: space-between;">
+                <span>Accel (Przyspieszenie):</span><progress id="calib-accel-bar" value="0" max="3" style="flex: 1; margin: 0 10px;"></progress><span id="calib-accel-text">0</span>/3
+            </div>
+            <div class="calib-axis" style="display: flex; align-items: center; margin: 10px 0; justify-content: space-between;">
+                <span>Gyro (Obroty):</span><progress id="calib-gyro-bar" value="0" max="3" style="flex: 1; margin: 0 10px;"></progress><span id="calib-gyro-text">0</span>/3
+            </div>
+            <div class="calib-axis" style="display: flex; align-items: center; margin: 10px 0; justify-content: space-between;">
+                <span>Mag (Magnetyczne):</span><progress id="calib-mag-bar" value="0" max="3" style="flex: 1; margin: 0 10px;"></progress><span id="calib-mag-text">0</span>/3
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button id="calib-update-btn" style="flex:1;">Aktualizuj Status</button>
+                <button id="calib-close-btn" style="flex:1;">Zamknij</button>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+                <button id="calib-save-btn" style="display:none; background:#61dafb; padding:6px 12px; border-radius:6px;">Zapisz offset do EEPROM</button>
+            </div>
         </div>
     </div>
 
-    <!-- Emergency FAB -->
-    <button id="emergencyFab" class="fab-emergency" title="Awaryjne zatrzymanie robota">
-        <span class="fab-icon">⏹</span>
-        <span class="fab-text">STOP</span>
-    </button>
-
-    <!-- Sticky Header -->
-    <header class="app-header">
-        <button id="menuToggle" class="menu-toggle" aria-label="Otwórz menu">
-            <span></span>
-            <span></span>
-            <span></span>
-        </button>
-        <h1 class="app-title">RoboBala</h1>
-        <div class="header-status">
-            <span class="status-dot" id="connectionDot"></span>
-            <span class="status-text" id="connectionText">Rozłączony</span>
+    <h1>Robot PID - Panel Sterowania v21.2</h1>
+    <div class="main-grid">
+        <div class="card" id="controls-card">
+            <h2>Sterowanie</h2>
+            <div id="joystickWrapper"><canvas id="joystickCanvas"></canvas></div>
+            <div class="control-row"><span class="control-label">Balansowanie</span><label class="switch"><input type="checkbox" id="balanceSwitch"><span class="slider round"></span></label></div>
+            <div class="control-row"><span class="control-label">Trzymaj Pozycje</span><label class="switch"><input type="checkbox" id="holdPositionSwitch"><span class="slider round"></span></label></div>
+            <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
+            <div class="control-row"><span class="control-label">Wylacz Magnetometr</span><label class="switch"><input type="checkbox" id="disableMagnetometerSwitch"><span class="slider round"></span></label></div>
+            <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
+            <button id="resetZeroBtn" style="margin-top:10px; width:100%;">Ustaw punkt 0 (Pitch)</button>
+            <div class="trim-controls">
+                <button id="pitchTrimMinus01Btn">-0.1</button>
+                <button id="pitchTrimMinus001Btn">-0.01</button>
+                <span>Korekta montażu (Pitch): <span id="trimValueDisplay">0.00</span>°</span>
+                <button id="pitchTrimPlus001Btn">+0.01</button>
+                <button id="pitchTrimPlus01Btn">+0.1</button>
+            </div>
+            <button id="resetRollZeroBtn" style="margin-top:10px; width:100%;">Ustaw punkt 0 (Roll)</button>
+            <div class="trim-controls">
+                <button id="rollTrimMinus01Btn">-0.1</button>
+                <button id="rollTrimMinus001Btn">-0.01</button>
+                <span>Korekta montażu (Roll): <span id="rollTrimValueDisplay">0.00</span>°</span>
+                <button id="rollTrimPlus001Btn">+0.01</button>
+                <button id="rollTrimPlus01Btn">+0.1</button>
+            </div>
+            <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
+            <button id="emergencyStopBtn">STOP AWARYJNY</button>
+            <button class="accordion-header" onclick="toggleAccordion(this)" style="margin-top: 15px;">Strojenie Joysticka</button>
+            <div class="accordion-content">
+                <div class="setting-container"><label for="joystickSensitivityInput">Czulosc Globalna (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickSensitivityInput" min="10" max="100" step="5" value="100"><button>+</button></div><div class="help-text">Globalny mnożnik dla wszystkich wartości z joysticka. Ustawienie 100% oznacza pełną czułość - robot reaguje maksymalnie na ruchy joysticka. Zmniejsz do 50-70%, jeśli robot jest zbyt nerwowy lub reaguje zbyt gwałtownie. Przydatne podczas nauki sterowania lub w ciasnych przestrzeniach. Typowy zakres: 60-100%.</div></div>
+                <div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button>+</button></div><div class="help-text">Krzywa wykładnicza (expo) zmienia charakterystykę odpowiedzi joysticka. Przy 0% odpowiedź jest liniowa. Zwiększenie wartości sprawia, że przy małych wychyleniach robot reaguje łagodniej (większa precyzja), a przy dużych wychyleniach normalnie. Wartość 30-50% zapewnia dobrą równowagę między precyzją a responsywnością. Typowy zakres: 0-50%.</div></div>
+                <div class="setting-container"><label for="maxSpeedJoystickInput">Max. predkosc (imp/s)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxSpeedJoystickInput" min="200" max="4000" step="100" value="800"><button>+</button></div><div class="help-text">Maksymalna prędkość zadana w trybie prędkości przy pełnym wychyleniu joysticka do przodu/tyłu. Wyższa wartość = szybszy robot. Dla bezpiecznej nauki zacznij od 500-800 imp/s. Dla sportowej jazdy możesz zwiększyć do 1500-2500 imp/s. Uwaga: zbyt wysoka wartość może powodować utratę balansu! Typowy zakres: 500-1500 imp/s.</div></div>
+                <div class="setting-container"><label for="maxAccelJoystickInput">Max. przyspieszenie (imp/s^2)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxAccelJoystickInput" min="0" max="2000" step="10" value="200"><button>+</button></div><div class="help-text">Maksymalna zmiana zadanej prędkości na sekundę (imp/s^2). Ogranicza przyspieszenie przy sterowaniu joystickiem, co poprawia stabilność. Wartość początkowa: 200 imp/s^2. Dostosuj w zależności od reakcji robota.</div></div>
+                <div class="setting-container"><label for="joystickAngleSensitivityInput">Czulosc Kata (st.)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickAngleSensitivityInput" min="1" max="30" step="0.5" value="10"><button>+</button></div><div class="help-text">Maksymalny kąt pochylenia zadany w trybie kąta przy pełnym wychyleniu joysticka. Mniejsza wartość (5-8°) = łagodniejsze przyspieszenie, bardziej przewidywalne zachowanie. Większa wartość (12-20°) = agresywniejsze przyspieszenie, szybsza reakcja. Rozpocznij od 8-10° i dostosuj do swoich preferencji. Typowy zakres: 6-15°.</div></div>
+                <div class="setting-container"><label for="turnFactorInput">Czulosc Skretu (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="turnFactorInput" min="0" max="100" step="5" value="25"><button>+</button></div><div class="help-text">Kontroluje, jak szybko robot obraca się w miejscu przy wychyleniu joysticka w poziomie. Mniejsza wartość (15-25%) = powolne, płynne skręty. Większa wartość (40-60%) = szybkie, ostre skręty. Za wysoka wartość może powodować utratę balansu podczas obrotu. Typowy zakres: 20-40%.</div></div>
+                <div class="setting-container"><label for="joystickDeadzoneInput">Strefa Martwa (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickDeadzoneInput" min="0" max="50" step="1" value="0"><button>+</button></div><div class="help-text">Obszar wokół środka joysticka, w którym ruch jest ignorowany. Przydatne, jeśli joystick "dryfuje" sam z siebie lub chcesz uniknąć przypadkowych mikroruchów. Wartość 5-10% usuwa drobne drżenia bez utraty czułości. Typowy zakres: 0-15%.</div></div>
+            </div>
         </div>
-    </header>
-
-    <!-- Off-Canvas Sidebar -->
-    <nav id="sidebar" class="sidebar">
-        <div class="sidebar-header">
-            <h2>Menu</h2>
-            <button id="sidebarClose" class="sidebar-close" aria-label="Zamknij menu">&times;</button>
+        <div class="card">
+            <h2>Dashboard</h2>
+            <button id="connectBleBtn" style="width: 100%; margin-bottom: 15px;">POLACZ Z ROBOTEM</button>
+            <div style="display: grid; grid-template-columns: 1fr auto; gap: 15px; align-items: start; margin-bottom: 15px;">
+                <div class="status-grid">
+                    <strong>Polaczenie:</strong> <div><span id="connectionStatus" class="status-indicator status-disconnected"></span> <span id="connectionText">Rozlaczony</span></div>
+                    <strong>Gamepad:</strong> <span id="gamepadStatus" style="font-weight:bold; color: #f7b731;">Brak</span>
+                    <strong>Tryb Pracy:</strong> <span id="robotStateVal" style="font-weight:bold; color: #61dafb;">IDLE</span>
+                    <span id="signSummary" style="margin-left:8px; font-size:0.9em; color:#a2f279;">B:+ S:+ P:+</span>
+                </div>
+                <div class="compass-container">
+                    <div class="compass-needle" id="compassNeedle"></div>
+                    <span class="compass-cardinal n">N</span>
+                    <span class="compass-cardinal e">E</span>
+                    <span class="compass-cardinal s">S</span>
+                    <span class="compass-cardinal w">W</span>
+                </div>
+            </div>
+             <div class="dashboard-grid">
+                <div class="dashboard-item">
+                    <span class="label">Czas Petli</span>
+                    <span class="value" id="loopTimeVal">0 &micro;s</span>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Czas Petli (średnio)</span>
+                    <span class="value" id="loopLoadVal">-- %</span>
+                </div>
+                <div class="dashboard-item" id="systemHealthItem">
+                    <span class="label">System Health</span>
+                    <span class="value" id="systemHealthVal">OK</span>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Kalibracja IMU</span>
+                    <span class="value">Sys: <span id="calibSysVal">-</span></span>
+                    <div class="historical-metric">Acc: <span id="calibAccelVal">-</span> Gyro: <span id="calibGyroVal">-</span> Mag: <span id="calibMagVal">-</span></div>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Offset (Pitch)</span>
+                    <span class="value" id="angleOffsetVal">0.0 °</span>
+                    <div class="historical-metric">Delta vs initial: <span id="offsetDeltaVal">0.0 °</span></div>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Offset (Roll)</span>
+                    <span class="value" id="rollOffsetVal">0.0 °</span>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Kat (Pitch)</span>
+                    <span class="value" id="angleVal">0.0 &deg;</span>
+                    <div class="historical-metric">(min: <span id="pitchMin">---</span>, max: <span id="pitchMax">---</span>, avg: <span id="pitchAvg">---</span>)</div>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Predkosc</span>
+                    <span class="value" id="speedVal">0 imp/s</span>
+                    <div class="historical-metric">(min: <span id="speedMin">---</span>, max: <span id="speedMax">---</span>, avg: <span id="speedAvg">---</span>)</div>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Kat (Roll)</span>
+                    <span class="value" id="rollVal">0.0 &deg;</span>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Enkoder L</span>
+                    <span class="value" id="encoderLeftVal">0</span>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Enkoder P</span>
+                    <span class="value" id="encoderRightVal">0</span>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Kurs (Yaw)</span>
+                    <span class="value" id="yawVal">0.0 °</span>
+                </div>
+            </div>
+             <fieldset style="margin-top: 15px;">
+                <legend>Diagnostyka</legend>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+                    <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Asystent Kalibracji IMU</button>
+                    <button id="calibrateZeroPointBtn" style="width:100%; background-color:#f7b731;">Znajdz Pion Automatycznie</button>
+                    <button id="sensorMappingBtn" style="width:100%; background-color:#f7b731;">Mapowanie czujnika</button>
+                    <button id="modelMappingBtn" style="width:100%; background-color:#f7b731;">Mapowanie modelu 3D</button>
+                </div>
+            </fieldset>
         </div>
-        <ul class="sidebar-menu">
-            <li><a href="#" data-view="dashboard" class="active">
-                <span class="menu-icon">🎛️</span>
-                <span>Pulpit Sterowniczy</span>
-            </a></li>
-            <li><a href="#" data-view="pid-tuning">
-                <span class="menu-icon">⚙️</span>
-                <span>Strojenie PID</span>
-            </a></li>
-            <li><a href="#" data-view="calibration">
-                <span class="menu-icon">🎯</span>
-                <span>Kalibracja</span>
-            </a></li>
-            <li><a href="#" data-view="autonomous">
-                <span class="menu-icon">🤖</span>
-                <span>Sterowanie Autonomiczne</span>
-            </a></li>
-            <li><a href="#" data-view="autotuning">
-                <span class="menu-icon">🎯</span>
-                <span>Auto-strojenie PID</span>
-            </a></li>
-            <li><a href="#" data-view="diagnostics">
-                <span class="menu-icon">🔍</span>
-                <span>Diagnostyka</span>
-            </a></li>
-            <li><a href="#" data-view="3d">
-                <span class="menu-icon">🎮</span>
-                <span>Model 3D</span>
-            </a></li>
-            <li><a href="#" data-view="settings">
-                <span class="menu-icon">⚡</span>
-                <span>Ustawienia</span>
-            </a></li>
-            <li><a href="#" id="loadEepromBtn">
-                <span class="menu-icon">📂</span>
-                <span>Wczytaj EEPROM</span>
-            </a></li>
-            <li><a href="#" id="saveEepromBtn">
-                <span class="menu-icon">💾</span>
-                <span>Zapisz EEPROM</span>
-            </a></li>
-        </ul>
-        <div class="sidebar-footer">
-            <button id="themeToggle" class="theme-toggle">
-                <span class="theme-icon">🌙</span>
-                <span class="theme-label">Tryb Ciemny</span>
-            </button>
+        <div class="card">
+            <h2>Wizualizacja 3D Robota</h2>
+            <div id="robot3d-container"></div>
+            <div class="robot3d-controls">
+                <button id="reset3dViewBtn">Resetuj Widok</button>
+                <button id="toggle3dAnimationBtn">Wl./Wyl. Animacje</button>
+                <button id="toggle3dMovementBtn">Start/Stop Ruchu</button>
+            </div>
+            <div class="robot3d-info">
+                <div class="robot3d-metrics">
+                    <strong>Przechyl (Pitch):</strong> <span id="robot3d-pitch">0.0°</span>
+                    <strong>Przechyl (Roll):</strong> <span id="robot3d-roll">0.0°</span>
+                    <strong>Obrot kol:</strong> <span id="robot3d-wheel-speed">0 obr/min</span>
+                    <strong>Pozycja X:</strong> <span id="robot3d-position-x">0.0 cm</span>
+                    <strong>Pozycja Z:</strong> <span id="robot3d-position-z">0.0 cm</span>
+                </div>
+            </div>
+            <fieldset style="margin-top: 15px;">
+                <div class="control-row" style="margin-bottom: 15px;">
+                    <span class="control-label">Perspektywa Robota</span>
+                    <label class="switch"><input type="checkbox" id="robotPerspectiveCheckbox"><span class="slider round"></span></label>
+                </div>
+            </fieldset>
         </div>
-    </nav>
-
-    <!-- Sidebar Overlay -->
-    <div id="sidebarOverlay" class="sidebar-overlay"></div>
-
-    <!-- Right Panel Overlay -->
-    <div id="panelRightOverlay" class="panel-right-overlay"></div>
-
-    <!-- View Pager -->
-    <div id="view-pager" class="view-pager">
-        <div id="main-page" class="page main-visible">
-            <!-- Main Content -->
-            <main class="app-content">
-                <!-- Dashboard View (Default) -->
-                <section id="viewDashboard" class="view active">
-            <!-- Connection Card -->
-            <div class="card">
-                <button id="connectBtn" class="btn btn-primary btn-large">
-                    <span>Połącz z Robotem</span>
-                </button>
-                <button id="openManualCorrectionPanel" class="btn btn-secondary" style="margin-left:10px;">Korekta</button>
+        <div class="card">
+            <h2>Analizator Sygnalow</h2>
+            <div class="chart-hints">
+                <strong>💡 Wskazówki:</strong> 
+                Ctrl+Scroll dla zoom | Ctrl+Przeciągnij dla przewijania | Shift+Przeciągnij dla zaznaczenia zakresu
             </div>
-
-            <!-- Virtual Joystick -->
-            <div class="card joystick-card">
-                <h2 class="card-title">Sterowanie
-                    <span class="tooltip-icon" data-tooltip="Używaj joysticka do kontroli ruchu robota. Przód/tył kontroluje prędkość, lewo/prawo obrót.">?</span>
-                </h2>
-                <div id="joystickContainer" class="joystick-container">
-                    <canvas id="joystickCanvas"></canvas>
+            <div id="chart-wrapper">
+                <canvas id="signalAnalyzerChart"></canvas>
+            </div>
+            <div class="chart-toolbar">
+                <button id="pauseChartBtn">⏸️ Pauza</button>
+                <button id="resumeChartBtn" style="display:none;">▶️ Wznow</button>
+                <button id="cursorABBtn">📏 Kursory A/B</button>
+                <button id="exportCsvBtn">📄 Eksport CSV</button>
+                <button id="exportRangeCsvBtn" title="Zaznacz zakres trzymając Shift i przeciągając myszką">📊 Eksport CSV (Zakres)</button>
+                <button id="resetZoomBtn">🔍 Reset Widoku</button>
+                <button id="exportPngBtn">🖼️ Eksport PNG</button>
+            </div>
+            <div class="chart-cursor-info" id="cursorInfo" style="display:none;">
+                <div><strong>Kursor A:</strong> X: <span id="cursorAX">---</span>, Y: <span id="cursorAY">---</span></div>
+                <div><strong>Kursor B:</strong> X: <span id="cursorBX">---</span>, Y: <span id="cursorBY">---</span></div>
+                <div><strong>Δt:</strong> <span id="cursorDeltaT">---</span></div>
+                <div><strong>Δy (Pitch):</strong> <span id="cursorDeltaYPitch">---</span></div>
+                <div><strong>Δy (Speed):</strong> <span id="cursorDeltaYSpeed">---</span></div>
+            </div>
+            <div class="chart-controls" id="signalChartControls"></div>
+        </div>
+        <div class="card">
+             <button class="accordion-header" onclick="toggleAccordion(this)">Sterowanie Autonomiczne</button>
+            <div class="accordion-content">
+               <fieldset>
+                   <legend>Sterowanie Precyzyjne (D-Pad)</legend>
+                   <div class="dpad-input-group"><label for="dpadDistInput">Dystans (cm):</label><input type="number" id="dpadDistInput" value="20"></div>
+                   <div class="dpad-input-group"><label for="dpadAngleInput">Kat (st.):</label><input type="number" id="dpadAngleInput" value="90"></div>
+                   <div class="dpad-container">
+                       <button id="dpad-up" class="dpad-btn" data-dpad="up">&#8593;</button><button id="dpad-left" class="dpad-btn" data-dpad="left">&#8592;</button><button id="dpad-stop" class="dpad-btn" data-dpad="stop">&#215;</button><button id="dpad-right" class="dpad-btn" data-dpad="right">&#8594;</button><button id="dpad-down" class="dpad-btn" data-dpad="down">&#8595;</button>
+                   </div>
+               </fieldset>
+               <fieldset style="margin-top: 15px;">
+                   <legend>Kreator Sekwencji Ruchow</legend>
+                   <div id="sequence-list"></div>
+                   <button id="add-sequence-step-btn" style="width:100%; margin: 10px 0;">Dodaj Krok</button>
+                   <div style="display:flex; gap:10px; justify-content:center;">
+                       <button id="run-sequence-btn" style="background-color: #a2f279;">Uruchom</button><button id="stop-sequence-btn" style="background-color: #ff6347;" disabled>Zatrzymaj</button><button id="clear-sequence-btn" style="background-color: #f7b731;">Wyczysc</button>
+                   </div>
+                   <h4 style="color: #61dafb; margin-top: 20px; margin-bottom: 10px;">Wizualizacja Sciezki (2D)</h4>
+                   <div id="path-visualization-container">
+                       <canvas id="pathCanvas"></canvas>
+                       <div class="path-legend">
+                           <div><span class="color-box planned"></span> Planowana</div>
+                           <div><span class="color-box actual"></span> Rzeczywista</div>
+                       </div>
+                   </div>
+                   <div id="sequence-report-panel" class="sequence-report-panel">
+                       <h4>Raport Sekwencji</h4>
+                       <div class="sequence-report-metrics" id="sequenceReportMetrics">
+                           <div><strong>Sredni Blad Kursu:</strong> <span id="avgHeadingError">---</span></div>
+                           <div><strong>Max Blad Kursu:</strong> <span id="maxHeadingError">---</span></div>
+                           <div><strong>Pokonany Dystans:</strong> <span id="totalDistanceCovered">---</span></div>
+                       </div>
+                       <button id="resetSequenceReportBtn" style="width: 100%; margin-top: 15px;">Wyczysc Raport</button>
+                   </div>
+               </fieldset>
+           </div>
+        </div>
+        <div class="card">
+            <h2>Konfiguracja</h2>
+            <fieldset>
+                <legend>Profile Ustawien (Snapshots)</legend>
+                <div class="profile-controls"> <select id="pidPresetSelect" style="width: 100%; padding: 5px;"></select> </div>
+                <div class="preset-actions">
+                    <button id="applySelectedPresetBtn">Zastosuj</button>
+                    <button id="saveCurrentAsPresetBtn">Zapisz jako Nowy</button>
                 </div>
-            </div>
-
-            <!-- Main Toggles -->
-            <div class="card">
-                <h2 class="card-title">Tryby Pracy</h2>
-                <div class="toggle-group">
-                    <div class="toggle-item">
-                        <label for="balanceToggle" class="toggle-label">
-                            <span>Balansowanie</span>
-                            <span class="tooltip-icon" data-tooltip="Włącz, aby robot aktywnie utrzymywał równowagę pionową.">?</span>
-                        </label>
-                        <label class="switch">
-                            <input type="checkbox" id="balanceToggle">
-                            <span class="slider"></span>
-                        </label>
+                <button id="deleteSelectedPresetBtn" style="width:100%; margin-top: 10px; background-color: #ff6347;">Usun Wybrany</button>
+                <!-- Przyciski przeniesione na dół, pod wszystkimi akordeonami -->
+            </fieldset>
+            <div id="allSettings">
+                <button class="accordion-header" onclick="toggleAccordion(this)">1. Filtr Mahony i Predykcja</button>
+                <div class="accordion-content">
+                    <div class="setting-container"> <label for="mahonyKpInput">Kp (Proporcjonalny)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="mahonyKpInput" min="0" max="10" step="0.1" value="1.0"><button>+</button></div> <div class="help-text">Proporcjonalne wzmocnienie filtru Mahony - szybkość korekty orientacji z akcelerometru. Wyższa wartość = szybsza konwergencja do prawidłowej orientacji, ale większa wrażliwość na przyspieszenia. Typowy zakres: 0.5-2.0.</div> </div>
+                    <div class="setting-container"> <label for="mahonyKiInput">Ki (Całkujący)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="mahonyKiInput" min="0" max="1" step="0.01" value="0.05"><button>+</button></div> <div class="help-text">Całkujące wzmocnienie - kompensuje dryf żyroskopu. Wyższa wartość = lepsza korekta dryfu, ale wolniejsza odpowiedź. Kluczowy parametr dla stabilności długoterminowej robota balansującego. Typowy zakres: 0.01-0.1.</div> </div>
+                    <div class="setting-container"> <label for="useMahonyFilterInput">Użyj własnej fuzji IMU<span class="help-icon">?</span></label> <input type="checkbox" class="config-value" id="useMahonyFilterInput" checked> <div class="help-text">Włącz własną fuzję danych IMU z filtrem Mahony zamiast wbudowanej w BNO055. Filtr Mahony jest optymalny dla robotów balansujących dzięki wbudowanej kompensacji dryfu żyroskopu i niższemu opóźnieniu.</div> </div>
+                    <hr style="border-color: #4a4f58; margin: 15px 0;">
+                    <h4 style="color: #4fc3f7; margin-bottom: 10px;">Predykcja kąta (Stabilność)</h4>
+                    <div class="setting-container"> <label for="predictionModeInput">Tryb predykcji<span class="help-icon">?</span></label> <select class="config-value" id="predictionModeInput"><option value="0">Wyłączony (aktualny kąt)</option><option value="1" selected>Prosta (θ + ω·Δt)</option><option value="2">Kwadratowa (θ + ω·Δt + ½α·Δt²)</option></select> <div class="help-text">Predykcja kompensuje opóźnienia systemowe poprzez przewidywanie przyszłego kąta. <strong>Wyłączony:</strong> reakcja na aktualny kąt - standardowe zachowanie. <strong>Prosta:</strong> uwzględnia prędkość kątową - zalecany tryb. <strong>Kwadratowa:</strong> uwzględnia też przyspieszenie kątowe - może być niestabilna.</div> </div>
+                    <div class="setting-container"> <label for="predictionTimeMsInput">Horyzont predykcji (ms)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="predictionTimeMsInput" min="0" max="50" step="1" value="20"><button>+</button></div> <div class="help-text">Jak daleko w przyszłość przewidywać kąt (w milisekundach). Wyższa wartość = większa kompensacja opóźnień, ale ryzyko przeregulowania. Typowy zakres: 10-30 ms. 0 = wyłączone.</div> </div>
+                </div>
+                <button class="accordion-header" onclick="toggleAccordion(this)">2. Parametry Sprzetowe i Mechaniczne</button>
+                <div class="accordion-content">
+                    <!-- Usunięto legacy mapowanie osi IMU – zastąpione nowym kreatorem 'Mapowanie czujnika' w Dashboard -->
+                    <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" min="1" max="30" step="0.1" value="8.2"><button>+</button></div> <div class="help-text">Średnica koła robota w centymetrach. Parametr kluczowy dla obliczania prędkości i pokonanego dystansu. Zmierz dokładnie średnicę od krawędzi do krawędzi przez środek koła. Większe koła = większa prędkość przy tych samych obrotach silnika. Typowy zakres: 6-12 cm.</div> </div>
+                    <div class="setting-container"> <label for="trackWidthInput">Rozstaw kol (cm)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="trackWidthInput" min="5" max="50" step="0.1" value="12.5"><button>+</button></div> <div class="help-text">Odległość między środkami obu kół (szerokość toru). Wpływa na obliczenia obrotu - szerszy rozstaw wymaga większej różnicy prędkości kół do wykonania tego samego skrętu. Zmierz odległość między środkami osi kół. Typowy zakres: 10-20 cm.</div> </div>
+                    <div class="setting-container"> <label for="encoderPprInput">Impulsy na obrot (PPR)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="encoderPprInput" min="100" max="5000" step="10" value="820"><button>+</button></div> <div class="help-text">Liczba impulsów enkodera na jeden pełny obrót koła. Zależy od rozdzielczości enkodera i przekładni (jeśli jest). Wartość ta wpływa na dokładność pomiaru prędkości i pozycji. Wyższa wartość = większa precyzja. Sprawdź specyfikację swojego enkodera i przekładni. Typowy zakres: 300-2000 PPR.</div> </div>
+                </div>
+                <button class="accordion-header" onclick="toggleAccordion(this)">3. Kalibracja PWM Silnikow</button>
+                <div class="accordion-content">
+                    <div class="pwm-info"> <strong>Info:</strong> Uzyj przycisku <strong>"Auto"</strong>, aby automatycznie znalezc prog startowy silnika, lub <strong>"Testuj"</strong>, aby sprawdzic recznie wpisana wartosc. <strong>Wazne:</strong> Przed testem podnies robota, aby kola mogly sie swobodnie krecic! </div>
+                    <div class="setting-container"> <label for="pwmTuneStartInput">Rozpocznij auto-szukanie od PWM</label> <div class="numeric-input-wrapper"> <button id="pwmTuneStartMinus">-</button> <input type="number" id="pwmTuneStartInput" min="1" max="2047" step="1" value="1200"> <button id="pwmTuneStartPlus">+</button> </div> </div> <hr style="border-color: #4a4f58; margin: 15px 0;">
+                    <div class="manual-tune-row" data-motor="left" data-direction="fwd"> <div class="pwm-input-row"> <label>Lewy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftFwdInput" min="0" max="2047" step="1" value="1200"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
+                    <div class="manual-tune-row" data-motor="left" data-direction="bwd"> <div class="pwm-input-row"> <label>Lewy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmLeftBwdInput" min="0" max="2047" step="1" value="1200"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
+                    <div class="manual-tune-row" data-motor="right" data-direction="fwd"> <div class="pwm-input-row"> <label>Prawy (Przod)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightFwdInput" min="0" max="2047" step="1" value="1200"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
+                    <div class="manual-tune-row" data-motor="right" data-direction="bwd"> <div class="pwm-input-row"> <label>Prawy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="2047" step="1" value="1200"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
+                    <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKIE SILNIKI</button>
+                </div>
+                <button class="accordion-header" onclick="toggleAccordion(this)">4. PID Balansu (Podstawowy) <span class="sign-badge" id="balanceSignBadge">B:+</span></button>
+                <div class="accordion-content">
+                    <div class="setting-container"> <label for="balanceKpInput">Kp - Sila<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKpInput" min="0" max="500" step="0.1" value="95"><button>+</button></div> <div class="help-text"><strong>Proporcjonalny (Kp):</strong> Określa, jak mocno robot reaguje na odchylenie od pionu. Wyższa wartość = sztywniejsze utrzymanie równowagi, szybsza reakcja na zakłócenia. Zbyt wysoka wartość powoduje szybkie oscylacje (robot "drży"). Zbyt niska = robot reaguje za wolno i może upaść. Zacznij od 80-120 i dostosuj stopniowo. Typowy zakres: 60-150.</div> </div>
+                    <div class="setting-container"> <label for="balanceKiInput">Ki - Korekta<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKiInput" min="0" max="10" step="0.01" value="0.0"><button>+</button></div> <div class="help-text"><strong>Całkujący (Ki):</strong> Eliminuje długotrwały, stały błąd (np. gdy robot powoli dryfuje w jednym kierunku mimo pionowego stania). Często nie jest potrzebny dla balansu - zacznij od 0. Jeśli robot ma tendencję do dryfowania, zwiększaj bardzo ostrożnie (np. 0.05-0.2). Zbyt wysoka wartość powoduje niestabilność i oscylacje. Typowy zakres: 0-0.5.</div> </div>
+                    <div class="setting-container"> <label for="balanceKdInput">Kd - Tlumienie<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKdInput" min="0" max="50" step="0.01" value="3.23"><button>+</button></div> <div class="help-text"><strong>Różniczkujący (Kd):</strong> Działa jak amortyzator - przeciwdziała szybkim zmianom kąta, hamuje oscylacje i wygładza ruch. Wyższa wartość = bardziej uspokojony, stabilny robot, ale wolniejsza reakcja. Zbyt wysoka wartość powoduje "leniwy" ruch i słabą reakcję na zakłócenia. Zbyt niska = robot jest nerwowy i drży. Typowy zakres: 2-8.</div> </div>
+                    <div class="setting-container"> <label for="balanceFilterAlphaInput">Filtr Pochodnej (%)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceFilterAlphaInput" min="1" max="100" step="1" value="100"><button>+</button></div> <div class="help-text">Wygładza sygnał różniczkujący (Kd), redukując wpływ szumów z czujnika. 100% = brak filtrowania (pełna responsywność, ale może być szum). Zmniejsz do 50-80%, jeśli robot jest nerwowy lub "drży" mimo niskiego Kd. Niższa wartość = płynniejszy ruch, ale wolniejsza reakcja. Typowy zakres: 70-100%.</div> </div>
+                    <div class="setting-container"> <label for="balanceIntegralLimitInput">Limit Integratora<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceIntegralLimitInput" min="0" max="200" step="1" value="50"><button>+</button></div> <div class="help-text">Maksymalna wartość, jaką może osiągnąć suma całkująca (Ki). Zapobiega "rozregulowaniu" integratora przy dużych, długotrwałych błędach. Jeśli używasz Ki, ustaw limit na 30-100. Jeśli Ki=0, ten parametr nie ma wpływu. Typowy zakres: 30-100.</div> </div>
+                    <div class="model-mapping-row" style="margin-top:6px;"><label>Znak sprzężenia (Balans)</label><div id="balanceSign" class="sign-toggle"><button data-sign="-1">-</button><button data-sign="1">+</button></div><div class="help-text" style="margin-top:8px;">Odwróć znak sprzężenia pętli balansu (zmiana możliwa tylko w trybie IDLE)</div></div>
+                </div>
+                <button class="accordion-header" onclick="toggleAccordion(this)">5. PID Kaskadowy (Predkosc/Pozycja)</button>
+                <div class="accordion-content">
+                    <div class="parameter-group"><h5>PID Predkosci <span class="sign-badge" id="speedSignBadge">S:+</span></h5>
+                        <div class="setting-container"> <label for="speedKpInput">Kp - Reakcja<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKpInput" min="0" max="10" step="0.01" value="0.0"><button>+</button></div> <div class="help-text">Kontroluje, jak mocno robot pochyla się, aby osiągnąć zadaną prędkość. Wyższa wartość = szybsze przyspieszanie/zwalnianie, ale może powodować oscylacje prędkości. Zacznij od małych wartości (0.1-0.5) i zwiększaj stopniowo. Typowy zakres: 0.1-2.0.</div> </div>
+                        <div class="setting-container"> <label for="speedKiInput">Ki - Eliminacja bledu<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKiInput" min="0" max="1" step="0.001" value="0.0"><button>+</button></div> <div class="help-text">Eliminuje stały błąd prędkości (gdy robot jedzie ciągle trochę wolniej/szybciej niż powinien). Często wystarczy 0, ale jeśli prędkość nie osiąga docelowej wartości, dodaj małą wartość Ki (0.01-0.1). Zbyt wysoka wartość powoduje oscylacje. Typowy zakres: 0-0.2.</div> </div>
+                        <div class="setting-container"> <label for="speedKdInput">Kd - Tlumienie<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKdInput" min="0" max="5" step="0.001" value="0.0"><button>+</button></div> <div class="help-text">Wygładza zmiany prędkości, przeciwdziała oscylacjom. Pomaga, gdy robot "skacze" między różnymi prędkościami. Zacznij od 0, dodaj (0.01-0.1) jeśli prędkość oscyluje. Zbyt wysoka wartość spowalnia reakcję na zmiany. Typowy zakres: 0-0.5.</div> </div>
+                        <div class="setting-container"> <label for="maxTargetAngleInput">Max. kat z PID Predk. (st.)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxTargetAngleInput" min="1" max="45" step="0.5" value="15.0"><button>+</button></div> <div class="help-text">Maksymalny kąt, jaki PID prędkości może zadać robotowi, aby osiągnąć docelową prędkość. Limit bezpieczeństwa - zapobiega zbyt dużemu pochyleniu. Większa wartość = szybsze przyspieszanie, ale większe ryzyko upadku. Typowy zakres: 10-20°.</div> </div>
+                        <div class="setting-container"> <label for="speedDeadbandInput">Strefa martwa (imp/s)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedDeadbandInput" min="0" max="50" step="1" value="5"><button>+</button></div> <div class="help-text">Jeśli rzeczywista prędkość różni się od zadanej o mniej niż ta wartość, PID nie reaguje. Zapobiega ciągłym mikro-korektom przy małych błędach, oszczędza energię i zmniejsza drgania. Typowy zakres: 3-15 imp/s.</div> </div>
+                        <div class="setting-container"> <label for="speedIntegralLimitInput">Limit Integratora<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedIntegralLimitInput" min="0" max="100" step="1" value="20"><button>+</button></div> <div class="help-text">Maksymalna wartość sumy całkującej (Ki). Zapobiega "wind-up" (rozregulowaniu) integratora. Istotne tylko gdy używasz Ki > 0. Typowy zakres: 10-50.</div> </div>
+                        <div class="model-mapping-row" style="margin-top:6px;"><label>Znak sprzężenia (Prędkość)</label><div id="speedSign" class="sign-toggle"><button data-sign="-1">-</button><button data-sign="1">+</button></div><div class="help-text" style="margin-top:8px;">Odwróć znak sprzężenia pętli prędkości (zmiana możliwa tylko w trybie IDLE)</div></div>
+                        <div class="setting-container"> <label for="speedFilterAlphaInput">Filtr Pochodnej (%)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedFilterAlphaInput" min="1" max="100" step="1" value="80"><button>+</button></div> <div class="help-text">Wygładza sygnał różniczkujący (Kd). 100% = brak filtrowania. Zmniejsz, jeśli Kd wprowadza nerwowość. Typowy zakres: 60-90%.</div> </div>
                     </div>
-                    <div class="toggle-item">
-                        <label for="holdPositionToggle" class="toggle-label">
-                            <span>Trzymaj Pozycję</span>
-                            <span class="tooltip-icon" data-tooltip="Robot będzie próbował pozostać w miejscu, korygując dryf.">?</span>
-                        </label>
-                        <label class="switch">
-                            <input type="checkbox" id="holdPositionToggle">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="toggle-item">
-                        <label for="speedModeToggle" class="toggle-label">
-                            <span>Tryb Prędkości</span>
-                            <span class="tooltip-icon" data-tooltip="Włącz kontrolę prędkości zamiast kontroli kąta pochylenia.">?</span>
-                        </label>
-                        <label class="switch">
-                            <input type="checkbox" id="speedModeToggle">
-                            <span class="slider"></span>
-                        </label>
+                    <div class="parameter-group"><h5>PID Pozycji <span class="sign-badge" id="positionSignBadge">P:+</span></h5>
+                        <div class="setting-container"> <label for="positionKpInput">Kp - Sila powrotu<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionKpInput" min="0" max="20" step="0.1" value="0.0"><button>+</button></div> <div class="help-text">Kontroluje, jak mocno robot dąży do powrotu do zadanej pozycji (funkcja "trzymaj pozycję"). Wyższa wartość = silniejsza korekta, szybszy powrót. Zbyt wysoka powoduje oscylacje wokół pozycji docelowej. Zacznij od 0.5-2.0. Typowy zakres: 0.5-5.0.</div> </div>
+                        <div class="setting-container"> <label for="positionKiInput">Ki - Korekta<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionKiInput" min="0" max="1" step="0.001" value="0.0"><button>+</button></div> <div class="help-text">Usuwa stałe odchylenie od pozycji (gdy robot powoli "dryfuje" mimo włączonej funkcji trzymania pozycji). Często nie jest potrzebny. Dodaj małą wartość (0.001-0.01) tylko jeśli robot systematycznie odjeżdża od pozycji. Typowy zakres: 0-0.05.</div> </div>
+                        <div class="setting-container"> <label for="positionKdInput">Kd - Hamowanie<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionKdInput" min="0" max="10" step="0.05" value="0.0"><button>+</button></div> <div class="help-text">Hamuje ruch, gdy robot zbliża się do pozycji docelowej - zapobiega "przestrzeleniu". Wyższa wartość = płynniejsze, bardziej kontrolowane zatrzymanie, ale wolniejszy powrót. Zacznij od 0.1-0.5. Typowy zakres: 0.1-2.0.</div> </div>
+                        <div class="setting-container"> <label for="maxTargetSpeedInput">Max. predkosc z PID Poz. (imp/s)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="maxTargetSpeedInput" min="100" max="4000" step="50" value="1000"><button>+</button></div> <div class="help-text">Maksymalna prędkość, jaką PID pozycji może zadać podczas powrotu do punktu. Limit bezpieczeństwa - zapobiega zbyt szybkiemu ruchowi przy dużych odchyleniach. Wyższa wartość = szybszy powrót, ale większe ryzyko przesterowania. Typowy zakres: 500-1500 imp/s.</div> </div>
+                        <div class="setting-container"> <label for="positionDeadbandInput">Margines bledu (imp.)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionDeadbandInput" min="0" max="100" step="1" value="15"><button>+</button></div> <div class="help-text">Jeśli odchylenie od pozycji jest mniejsze niż ta wartość (w impulsach enkodera), PID pozycji nie reaguje. Robot "akceptuje" to małe odchylenie i nie próbuje go korygować. Zapobiega ciągłym mikro-ruchom. Typowy zakres: 10-30 imp.</div> </div>
+                        <div class="setting-container"> <label for="positionIntegralLimitInput">Limit Integratora<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionIntegralLimitInput" min="0" max="500" step="10" value="100"><button>+</button></div> <div class="help-text">Maksymalna wartość sumy całkującej (Ki). Zapobiega "wind-up" integratora. Istotne tylko gdy Ki > 0. Typowy zakres: 50-200.</div> </div>
+                        <div class="model-mapping-row" style="margin-top:6px;"><label>Znak sprzężenia (Pozycja)</label><div id="positionSign" class="sign-toggle"><button data-sign="-1">-</button><button data-sign="1">+</button></div><div class="help-text" style="margin-top:8px;">Odwróć znak sprzężenia pętli pozycji (zmiana możliwa tylko w trybie IDLE)</div></div>
+                        <div class="setting-container"> <label for="positionFilterAlphaInput">Filtr Pochodnej (%)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionFilterAlphaInput" min="1" max="100" step="1" value="90"><button>+</button></div> <div class="help-text">Wygładza sygnał różniczkujący (Kd). 100% = brak filtrowania. Zmniejsz do 70-90%, jeśli hamowanie jest "szarpane". Typowy zakres: 70-95%.</div> </div>
                     </div>
                 </div>
-            </div>
-
-            <!-- Telemetry -->
-            <div class="card">
-                <h2 class="card-title">Telemetria</h2>
-                <div class="telemetry-grid">
-                    <div class="telemetry-item">
-                        <span class="telemetry-label">Pitch</span>
-                        <span class="telemetry-value" id="pitchValue">0.0°</span>
+                <button class="accordion-header" onclick="toggleAccordion(this)">6. PID Obrotu i Kursu</button>
+                <div class="accordion-content">
+                    <div class="parameter-group"><h5>PID Obrotu (Autonomiczny)</h5>
+                        <div class="setting-container"> <label for="rotationKpInput">Kp - Sila obrotu<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationKpInput" min="0" max="50" step="0.1" value="0.0"><button>+</button></div> <div class="help-text">Kontroluje moc obrotu podczas automatycznego skrętu o zadany kąt. Wyższa wartość = szybszy obrót, ale ryzyko przesterowania (robot obraca się za daleko). Zacznij od małych wartości (1-5) i zwiększaj stopniowo. Typowy zakres: 2-10.</div> </div>
+                        <div class="setting-container"> <label for="rotationKdInput">Kd - Tlumienie<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationKdInput" min="0" max="20" step="0.1" value="0.0"><button>+</button></div> <div class="help-text">Hamuje obrót, gdy robot zbliża się do docelowego kąta. Zapobiega oscylacjom wokół pozycji docelowej. Wyższa wartość = płynniejsze, bardziej kontrolowane zatrzymanie. Zacznij od 0.5-2.0. Typowy zakres: 0.5-5.0.</div> </div>
                     </div>
-                    <div class="telemetry-item">
-                        <span class="telemetry-label">Roll</span>
-                        <span class="telemetry-value" id="rollValue">0.0°</span>
-                    </div>
-                    <div class="telemetry-item">
-                        <span class="telemetry-label">Yaw</span>
-                        <span class="telemetry-value" id="yawValue">0.0°</span>
-                    </div>
-                    <div class="telemetry-item">
-                        <span class="telemetry-label">Czas Pętli</span>
-                        <span class="telemetry-value" id="loopTimeValue">0 μs</span>
-                    </div>
-                    <div class="telemetry-item">
-                        <span class="telemetry-label">Enkoder Lewy</span>
-                        <span class="telemetry-value" id="encoderLeftVal">0</span>
-                    </div>
-                    <div class="telemetry-item">
-                        <span class="telemetry-label">Enkoder Prawy</span>
-                        <span class="telemetry-value" id="encoderRightVal">0</span>
+                    <div class="parameter-group"><h5>PID Utrzymania Kursu (podczas jazdy prosto)</h5>
+                        <div class="setting-container"> <label for="headingKpInput">Kp - Sila korekty<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKpInput" min="0" max="10" step="0.05" value="0.0"><button>+</button></div> <div class="help-text">Kontroluje, jak mocno robot koryguje odchylenie od zadanego kursu podczas jazdy prosto. Wyższa wartość = mocniejsza korekta, robot jedzie bardziej "po linii". Zbyt wysoka może powodować "zygzakowanie". Zacznij od 0.5-2.0. Typowy zakres: 0.5-5.0.</div> </div>
+                        <div class="setting-container"> <label for="headingKiInput">Ki - Precyzja<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKiInput" min="0" max="1" step="0.005" value="0.0"><button>+</button></div> <div class="help-text">Usuwa systematyczne odchylenie kursu (gdy robot powoli "skręca" w jedną stronę mimo jazdy prosto). Dodaj małą wartość (0.01-0.1) jeśli robot ma tendencję do odbijania w bok. Typowy zakres: 0-0.2.</div> </div>
+                        <div class="setting-container"> <label for="headingKdInput">Kd - Tlumienie<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="headingKdInput" min="0" max="5" step="0.01" value="0.0"><button>+</button></div> <div class="help-text">Wygładza korekty kursu, zapobiega "szarpaniu" przy zmianach kierunku. Przydatne jeśli robot nerwowo koryguje kurs. Zacznij od 0.05-0.2. Typowy zakres: 0.05-0.5.</div> </div>
+                        <div class="setting-container"> <label for="rotationToPwmScaleInput">Skala wyjścia PID -> PWM<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationToPwmScaleInput" min="0" max="1" step="0.001" value="0.01"><button>+</button></div> <div class="help-text">Konwertuje wyjście PID obrotu/kursu na komponent skrętu (PWM). Zwiększ jeśli korekty kierunku są za słabe, zmniejsz jeśli robot "przeostrza" lub oscyluje. Typowy zakres: 0.005 - 0.05.</div> </div>
                     </div>
                 </div>
-            </div>
-            <div id="dashboard-right-panel" class="panel-right" style="display:none;">
-                <div class="card">
-                    <h3 class="card-title">Korekta ręczna (Pitch / Roll)</h3>
-                    <div class="param-group">
-                        <label for="manualPitchCorrectionInput">Pitch (°)</label>
-                        <div class="input-group">
-                            <button id="pitchMinus" class="btn-minus">−</button>
-                            <input type="number" id="manualPitchCorrectionInput" value="0.0" step="0.1">
-                            <button id="pitchPlus" class="btn-plus">+</button>
-                        </div>
-                        <div class="button-group">
-                            <button id="manualPitchApplyBtn" class="btn btn-primary">Zastosuj</button>
-                            <button id="manualPitchSetZeroBtn" class="btn btn-secondary">Ustaw 0</button>
-                        </div>
-                    </div>
-                    <div class="param-group">
-                        <label for="manualRollCorrectionInput">Roll (°)</label>
-                        <div class="input-group">
-                            <button id="rollMinus" class="btn-minus">−</button>
-                            <input type="number" id="manualRollCorrectionInput" value="0.0" step="0.1">
-                            <button id="rollPlus" class="btn-plus">+</button>
-                        </div>
-                        <div class="button-group">
-                            <button id="manualRollApplyBtn" class="btn btn-primary">Zastosuj</button>
-                            <button id="manualRollSetZeroBtn" class="btn btn-secondary">Ustaw 0</button>
-                        </div>
-                    </div>
-                    <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:8px;">
-                        <button id="closeManualCorrectionPanel" class="btn btn-secondary">Zamknij</button>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- PID Tuning View -->
-        <section id="viewPidTuning" class="view">
-            <div class="card">
-                <h2 class="card-title">Strojenie PID</h2>
                 
-                <!-- PID Tabs -->
-                <div class="tabs">
-                    <button class="tab active" data-tab="balance">Balans</button>
-                    <button class="tab" data-tab="speed">Prędkość</button>
-                    <button class="tab" data-tab="position">Pozycja</button>
-                    <button class="tab" data-tab="rotation">Obrót</button>
-                    <button class="tab" data-tab="heading">Kurs</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">7. Zaawansowana Optymalizacja PID</button>
+                <div class="accordion-content autotune-pane" id="autotuning-card-content">
+                <div id="autotuning-config-panel">
+                    <!-- Główne zakładki panelu -->
+                    <div class="autotune-main-tabs">
+                        <button class="autotune-main-tab active" data-tab="config">Konfiguracja Testu</button>
+                        <button class="autotune-main-tab" data-tab="methods">Metody Optymalizacji</button>
+                    </div>
+
+                    <!-- Zakładka 1: Konfiguracja -->
+                    <div class="autotune-main-content active" data-tab="config">
+                        <div class="config-section">
+                            <label for="tuning-loop-selector">🎯 Pętla PID do strojenia:</label>
+                            <select id="tuning-loop-selector" style="padding: 8px; background-color: #20232a; color: #fff; border: 1px solid #61dafb; border-radius: 4px;">
+                                <option value="balance">Pętla Balansu</option>
+                                <option value="speed">Pętla Prędkości</option>
+                                <option value="position">Pętla Pozycji</option>
+                            </select>
+                            <button id="open-fitness-modal-btn" style="margin-left: 8px; background:#61dafb; padding:6px 10px; border-radius:6px;">Konfiguruj Wagi</button>
+                        </div>
+                        <div class="config-section">
+                            <h4>🔍 Przestrzeń Przeszukiwania</h4>
+                            <div class="search-space-grid">
+                                <div class="search-space-param"><label for="search-kp-min">Kp Min:</label><input type="number" id="search-kp-min" value="40" step="0.1"></div>
+                                <div class="search-space-param"><label for="search-kp-max">Kp Max:</label><input type="number" id="search-kp-max" value="50" step="0.1"></div>
+                                <div class="search-space-param"><label for="search-ki-min">Ki Min:</label><input type="number" id="search-ki-min" value="0" step="0.01"></div>
+                                <div class="search-space-param"><label for="search-ki-max">Ki Max:</label><input type="number" id="search-ki-max" value="0" step="0.01"></div>
+                                <div class="search-space-param"><label for="search-kd-min">Kd Min:</label><input type="number" id="search-kd-min" value="0" step="0.01"></div>
+                                <div class="search-space-param"><label for="search-kd-max">Kd Max:</label><input type="number" id="search-kd-max" value="5" step="0.01"></div>
+                            </div>
+                        </div>
+                        <div class="config-section">
+                            <h4>🧪 Parametry Testu</h4>
+                            <div style="text-align: left; margin-bottom: 10px;"><label><input type="checkbox" id="test-with-impulse" checked> Test z impulsem (skok odpowiedzi)</label></div>
+                            <div style="text-align: left;"><label><input type="checkbox" id="include-ki-checkbox"> Uwzględnij strojenie Ki</label></div>
+                        </div>
+                    </div>
+
+                    <!-- Zakładka 2: Metody -->
+                    <div class="autotune-main-content" data-tab="methods">
+                        <div class="method-tabs">
+                            <button class="method-tab active" data-method="ga">🧬 Algorytm Genetyczny</button>
+                            <button class="method-tab" data-method="pso">🌀 PSO</button>
+                            <button class="method-tab" data-method="bayesian">🧠 Optymalizacja Bayesowska</button>
+                        </div>
+                        <div class="method-content active" data-method="ga">
+                            <div class="method-config">
+                                <div><label for="ga-population">Rozmiar populacji:</label><input type="number" id="ga-population" value="10" min="5" max="100"></div>
+                                <div><label for="ga-generations">Liczba pokoleń:</label><input type="number" id="ga-generations" value="10" min="5" max="100"></div>
+                                <div><label for="ga-mutation">Wskaźnik mutacji (%):</label><input type="number" id="ga-mutation" value="10" min="0" max="100" step="1"></div>
+                                <div><label for="ga-crossover">Wskaźnik krzyżowania (%):</label><input type="number" id="ga-crossover" value="70" min="0" max="100" step="1"></div>
+                                <div style="justify-content: center;"><label><input type="checkbox" id="ga-elitism" checked> Elitaryzm</label></div>
+                            </div>
+                        </div>
+                        <div class="method-content" data-method="pso">
+                            <div class="method-config">
+                                <div><label for="pso-particles">Liczba cząstek:</label><input type="number" id="pso-particles" value="10" min="10" max="100"></div>
+                                <div><label for="pso-iterations">Liczba iteracji:</label><input type="number" id="pso-iterations" value="10" min="10" max="100"></div>
+                                <div><label for="pso-inertia">Waga bezwładności:</label><input type="number" id="pso-inertia" value="0.7" min="0" max="1" step="0.01"></div>
+                                <div><label for="pso-cognitive">Waga poznawcza:</label><input type="number" id="pso-cognitive" value="1.5" min="0" max="3" step="0.1"></div>
+                                <div><label for="pso-social">Waga społeczna:</label><input type="number" id="pso-social" value="1.5" min="0" max="3" step="0.1"></div>
+                            </div>
+                        </div>
+                        <div class="method-content" data-method="bayesian">
+                            <div class="method-config">
+                                <div><label for="bayesian-iterations">Liczba iteracji:</label><input type="number" id="bayesian-iterations" value="25" min="10" max="50"></div>
+                                <div><label for="bayesian-initial">Początkowe próbki losowe:</label><input type="number" id="bayesian-initial" value="5" min="3" max="10"></div>
+                                <div><label for="bayesian-acquisition">Funkcja akwizycji:</label>
+                                    <select id="bayesian-acquisition" style="padding: 8px; background: #20232a; border: 1px solid #61dafb; border-radius: 4px; color: #ffffff;">
+                                        <option value="ei">Expected Improvement (EI)</option>
+                                        <option value="ucb">Upper Confidence Bound (UCB)</option>
+                                        <option value="pi">Probability of Improvement (PI)</option>
+                                    </select>
+                                </div>
+                                <div><label for="bayesian-xi">Parametr eksploracji (ξ):</label><input type="number" id="bayesian-xi" value="0.01" min="0" max="1" step="0.01"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Zakładka 3: Zbiór Danych -->
+                    
                 </div>
 
-                <!-- Balance PID Tab -->
-                <div id="tabBalance" class="tab-content active">
-                    <div class="accordion">
-                        <button class="accordion-btn">Nastawy Podstawowe</button>
-                        <div class="accordion-content">
-                            <div class="param-group">
-                                <label for="balanceKp">
-                                    Kp - Siła
-                                    <span class="tooltip-icon" data-tooltip="Określa, jak mocno robot reaguje na bieżący błąd przechyłu. Zbyt duża wartość powoduje oscylacje.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="balanceKp" value="95" min="0" max="500" step="0.1">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="balanceKi">
-                                    Ki - Korekta
-                                    <span class="tooltip-icon" data-tooltip="Eliminuje długotrwały, stały błąd. Często nie jest potrzebny dla balansu.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="balanceKi" value="0" min="0" max="10" step="0.01">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="balanceKd">
-                                    Kd - Tłumienie
-                                    <span class="tooltip-icon" data-tooltip="Działa jak amortyzator - przeciwdziała szybkim zmianom kąta i wygładza ruch.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="balanceKd" value="3.23" min="0" max="50" step="0.01">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="accordion">
-                        <button class="accordion-btn">Ustawienia Zaawansowane</button>
-                        <div class="accordion-content">
-                            <div class="param-group">
-                                <label for="balanceFilterAlpha">
-                                    Filtr Pochodnej (%)
-                                    <span class="tooltip-icon" data-tooltip="Wygładza sygnał różniczkujący (Kd), redukując wpływ szumów z czujnika.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="balanceFilterAlpha" value="100" min="1" max="100" step="1">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="balanceIntegralLimit">
-                                    Limit Integratora
-                                    <span class="tooltip-icon" data-tooltip="Maksymalna wartość, jaką może osiągnąć suma całkująca (Ki).">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="balanceIntegralLimit" value="50" min="0" max="200" step="1">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Speed PID Tab -->
-                <div id="tabSpeed" class="tab-content">
-                    <div class="accordion">
-                        <button class="accordion-btn">Nastawy Podstawowe</button>
-                        <div class="accordion-content">
-                            <div class="param-group">
-                                <label for="speedKp">
-                                    Kp - Reakcja
-                                    <span class="tooltip-icon" data-tooltip="Kontroluje, jak mocno robot pochyla się, aby osiągnąć zadaną prędkość. Wyższa wartość = szybsze przyspieszanie/zwalnianie, ale może powodować oscylacje prędkości. Zacznij od małych wartości (0.1-0.5) i zwiększaj stopniowo. Typowy zakres: 0.1-2.0.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="speedKp" value="0.0" min="0" max="10" step="0.01">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="speedKi">
-                                    Ki - Eliminacja błędu
-                                    <span class="tooltip-icon" data-tooltip="Eliminuje stały błąd prędkości (gdy robot jedzie ciągle trochę wolniej/szybciej niż powinien). Często wystarczy 0, ale jeśli prędkość nie osiąga docelowej wartości, dodaj małą wartość Ki (0.01-0.1). Zbyt wysoka wartość powoduje oscylacje. Typowy zakres: 0-0.2.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="speedKi" value="0.0" min="0" max="1" step="0.001">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="speedKd">
-                                    Kd - Tłumienie
-                                    <span class="tooltip-icon" data-tooltip="Wygładza zmiany prędkości, przeciwdziała oscylacjom. Pomaga, gdy robot 'skacze' między różnymi prędkościami. Zacznij od 0, dodaj (0.01-0.1) jeśli prędkość oscyluje. Zbyt wysoka wartość spowalnia reakcję na zmiany. Typowy zakres: 0-0.5.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="speedKd" value="0.0" min="0" max="5" step="0.001">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="maxTargetAngle">
-                                    Max. kąt z PID Prędkości (st.)
-                                    <span class="tooltip-icon" data-tooltip="Maksymalny kąt, jaki PID prędkości może zadać robotowi, aby osiągnąć docelową prędkość. Limit bezpieczeństwa - zapobiega zbyt dużemu pochyleniu. Większa wartość = szybsze przyspieszanie, ale większe ryzyko upadku. Typowy zakres: 10-20°.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="maxTargetAngle" value="15.0" min="1" max="45" step="0.5">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="speedDeadband">
-                                    Strefa martwa (imp/s)
-                                    <span class="tooltip-icon" data-tooltip="Jeśli rzeczywista prędkość różni się od zadanej o mniej niż ta wartość, PID nie reaguje. Zapobiega ciągłym mikro-korektom przy małych błędach, oszczędza energię i zmniejsza drgania. Typowy zakres: 3-15 imp/s.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="speedDeadband" value="5" min="0" max="50" step="1">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="speedIntegralLimit">
-                                    Limit Integratora
-                                    <span class="tooltip-icon" data-tooltip="Maksymalna wartość sumy całkującej (Ki). Zapobiega 'wind-up' (rozregulowaniu) integratora. Istotne tylko gdy używasz Ki > 0. Typowy zakres: 10-50.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="speedIntegralLimit" value="20" min="0" max="100" step="1">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="accordion">
-                        <button class="accordion-btn">Ustawienia Zaawansowane</button>
-                        <div class="accordion-content">
-                            <div class="param-group">
-                                <label for="speedFilterAlpha">
-                                    Filtr Pochodnej (%)
-                                    <span class="tooltip-icon" data-tooltip="Wygładza sygnał różniczkujący (Kd). 100% = brak filtrowania. Zmniejsz, jeśli Kd wprowadza nerwowość. Typowy zakres: 60-90%.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="speedFilterAlpha" value="80" min="1" max="100" step="1">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="sign-toggle-group">
-                        <label>Znak sprzężenia (Prędkość)</label>
-                        <div id="speedSign" class="sign-toggle">
-                            <button data-sign="1" class="active">+1</button>
-                            <button data-sign="-1">-1</button>
-                        </div>
-                        <span class="sign-tooltip" data-tooltip="Odwróć znak sprzężenia pętli prędkości (zmiana możliwa tylko w trybie IDLE)">?</span>
-                    </div>
-                </div>
-
-                <!-- Position PID Tab -->
-                <div id="tabPosition" class="tab-content">
-                    <div class="accordion">
-                        <button class="accordion-btn">Nastawy Podstawowe</button>
-                        <div class="accordion-content">
-                            <div class="param-group">
-                                <label for="positionKp">
-                                    Kp - Siła powrotu
-                                    <span class="tooltip-icon" data-tooltip="Kontroluje, jak mocno robot dąży do powrotu do zadanej pozycji (funkcja 'trzymaj pozycję'). Wyższa wartość = silniejsza korekta, szybszy powrót. Zbyt wysoka powoduje oscylacje wokół pozycji docelowej. Zacznij od 0.5-2.0. Typowy zakres: 0.5-5.0.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="positionKp" value="0.0" min="0" max="20" step="0.1">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="positionKi">
-                                    Ki - Korekta
-                                    <span class="tooltip-icon" data-tooltip="Usuwa stałe odchylenie od pozycji (gdy robot powoli 'dryfuje' mimo włączonej funkcji trzymania pozycji). Często nie jest potrzebny. Dodaj małą wartość (0.001-0.01) tylko jeśli robot systematycznie odjeżdża od pozycji. Typowy zakres: 0-0.05.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="positionKi" value="0.0" min="0" max="1" step="0.001">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="positionKd">
-                                    Kd - Hamowanie
-                                    <span class="tooltip-icon" data-tooltip="Hamuje ruch, gdy robot zbliża się do pozycji docelowej - zapobiega 'przestrzeleniu'. Wyższa wartość = płynniejsze, bardziej kontrolowane zatrzymanie, ale wolniejszy powrót. Zacznij od 0.1-0.5. Typowy zakres: 0.1-2.0.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="positionKd" value="0.0" min="0" max="10" step="0.05">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="maxTargetSpeed">
-                                    Max. prędkość z PID Pozycji (imp/s)
-                                    <span class="tooltip-icon" data-tooltip="Maksymalna prędkość, jaką PID pozycji może zadać podczas powrotu do punktu. Limit bezpieczeństwa - zapobiega zbyt szybkiemu ruchowi przy dużych odchyleniach. Wyższa wartość = szybszy powrót, ale większe ryzyko przesterowania. Typowy zakres: 500-1500 imp/s.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="maxTargetSpeed" value="1000" min="100" max="4000" step="50">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="positionDeadband">
-                                    Margines błędu (imp.)
-                                    <span class="tooltip-icon" data-tooltip="Jeśli odchylenie od pozycji jest mniejsze niż ta wartość (w impulsach enkodera), PID pozycji nie reaguje. Robot 'akceptuje' to małe odchylenie i nie próbuje go korygować. Zapobiega ciągłym mikro-ruchom. Typowy zakres: 10-30 imp.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="positionDeadband" value="15" min="0" max="100" step="1">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="positionIntegralLimit">
-                                    Limit Integratora
-                                    <span class="tooltip-icon" data-tooltip="Maksymalna wartość sumy całkującej (Ki). Zapobiega 'wind-up' integratora. Istotne tylko gdy Ki > 0. Typowy zakres: 50-200.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="positionIntegralLimit" value="100" min="0" max="500" step="10">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="accordion">
-                        <button class="accordion-btn">Ustawienia Zaawansowane</button>
-                        <div class="accordion-content">
-                            <div class="param-group">
-                                <label for="positionFilterAlpha">
-                                    Filtr Pochodnej (%)
-                                    <span class="tooltip-icon" data-tooltip="Wygładza sygnał różniczkujący (Kd). 100% = brak filtrowania. Zmniejsz do 70-90%, jeśli hamowanie jest 'szarpane'. Typowy zakres: 70-95%.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="positionFilterAlpha" value="90" min="1" max="100" step="1">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="sign-toggle-group">
-                        <label>Znak sprzężenia (Pozycja)</label>
-                        <div id="positionSign" class="sign-toggle">
-                            <button data-sign="1" class="active">+1</button>
-                            <button data-sign="-1">-1</button>
-                        </div>
-                        <span class="sign-tooltip" data-tooltip="Odwróć znak sprzężenia pętli pozycji (zmiana możliwa tylko w trybie IDLE)">?</span>
-                    </div>
-                </div>
-
-                <!-- Rotation PID Tab -->
-                <div id="tabRotation" class="tab-content">
-                    <div class="accordion">
-                        <button class="accordion-btn">Nastawy Podstawowe</button>
-                        <div class="accordion-content">
-                            <div class="param-group">
-                                <label for="rotationKp">
-                                    Kp - Siła obrotu
-                                    <span class="tooltip-icon" data-tooltip="Kontroluje moc obrotu podczas automatycznego skrętu o zadany kąt. Wyższa wartość = szybszy obrót, ale ryzyko przesterowania (robot obraca się za daleko). Zacznij od małych wartości (1-5) i zwiększaj stopniowo. Typowy zakres: 2-10.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="rotationKp" value="0.0" min="0" max="50" step="0.1">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="rotationKd">
-                                    Kd - Tłumienie
-                                    <span class="tooltip-icon" data-tooltip="Hamuje obrót, gdy robot zbliża się do docelowego kąta. Zapobiega oscylacjom wokół pozycji docelowej. Wyższa wartość = płynniejsze, bardziej kontrolowane zatrzymanie. Zacznij od 0.5-2.0. Typowy zakres: 0.5-5.0.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="rotationKd" value="0.0" min="0" max="20" step="0.1">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Heading PID Tab -->
-                <div id="tabHeading" class="tab-content">
-                    <div class="accordion">
-                        <button class="accordion-btn">Nastawy Podstawowe</button>
-                        <div class="accordion-content">
-                            <div class="param-group">
-                                <label for="headingKp">
-                                    Kp - Siła korekty
-                                    <span class="tooltip-icon" data-tooltip="Kontroluje, jak mocno robot koryguje odchylenie od zadanego kursu podczas jazdy prosto. Wyższa wartość = mocniejsza korekta, robot jedzie bardziej 'po linii'. Zbyt wysoka może powodować 'zygzakowanie'. Zacznij od 0.5-2.0. Typowy zakres: 0.5-5.0.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="headingKp" value="0.0" min="0" max="10" step="0.05">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="headingKi">
-                                    Ki - Precyzja
-                                    <span class="tooltip-icon" data-tooltip="Usuwa systematyczne odchylenie kursu (gdy robot powoli 'skręca' w jedną stronę mimo jazdy prosto). Dodaj małą wartość (0.01-0.1) jeśli robot ma tendencję do odbijania w bok. Typowy zakres: 0-0.2.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="headingKi" value="0.0" min="0" max="1" step="0.005">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="headingKd">
-                                    Kd - Tłumienie
-                                    <span class="tooltip-icon" data-tooltip="Wygładza korekty kursu, zapobiega 'szarpaniu' przy zmianach kierunku. Przydatne jeśli robot nerwowo koryguje kurs. Zacznij od 0.05-0.2. Typowy zakres: 0.05-0.5.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="headingKd" value="0.0" min="0" max="5" step="0.01">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                            <div class="param-group">
-                                <label for="rotationToPwmScale">
-                                    Skala wyjścia PID -> PWM
-                                    <span class="tooltip-icon" data-tooltip="Konwertuje wyjście PID obrotu/kursu na komponent skrętu (PWM). Zwiększ jeśli korekty kierunku są za słabe, zmniejsz jeśli robot 'przeostrza' lub oscyluje. Typowy zakres: 0.005 - 0.05.">?</span>
-                                </label>
-                                <div class="input-group">
-                                    <button class="btn-minus">−</button>
-                                    <input type="number" id="rotationToPwmScale" value="0.01" min="0" max="1" step="0.001">
-                                    <button class="btn-plus">+</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="sign-toggle-group">
-                        <label>Znak sprzężenia (Balans)</label>
-                        <div id="balanceSign" class="sign-toggle">
-                            <button data-sign="1" class="active">+1</button>
-                            <button data-sign="-1">-1</button>
-                        </div>
-                        <span class="sign-tooltip" data-tooltip="Odwróć znak sprzężenia pętli balansu (zmiana możliwa tylko w trybie IDLE)">?</span>
-                    </div>
-                <div class="button-group mt-3">
-                    <button id="loadConfig" class="btn btn-secondary">Wczytaj z Robota</button>
-                    <button id="saveConfig" class="btn btn-primary">Zapisz na Robocie</button>
-                </div>
-
-                <!-- Tuning Progress Panel -->
-                <div id="tuning-progress-panel" class="card" style="display: none;">
-                    <h3 class="card-title">Postęp Strojenia</h3>
+                <!-- Panel Postępu Strojenia (domyślnie ukryty) -->
+                <div id="tuning-progress-panel">
+                    <h4>📊 Postęp Optymalizacji</h4>
                     <div class="progress-info">
-                        <div class="progress-item">
-                            <span class="progress-label">Metoda:</span>
-                            <span class="progress-value" id="current-method">---</span>
+                            <p>Status: <span id="tuning-status-text">Oczekuje</span></p>
+                            <p>Iteracja: <span id="current-iteration">0</span> / <span id="total-iterations">0</span></p>
+                            <p>Pokolenie: <span id="current-generation">0</span> / <span id="ga-gen-total">0</span></p>
+                            <p>Osobnik: <span id="current-individual">0</span> / <span id="population-size">0</span></p>
+                            <p>Parametry: Kp: <span id="current-kp">---</span> Ki: <span id="current-ki">---</span> Kd: <span id="current-kd">---</span></p>
+                            <p>Fitness: <span id="current-fitness">---</span></p>
                         </div>
-                        <div class="progress-item">
-                            <span class="progress-label">Iteracja:</span>
-                            <span class="progress-value" id="current-iteration">0</span> / <span id="total-iterations">0</span>
-                        </div>
-                        <div class="progress-item">
-                            <span class="progress-label">Najlepszy Fitness:</span>
-                            <span class="progress-value" id="best-fitness">---</span>
-                        </div>
-                    </div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progress-fill" style="width: 0%;"></div>
-                    </div>
-                    <div class="button-group">
-                        <button id="pause-tuning" class="btn btn-warning">Pauza</button>
-                        <button id="resume-tuning" class="btn btn-success" style="display: none;">Wznów</button>
-                        <button id="stop-tuning" class="btn btn-danger">Zatrzymaj</button>
-                    </div>
-                </div>
-
-                <!-- Best Parameters Display -->
-                <div id="best-params-panel" class="card" style="display: none;">
-                    <h3 class="card-title">Najlepsze Parametry</h3>
-                    <div class="param-display">
-                        <div class="param-item">
-                            <span class="param-label">Kp:</span>
-                            <span class="param-value" id="best-kp">---</span>
-                        </div>
-                        <div class="param-item">
-                            <span class="param-label">Ki:</span>
-                            <span class="param-value" id="best-ki">---</span>
-                        </div>
-                        <div class="param-item">
-                            <span class="param-label">Kd:</span>
-                            <span class="param-value" id="best-kd">---</span>
-                        </div>
-                    </div>
-                    <div class="button-group">
-                        <button id="apply-best-btn" class="btn btn-primary" disabled>Zastosuj Parametry</button>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Other Views (Calibration, Autonomous, Diagnostics, Settings) -->
-        <section id="viewCalibration" class="view">
-            <div class="card">
-                <h2 class="card-title">Kalibracja</h2>
-                <p class="info-text">Narzędzia kalibracji będą dostępne tutaj...</p>
-            </div>
-        </section>
-
-        <section id="viewAutonomous" class="view">
-            <div class="card">
-                <h2 class="card-title">Sterowanie Autonomiczne</h2>
-                
-                <!-- Manual Autonomous Controls -->
-                <div class="card">
-                    <h3>Sterowanie Precyzyjne (D-Pad)</h3>
-                    <div class="dpad-input-group">
-                        <label for="dpadDistInput">Dystans (cm):</label>
-                        <input type="number" id="dpadDistInput" value="20">
-                    </div>
-                    <div class="dpad-input-group">
-                        <label for="dpadAngleInput">Kąt (st.):</label>
-                        <input type="number" id="dpadAngleInput" value="90">
-                    </div>
-                    <div class="dpad-container">
-                        <button id="dpad-up" class="dpad-btn" data-dpad="up">↑</button>
-                        <button id="dpad-left" class="dpad-btn" data-dpad="left">←</button>
-                        <button id="dpad-stop" class="dpad-btn" data-dpad="stop">×</button>
-                        <button id="dpad-right" class="dpad-btn" data-dpad="right">→</button>
-                        <button id="dpad-down" class="dpad-btn" data-dpad="down">↓</button>
-                    </div>
-                </div>
-
-                <!-- Sequence Controls -->
-                <div class="sequence-controls">
-                    <div class="button-group">
-                        <button id="add-sequence-step-btn" class="btn btn-secondary">Dodaj Krok</button>
-                        <button id="run-sequence-btn" class="btn btn-primary">Uruchom Sekwencję</button>
-                        <button id="stop-sequence-btn" class="btn btn-danger" style="display: none;">Zatrzymaj</button>
-                        <button id="clear-sequence-btn" class="btn btn-warning">Wyczyść</button>
-                    </div>
-                </div>
-
-                <!-- Sequence List -->
-                <div class="sequence-list" id="sequence-list">
-                    <!-- Sequence steps will be added here dynamically -->
-                </div>
-
-                <!-- Path Visualization -->
-                <div class="card">
-                    <h2 class="card-title">Wizualizacja Ścieżki</h2>
-                    <div id="path-visualization-container" class="path-visualization-container">
-                        <canvas id="pathCanvas"></canvas>
-                    </div>
-                    <div class="button-group">
-                        <button id="reset-path-btn" class="btn btn-secondary">Resetuj Ścieżkę</button>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section id="viewAutotuning" class="view">
-            <div class="card">
-                <h2 class="card-title">Auto-strojenie PID</h2>
-                
-                <!-- Tuning Configuration -->
-                <div class="tuning-config">
-                    <div class="config-section">
-                        <label for="tuning-loop-selector">🎯 Pętla PID do strojenia:</label>
-                        <select id="tuning-loop-selector">
-                            <option value="balance">Pętla Balansu</option>
-                            <option value="speed">Pętla Prędkości</option>
-                            <option value="position">Pętla Pozycji</option>
-                        </select>
-                        <button id="open-fitness-modal-btn">Konfiguruj Wagi</button>
-                    </div>
-                    
-                    <div class="config-section">
-                        <h4>🔍 Przestrzeń Przeszukiwania</h4>
-                        <div class="search-space-grid">
-                            <div class="search-space-param">
-                                <label for="search-kp-min">Kp Min:</label>
-                                <input type="number" id="search-kp-min" value="40" step="0.1">
+                            <div style="margin-top:8px;">
+                                <canvas id="current-telemetry-chart" height="80" style="width:100%; background:#101014; border:1px solid #2a2a35; border-radius:6px;"></canvas>
                             </div>
-                            <div class="search-space-param">
-                                <label for="search-kp-max">Kp Max:</label>
-                                <input type="number" id="search-kp-max" value="50" step="0.1">
-                            </div>
-                            <div class="search-space-param">
-                                <label for="search-ki-min">Ki Min:</label>
-                                <input type="number" id="search-ki-min" value="0" step="0.01">
-                            </div>
-                            <div class="search-space-param">
-                                <label for="search-ki-max">Ki Max:</label>
-                                <input type="number" id="search-ki-max" value="0" step="0.01">
-                            </div>
-                            <div class="search-space-param">
-                                <label for="search-kd-min">Kd Min:</label>
-                                <input type="number" id="search-kd-min" value="0" step="0.01">
-                            </div>
-                            <div class="search-space-param">
-                                <label for="search-kd-max">Kd Max:</label>
-                                <input type="number" id="search-kd-max" value="5" step="0.01">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="config-section">
-                        <h4>🧪 Parametry Testu</h4>
-                        <label><input type="checkbox" id="test-with-impulse" checked> Test z impulsem (skok odpowiedzi)</label>
-                        <label><input type="checkbox" id="include-ki-checkbox"> Uwzględnij strojenie Ki</label>
-                    </div>
-                </div>
-
-                <!-- Tuning Methods Tabs -->
-                <div class="tuning-methods">
-                    <div class="method-tabs">
-                        <button class="method-tab active" data-method="ga">🧬 Algorytm Genetyczny</button>
-                        <button class="method-tab" data-method="pso">🌀 PSO</button>
-                        <button class="method-tab" data-method="zn">📊 Ziegler-Nichols</button>
-                    </div>
-                    
-                    <div class="method-content active" data-method="ga">
-                        <div class="method-config">
-                            <div><label for="ga-population">Rozmiar populacji:</label><input type="number" id="ga-population" value="10" min="5" max="100"></div>
-                            <div><label for="ga-generations">Liczba pokoleń:</label><input type="number" id="ga-generations" value="10" min="5" max="100"></div>
-                            <div><label for="ga-mutation">Wskaźnik mutacji (%):</label><input type="number" id="ga-mutation" value="10" min="0" max="100" step="1"></div>
-                            <div><label for="ga-crossover">Wskaźnik krzyżowania (%):</label><input type="number" id="ga-crossover" value="70" min="0" max="100" step="1"></div>
-                            <div><label><input type="checkbox" id="ga-elitism" checked> Elitaryzm</label></div>
-                        </div>
-                    </div>
-                    
-                    <div class="method-content" data-method="pso">
-                        <div class="method-config">
-                            <div><label for="pso-particles">Liczba cząstek:</label><input type="number" id="pso-particles" value="10" min="10" max="100"></div>
-                            <div><label for="pso-iterations">Liczba iteracji:</label><input type="number" id="pso-iterations" value="10" min="10" max="100"></div>
-                            <div><label for="pso-inertia">Waga bezwładności:</label><input type="number" id="pso-inertia" value="0.7" min="0" max="1" step="0.01"></div>
-                            <div><label for="pso-cognitive">Waga poznawcza:</label><input type="number" id="pso-cognitive" value="1.5" min="0" max="3" step="0.1"></div>
-                            <div><label for="pso-social">Waga społeczna:</label><input type="number" id="pso-social" value="1.5" min="0" max="3" step="0.1"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="method-content" data-method="zn">
-                        <div class="method-config">
-                            <div><label for="zn-amplitude">Amplituda przekaźnika:</label><input type="number" id="zn-amplitude" value="2.0" min="0.5" max="10" step="0.5"></div>
-                            <div><label for="zn-min-cycles">Minimalna liczba cykli:</label><input type="number" id="zn-min-cycles" value="3" min="2" max="10"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tuning Progress Panel -->
-                <div id="tuning-progress-panel" class="card" style="display: none;">
-                    <h3>📊 Postęp Optymalizacji</h3>
-                    <div class="progress-info">
-                        <div>Status: <span id="tuning-status-text">Oczekuje</span></div>
-                        <div>Iteracja: <span id="current-iteration">0</span> / <span id="total-iterations">0</span></div>
-                        <div>Pokolenie: <span id="current-generation">0</span> / <span id="ga-gen-total">0</span></div>
-                        <div>Osobnik: <span id="current-individual">0</span> / <span id="population-size">0</span></div>
-                        <div>Parametry: Kp: <span id="current-kp">---</span> Ki: <span id="current-ki">---</span> Kd: <span id="current-kd">---</span></div>
-                        <div>Fitness: <span id="current-fitness">---</span></div>
-                    </div>
-                    <canvas id="current-telemetry-chart" height="80"></canvas>
                     <div id="fitness-chart-container"><canvas id="fitness-chart"></canvas></div>
-                    
                     <div class="current-best">
                         <h4>🏆 Najlepsze Znalezione Parametry</h4>
                         <div class="current-best-grid">
                             <div><strong>Kp:</strong> <span id="best-kp">---</span></div>
                             <div><strong>Ki:</strong> <span id="best-ki">---</span></div>
                             <div><strong>Kd:</strong> <span id="best-kd">---</span></div>
-                            <div><strong>Fitness:</strong> <span id="best-fitness">---</span></div>
+                            <div style="grid-column: 1 / -1;"><strong>Fitness:</strong> <span id="best-fitness">---</span></div>
                         </div>
-                        <button id="apply-best-btn" disabled>Zastosuj Najlepsze</button>
+                        <button id="apply-best-btn" style="width:100%; margin-top:10px; background-color: #a2f279;" disabled>✅ Zastosuj Najlepsze</button>
                     </div>
-                    
-                    <div class="recent-results">
+                    <div class="recent-results" style="margin-top: 15px; text-align: left;">
                         <h4>🕒 Ostatnie 5 prób</h4>
-                        <div id="recent-results-list">Brak danych.</div>
-                        <button id="open-tuning-history-btn">📜 Historia i Eksport</button>
+                        <div id="recent-results-list" style="background:#20232a; border:1px solid #4a4f58; border-radius:6px; padding:8px; font-family: monospace; white-space: pre-wrap; min-height: 40px;">
+                            Brak danych.
+                        </div>
+                        <button id="open-tuning-history-btn" class="btn-small" style="margin-top:10px;">📜 Historia i Eksport</button>
                     </div>
                 </div>
 
-                <!-- Tuning Controls -->
-                <div class="tuning-controls">
+                <!-- Główne Przyciski Sterujące -->
+                <div class="tuning-controls" id="tuning-controls-bar">
                     <button id="start-tuning-btn">🚀 Rozpocznij Strojenie</button>
                     <button id="pause-tuning-btn" disabled>⏸️ Pauza</button>
                     <button id="resume-tuning-btn" style="display:none;" disabled>▶️ Wznów</button>
                     <button id="stop-tuning-btn" disabled>⏹️ Zatrzymaj</button>
                 </div>
             </div>
-        </section>
-
-        <!-- Diagnostics View -->
-        <section id="viewDiagnostics" class="view">
-            <div class="card">
-                <h2 class="card-title">Diagnostyka</h2>
-                
-                <!-- Signal Analyzer -->
-                <div class="signal-analyzer">
-                    <h3>Wykres Sygnałów</h3>
-                    <div class="chart-hints">
-                        <strong>💡 Wskazówki:</strong> 
-                        Ctrl+Scroll dla zoom | Ctrl+Przeciągnij dla przewijania | Shift+Przeciągnij dla zaznaczenia zakresu
-                    </div>
-                    <div class="chart-controls" id="signalChartControls">
-                        <!-- Checkboxes will be added here dynamically -->
-                    </div>
-                    <canvas id="signalAnalyzerChart" class="signal-canvas"></canvas>
-                    <div class="button-group">
-                        <button id="pauseChartBtn" class="btn btn-secondary">Pauza</button>
-                        <button id="resumeChartBtn" class="btn btn-secondary" style="display: none;">Wznów</button>
-                        <button id="cursorABBtn" class="btn btn-secondary">Kursory A/B</button>
-                        <button id="exportCsvBtn" class="btn btn-primary">Eksport CSV</button>
-                        <button id="exportRangeCsvBtn" class="btn btn-primary">Eksport Zakresu CSV</button>
-                        <button id="resetZoomBtn" class="btn btn-secondary">Reset Zoom</button>
-                        <button id="exportPngBtn" class="btn btn-primary">Eksport PNG</button>
-                    </div>
-                </div>
-
-                <!-- Cursor Info -->
-                <div class="cursor-info" id="cursorInfo" style="display: none;">
-                    <div class="cursor-row">
-                        <div class="cursor-item">
-                            <span class="cursor-label">Kursor A:</span>
-                            <span class="cursor-value" id="cursorAX">---</span>
-                            <span class="cursor-value" id="cursorAY">---</span>
-                        </div>
-                        <div class="cursor-item">
-                            <span class="cursor-label">Kursor B:</span>
-                            <span class="cursor-value" id="cursorBX">---</span>
-                            <span class="cursor-value" id="cursorBY">---</span>
-                        </div>
-                    </div>
-                    <div class="cursor-row">
-                        <div class="cursor-item">
-                            <span class="cursor-label">ΔT:</span>
-                            <span class="cursor-value" id="cursorDeltaT">---</span>
-                        </div>
-                        <div class="cursor-item">
-                            <span class="cursor-label">ΔPitch:</span>
-                            <span class="cursor-value" id="cursorDeltaYPitch">---</span>
-                        </div>
-                        <div class="cursor-item">
-                            <span class="cursor-label">ΔSpeed:</span>
-                            <span class="cursor-value" id="cursorDeltaYSpeed">---</span>
-                        </div>
-                    </div>
-                    <div class="button-group">
-                        <button id="cursorABBtn" class="btn btn-secondary">Kursory A/B</button>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- 3D Visualization View -->
-        <section id="view3D" class="view">
-            <div class="card">
-                <h2 class="card-title">Model 3D Robota</h2>
-                <div id="robot3d-container" class="robot-3d-container"></div>
-                <div class="robot-3d-controls">
-                    <div class="control-row">
-                        <span class="control-label">Perspektywa Robota</span>
-                        <label class="switch">
-                            <input type="checkbox" id="robotPerspectiveCheckbox">
-                            <span class="slider round"></span>
-                        </label>
-                    </div>
-                </div>
-                <div class="robot-3d-info">
-                    <div class="robot-3d-metrics">
-                        <div><strong>Przechyl (Pitch):</strong> <span id="robot3d-pitch">0.0°</span></div>
-                        <div><strong>Przechyl (Roll):</strong> <span id="robot3d-roll">0.0°</span></div>
-                        <div><strong>Obrot kół:</strong> <span id="robot3d-wheel-speed">0 obr/min</span></div>
-                        <div><strong>Pozycja X:</strong> <span id="robot3d-position-x">0.0 cm</span></div>
-                        <div><strong>Pozycja Z:</strong> <span id="robot3d-position-z">0.0 cm</span></div>
-                    </div>
-                </div>
-                <div class="button-group">
-                    <button id="reset3DView" class="btn btn-secondary">Resetuj Widok</button>
-                    <button id="toggle3DAnimation" class="btn btn-secondary">Wł./Wył. Animację</button>
-                    <button id="toggle3DMovement" class="btn btn-secondary">Start/Stop Ruchu</button>
-                    <button id="modelMappingBtn3D" class="btn btn-secondary">Mapowanie Modelu 3D</button>
-                </div>
-            </div>
-        </section>
-
-        <section id="viewSettings" class="view">
-            <div class="card">
-                <h2 class="card-title">Ustawienia</h2>
-                
-                <!-- Joystick Settings -->
-                <div class="accordion">
-                    <button class="accordion-btn">Strojenie Joysticka</button>
-                    <div class="accordion-content">
-                        <div class="param-group">
-                            <label for="joystickSensitivityInput">Czułość Globalna (%)
-                                <span class="tooltip-icon" data-tooltip="Globalny mnożnik dla wszystkich wartości z joysticka. Ustawienie 100% oznacza pełną czułość - robot reaguje maksymalnie na ruchy joysticka. Zmniejsz do 50-70%, jeśli robot jest zbyt nerwowy lub reaguje zbyt gwałtownie. Przydatne podczas nauki sterowania lub w ciasnych przestrzeniach. Typowy zakres: 60-100%.">?</span>
-                            </label>
-                            <div class="numeric-input-wrapper">
-                                <button class="btn-minus">−</button>
-                                <input type="number" id="joystickSensitivityInput" value="100" min="10" max="100" step="5">
-                                <button class="btn-plus">+</button>
-                            </div>
-                        </div>
-                        <div class="param-group">
-                            <label for="expoJoystickInput">Expo Joysticka (%)
-                                <span class="tooltip-icon" data-tooltip="Krzywa wykładnicza (expo) zmienia charakterystykę odpowiedzi joysticka. Przy 0% odpowiedź jest liniowa. Zwiększenie wartości sprawia, że przy małych wychyleniach robot reaguje łagodniej (większa precyzja), a przy dużych wychyleniach normalnie. Wartość 30-50% zapewnia dobrą równowagę między precyzją a responsywnością. Typowy zakres: 0-50%.">?</span>
-                            </label>
-                            <div class="input-group">
-                                <button class="btn-minus">−</button>
-                                <input type="number" id="expoJoystickInput" value="0" min="0" max="90" step="1">
-                                <button class="btn-plus">+</button>
-                            </div>
-                        </div>
-                        <div class="param-group">
-                            <label for="maxSpeedJoystickInput">Max. prędkość (imp/s)
-                                <span class="tooltip-icon" data-tooltip="Maksymalna prędkość zadana w trybie prędkości przy pełnym wychyleniu joysticka do przodu/tyłu. Wyższa wartość = szybszy robot. Dla bezpiecznej nauki zacznij od 500-800 imp/s. Dla sportowej jazdy możesz zwiększyć do 1500-2500 imp/s. Uwaga: zbyt wysoka wartość może powodować utratę balansu! Typowy zakres: 500-1500 imp/s.">?</span>
-                            </label>
-                            <div class="input-group">
-                                <button class="btn-minus">−</button>
-                                <input type="number" id="maxSpeedJoystickInput" class="config-value" value="800" min="200" max="4000" step="100">
-                                <button class="btn-plus">+</button>
-                            </div>
-                        <div class="param-group">
-                            <label for="maxAccelJoystickInput">Max. przyspieszenie (imp/s^2)
-                                <span class="tooltip-icon" data-tooltip="Maksymalna zmiana zadanej prędkości na sekundę (imp/s^2). Ogranicza przyspieszenie przy sterowaniu joystickiem, co poprawia stabilność.">?</span>
-                            </label>
-                            <div class="input-group">
-                                <button class="btn-minus">−</button>
-                                <input type="number" id="maxAccelJoystickInput" class="config-value" value="200" min="0" max="5000" step="10">
-                                <button class="btn-plus">+</button>
-                            </div>
-                        </div>
-                        </div>
-                        <div class="param-group">
-                            <label for="joystickAngleSensitivityInput">Czułość Kąta (st.)
-                                <span class="tooltip-icon" data-tooltip="Maksymalny kąt pochylenia zadany w trybie kąta przy pełnym wychyleniu joysticka. Mniejsza wartość (5-8°) = łagodniejsze przyspieszenie, bardziej przewidywalne zachowanie. Większa wartość (12-20°) = agresywniejsze przyspieszenie, szybsza reakcja. Rozpocznij od 8-10° i dostosuj do swoich preferencji. Typowy zakres: 6-15°.">?</span>
-                            </label>
-                            <div class="input-group">
-                                <button class="btn-minus">−</button>
-                                <input type="number" id="joystickAngleSensitivityInput" value="10" min="1" max="30" step="0.5">
-                                <button class="btn-plus">+</button>
-                            </div>
-                        </div>
-                        <div class="param-group">
-                            <label for="turnFactorInput">Czułość Skrętu (%)
-                                <span class="tooltip-icon" data-tooltip="Kontroluje, jak szybko robot obraca się w miejscu przy wychyleniu joysticka w poziomie. Mniejsza wartość (15-25%) = powolne, płynne skręty. Większa wartość (40-60%) = szybkie, ostre skręty. Za wysoka wartość może powodować utratę balansu podczas obrotu. Typowy zakres: 20-40%.">?</span>
-                            </label>
-                            <div class="input-group">
-                                <button class="btn-minus">−</button>
-                                <input type="number" id="turnFactorInput" value="25" min="0" max="100" step="5">
-                                <button class="btn-plus">+</button>
-                            </div>
-                        </div>
-                        <div class="param-group">
-                            <label for="joystickDeadzoneInput">Strefa Martwa (%)
-                                <span class="tooltip-icon" data-tooltip="Obszar wokół środka joysticka, w którym ruch jest ignorowany. Przydatne, jeśli joystick 'dryfuje' sam z siebie lub chcesz uniknąć przypadkowych mikroruchów. Wartość 5-10% usuwa drobne drżenia bez utraty czułości. Typowy zakres: 0-15%.">?</span>
-                            </label>
-                            <div class="input-group">
-                                <button class="btn-minus">−</button>
-                                <input type="number" id="joystickDeadzoneInput" value="0" min="0" max="50" step="1">
-                                <button class="btn-plus">+</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Joystick Mapping (moved to modal) -->
-                <div class="accordion">
-                    <button class="accordion-btn active">Mapowanie Gamepada</button>
-                    <div class="accordion-content active">
-                        <div class="joystick-mapping">
-                            <div class="mapping-section">
-                                <div style="display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
-                                    <div style="flex:1; min-width:220px;">
-                                        <label style="font-weight:600; display:block;">Osie Sterowania</label>
-                                        <div class="axis-mapping">
-                                            <div class="axis-item">
-                                                <label>Oś X (Lewo/Prawo):</label>
-                                                <select id="axis-x-select">
-                                                    <option value="-1">Brak</option>
-                                                </select>
-                                                <label style="margin-left:8px;"><input type="checkbox" id="invert-x"> Inwersja</label>
-                                            </div>
-                                            <div class="axis-item">
-                                                <label>Oś Y (Przód/Tył):</label>
-                                                <select id="axis-y-select">
-                                                    <option value="-1">Brak</option>
-                                                </select>
-                                                <label style="margin-left:8px;"><input type="checkbox" id="invert-y"> Inwersja</label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div style="min-width:160px; display:flex; gap:8px; justify-content:flex-end;">
-                                        <button id="open-gamepad-modal-btn" class="btn btn-secondary">Otwórz Mapowanie</button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="mapping-section" style="margin-top:12px; color:var(--text-secondary); font-size:0.95rem;">
-                                <div class="axis-mapping-summary">Mapowanie przycisków dostępne w wyskakującym oknie (użyj przycisku "Otwórz Mapowanie").</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Hardware Settings -->
-                <div class="accordion">
-                    <button class="accordion-btn">Parametry Sprzętowe</button>
-                    <div class="accordion-content">
-                        <div class="param-group">
-                            <label for="wheelDiameterInput">Średnica Koła (cm)
-                                <span class="tooltip-icon" data-tooltip="Średnica koła robota w centymetrach. Parametr kluczowy dla obliczania prędkości i pokonanego dystansu. Zmierz dokładnie średnicę od krawędzi do krawędzi przez środek koła. Większe koła = większa prędkość przy tych samych obrotach silnika. Typowy zakres: 6-12 cm.">?</span>
-                            </label>
-                            <div class="input-group">
-                                <button class="btn-minus">−</button>
-                                <input type="number" id="wheelDiameterInput" value="8.2" min="1" max="30" step="0.1">
-                                <button class="btn-plus">+</button>
-                            </div>
-                        </div>
-                        <div class="param-group">
-                            <label for="trackWidthInput">Rozstaw Kół (cm)
-                                <span class="tooltip-icon" data-tooltip="Odległość między środkami obu kół (szerokość toru). Wpływa na obliczenia obrotu - szerszy rozstaw wymaga większej różnicy prędkości kół do wykonania tego samego skrętu. Zmierz odległość między środkami osi kół. Typowy zakres: 10-20 cm.">?</span>
-                            </label>
-                            <div class="input-group">
-                                <button class="btn-minus">−</button>
-                                <input type="number" id="trackWidthInput" value="12.5" min="5" max="50" step="0.1">
-                                <button class="btn-plus">+</button>
-                            </div>
-                        </div>
-                        <div class="param-group">
-                            <label for="encoderPprInput">Impulsy na Obrót (PPR)
-                                <span class="tooltip-icon" data-tooltip="Liczba impulsów enkodera na jeden pełny obrót koła. Zależy od rozdzielczości enkodera i przekładni (jeśli jest). Wartość ta wpływa na dokładność pomiaru prędkości i pozycji. Wyższa wartość = większa precyzja. Sprawdź specyfikację swojego enkodera i przekładni. Typowy zakres: 300-2000 PPR.">?</span>
-                            </label>
-                            <div class="input-group">
-                                <button class="btn-minus">−</button>
-                                <input type="number" id="encoderPprInput" value="820" min="100" max="5000" step="10">
-                                <button class="btn-plus">+</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- IMU Settings -->
-                <div class="accordion">
-                    <button class="accordion-btn">Strojenie IMU</button>
-                    <div class="accordion-content">
-                        <div class="param-group">
-                            <label for="useMadgwickFilterInput">
-                                Użyj filtra Madgwicka
-                                <span class="tooltip-icon" data-tooltip="Włącz własną fuzję IMU z filtrem Madgwicka zamiast wbudowanego filtra BNO055. Może poprawić stabilność w trudnych warunkach.">?</span>
-                            </label>
-                            <label class="switch">
-                                <input type="checkbox" id="useMadgwickFilterInput">
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-                        <div class="param-group">
-                            <label for="madgwickBetaInput">
-                                Beta (filtr Madgwicka)
-                                <span class="tooltip-icon" data-tooltip="Współczynnik ufności w dane żyroskopu. Wyższe wartości = szybsza reakcja na zmiany, ale większa wrażliwość na szumy. Typowy zakres: 0.01-1.0. Domyślnie: 0.1">?</span>
-                            </label>
-                            <div class="input-group">
-                                <button id="madgwickBetaMinus" class="btn-minus">−</button>
-                                <input type="number" id="madgwickBetaInput" value="0.1" min="0.001" max="2.0" step="0.01">
-                                <button id="madgwickBetaPlus" class="btn-plus">+</button>
-                            </div>
-                        </div>
-                        <div class="param-group">
-                            <label for="madgwickZetaInput">
-                                Zeta (filtr Madgwicka)
-                                <span class="tooltip-icon" data-tooltip="Współczynnik korekcji dryftu żyroskopu. Wyższe wartości = lepsza korekcja dryftu, ale wolniejsza reakcja. Typowy zakres: 0-1.0. Domyślnie: 0.0">?</span>
-                            </label>
-                            <div class="input-group">
-                                <button id="madgwickZetaMinus" class="btn-minus">−</button>
-                                <input type="number" id="madgwickZetaInput" value="0.0" min="0.0" max="1.0" step="0.01">
-                                <button id="madgwickZetaPlus" class="btn-plus">+</button>
-                            </div>
-                        </div>
-                        <div class="param-group">
-                            <label for="magnetometerEnabledInput">
-                                Włącz magnetometr
-                                <span class="tooltip-icon" data-tooltip="Włącz magnetometr dla 9-osiowej fuzji IMU (NDOF). Wyłącz jeśli magnetometr jest zakłócany (np. przez silniki).">?</span>
-                            </label>
-                            <label class="switch">
-                                <input type="checkbox" id="magnetometerEnabledInput" checked>
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-                        <hr style="border-color:#2a2a35;">
-                        <div class="imu-tuning-chart-container">
-                            <h4>Wykres Strojenia IMU</h4>
-                            <canvas id="imuTuningChart" height="280" style="max-width:100%; width:100%"></canvas>
-                            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:8px; gap:12px;">
-                                <div style="flex:1;">
-                                    <label for="imuTuningTelemetryToggle" style="font-weight:600;">Telemetry: surowy kąt (akcelerometr) vs filtr Madgwicka</label>
-                                    <div style="font-size:0.85em; color:var(--text-secondary);">Użyj tej opcji aby włączyć/wyłączyć przesyłanie dedykowanej telemetrii IMU do strojenia.</div>
-                                </div>
-                                <label class="switch" style="margin-left:auto;">
-                                    <input type="checkbox" id="imuTuningTelemetryToggle">
-                                    <span class="slider"></span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PWM Calibration (min PWM autotune) -->
-                <div class="accordion">
-                    <button class="accordion-btn">Kalibracja PWM Silników</button>
-                    <div class="accordion-content">
-                        <div class="pwm-info"> <strong>Info:</strong> Użyj przycisku <strong>Auto</strong>, aby automatycznie znaleźć prog startowy silnika, lub <strong>Testuj</strong>, aby sprawdzić ręcznie wpisaną wartość. <strong>UWAGA:</strong> Przed testem podnieś robota, aby koła mogły się swobodnie obracać!</div>
-                        <div class="param-group">
-                            <label for="pwmTuneStartInput">Rozpocznij auto-szukanie od PWM</label>
-                            <div class="input-group">
-                                <button id="pwmTuneStartMinus" class="btn-minus">−</button>
-                                <input type="number" id="pwmTuneStartInput" value="1200" min="1" max="2047" step="1">
-                                <button id="pwmTuneStartPlus" class="btn-plus">+</button>
-                            </div>
-                        </div>
-                        <hr>
-                        <div class="param-group manual-tune-row" data-motor="left" data-direction="fwd">
-                            <label>Lewy (Przód)</label>
-                            <div class="input-group">
-                                <button class="btn-minus tune-minus">−</button>
-                                <input type="number" id="minPwmLeftFwdInput" class="tune-input" value="1200" min="0" max="2047" step="1">
-                                <button class="btn-plus tune-plus">+</button>
-                            </div>
-                            <div class="button-group">
-                                <button class="btn test-btn">Testuj</button>
-                                <button class="btn stop-btn">Stop</button>
-                                <button class="btn auto-btn">Auto</button>
-                            </div>
-                        </div>
-
-                        <div class="param-group manual-tune-row" data-motor="left" data-direction="bwd">
-                            <label>Lewy (Tył)</label>
-                            <div class="input-group">
-                                <button class="btn-minus tune-minus">−</button>
-                                <input type="number" id="minPwmLeftBwdInput" class="tune-input" value="1200" min="0" max="2047" step="1">
-                                <button class="btn-plus tune-plus">+</button>
-                            </div>
-                            <div class="button-group">
-                                <button class="btn test-btn">Testuj</button>
-                                <button class="btn stop-btn">Stop</button>
-                                <button class="btn auto-btn">Auto</button>
-                            </div>
-                        </div>
-
-                        <div class="param-group manual-tune-row" data-motor="right" data-direction="fwd">
-                            <label>Prawy (Przód)</label>
-                            <div class="input-group">
-                                <button class="btn-minus tune-minus">−</button>
-                                <input type="number" id="minPwmRightFwdInput" class="tune-input" value="1200" min="0" max="2047" step="1">
-                                <button class="btn-plus tune-plus">+</button>
-                            </div>
-                            <div class="button-group">
-                                <button class="btn test-btn">Testuj</button>
-                                <button class="btn stop-btn">Stop</button>
-                                <button class="btn auto-btn">Auto</button>
-                            </div>
-                        </div>
-
-                        <div class="param-group manual-tune-row" data-motor="right" data-direction="bwd">
-                            <label>Prawy (Tył)</label>
-                            <div class="input-group">
-                                <button class="btn-minus tune-minus">−</button>
-                                <input type="number" id="minPwmRightBwdInput" class="tune-input" value="1200" min="0" max="2047" step="1">
-                                <button class="btn-plus tune-plus">+</button>
-                            </div>
-                            <div class="button-group">
-                                <button class="btn test-btn">Testuj</button>
-                                <button class="btn stop-btn">Stop</button>
-                                <button class="btn auto-btn">Auto</button>
-                            </div>
-                        </div>
-
-                        <div class="button-group" style="margin-top:12px;">
-                            <button id="manualTuneStopAll" class="btn btn-danger">ZATRZYMAJ WSZYSTKIE SILNIKI</button>
-                        </div>
-                        <div class="button-group" style="margin-top:8px;">
-                            <button id="sensorMappingBtnSettings" class="btn btn-secondary">Mapowanie Czujnika</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- IMU Calibration -->
-                <div class="accordion">
-                    <button class="accordion-btn">Kalibracja IMU</button>
-                    <div class="accordion-content">
-                        <div class="button-group">
-                            <button id="calibrateMpuBtnSettings" class="btn btn-secondary">Kalibracja IMU</button>
-                            <button id="calibrateZeroPointBtnSettings" class="btn btn-secondary">Znajdź Pion Automatycznie</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-    </main>
         </div>
-        <div id="dynamic-page" class="page dynamic-hidden">
-            <!-- Druga strona - stała treść testowa -->
-            <div class="card" style="text-align: center; padding: 2rem; margin: 1rem;">
-                <h2>Druga strona - test</h2>
-                <p>To jest druga strona pagera.</p>
-                <p>Jeśli widzisz ten tekst, strona działa prawidłowo.</p>
-                <p>Kostka się obraca z ruchem palca.</p>
-                <button onclick="switchToPage(1)" class="btn btn-secondary" style="margin-top: 1rem;">Wróć do strony głównej</button>
+        
+                <button class="accordion-header" onclick="toggleAccordion(this)">8. Identyfikacja Obiektu (System ID)</button>
+                <div class="accordion-content" id="sysid-content">
+                    <p style="color: #aaa; font-size: 0.9em; margin-bottom: 15px;">
+                        📊 Nagraj odpowiedź skokową robota przy ustawionym Kp (bez Ki/Kd). 
+                        Impuls PWM zostanie wysłany 1s po rozpoczęciu nagrywania.
+                        Eksportuj dane do MATLAB/Python aby stworzyć model i obliczyć optymalne PID.
+                    </p>
+                    
+                    <div class="setting-container">
+                        <label for="sysid-kp">Kp (tylko proporcjonalny)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="sysid-kp" min="1" max="200" step="1" value="50"><button>+</button></div>
+                        <div class="help-text">Wartość wzmocnienia proporcjonalnego używana podczas testu. Ki i Kd będą ustawione na 0. Po zakończeniu nagrywania oryginalne wartości PID zostaną przywrócone.</div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="sysid-duration">Czas nagrywania (s)<span class="help-icon">?</span></label>
+                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="sysid-duration" min="2" max="30" step="1" value="5"><button>+</button></div>
+                        <div class="help-text">Całkowity czas nagrywania odpowiedzi skokowej. Impuls zostanie zastosowany 1s po starcie nagrywania, więc zalecany czas to min. 5s.</div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="sysid-impulse">Impuls joysticka (%)<span class="help-icon">?</span></label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <div class="numeric-input-wrapper" style="flex: 1;"><button>-</button><input type="number" class="config-value" id="sysid-impulse" min="5" max="100" step="5" value="25"><button>+</button></div>
+                            <button id="sysid-test-impulse-btn" style="padding: 8px 12px; background: #f7b731; color: #000; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; white-space: nowrap;" title="Jednorazowy test impulsu (podwójny przód→tył)">🔧 Testuj</button>
+                        </div>
+                        <div class="help-text">Siła impulsu jako % wychylenia joysticka. Podwójny impuls: 100ms przód + 100ms tył, żeby robot nie odjechał. Wyższa wartość = silniejsze zakłócenie. Typowy zakres: 15-40%. Użyj przycisku "Testuj" aby sprawdzić siłę impulsu przed nagrywaniem.</div>
+                    </div>
+                    <div class="setting-container">
+                        <label for="sysid-sample-rate">Próbkowanie (Hz)<span class="help-icon">?</span></label>
+                        <select id="sysid-sample-rate" class="config-value" style="width: 100%; padding: 8px; background: #20232a; border: 1px solid #61dafb; border-radius: 4px; color: #fff;">
+                            <option value="100">100 Hz</option>
+                            <option value="200" selected>200 Hz</option>
+                            <option value="500">500 Hz (pełna telemetria)</option>
+                        </select>
+                        <div class="help-text">Częstotliwość próbkowania danych. Wyższa wartość = więcej danych, lepsza rozdzielczość czasowa, ale większy plik.</div>
+                    </div>
+                    
+                    <div style="background: #20232a; border: 1px solid #4a4f58; border-radius: 6px; padding: 12px; margin: 15px 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Status: <strong id="sysid-status-text" style="color: #aaa;">Gotowy</strong></span>
+                            <span>Próbki: <strong id="sysid-sample-count">0</strong></span>
+                        </div>
+                        <div style="margin-top: 8px;">
+                            <progress id="sysid-progress" value="0" max="100" style="width: 100%; height: 20px;"></progress>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin: 15px 0;">
+                        <button id="sysid-start-btn" style="flex: 1; min-width: 120px; padding: 12px; background: #61dafb; color: #000; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">
+                            ▶️ Rozpocznij Nagrywanie
+                        </button>
+                        <button id="sysid-stop-btn" style="flex: 1; min-width: 120px; padding: 12px; background: #ff6347; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;" disabled>
+                            ⏹️ Zatrzymaj
+                        </button>
+                    </div>
+                    
+                    <p style="color: #888; font-size: 0.85em; margin-bottom: 10px;">
+                        💾 Dane zawierają: czas, kąt rzeczywisty, impuls PWM, prędkość kół, gyro
+                    </p>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;">
+                        <button id="sysid-export-csv-btn" style="flex: 1; min-width: 100px; padding: 10px; background: #a2f279; color: #000; border: none; border-radius: 6px; cursor: pointer;" disabled>
+                            📊 Eksport CSV
+                        </button>
+                        <button id="sysid-export-mat-btn" style="flex: 1; min-width: 100px; padding: 10px; background: #f7b731; color: #000; border: none; border-radius: 6px; cursor: pointer;" disabled>
+                            📐 Eksport MAT
+                        </button>
+                        <button id="sysid-clear-btn" style="flex: 1; min-width: 100px; padding: 10px; background: #4a4f58; color: #fff; border: none; border-radius: 6px; cursor: pointer;" disabled>
+                            🗑️ Wyczyść Dane
+                        </button>
+                    </div>
+                    
+                    <canvas id="sysid-preview-chart" height="150" style="width: 100%; background: #101014; border: 1px solid #2a2a35; border-radius: 6px;"></canvas>
+                </div>
+            </div>
+        </div>
+            <div class="button-group" style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
+                <button id="loadBtn">Wczytaj z Robota</button>
+                <button id="saveBtn">Zapisz na Robocie</button>
+            </div>
+        </div>
+    <div class="card" id="log-card" style="position: fixed; left: 0; right: 0; bottom: 0; z-index: 3000; margin: 0; border-radius: 0; padding-bottom: 0; box-shadow: 0 -4px 10px rgba(0,0,0,0.35);">
+            <div style="display:flex; align-items:center; gap:10px; cursor:pointer;" id="log-toggle-bar" title="Rozwiń/Zwiń logi">
+                <h2 style="margin: 0;">Logi</h2>
+                <div style="margin-left:auto; display:flex; align-items:center; gap:10px;">
+                    <label style="font-size:0.9em; color:#ccc; display:flex; align-items:center; gap:6px;">Autoscroll <input type="checkbox" id="logsAutoscroll" checked></label>
+                    <button id="clearLogsBtn" class="btn-small" style="background:#f7b731;">Wyczyść</button>
+                </div>
+            </div>
+            <div id="log-history" style="max-height: 40vh; overflow-y: auto; display: none;"></div>
+        </div>
+    </div>
+    <!-- Nowy modal: Mapowanie czujnika – sekwencyjny kreator z auto-wykryciem obrotu > 90° -->
+    
+    <!-- Modal: Historia prób strojenia -->
+    <div id="tuning-history-modal" class="modal-backdrop" style="display:none;">
+        <div class="modal-content" style="max-width:1000px;">
+            <h2>Historia wszystkich prób</h2>
+            <div style="display:flex; gap:8px; margin-bottom:8px;">
+                <button id="closeHistoryBtn" style="background:#ff6347;">Zamknij</button>
+                <button id="exportHistoryCsvBtn" style="background:#61dafb;">Eksport CSV</button>
+                <span id="historyCount" style="margin-left:auto; color:#aaa;"></span>
+            </div>
+            <div class="autotune-results-container">
+                <table class="autotune-results-table" style="display:table;">
+                    <thead>
+                        <tr><th>#</th><th>Kp</th><th>Ki</th><th>Kd</th><th>Fitness</th><th>ITAE</th><th>Przeregul.</th><th>Akcja</th></tr>
+                    </thead>
+                    <tbody id="results-table-body"></tbody>
+                </table>
             </div>
         </div>
     </div>
-
-    <!-- Collapsible Log Sheet -->
-    <div id="logSheet" class="log-sheet">
-        <div class="log-header" id="logHeader">
-            <div class="log-title-area">
-                <h3 class="log-title">Logi Systemowe</h3>
-                <span class="log-badge" id="logBadge">0</span>
-            </div>
-            <div class="log-controls">
-                <label class="log-autoscroll">
-                    <input type="checkbox" id="logAutoscroll" checked>
-                    <span>Auto-scroll</span>
-                </label>
-                <button id="clearLogs" class="btn-icon" title="Wyczyść logi">🗑️</button>
-                <button id="logToggle" class="btn-icon log-toggle-icon" aria-label="Rozwiń/zwiń logi">
-                    <span class="chevron">▲</span>
-                </button>
-            </div>
-        </div>
-        <div class="log-content" id="logContent">
-            <div id="logMessages"></div>
-        </div>
-    </div>
-
-    <!-- Load Scripts -->
-    <!-- Modal: Konfiguracja Fitness -->
-    <div id="fitness-modal" class="modal-backdrop" style="display:none;">
-        <div class="modal-content" style="max-width:480px;">
-            <h2>Konfiguracja Fitness (Rozdziel 100 punktów)</h2>
-            <div style="display:flex; gap:10px; flex-direction:column;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <label for="ga-weight-itae">ITAE</label>
-                    <input type="number" id="ga-weight-itae" min="0" max="100" value="50" style="width:110px;">
-                </div>
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <label for="ga-weight-overshoot">Przeregulowanie</label>
-                    <input type="number" id="ga-weight-overshoot" min="0" max="100" value="30" style="width:110px;">
-                </div>
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <label for="ga-weight-control-effort">SSE / Kontrola</label>
-                    <input type="number" id="ga-weight-control-effort" min="0" max="100" value="20" style="width:110px;">
-                </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; font-weight:bold; color:var(--accent-primary);">
-                    <div>Pozostało:</div>
-                    <div id="ga-weight-remaining">0</div>
-                </div>
-                <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:8px;">
-                    <button id="close-fitness-modal" style="background:var(--accent-error);">Zamknij</button>
-                    <button id="apply-fitness-btn" style="background:var(--accent-secondary);" disabled>Zastosuj Wagi</button>
-                </div>
-            </div>
-                <!-- Modal: Mapowanie Gamepada (top-level) -->
-                <div id="gamepad-mapping-modal" class="modal-backdrop" style="display:none;">
-                    <div class="modal-content" style="max-width:560px;">
-                        <h2>Mapowanie Gamepada <span class="help-icon" title="Przypisz akcje do przycisków gamepada">?</span></h2>
-                        <div class="mapping-list" id="gamepad-mapping-list" style="margin-top:8px;">
-                            <!-- dynamic content will be rendered here -->
-                        </div>
-                        <div style="display:flex; gap:8px; margin-top:12px; justify-content:flex-end; flex-wrap:wrap;">
-                            <button id="start-mapping-btn" class="btn btn-primary">Rozpocznij Mapowanie</button>
-                            <button id="save-mapping-btn" class="btn btn-secondary">Zapisz Mapowanie</button>
-                            <button id="load-mapping-btn" class="btn btn-secondary">Wczytaj Mapowanie</button>
-                            <button id="close-modal-btn" class="btn btn-secondary">Zamknij</button>
-                        </div>
-                        <div style="display:flex; gap:10px; margin-top:12px; justify-content:space-between;">
-                            <div id="gamepadStatus" style="font-weight:600; color:var(--text-secondary);">Brak</div>
-                        </div>
-                    </div>
-                </div>
-        </div>
-    </div>
-    <!-- Sensor mapping modal -->
     <div id="sensor-mapping-modal" class="modal-backdrop" style="display:none;">
         <div class="modal-content">
             <h2>Mapowanie Czujnika (Orientacja) <span class="help-icon" id="sensorMappingHelp" title="Pokaż/ukryj szczegółową pomoc">?</span></h2>
@@ -1348,19 +586,22 @@
                 <strong>Cel:</strong> Dopasowanie fizycznego montażu IMU do oczekiwanych osi sterowania robota.<br>
                 <strong>Kroki:</strong> (1) Pozycja pionowa referencyjna. (2) Obrót poziomy ≥ 90°. (3) Zapis korekcji.<br>
                 <strong>Wpływ:</strong> Działa na wewnętrzne wektory (akcelerometr/żyroskop) używane przez PID. Nie zmienia wizualizacji 3D (oddzielne mapowanie modelu).<br>
-                <strong>Wymagane:</strong> Kalibracja IMU (System=3) dla najlepszej dokładności.
+                <strong>Wymagane:</strong> Kalibracja IMU (System=3) dla najlepszej dokładności.<br>
+                <em>Po zapisie sterowanie będzie korzystać z poprawionych osi automatycznie.</em>
             </div>
             <div id="sensorWizardStepInfo" style="margin:6px 0; font-size:12px; color:#aaa;">Krok <span id="sensorWizardStepNo">1</span>/3</div>
             <div id="sensorWizardText" style="text-align:left; font-size:0.95em; line-height:1.5; background:#101014; border:1px solid #2a2a35; padding:12px; border-radius:8px;">
-                <!-- dynamic content -->
+                <!-- dynamiczna instrukcja -->
             </div>
-            <div id="sensorWizardHint" style="margin-top:8px; font-size:0.85em; color:#bbb;"> </div>
+            <div id="sensorWizardHint" style="margin-top:8px; font-size:0.85em; color:#bbb;">
+                <!-- dynamiczne podpowiedzi -->
+            </div>
             <div id="sensorWizardProgress" style="margin-top:12px; font-family:monospace; background:#111; border:1px solid #333; border-radius:6px; padding:8px; text-align:left;">
                 [ ] Pion | [ ] Rotacja ≥ 90° | [ ] Zapis
             </div>
             <div class="sensor-mapping-wrapper" style="display:flex; gap:10px; margin-top:12px; align-items:flex-start;">
                 <div id="sensor-mapping-preview" class="sensor-mapping-preview" style="flex:1; min-width:250px; height:200px; background:#000; border-radius:6px; overflow:hidden;"></div>
-                <div class="sensor-mapping-controls" style="width:320px; display:flex; flex-direction:column; gap:8px;">
+                    <div class="sensor-mapping-controls" style="width:320px; display:flex; flex-direction:column; gap:8px;">
                     <div style="display:flex; justify-content:space-between; gap:6px;">
                         <div>
                             <div>Pitch (Cube): <span id="modal-pitch-display">0.0°</span></div>
@@ -1385,6 +626,7 @@
                         <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Montaż Y</div><button id="mountYMinus90Btn">-90°</button><button id="mountYPlus90Btn">+90°</button></div>
                         <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Montaż Z</div><button id="mountZMinus90Btn">-90°</button><button id="mountZPlus90Btn">+90°</button></div>
                     </div>
+                    <!-- DODANE: Kontrolki remapu IMU (wpływają na wewnętrzne wektory - PID) -->
                     <hr style="border-color:#2a2a35;">
                     <div style="margin-top:6px;">
                         <strong>Mapowanie osi IMU (wpływ na PID)</strong>
@@ -1417,6 +659,7 @@
                         <button id="setModalPitchZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Pitch)</button>
                         <button id="setModalRollZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Roll)</button>
                     </div>
+                    <!-- Małe korekty trimów -->
                     <hr style="border-color:#2a2a35;">
                     <div style="margin-top:6px;">
                         <strong>Małe korekty trimów</strong>
@@ -1443,6 +686,34 @@
                     </div>
                 </div>
             </div>
+                    <!-- Modal: Konfiguracja Fitness -->
+                    <div id="fitness-modal" class="modal-backdrop" style="display:none;">
+                        <div class="modal-content" style="max-width:480px;">
+                            <h2>Konfiguracja Fitness (Rozdziel 100 punktów)</h2>
+                            <div style="display:flex; gap:10px; flex-direction:column;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <label for="weight-itae">ITAE</label>
+                                    <input type="number" id="weight-itae" min="0" max="100" value="50" style="width:110px;">
+                                </div>
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <label for="weight-overshoot">Przeregulowanie</label>
+                                    <input type="number" id="weight-overshoot" min="0" max="100" value="30" style="width:110px;">
+                                </div>
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <label for="weight-sse">SSE / Kontrola</label>
+                                    <input type="number" id="weight-sse" min="0" max="100" value="20" style="width:110px;">
+                                </div>
+                                <div style="display:flex; justify-content:space-between; align-items:center; font-weight:bold; color:#61dafb;">
+                                    <div>Pozostało:</div>
+                                    <div id="weight-remaining">0</div>
+                                </div>
+                                <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:8px;">
+                                    <button id="close-fitness-modal" style="background:#ff6347;">Zamknij</button>
+                                    <button id="apply-fitness-btn" style="background:#a2f279;" disabled>Zastosuj Wagi</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
             <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
                 <button id="sensorWizardCancelBtn" style="background:#ff6347;">Anuluj</button>
                 <button id="sensorWizardBackBtn" disabled>Wstecz</button>
@@ -1450,7 +721,6 @@
             </div>
         </div>
     </div>
-    
     <!-- Modal mapowania modelu 3D -->
     <div id="model-mapping-modal" class="modal-backdrop" style="display:none;">
         <div class="modal-content">
@@ -1459,53 +729,63 @@
                 <strong>Co to robi?</strong> Przekształca kąty Euler'a (pochodne z kwaternionu) na osie sceny 3D.<br>
                 <strong>Kiedy użyć?</strong> Jeśli model 3D reaguje w niewłaściwych osiach albo odwrotnie niż oczekujesz.<br>
                 <strong>Źródła:</strong> Pitch/Yaw/Roll liczone z kwaternionu (standard ZYX).<br>
-                <strong>Znaki:</strong> Użyj -1 aby odwrócić kierunek osi bez zmiany logiki sterowania.
+                <strong>Znak:</strong> Użyj -1 aby odwrócić kierunek osi bez zmiany logiki sterowania.<br>
+                <em>Zmiany nie wpływają na kontrolę robota – tylko na wizualizację.</em>
             </div>
             <p style="text-align:left; font-size:0.85em; line-height:1.4;" title="Tylko wizualizacja, nie sterowanie">Określ, które składowe kątów Euler'a mają zasilać osie modelu 3D oraz ich znak.</p>
-            <div class="model-mapping-row">
+            <div class="model-mapping-row" title="Źródło oraz znak dla osi Pitch modelu">
                 <strong>Pitch:</strong>
-                <select id="modelPitchSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
-                <div class="sign-toggle" id="modelPitchSign"><button data-sign="1" class="active">+1</button><button data-sign="-1">-1</button></div>
+                <select id="modelPitchSource" title="Wybierz z której osi Euler będzie pochodzić Pitch modelu">
+                    <option value="0">Pitch</option>
+                    <option value="1">Yaw</option>
+                    <option value="2">Roll</option>
+                </select>
+                <div class="sign-toggle" id="modelPitchSign" title="Znak osi Pitch">
+                    <button data-sign="1" class="active" title="Dodatni kierunek">+1</button>
+                    <button data-sign="-1" title="Odwróć kierunek">-1</button>
+                </div>
             </div>
-            <div class="model-mapping-row">
+            <div class="model-mapping-row" title="Źródło oraz znak dla osi Yaw modelu">
                 <strong>Yaw:</strong>
-                <select id="modelYawSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
-                <div class="sign-toggle" id="modelYawSign"><button data-sign="1" class="active">+1</button><button data-sign="-1">-1</button></div>
+                <select id="modelYawSource" title="Wybierz z której osi Euler będzie pochodzić Yaw modelu">
+                    <option value="0">Pitch</option>
+                    <option value="1">Yaw</option>
+                    <option value="2">Roll</option>
+                </select>
+                <div class="sign-toggle" id="modelYawSign" title="Znak osi Yaw">
+                    <button data-sign="1" class="active" title="Dodatni kierunek">+1</button>
+                    <button data-sign="-1" title="Odwróć kierunek">-1</button>
+                </div>
             </div>
-            <div class="model-mapping-row">
+            <div class="model-mapping-row" title="Źródło oraz znak dla osi Roll modelu">
                 <strong>Roll:</strong>
-                <select id="modelRollSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
-                <div class="sign-toggle" id="modelRollSign"><button data-sign="1" class="active">+1</button><button data-sign="-1">-1</button></div>
+                <select id="modelRollSource" title="Wybierz z której osi Euler będzie pochodzić Roll modelu">
+                    <option value="0">Pitch</option>
+                    <option value="1">Yaw</option>
+                    <option value="2">Roll</option>
+                </select>
+                <div class="sign-toggle" id="modelRollSign" title="Znak osi Roll">
+                    <button data-sign="1" class="active" title="Dodatni kierunek">+1</button>
+                    <button data-sign="-1" title="Odwróć kierunek">-1</button>
+                </div>
             </div>
-            <div id="model-mapping-current">Brak danych mapowania.</div>
+            <div id="model-mapping-current" title="Aktualna konfiguracja mapowania">Brak danych mapowania.</div>
             <div style="display:flex; gap:10px; margin-top:12px;">
-                <button id="modelMappingLoadBtn" style="flex:1; background:#61dafb;">Wczytaj</button>
-                <button id="modelMappingSaveBtn" style="flex:1; background:#a2f279;">Zapisz</button>
-                <button id="modelMappingResetBtn" style="flex:1; background:#f7b731;">Domyślne</button>
+                <button id="modelMappingLoadBtn" style="flex:1; background:#61dafb;" title="Pobierz aktualne wartości z EEPROM">Wczytaj</button>
+                <button id="modelMappingSaveBtn" style="flex:1; background:#a2f279;" title="Zapisz bieżące ustawienia do EEPROM">Zapisz</button>
+                <button id="modelMappingResetBtn" style="flex:1; background:#f7b731;" title="Przywróć wartości domyślne (identity)">Domyślne</button>
             </div>
-            <button id="modelMappingCloseBtn" style="width:100%; margin-top:14px; background:#ff6347;">Zamknij</button>
+            <button id="modelMappingCloseBtn" style="width:100%; margin-top:14px; background:#ff6347;" title="Zamknij okno">Zamknij</button>
         </div>
     </div>
 
-
-
-    <!-- Modal: Potwierdzenie EEPROM -->
-    <div id="eeprom-modal" class="modal-backdrop" style="display:none;">
-        <div class="modal-content" style="max-width:400px;">
-            <h3 id="eeprom-modal-title">Potwierdzenie</h3>
-            <p id="eeprom-modal-message">Operacja EEPROM została wykonana pomyślnie.</p>
-            <button id="eeprom-modal-close" class="btn btn-primary" style="width:100%;">OK</button>
-        </div>
-    </div>
-
-
-    <script src="js/helpers.js"></script>
-    <!-- State manager (AppStore/AppState) musi być załadowany przed komponentami UI -->
-    <script src="js/state_manager.js"></script>
-    <script src="js/path_visualization.js"></script>
-    <script src="js/tuning_algorithms.js"></script>
-    <script src="js/ui_components.js"></script>
-    <script src="js/ui_core.js"></script>
+    <!-- WARNING: Do NOT include both the production bundle and modular JS files in the same page.
+        For development, use 'index-dev.html' which loads the modular scripts in dependency order.
+        The bundler is available as a single file 'js/main.js' for production. -->
+    <!-- Production mode: używamy wyłącznie zbudowanego pakietu 'main.js'.
+        NIE ładujemy jednocześnie modularnych plików aby uniknąć
+        redeklaracji zmiennych (patrz komentarz w main.js). -->
     <script src="js/main.js"></script>
+
 </body>
 </html>
