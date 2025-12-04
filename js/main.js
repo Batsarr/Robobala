@@ -880,9 +880,9 @@ window.telemetryData = {};
 let isCalibrationModalShown = false;
 // UI base for 'Set Zero' feature — apparent trim is actualTrim - uiTrimZeroBase
 // Prosty model trymów:
-//  - firmware trzyma jedną wartość trim_angle / roll_trim (w stopniach)
-//  - UI pokazuje dokładnie tę wartość, a kąt liczymy z kwaternionu + trim
-//  - przycisk "Ustaw 0" wylicza nowy trim tak, aby aktualna pozycja dawała 0°.
+//  - firmware trzyma jedną wartość trim_angle / roll_trim (w stopniach) - korekta montażu czujnika
+//  - firmware trzyma osobno pitch_offset / roll_offset (w stopniach) - offset pionu dla balansu
+//  - UI pokazuje dokładnie te wartości
 let originalFirmwareTrimPitch = null; // tylko do celów informacyjnych/logów
 let originalFirmwareTrimRoll = null;
 
@@ -1559,12 +1559,13 @@ function getRawEuler() {
 // GLOBALNE: ustawianie punktu 0 dla Pitch i Roll.
 // Firmware: adjust_zero dodaje deltę do baseTargetAngleTrim.
 // Telemetria pitch to już kąt po trymach, więc delta = -pitch spowoduje że następny odczyt będzie 0.
+// Uwzględniamy też offset UI, który jest tymczasową korektą wyświetlania.
 function setPitchZero() {
     if (!window.telemetryData) {
         addLogMessage('[UI] Brak danych telemetrii (pitch).', 'warn');
         return;
     }
-    // Odczytaj aktualny pitch z telemetrii (już po trymach)
+    // Odczytaj aktualny pitch z telemetrii (już po trymach i offsetach)
     let currentPitch = Number(window.telemetryData.pitch);
     if (typeof currentPitch !== 'number' || isNaN(currentPitch)) {
         if (typeof window.telemetryData.qw === 'number') {
@@ -1581,7 +1582,7 @@ function setPitchZero() {
         addLogMessage('[UI] Nieprawidlowy odczyt pitch.', 'error');
         return;
     }
-    // Delta = -currentPitch -> po dodaniu do trim, następny odczyt pitch = 0
+    // Delta = -currentPitch -> po dodaniu do trim montażu, następny odczyt pitch = 0
     const delta = -currentPitch;
     sendBleMessage({ type: 'adjust_zero', value: delta });
     const val = document.getElementById('angleVal');
@@ -1597,7 +1598,7 @@ function setRollZero() {
         addLogMessage('[UI] Brak danych telemetrii (roll).', 'warn');
         return;
     }
-    // Odczytaj aktualny roll z telemetrii (już po trymach)
+    // Odczytaj aktualny roll z telemetrii (już po trymach i offsetach)
     let currentRoll = Number(window.telemetryData.roll);
     if (typeof currentRoll !== 'number' || isNaN(currentRoll)) {
         if (typeof window.telemetryData.qw === 'number') {
@@ -1613,7 +1614,7 @@ function setRollZero() {
         addLogMessage('[UI] Nieprawidlowy odczyt roll.', 'error');
         return;
     }
-    // Delta = -currentRoll -> po dodaniu do trim, następny odczyt roll = 0
+    // Delta = -currentRoll -> po dodaniu do trim montażu, następny odczyt roll = 0
     const delta = -currentRoll;
     sendBleMessage({ type: 'adjust_roll_trim', value: delta });
     const val = document.getElementById('rollVal');
@@ -2289,8 +2290,12 @@ function normalizeTelemetryData(d) {
     if (d.lt !== undefined && d.loop_time === undefined) d.loop_time = d.lt;
     if (d.ta !== undefined && d.trim_angle === undefined) d.trim_angle = d.ta; // legacy alias
     if (d.rt !== undefined && d.roll_trim === undefined) d.roll_trim = d.rt;   // legacy alias
+    if (d.po !== undefined && d.pitch_offset === undefined) d.pitch_offset = d.po; // offset pionu pitch
+    if (d.ro !== undefined && d.roll_offset === undefined) d.roll_offset = d.ro;   // offset pionu roll
     if (d.trim_angle === undefined) d.trim_angle = 0.0;
     if (d.roll_trim === undefined) d.roll_trim = 0.0;
+    if (d.pitch_offset === undefined) d.pitch_offset = 0.0;
+    if (d.roll_offset === undefined) d.roll_offset = 0.0;
     if (d.states && typeof d.states === 'object') {
         const s = d.states;
         if (s.b !== undefined && s.balancing === undefined) s.balancing = s.b;
@@ -2334,7 +2339,7 @@ function updateTelemetryUI(data) {
         }
     }
     if (typeof data.raw_pitch === 'number' || typeof data.pitch === 'number') {
-        // Firmware już zastosował trymy do kwaternionu; UI używa bezpośrednio skorygowanego kąta.
+        // Firmware już zastosował trymy do kwaternionu; UI wyświetla rzeczywisty kąt sensora
         const correctedPitch = (data.pitch !== undefined) ? data.pitch : (typeof data.raw_pitch === 'number' ? data.raw_pitch : 0);
         document.getElementById('angleVal').textContent = correctedPitch.toFixed(1) + ' \u00B0';
         const vizPitchVal = (data.viz_pitch !== undefined) ? data.viz_pitch : correctedPitch || 0;
@@ -2407,6 +2412,38 @@ function updateTelemetryUI(data) {
     if (calibGyro !== undefined) { document.getElementById('calibGyroVal').textContent = calibGyro; updateCalibrationProgress('gyro', calibGyro); }
     const calibMag = (data.calib_mag !== undefined) ? data.calib_mag : data.cm;
     if (calibMag !== undefined) { document.getElementById('calibMagVal').textContent = calibMag; updateCalibrationProgress('mag', calibMag); }
+
+    // Aktualizacja Dashboard: Korekta montażu (z firmware) i Offset pionu (z firmware)
+    const trimPitch = Number(data.trim_angle) || 0;
+    const trimRoll = Number(data.roll_trim) || 0;
+    const pitchOffset = Number(data.pitch_offset) || 0;
+    const rollOffset = Number(data.roll_offset) || 0;
+
+    const angleOffsetValEl = document.getElementById('angleOffsetVal');
+    if (angleOffsetValEl) angleOffsetValEl.textContent = trimPitch.toFixed(1) + ' °';
+    const rollMountOffsetValEl = document.getElementById('rollMountOffsetVal');
+    if (rollMountOffsetValEl) rollMountOffsetValEl.textContent = trimRoll.toFixed(1) + ' °';
+    // Aktualizacja też w kontrolkach trim (montaż)
+    const trimValueDisplay = document.getElementById('trimValueDisplay');
+    if (trimValueDisplay) trimValueDisplay.textContent = trimPitch.toFixed(2);
+    const rollTrimValueDisplay = document.getElementById('rollTrimValueDisplay');
+    if (rollTrimValueDisplay) rollTrimValueDisplay.textContent = trimRoll.toFixed(2);
+    // Offset pionu (z firmware - wpływa na balans)
+    const pitchUIOffsetValEl = document.getElementById('pitchUIOffsetVal');
+    if (pitchUIOffsetValEl) pitchUIOffsetValEl.textContent = pitchOffset.toFixed(1) + ' °';
+    const rollUIOffsetValEl = document.getElementById('rollUIOffsetVal');
+    if (rollUIOffsetValEl) rollUIOffsetValEl.textContent = rollOffset.toFixed(1) + ' °';
+    // Aktualizacja kontrolek offsetu
+    const pitchOffsetDisplay = document.getElementById('pitchOffsetDisplay');
+    if (pitchOffsetDisplay) pitchOffsetDisplay.textContent = pitchOffset.toFixed(2);
+    const rollOffsetDisplay = document.getElementById('rollOffsetDisplay');
+    if (rollOffsetDisplay) rollOffsetDisplay.textContent = rollOffset.toFixed(2);
+    // Delta vs initial (różnica między aktualnym a pierwotnym trymem)
+    if (originalFirmwareTrimPitch === null && trimPitch !== 0) originalFirmwareTrimPitch = trimPitch;
+    const offsetDelta = originalFirmwareTrimPitch !== null ? (trimPitch - originalFirmwareTrimPitch) : 0;
+    const offsetDeltaValEl = document.getElementById('offsetDeltaVal');
+    if (offsetDeltaValEl) offsetDeltaValEl.textContent = offsetDelta.toFixed(1) + ' °';
+
     if (data.states && !AppState.isApplyingConfig) {
         AppState.isApplyingConfig = true;
         // states short keys fallback
@@ -4149,6 +4186,44 @@ function setupParameterListeners() {
     document.getElementById('rollTrimMinus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.01));
     document.getElementById('rollTrimPlus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.01));
     document.getElementById('rollTrimPlus01Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.1));
+
+    // Offset pionu (wysyłane do firmware, zapisywane w EEPROM, wpływa na punkt równowagi balansu)
+    function updateAndSendPitchOffset(delta) {
+        const span = document.getElementById('pitchOffsetDisplay');
+        if (!span) return;
+        const preview = (parseFloat(span.textContent) || 0) + delta;
+        span.textContent = preview.toFixed(2);
+        sendBleMessage({ type: 'adjust_pitch_offset', value: delta });
+        addLogMessage(`[UI] Offset pionu (Pitch): ${delta > 0 ? '+' : ''}${delta.toFixed(2)}° (zapisz do EEPROM!)`, 'info');
+    }
+    function updateAndSendRollOffset(delta) {
+        const span = document.getElementById('rollOffsetDisplay');
+        if (!span) return;
+        const preview = (parseFloat(span.textContent) || 0) + delta;
+        span.textContent = preview.toFixed(2);
+        sendBleMessage({ type: 'adjust_roll_offset', value: delta });
+        addLogMessage(`[UI] Offset pionu (Roll): ${delta > 0 ? '+' : ''}${delta.toFixed(2)}° (zapisz do EEPROM!)`, 'info');
+    }
+    document.getElementById('pitchOffsetMinus01Btn')?.addEventListener('click', () => updateAndSendPitchOffset(-0.1));
+    document.getElementById('pitchOffsetMinus001Btn')?.addEventListener('click', () => updateAndSendPitchOffset(-0.01));
+    document.getElementById('pitchOffsetPlus001Btn')?.addEventListener('click', () => updateAndSendPitchOffset(0.01));
+    document.getElementById('pitchOffsetPlus01Btn')?.addEventListener('click', () => updateAndSendPitchOffset(0.1));
+    document.getElementById('resetPitchOffsetBtn')?.addEventListener('click', () => {
+        sendBleMessage({ type: 'reset_pitch_offset' });
+        const span = document.getElementById('pitchOffsetDisplay');
+        if (span) span.textContent = '0.00';
+        addLogMessage('[UI] Offset pionu (Pitch) wyzerowany (zapisz do EEPROM!).', 'success');
+    });
+    document.getElementById('rollOffsetMinus01Btn')?.addEventListener('click', () => updateAndSendRollOffset(-0.1));
+    document.getElementById('rollOffsetMinus001Btn')?.addEventListener('click', () => updateAndSendRollOffset(-0.01));
+    document.getElementById('rollOffsetPlus001Btn')?.addEventListener('click', () => updateAndSendRollOffset(0.01));
+    document.getElementById('rollOffsetPlus01Btn')?.addEventListener('click', () => updateAndSendRollOffset(0.1));
+    document.getElementById('resetRollOffsetBtn')?.addEventListener('click', () => {
+        sendBleMessage({ type: 'reset_roll_offset' });
+        const span = document.getElementById('rollOffsetDisplay');
+        if (span) span.textContent = '0.00';
+        addLogMessage('[UI] Offset pionu (Roll) wyzerowany (zapisz do EEPROM!).', 'success');
+    });
 
 
     document.getElementById('saveBtn')?.addEventListener('click', () => {
