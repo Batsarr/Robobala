@@ -5092,6 +5092,7 @@ function initSystemIdentification() {
     const clearBtn = document.getElementById('sysid-clear-btn');
     const testImpulseBtn = document.getElementById('sysid-test-impulse-btn');
     const testTypeSelect = document.getElementById('sysid-test-type');
+    const analyzeBtn = document.getElementById('sysid-analyze-btn');
 
     if (startBtn) startBtn.addEventListener('click', startSysIdRecording);
     if (stopBtn) stopBtn.addEventListener('click', stopSysIdRecording);
@@ -5100,6 +5101,7 @@ function initSystemIdentification() {
     if (clearBtn) clearBtn.addEventListener('click', clearSysIdData);
     if (testImpulseBtn) testImpulseBtn.addEventListener('click', testSysIdImpulse);
     if (testTypeSelect) testTypeSelect.addEventListener('change', handleSysIdTestTypeChange);
+    if (analyzeBtn) analyzeBtn.addEventListener('click', analyzeSysIdData);
 
     // Initialize chart context
     const canvas = document.getElementById('sysid-preview-chart');
@@ -5490,6 +5492,7 @@ function updateSysIdUI(state) {
     const exportCsvBtn = document.getElementById('sysid-export-csv-btn');
     const exportMatBtn = document.getElementById('sysid-export-mat-btn');
     const clearBtn = document.getElementById('sysid-clear-btn');
+    const analyzeBtn = document.getElementById('sysid-analyze-btn');
     const statusText = document.getElementById('sysid-status-text');
 
     if (state === 'recording') {
@@ -5498,6 +5501,7 @@ function updateSysIdUI(state) {
         if (exportCsvBtn) exportCsvBtn.disabled = true;
         if (exportMatBtn) exportMatBtn.disabled = true;
         if (clearBtn) clearBtn.disabled = true;
+        if (analyzeBtn) analyzeBtn.disabled = true;
         if (statusText) statusText.textContent = 'Nagrywanie...';
         if (statusText) statusText.style.color = '#61dafb';
     } else if (state === 'stopped') {
@@ -5507,6 +5511,7 @@ function updateSysIdUI(state) {
         if (exportCsvBtn) exportCsvBtn.disabled = !hasData;
         if (exportMatBtn) exportMatBtn.disabled = !hasData;
         if (clearBtn) clearBtn.disabled = !hasData;
+        if (analyzeBtn) analyzeBtn.disabled = !hasData;
         if (statusText) statusText.textContent = hasData ? 'Gotowy do eksportu' : 'Gotowy';
         if (statusText) statusText.style.color = hasData ? '#a2f279' : '#aaa';
     }
@@ -5790,6 +5795,702 @@ disp(['Impulse PWM: ${SysIdState.impulse}']);
     addLogMessage(`[SysID] Eksportowano ${SysIdState.data.length} próbek do skryptu MATLAB (.m).`, 'success');
 }
 
+// ========================================================================
+// SYSTEM IDENTIFICATION - ANALYSIS FUNCTIONS
+// Based on Python system_identification.py
+// ========================================================================
+
+/**
+ * Główna funkcja analizy danych systemowej identyfikacji
+ */
+function analyzeSysIdData() {
+    if (SysIdState.data.length < 20) {
+        addLogMessage('[SysID Analiza] Za mało danych do analizy (min. 20 próbek).', 'error');
+        return;
+    }
+
+    addLogMessage('[SysID Analiza] Rozpoczynam analizę danych...', 'info');
+
+    const testType = SysIdState.testType || 'balance';
+    let params = null;
+    let pidSuggestions = {};
+
+    try {
+        if (testType === 'balance') {
+            params = identifyBalanceLoop(SysIdState.data, SysIdState.kp);
+            if (params) {
+                pidSuggestions = calculatePIDFromModel(params, SysIdState.kp, 'balance');
+            }
+        } else if (testType === 'speed') {
+            params = identifySpeedLoop(SysIdState.data);
+            if (params) {
+                pidSuggestions = calculatePIDFromModel(params, 0, 'speed');
+            }
+        } else if (testType === 'position') {
+            params = identifyPositionLoop(SysIdState.data);
+            if (params) {
+                pidSuggestions = calculatePIDFromModel(params, 0, 'position');
+            }
+        }
+
+        // Wyświetl wyniki w UI
+        displayAnalysisResults(params, pidSuggestions, testType);
+
+        if (params) {
+            addLogMessage(`[SysID Analiza] Zakończono. Przeregulowanie: ${(params.overshoot * 100).toFixed(1)}%`, 'success');
+        } else {
+            addLogMessage('[SysID Analiza] Nie udało się zidentyfikować parametrów modelu.', 'warn');
+        }
+
+    } catch (err) {
+        addLogMessage(`[SysID Analiza] Błąd: ${err.message}`, 'error');
+        console.error('SysID Analysis error:', err);
+    }
+}
+
+/**
+ * Znajduje moment impulsu w danych
+ */
+function findImpulseTime(time, inputSignal, threshold = 5) {
+    for (let i = 0; i < inputSignal.length; i++) {
+        if (Math.abs(inputSignal[i]) > threshold) {
+            return { time: time[i], index: i };
+        }
+    }
+    return null;
+}
+
+/**
+ * Wykrywa typ impulsu
+ */
+function detectImpulseType(inputSignal) {
+    const hasPositive = inputSignal.some(v => v > 5);
+    const hasNegative = inputSignal.some(v => v < -5);
+
+    if (hasPositive && hasNegative) {
+        const firstPos = inputSignal.findIndex(v => v > 5);
+        const firstNeg = inputSignal.findIndex(v => v < -5);
+        return firstPos < firstNeg ? 'double_fwd_bwd' : 'double_bwd_fwd';
+    } else if (hasPositive) {
+        return 'single_fwd';
+    } else if (hasNegative) {
+        return 'single_bwd';
+    }
+    return 'unknown';
+}
+
+/**
+ * Znajduje lokalne maksima w tablicy
+ */
+function findPeaks(arr) {
+    const peaks = [];
+    for (let i = 1; i < arr.length - 1; i++) {
+        if (arr[i] > arr[i - 1] && arr[i] > arr[i + 1]) {
+            peaks.push({ index: i, value: arr[i] });
+        }
+    }
+    return peaks;
+}
+
+/**
+ * Identyfikacja pętli balansu
+ */
+function identifyBalanceLoop(data, kpUsed) {
+    const time = data.map(d => d.time);
+    const inputSignal = data.map(d => d.impulse_pwm || d.input_signal || 0);
+    const outputSignal = data.map(d => d.angle);
+    const warnings = [];
+
+    // Wykryj typ impulsu
+    const impulseType = detectImpulseType(inputSignal);
+
+    // Znajdź moment impulsu
+    const impulseInfo = findImpulseTime(time, inputSignal);
+    if (!impulseInfo) {
+        return null;
+    }
+    const impulseTime = impulseInfo.time;
+    const impulseIdx = impulseInfo.index;
+
+    // Usuń offset z danych przed impulsem
+    const preImpulseData = outputSignal.slice(0, impulseIdx);
+    const baseline = preImpulseData.length > 0 ?
+        preImpulseData.reduce((a, b) => a + b, 0) / preImpulseData.length : 0;
+    const adjustedOutput = outputSignal.map(v => v - baseline);
+
+    // Amplituda impulsu
+    const impulseAmplitude = Math.max(...inputSignal.map(Math.abs));
+
+    // Analizuj odpowiedź po impulsie
+    const postImpulseMask = time.map((t, i) => t >= impulseTime ? i : -1).filter(i => i >= 0);
+    const tResponse = postImpulseMask.map(i => time[i] - impulseTime);
+    const yResponse = postImpulseMask.map(i => adjustedOutput[i]);
+
+    if (yResponse.length < 10) {
+        return null;
+    }
+
+    // Parametry odpowiedzi
+    const yAbsMax = Math.max(...yResponse.map(Math.abs));
+    const yFinal = yResponse.slice(-Math.max(1, Math.floor(yResponse.length / 4)))
+        .reduce((a, b) => a + b, 0) / Math.max(1, Math.floor(yResponse.length / 4));
+
+    // Wzmocnienie statyczne
+    const K = impulseAmplitude > 0 ? yAbsMax / impulseAmplitude : 0;
+
+    // Przeregulowanie - znajdź szczyty
+    const peaksPos = findPeaks(yResponse);
+    const peaksNeg = findPeaks(yResponse.map(v => -v));
+
+    let overshoot = 0;
+    if (peaksPos.length >= 2) {
+        const firstPeak = Math.abs(yResponse[peaksPos[0].index]);
+        const secondPeak = peaksPos.length > 1 ? Math.abs(yResponse[peaksPos[1].index]) : firstPeak * 0.5;
+        overshoot = firstPeak > 0.01 ? secondPeak / firstPeak : 0;
+    } else if (peaksPos.length >= 1 && peaksNeg.length >= 1) {
+        const peak1 = Math.abs(yResponse[peaksPos[0].index]);
+        const peak2 = Math.abs(yResponse[peaksNeg[0].index]);
+        const maxPeak = Math.max(peak1, peak2);
+        overshoot = maxPeak > 0.01 ? Math.min(peak1, peak2) / maxPeak : 0;
+    }
+
+    // Czas ustalania (5% pasmo)
+    const settlingThreshold = 0.05 * yAbsMax;
+    let settlingTime = tResponse[tResponse.length - 1] || 0.5;
+    for (let i = 0; i < yResponse.length; i++) {
+        if (Math.abs(yResponse[i] - yFinal) < settlingThreshold) {
+            // Sprawdź czy pozostaje w paśmie
+            let stays = true;
+            for (let j = i; j < Math.min(i + 10, yResponse.length); j++) {
+                if (Math.abs(yResponse[j] - yFinal) >= settlingThreshold) {
+                    stays = false;
+                    break;
+                }
+            }
+            if (stays) {
+                settlingTime = tResponse[i];
+                break;
+            }
+        }
+    }
+
+    // Oszacuj parametry modelu
+    let zeta, wn;
+
+    if (overshoot > 0.01 && overshoot < 1.0) {
+        const logDecrement = -Math.log(overshoot);
+        zeta = logDecrement / Math.sqrt(4 * Math.PI * Math.PI + logDecrement * logDecrement);
+    } else if (overshoot >= 1.0) {
+        zeta = 0.1;
+    } else {
+        zeta = 1.0;
+    }
+
+    if (settlingTime > 0.01) {
+        wn = zeta < 1.0 ? 4 / (zeta * settlingTime) : 3 / settlingTime;
+    } else {
+        wn = 10.0;
+    }
+
+    // Walidacja parametrów
+    if (zeta <= 0 || zeta > 2) {
+        const originalZeta = zeta;
+        zeta = Math.max(0.1, Math.min(1.5, Math.abs(zeta)));
+        if (originalZeta <= 0) {
+            warnings.push(`ℹ️ Skorygowano tłumienie z ${originalZeta.toFixed(4)} na ${zeta.toFixed(4)}`);
+        }
+    }
+
+    if (wn <= 0 || wn > 500) {
+        const originalWn = wn;
+        wn = Math.max(2.0, Math.min(100.0, Math.abs(wn)));
+        warnings.push(`ℹ️ Skorygowano częstotliwość własną z ${originalWn.toFixed(4)} na ${wn.toFixed(4)} rad/s`);
+    }
+
+    if (overshoot > 5) {
+        warnings.push(`ℹ️ Wysokie przeregulowanie ${(overshoot * 100).toFixed(0)}% - możliwe oscylacje lub błąd pomiaru`);
+    }
+
+    return {
+        K: K,
+        zeta: zeta,
+        wn: wn,
+        overshoot: overshoot,
+        settlingTime: settlingTime,
+        impulseAmplitude: impulseAmplitude,
+        impulseType: impulseType,
+        warnings: warnings,
+        loopType: 'balance'
+    };
+}
+
+/**
+ * Identyfikacja pętli prędkości
+ */
+function identifySpeedLoop(data) {
+    const time = data.map(d => d.time);
+    const setpoint = data.map(d => d.setpoint_speed || d.input_signal || 0);
+    const speed = data.map(d => d.speed);
+
+    // Znajdź moment skoku
+    const stepIdx = setpoint.findIndex(v => v > 1);
+    if (stepIdx < 0) return null;
+
+    const stepTime = time[stepIdx];
+    const stepValue = Math.max(...setpoint);
+
+    // Odpowiedź po skoku
+    const postStepData = data.filter((d, i) => time[i] >= stepTime);
+    if (postStepData.length < 20) return null;
+
+    const tResponse = postStepData.map(d => d.time - stepTime);
+    const yResponse = postStepData.map(d => d.speed);
+
+    // Wartość końcowa
+    const stableRegion = yResponse.slice(0, Math.floor(yResponse.length * 0.4));
+    const yFinal = stableRegion.length > 10 ?
+        stableRegion.slice(-Math.floor(stableRegion.length * 0.3))
+            .reduce((a, b) => a + b, 0) / Math.floor(stableRegion.length * 0.3) :
+        yResponse.slice(-10).reduce((a, b) => a + b, 0) / 10;
+
+    // Wzmocnienie
+    const K = stepValue > 0 ? yFinal / stepValue : 1.0;
+
+    // Czas narastania
+    const y10 = 0.1 * yFinal;
+    const y90 = 0.9 * yFinal;
+    const t10Idx = yResponse.findIndex(v => v >= y10);
+    const t90Idx = yResponse.findIndex(v => v >= y90);
+    const riseTime = (t10Idx >= 0 && t90Idx >= 0) ? tResponse[t90Idx] - tResponse[t10Idx] : 0.5;
+
+    // Stała czasowa
+    const tau = riseTime / 2.2;
+
+    // Przeregulowanie
+    const yMax = Math.max(...yResponse.slice(0, Math.floor(yResponse.length * 0.5)));
+    const overshoot = yFinal > 0.1 ? (yMax - yFinal) / yFinal : 0;
+
+    // Parametry modelu
+    let zeta, wn;
+    if (overshoot > 0.05) {
+        if (overshoot < 1.0) {
+            const logDec = -Math.log(overshoot);
+            zeta = logDec / Math.sqrt(4 * Math.PI * Math.PI + logDec * logDec);
+        } else {
+            zeta = 0.3;
+        }
+        wn = riseTime > 0.01 ? 1.8 / riseTime : 20;
+    } else {
+        zeta = 1.0;
+        wn = tau > 0.01 ? 1 / tau : 10;
+    }
+
+    return {
+        K: K,
+        tau: tau,
+        zeta: zeta,
+        wn: wn,
+        overshoot: overshoot,
+        riseTime: riseTime,
+        stepValue: stepValue,
+        steadyState: yFinal,
+        loopType: 'speed',
+        warnings: []
+    };
+}
+
+/**
+ * Identyfikacja pętli pozycji
+ */
+function identifyPositionLoop(data) {
+    const time = data.map(d => d.time);
+    const setpoint = data.map(d => d.setpoint_position || d.input_signal || 0);
+    const position = data.map(d => d.position_cm || 0);
+
+    // Znajdź moment skoku
+    const stepIdx = setpoint.findIndex(v => v > 1);
+    if (stepIdx < 0) return null;
+
+    const stepTime = time[stepIdx];
+    const stepValue = Math.max(...setpoint);
+
+    // Pozycja początkowa
+    const positionStart = stepIdx > 10 ?
+        position.slice(Math.max(0, stepIdx - 10), stepIdx).reduce((a, b) => a + b, 0) / 10 :
+        position[0];
+
+    // Odpowiedź po skoku
+    const postStepData = data.filter((d, i) => time[i] >= stepTime);
+    if (postStepData.length < 20) return null;
+
+    const tResponse = postStepData.map(d => d.time - stepTime);
+    const yResponse = postStepData.map(d => (d.position_cm || 0) - positionStart);
+
+    // Wartość końcowa
+    const stableRegion = yResponse.slice(0, Math.floor(yResponse.length * 0.4));
+    const yFinal = stableRegion.length > 10 ?
+        stableRegion.slice(-Math.floor(stableRegion.length * 0.3))
+            .reduce((a, b) => a + b, 0) / Math.floor(stableRegion.length * 0.3) :
+        yResponse[yResponse.length - 1];
+
+    // Błąd stanu ustalonego
+    const ssError = stepValue - yFinal;
+
+    // Wzmocnienie
+    const K = stepValue > 0 ? yFinal / stepValue : 1.0;
+
+    // Czas narastania
+    const y10 = 0.1 * yFinal;
+    const y90 = 0.9 * yFinal;
+    const t10Idx = yResponse.findIndex(v => v >= y10);
+    const t90Idx = yResponse.findIndex(v => v >= y90);
+    const riseTime = (t10Idx >= 0 && t90Idx >= 0) ? tResponse[t90Idx] - tResponse[t10Idx] : 1.0;
+
+    // Przeregulowanie
+    const yMax = Math.max(...yResponse.slice(0, Math.floor(yResponse.length * 0.5)));
+    const overshoot = yFinal > 0.5 ? (yMax - yFinal) / yFinal : 0;
+
+    // Czas ustalania
+    const settlingThreshold = 0.05 * yFinal;
+    let settlingTime = tResponse[tResponse.length - 1];
+    for (let i = 0; i < yResponse.length; i++) {
+        if (Math.abs(yResponse[i] - yFinal) < settlingThreshold) {
+            settlingTime = tResponse[i];
+            break;
+        }
+    }
+
+    // Parametry modelu
+    let zeta, wn;
+    if (overshoot > 0.05) {
+        if (overshoot < 1.0) {
+            const logDec = -Math.log(overshoot);
+            zeta = logDec / Math.sqrt(4 * Math.PI * Math.PI + logDec * logDec);
+        } else {
+            zeta = 0.3;
+        }
+        wn = riseTime > 0.01 ? 1.8 / riseTime : 5;
+    } else {
+        zeta = 1.0;
+        wn = settlingTime > 0.1 ? 3 / settlingTime : 3;
+    }
+
+    return {
+        K: K,
+        zeta: zeta,
+        wn: wn,
+        overshoot: overshoot,
+        riseTime: riseTime,
+        settlingTime: settlingTime,
+        stepValue: stepValue,
+        steadyState: yFinal,
+        ssError: ssError,
+        loopType: 'position',
+        warnings: []
+    };
+}
+
+/**
+ * Oblicza sugestie PID na podstawie modelu
+ */
+function calculatePIDFromModel(params, kpUsed, loopType) {
+    const overshoot = params.overshoot || 0;
+    const settlingTime = params.settlingTime || 0.5;
+    const riseTime = params.riseTime || 0.3;
+    const K = params.K || 1.0;
+    const suggestions = {};
+
+    if (loopType === 'balance') {
+        // PĘTLA BALANSU (500 Hz) - Kp + Kd
+        const KP_MIN = 20, KP_MAX = 200;
+        const KD_MIN = 0.5, KD_MAX = 15;
+
+        let kpNew, kdNew, comment;
+
+        if (overshoot > 2.0) {
+            kpNew = kpUsed * 0.5;
+            kdNew = kpUsed * 0.06;
+            comment = "Silne oscylacje - znacznie zmniejsz Kp, dodaj Kd";
+        } else if (overshoot > 1.0) {
+            kpNew = kpUsed * 0.7;
+            kdNew = kpUsed * 0.05;
+            comment = "Oscylacje - zmniejsz Kp, dodaj Kd";
+        } else if (overshoot > 0.5) {
+            kpNew = kpUsed * 0.85;
+            kdNew = kpUsed * 0.04;
+            comment = "Lekkie oscylacje - delikatna korekta";
+        } else if (overshoot > 0.2) {
+            kpNew = kpUsed * 0.95;
+            kdNew = kpUsed * 0.03;
+            comment = "OK - minimalna korekta";
+        } else {
+            kpNew = kpUsed * 1.1;
+            kdNew = kpUsed * 0.02;
+            comment = "Mało oscylacji - można zwiększyć Kp";
+        }
+
+        kpNew = Math.max(KP_MIN, Math.min(KP_MAX, kpNew));
+        kdNew = Math.max(KD_MIN, Math.min(KD_MAX, kdNew));
+
+        suggestions['Zalecane'] = {
+            Kp: parseFloat(kpNew.toFixed(1)),
+            Ki: 0,
+            Kd: parseFloat(kdNew.toFixed(2)),
+            comment: comment
+        };
+        suggestions['Konserwatywne'] = {
+            Kp: parseFloat(Math.max(KP_MIN, kpUsed * 0.6).toFixed(1)),
+            Ki: 0,
+            Kd: parseFloat(Math.max(KD_MIN, Math.min(5, kpUsed * 0.03)).toFixed(2)),
+            comment: "Bezpieczny start"
+        };
+        if (overshoot < 1.0) {
+            suggestions['Agresywne'] = {
+                Kp: parseFloat(Math.min(KP_MAX, kpUsed * 1.2).toFixed(1)),
+                Ki: 0,
+                Kd: parseFloat(Math.max(KD_MIN, Math.min(KD_MAX, kpUsed * 0.04)).toFixed(2)),
+                comment: "Szybsza reakcja"
+            };
+        }
+
+    } else if (loopType === 'speed') {
+        // PĘTLA PRĘDKOŚCI (250 Hz) - PI lub PID
+        const KP_MIN = 0.01, KP_MAX = 2.0;
+        const KI_MIN = 0.001, KI_MAX = 0.5;
+        const KD_MIN = 0.0, KD_MAX = 0.1;
+
+        const tau = params.tau || 0.5;
+        let kpBase = K > 0.01 ? Math.min(KP_MAX, 0.5 / K) : 0.5;
+
+        let kpNew, kiNew, kdNew, comment;
+
+        if (overshoot > 0.5) {
+            kpNew = kpBase * 0.6;
+            kiNew = tau > 0.01 ? kpBase * 0.1 / tau : 0.05;
+            kdNew = kpBase * 0.05;
+            comment = "Oscylacje - zmniejsz Kp, dodaj Ki";
+        } else if (overshoot > 0.2) {
+            kpNew = kpBase * 0.8;
+            kiNew = tau > 0.01 ? kpBase * 0.15 / tau : 0.08;
+            kdNew = kpBase * 0.03;
+            comment = "Lekkie oscylacje - standardowe PI";
+        } else {
+            kpNew = kpBase;
+            kiNew = tau > 0.01 ? kpBase * 0.2 / tau : 0.1;
+            kdNew = 0;
+            comment = "Dobra odpowiedź - standardowe PI";
+        }
+
+        kpNew = Math.max(KP_MIN, Math.min(KP_MAX, kpNew));
+        kiNew = Math.max(KI_MIN, Math.min(KI_MAX, kiNew));
+        kdNew = Math.max(KD_MIN, Math.min(KD_MAX, kdNew));
+
+        suggestions['Zalecane'] = {
+            Kp: parseFloat(kpNew.toFixed(3)),
+            Ki: parseFloat(kiNew.toFixed(4)),
+            Kd: parseFloat(kdNew.toFixed(4)),
+            comment: comment
+        };
+        suggestions['PI_wolny'] = {
+            Kp: parseFloat((kpNew * 0.5).toFixed(3)),
+            Ki: parseFloat((kiNew * 0.5).toFixed(4)),
+            Kd: 0,
+            comment: "Wolniejszy ale stabilny"
+        };
+        suggestions['PI_szybki'] = {
+            Kp: parseFloat(Math.min(KP_MAX, kpNew * 1.5).toFixed(3)),
+            Ki: parseFloat(Math.min(KI_MAX, kiNew * 1.5).toFixed(4)),
+            Kd: 0,
+            comment: "Szybszy - możliwe oscylacje"
+        };
+
+    } else if (loopType === 'position') {
+        // PĘTLA POZYCJI (125 Hz) - P lub PI
+        const KP_MIN = 0.1, KP_MAX = 10.0;
+        const KI_MIN = 0.0, KI_MAX = 0.5;
+
+        let kpBase = K > 0.01 ? Math.min(KP_MAX, 2.0 / K) : 2.0;
+        const ssError = params.ssError || 0;
+
+        let kpNew, kiNew, comment;
+
+        // Błąd stanu ustalonego
+        if (Math.abs(ssError) > 0.5) {
+            kiNew = 0.1;
+            comment = `Błąd pozycji ${ssError.toFixed(1)}cm - dodano Ki`;
+        } else {
+            kiNew = 0;
+            comment = "Dobra dokładność - tylko P";
+        }
+
+        // Dostosuj na podstawie odpowiedzi
+        if (overshoot > 0.3) {
+            kpNew = kpBase * 0.6;
+            comment = "Przeregulowanie - zmniejsz Kp";
+        } else if (riseTime > 2.0) {
+            kpNew = kpBase * 1.3;
+            comment = "Wolna odpowiedź - zwiększ Kp";
+        } else {
+            kpNew = kpBase;
+        }
+
+        kpNew = Math.max(KP_MIN, Math.min(KP_MAX, kpNew));
+        kiNew = Math.max(KI_MIN, Math.min(KI_MAX, kiNew));
+
+        suggestions['Zalecane'] = {
+            Kp: parseFloat(kpNew.toFixed(2)),
+            Ki: parseFloat(kiNew.toFixed(3)),
+            Kd: 0,
+            comment: comment
+        };
+        suggestions['P_tylko'] = {
+            Kp: parseFloat((kpNew * 0.8).toFixed(2)),
+            Ki: 0,
+            Kd: 0,
+            comment: "Tylko P - najprostsze"
+        };
+        suggestions['PI_precyzyjny'] = {
+            Kp: parseFloat(kpNew.toFixed(2)),
+            Ki: parseFloat(Math.max(0.05, kiNew).toFixed(3)),
+            Kd: 0,
+            comment: "PI - lepsza dokładność pozycji"
+        };
+    }
+
+    return suggestions;
+}
+
+/**
+ * Wyświetla wyniki analizy w UI
+ */
+function displayAnalysisResults(params, pidSuggestions, testType) {
+    const resultsDiv = document.getElementById('sysid-analysis-results');
+    const warningsDiv = document.getElementById('sysid-warnings');
+    const suggestionsDiv = document.getElementById('sysid-pid-suggestions');
+
+    if (!resultsDiv) return;
+
+    if (!params) {
+        resultsDiv.style.display = 'none';
+        return;
+    }
+
+    resultsDiv.style.display = 'block';
+
+    // Ostrzeżenia
+    if (params.warnings && params.warnings.length > 0) {
+        warningsDiv.style.display = 'block';
+        warningsDiv.innerHTML = params.warnings.map(w => `<div>⚠️ ${w}</div>`).join('');
+    } else {
+        warningsDiv.style.display = 'none';
+    }
+
+    // Parametry modelu
+    document.getElementById('sysid-result-k').textContent = params.K.toFixed(6);
+    document.getElementById('sysid-result-zeta').textContent = params.zeta ? params.zeta.toFixed(4) : '-';
+    document.getElementById('sysid-result-wn').textContent = params.wn ? `${params.wn.toFixed(2)} rad/s` : '-';
+    document.getElementById('sysid-result-overshoot').textContent = `${(params.overshoot * 100).toFixed(1)}%`;
+    document.getElementById('sysid-result-settling').textContent = params.settlingTime ? `${params.settlingTime.toFixed(3)} s` : '-';
+
+    // Sugestie PID
+    suggestionsDiv.innerHTML = '';
+
+    const loopNames = { balance: 'Balansu', speed: 'Prędkości', position: 'Pozycji' };
+    const loopColors = { balance: '#61dafb', speed: '#f7b731', position: '#a2f279' };
+
+    for (const [method, pid] of Object.entries(pidSuggestions)) {
+        const card = document.createElement('div');
+        card.style.cssText = `
+            background: #20232a; 
+            border: 1px solid ${loopColors[testType] || '#61dafb'}; 
+            border-radius: 6px; 
+            padding: 12px;
+        `;
+
+        const methodLabel = method === 'Zalecane' ? '⭐ Zalecane' : method;
+        const highlight = method === 'Zalecane' ? 'border-width: 2px;' : '';
+        card.style.cssText += highlight;
+
+        card.innerHTML = `
+            <div style="font-weight: bold; color: ${loopColors[testType] || '#61dafb'}; margin-bottom: 8px;">${methodLabel}</div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px;">
+                <div style="text-align: center;">
+                    <div style="color: #888; font-size: 0.8em;">Kp</div>
+                    <div style="font-weight: bold; font-size: 1.1em;">${pid.Kp}</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="color: #888; font-size: 0.8em;">Ki</div>
+                    <div style="font-weight: bold; font-size: 1.1em;">${pid.Ki}</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="color: #888; font-size: 0.8em;">Kd</div>
+                    <div style="font-weight: bold; font-size: 1.1em;">${pid.Kd}</div>
+                </div>
+            </div>
+            <div style="font-size: 0.85em; color: #aaa;">→ ${pid.comment || ''}</div>
+            <button onclick="applySuggestedPID('${testType}', ${pid.Kp}, ${pid.Ki}, ${pid.Kd})" 
+                    style="margin-top: 10px; width: 100%; padding: 8px; background: ${loopColors[testType] || '#61dafb'}; 
+                           color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                📥 Zastosuj te wartości
+            </button>
+        `;
+
+        suggestionsDiv.appendChild(card);
+    }
+}
+
+/**
+ * Zastosuj sugerowane wartości PID
+ */
+function applySuggestedPID(loopType, kp, ki, kd) {
+    if (loopType === 'balance') {
+        const kpInput = document.getElementById('balanceKpInput');
+        const kiInput = document.getElementById('balanceKiInput');
+        const kdInput = document.getElementById('balanceKdInput');
+
+        if (kpInput) { kpInput.value = kp; kpInput.dispatchEvent(new Event('change')); }
+        if (kiInput) { kiInput.value = ki; kiInput.dispatchEvent(new Event('change')); }
+        if (kdInput) { kdInput.value = kd; kdInput.dispatchEvent(new Event('change')); }
+
+        // Wyślij do robota
+        sendBleMessage({ type: 'set_param', key: 'kp_b', value: kp });
+        sendBleMessage({ type: 'set_param', key: 'ki_b', value: ki });
+        sendBleMessage({ type: 'set_param', key: 'kd_b', value: kd });
+
+        addLogMessage(`[SysID] Zastosowano PID Balansu: Kp=${kp}, Ki=${ki}, Kd=${kd}`, 'success');
+
+    } else if (loopType === 'speed') {
+        const kpInput = document.getElementById('speedKpInput');
+        const kiInput = document.getElementById('speedKiInput');
+        const kdInput = document.getElementById('speedKdInput');
+
+        if (kpInput) { kpInput.value = kp; kpInput.dispatchEvent(new Event('change')); }
+        if (kiInput) { kiInput.value = ki; kiInput.dispatchEvent(new Event('change')); }
+        if (kdInput) { kdInput.value = kd; kdInput.dispatchEvent(new Event('change')); }
+
+        sendBleMessage({ type: 'set_param', key: 'kp_s', value: kp });
+        sendBleMessage({ type: 'set_param', key: 'ki_s', value: ki });
+        sendBleMessage({ type: 'set_param', key: 'kd_s', value: kd });
+
+        addLogMessage(`[SysID] Zastosowano PID Prędkości: Kp=${kp}, Ki=${ki}, Kd=${kd}`, 'success');
+
+    } else if (loopType === 'position') {
+        const kpInput = document.getElementById('positionKpInput');
+        const kiInput = document.getElementById('positionKiInput');
+        const kdInput = document.getElementById('positionKdInput');
+
+        if (kpInput) { kpInput.value = kp; kpInput.dispatchEvent(new Event('change')); }
+        if (kiInput) { kiInput.value = ki; kiInput.dispatchEvent(new Event('change')); }
+        if (kdInput) { kdInput.value = kd; kdInput.dispatchEvent(new Event('change')); }
+
+        sendBleMessage({ type: 'set_param', key: 'kp_p', value: kp });
+        sendBleMessage({ type: 'set_param', key: 'ki_p', value: ki });
+        sendBleMessage({ type: 'set_param', key: 'kd_p', value: kd });
+
+        addLogMessage(`[SysID] Zastosowano PID Pozycji: Kp=${kp}, Ki=${ki}, Kd=${kd}`, 'success');
+    }
+}
+
 function clearSysIdData() {
     SysIdState.data = [];
     updateSysIdUI('stopped');
@@ -5799,6 +6500,10 @@ function clearSysIdData() {
     if (canvas && SysIdState.chartCtx) {
         SysIdState.chartCtx.clearRect(0, 0, canvas.width, canvas.height);
     }
+
+    // Ukryj panel wyników analizy
+    const resultsDiv = document.getElementById('sysid-analysis-results');
+    if (resultsDiv) resultsDiv.style.display = 'none';
 
     const countEl = document.getElementById('sysid-sample-count');
     if (countEl) countEl.textContent = '0';
