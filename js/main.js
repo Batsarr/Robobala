@@ -395,13 +395,24 @@ class BLECommunication extends CommunicationLayer {
 
     /**
      * Connect to BLE device
+     * @param {string|null} targetDeviceName - Optional specific device name to connect to (e.g., from QR code)
      * @returns {Promise<boolean>}
      */
-    async connect() {
+    async connect(targetDeviceName = null) {
         try {
+            // Build filter - if targetDeviceName provided, filter by exact name
+            // Otherwise use prefix filter to allow RoboBala, RoboBala-01, RoboBala-02, etc.
+            const filters = [];
+            if (targetDeviceName) {
+                filters.push({ name: targetDeviceName });
+            } else {
+                // Use namePrefix to match all RoboBala* devices
+                filters.push({ namePrefix: 'RoboBala' });
+            }
+
             // Request device
             this.device = await navigator.bluetooth.requestDevice({
-                filters: [{ name: 'RoboBala' }],
+                filters: filters,
                 optionalServices: [this.serviceUuid]
             });
 
@@ -1713,14 +1724,225 @@ function relocateAutotuneChart(method) {
     }
 }
 
-async function connectBLE() {
-    addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info');
+/**
+ * Get target device name from URL parameter
+ * @returns {string|null} Device name from URL or null
+ */
+function getTargetDeviceFromURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('device');
+}
+
+/**
+ * Clear device parameter from URL without reload
+ */
+function clearDeviceFromURL() {
+    const url = new URL(window.location);
+    url.searchParams.delete('device');
+    window.history.replaceState({}, '', url);
+}
+
+// ========================================================================
+// QR CODE FUNCTIONALITY
+// ========================================================================
+// Generate QR codes for easy pairing with specific robots
+// ========================================================================
+
+/**
+ * Generate a connection URL for a specific device
+ * @param {string} deviceName - The BLE device name
+ * @returns {string} Full URL with device parameter
+ */
+function generateConnectionURL(deviceName) {
+    const url = new URL(window.location.href);
+    // Remove existing parameters and add device
+    url.search = '';
+    url.searchParams.set('device', deviceName);
+    return url.toString();
+}
+
+/**
+ * Generate QR code for the current device or specified device name
+ * @param {string} deviceName - Device name to generate QR for
+ */
+async function generateQRCode(deviceName) {
+    const container = document.getElementById('qr-code-container');
+    const linkInput = document.getElementById('qr-link-input');
+    const deviceNameSpan = document.getElementById('qr-device-name');
+
+    if (!container || !deviceName) return;
+
+    // Clear previous QR
+    container.innerHTML = '';
+
+    // Generate connection URL
+    const connectionURL = generateConnectionURL(deviceName);
+
+    // Update UI
+    if (deviceNameSpan) deviceNameSpan.textContent = deviceName;
+    if (linkInput) linkInput.value = connectionURL;
+
     try {
-        // Use the new communication layer
-        const connected = await commLayer.connect();
+        // Use QRCode library to generate
+        if (typeof QRCode !== 'undefined') {
+            const canvas = document.createElement('canvas');
+            await QRCode.toCanvas(canvas, connectionURL, {
+                width: 200,
+                margin: 2,
+                color: {
+                    dark: '#000000',
+                    light: '#ffffff'
+                }
+            });
+            container.appendChild(canvas);
+        } else {
+            container.innerHTML = '<p style="color: #ff6347;">Biblioteka QRCode niedostępna</p>';
+            console.error('QRCode library not loaded');
+        }
+    } catch (error) {
+        console.error('Error generating QR code:', error);
+        container.innerHTML = '<p style="color: #ff6347;">Błąd generowania kodu QR</p>';
+    }
+}
+
+/**
+ * Show QR modal with current device or prompt for device name
+ */
+function showQRModal() {
+    const modal = document.getElementById('qr-modal');
+    if (!modal) return;
+
+    // Get current connected device name or use default
+    let deviceName = 'RoboBala';
+
+    if (commLayer && commLayer.getDeviceName && commLayer.getDeviceName()) {
+        deviceName = commLayer.getDeviceName();
+    } else if (AppState && appStore) {
+        const storedName = appStore.getState('connection.deviceName');
+        if (storedName) deviceName = storedName;
+    }
+
+    // If not connected, prompt for device name
+    if (!AppState.isConnected) {
+        const userInput = prompt(
+            'Podaj nazwę urządzenia BLE robota:\n' +
+            '(np. RoboBala, RoboBala-01, RoboBala-02)\n\n' +
+            'Każdy robot powinien mieć unikalną nazwę w config.h',
+            deviceName
+        );
+        if (userInput && userInput.trim()) {
+            deviceName = userInput.trim();
+        } else {
+            return; // User cancelled
+        }
+    }
+
+    // Generate QR and show modal
+    generateQRCode(deviceName);
+    modal.style.display = 'flex';
+}
+
+/**
+ * Hide QR modal
+ */
+function hideQRModal() {
+    const modal = document.getElementById('qr-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+/**
+ * Copy connection link to clipboard
+ */
+async function copyConnectionLink() {
+    const linkInput = document.getElementById('qr-link-input');
+    if (!linkInput) return;
+
+    try {
+        await navigator.clipboard.writeText(linkInput.value);
+        addLogMessage('[UI] Link skopiowany do schowka!', 'success');
+
+        // Visual feedback
+        const btn = document.getElementById('qr-copy-link-btn');
+        if (btn) {
+            const originalText = btn.textContent;
+            btn.textContent = '✓ Skopiowano!';
+            btn.style.background = '#4caf50';
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.style.background = '#61dafb';
+            }, 2000);
+        }
+    } catch (error) {
+        console.error('Failed to copy:', error);
+        // Fallback - select the text
+        linkInput.select();
+        document.execCommand('copy');
+        addLogMessage('[UI] Link skopiowany (fallback)', 'info');
+    }
+}
+
+/**
+ * Initialize QR code UI event listeners
+ */
+function initQRCodeUI() {
+    // Show QR button
+    const showQrBtn = document.getElementById('showQrBtn');
+    showQrBtn?.addEventListener('click', showQRModal);
+
+    // Close QR modal
+    const closeBtn = document.getElementById('qr-close-btn');
+    closeBtn?.addEventListener('click', hideQRModal);
+
+    // Copy link button
+    const copyBtn = document.getElementById('qr-copy-link-btn');
+    copyBtn?.addEventListener('click', copyConnectionLink);
+
+    // Close on backdrop click
+    const modal = document.getElementById('qr-modal');
+    modal?.addEventListener('click', (e) => {
+        if (e.target === modal) hideQRModal();
+    });
+
+    // Auto-connect if device parameter present in URL
+    const targetDevice = getTargetDeviceFromURL();
+    if (targetDevice) {
+        addLogMessage(`[UI] Wykryto parametr urządzenia w URL: ${targetDevice}`, 'info');
+        // Show prompt to connect
+        setTimeout(() => {
+            if (confirm(`Czy chcesz połączyć się z robotem "${targetDevice}"?`)) {
+                connectBLE();
+            } else {
+                clearDeviceFromURL();
+            }
+        }, 500);
+    }
+}
+
+// ========================================================================
+// END QR CODE FUNCTIONALITY
+// ========================================================================
+
+async function connectBLE() {
+    // Check for target device from URL (QR code)
+    const targetDevice = getTargetDeviceFromURL();
+
+    if (targetDevice) {
+        addLogMessage(`[UI] Laczenie z konkretnym robotem: ${targetDevice}...`, 'info');
+    } else {
+        addLogMessage('[UI] Prosze o wybranie urzadzenia Bluetooth...', 'info');
+    }
+
+    try {
+        // Use the new communication layer with optional target device
+        const connected = await commLayer.connect(targetDevice);
 
         if (!connected) {
             throw new Error('Failed to connect to device');
+        }
+
+        // Clear device param from URL after successful connection
+        if (targetDevice) {
+            clearDeviceFromURL();
         }
 
         // Get device info for backward compatibility
@@ -4141,6 +4363,10 @@ function setupParameterListeners() {
     }
     const connectBleBtnEl = document.getElementById('connectBleBtn');
     connectBleBtnEl?.addEventListener('click', connectBLE);
+
+    // QR Code functionality
+    initQRCodeUI();
+
     ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'disableMagnetometerSwitch'].forEach(id => { const el = document.getElementById(id); if (!el) return; el.addEventListener('change', (e) => { if (AppState.isApplyingConfig) return; const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle', 'disableMagnetometerSwitch': 'set_param' }; if (typeMap[id] === 'set_param') { sendBleMessage({ type: 'set_param', key: 'disable_magnetometer', value: e.target.checked ? 1.0 : 0.0 }); } else { sendBleMessage({ type: typeMap[id], enabled: e.target.checked }); } }); });
 
     // POPRAWKA: Trymy zmieniają fizyczny montaż (qcorr). Wysyłamy DELTY przez adjust_zero/adjust_roll.
@@ -4876,7 +5102,7 @@ function initSystemIdentification() {
     if (canvas) {
         SysIdState.chartCtx = canvas.getContext('2d');
     }
-    
+
     // Initialize UI visibility based on default test type
     handleSysIdTestTypeChange();
 }
@@ -4885,12 +5111,12 @@ function initSystemIdentification() {
 function handleSysIdTestTypeChange() {
     const testType = document.getElementById('sysid-test-type')?.value || 'balance';
     SysIdState.testType = testType;
-    
+
     const kpContainer = document.getElementById('sysid-kp-container');
     const impulseContainer = document.getElementById('sysid-impulse-container');
     const stepContainer = document.getElementById('sysid-step-container');
     const stepInput = document.getElementById('sysid-step-value');
-    
+
     if (testType === 'balance') {
         // Test balansu - pokaż Kp i impuls
         if (kpContainer) kpContainer.style.display = '';
@@ -4988,7 +5214,7 @@ async function startSysIdRecording() {
 
     // Pobierz typ testu
     SysIdState.testType = document.getElementById('sysid-test-type')?.value || 'balance';
-    
+
     // Check robot state - robot musi balansować żeby reagował na zakłócenie
     if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState)) {
         const ok = confirm(`Robot musi balansować. Aktualny stan: '${AppState.lastKnownRobotState}'.\nCzy włączyć balansowanie?`);
@@ -5015,7 +5241,7 @@ async function startSysIdRecording() {
         // Test balansu - Kp-only mode
         SysIdState.kp = parseFloat(document.getElementById('sysid-kp')?.value) || 50;
         SysIdState.impulse = (parseFloat(document.getElementById('sysid-impulse')?.value) || 25) / 100;
-        
+
         // Zapisz i ustaw PID
         const currentKp = parseFloat(document.getElementById('balanceKpInput')?.value) || SysIdState.kp;
         const currentKi = parseFloat(document.getElementById('balanceKiInput')?.value) || 0;
@@ -5026,29 +5252,29 @@ async function startSysIdRecording() {
         sendBleMessage({ type: 'set_param', key: 'ki_b', value: 0 });
         sendBleMessage({ type: 'set_param', key: 'kd_b', value: 0 });
         addLogMessage(`[SysID Balance] Ustawiono Kp=${SysIdState.kp}, Ki=0, Kd=0`, 'info');
-        
+
     } else if (SysIdState.testType === 'speed') {
         // Test pętli prędkości - skok setpointu prędkości
         SysIdState.stepValue = parseFloat(document.getElementById('sysid-step-value')?.value) || 100;
-        
+
         // Zapisz aktualne PID prędkości (opcjonalnie możemy je wyzerować dla testu)
         const currentKpS = parseFloat(document.getElementById('speedKpInput')?.value) || 0;
         const currentKiS = parseFloat(document.getElementById('speedKiInput')?.value) || 0;
         const currentKdS = parseFloat(document.getElementById('speedKdInput')?.value) || 0;
         SysIdState.savedSpeedPID = { kp: currentKpS, ki: currentKiS, kd: currentKdS };
-        
+
         addLogMessage(`[SysID Speed] Test pętli prędkości, skok: ${SysIdState.stepValue} imp/s`, 'info');
-        
+
     } else if (SysIdState.testType === 'position') {
         // Test pętli pozycji - skok setpointu pozycji
         SysIdState.stepValue = parseFloat(document.getElementById('sysid-step-value')?.value) || 30;
-        
+
         // Zapisz aktualne PID pozycji
         const currentKpP = parseFloat(document.getElementById('positionKpInput')?.value) || 0;
         const currentKiP = parseFloat(document.getElementById('positionKiInput')?.value) || 0;
         const currentKdP = parseFloat(document.getElementById('positionKdInput')?.value) || 0;
         SysIdState.savedPositionPID = { kp: currentKpP, ki: currentKiP, kd: currentKdP };
-        
+
         addLogMessage(`[SysID Position] Test pętli pozycji, skok: ${SysIdState.stepValue} cm`, 'info');
     }
 
@@ -5099,13 +5325,13 @@ async function startSysIdRecording() {
                 }
                 record.input_signal = currentImpulse;
                 record.impulse_pwm = currentImpulse;  // Kompatybilność wsteczna
-                
+
             } else if (SysIdState.testType === 'speed') {
                 // Setpoint prędkości
                 record.input_signal = SysIdState.stepApplied ? SysIdState.stepValue : 0;
                 record.setpoint_speed = record.input_signal;
                 record.speed_error = record.input_signal - record.speed;
-                
+
             } else if (SysIdState.testType === 'position') {
                 // Setpoint pozycji - oblicz pozycję z enkoderów
                 const avgEncoder = (record.encoder_left + record.encoder_right) / 2;
@@ -5114,7 +5340,7 @@ async function startSysIdRecording() {
                 const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput')?.value) || 8.2;
                 const wheelCircum = Math.PI * wheelDiameter; // cm
                 const positionCm = (avgEncoder / encoderPpr) * wheelCircum;
-                
+
                 record.position_cm = positionCm;
                 record.input_signal = SysIdState.stepApplied ? SysIdState.stepValue : 0;
                 record.setpoint_position = record.input_signal;
@@ -5142,7 +5368,7 @@ async function startSysIdRecording() {
     // Zastosuj skok/impuls po 1 sekundzie
     setTimeout(() => {
         if (!SysIdState.isRecording) return;
-        
+
         if (SysIdState.testType === 'balance') {
             // Podwójny impuls joysticka
             SysIdState.impulseApplied = true;
@@ -5163,20 +5389,20 @@ async function startSysIdRecording() {
                     addLogMessage(`[SysID] Impuls zakończony`, 'info');
                 }
             }, 200);
-            
+
         } else if (SysIdState.testType === 'speed') {
             // Skok setpointu prędkości - włączamy tryb TRZYMA_POZYCJE z zadaną prędkością
             SysIdState.stepApplied = true;
             SysIdState.currentSetpoint = SysIdState.stepValue;
-            
+
             addLogMessage(`[SysID] Skok prędkości: ${SysIdState.stepValue} imp/s`, 'info');
-            
+
             // Wyślij setpoint prędkości przez joystick (proporcjonalnie)
             // Maksymalny joystick = 100%, więc normalizujemy do max_speed
             const maxSpeed = parseFloat(document.getElementById('maxSpeedInput')?.value) || 200;
             const joystickY = Math.min(1.0, SysIdState.stepValue / maxSpeed);
             sendBleMessage({ type: 'joystick', x: 0, y: joystickY });
-            
+
             // Po połowie czasu nagrywania zeruj setpoint (żeby zobaczyć odpowiedź na skok w dół)
             setTimeout(() => {
                 if (SysIdState.isRecording) {
@@ -5185,18 +5411,18 @@ async function startSysIdRecording() {
                     addLogMessage(`[SysID] Zerowanie prędkości`, 'info');
                 }
             }, SysIdState.duration / 2 - 1000);
-            
+
         } else if (SysIdState.testType === 'position') {
             // Skok setpointu pozycji
             SysIdState.stepApplied = true;
             SysIdState.currentSetpoint = SysIdState.stepValue;
-            
+
             addLogMessage(`[SysID] Skok pozycji: ${SysIdState.stepValue} cm`, 'info');
-            
+
             // Wyślij komendę position_setpoint (jeśli firmware obsługuje)
             // Alternatywnie: krótki impuls joysticka żeby robot ruszył
             sendBleMessage({ type: 'set_param', key: 'pos_setpoint', value: SysIdState.stepValue });
-            
+
             // Po połowie czasu zeruj setpoint
             setTimeout(() => {
                 if (SysIdState.isRecording) {
@@ -5238,7 +5464,7 @@ function stopSysIdRecording() {
         addLogMessage(`[SysID] Przywrócono PID balansu: Kp=${SysIdState.savedPID.kp}`, 'info');
         SysIdState.savedPID = null;
     }
-    
+
     if (SysIdState.testType === 'position') {
         // Zeruj setpoint pozycji
         sendBleMessage({ type: 'set_param', key: 'pos_setpoint', value: 0 });
@@ -5304,7 +5530,7 @@ function drawSysIdChart() {
     // Dane do wykresu w zależności od typu testu
     let primaryData, secondaryData, primaryLabel, secondaryLabel;
     const testType = SysIdState.testType || 'balance';
-    
+
     if (testType === 'balance') {
         primaryData = data.map(d => d.angle);
         secondaryData = data.map(d => d.impulse_pwm || d.input_signal || 0);
@@ -5411,7 +5637,7 @@ function exportSysIdCSV() {
     const encoderPpr = document.getElementById('encoderPprInput')?.value || 820;
     const wheelDiameter = document.getElementById('wheelDiameterInput')?.value || 8.2;
     const trackWidth = document.getElementById('trackWidthInput')?.value || 15;
-    
+
     // Typ testu
     const testType = SysIdState.testType || 'balance';
 
@@ -5427,7 +5653,7 @@ function exportSysIdCSV() {
         `# track_width_cm: ${trackWidth}`,
         `# samples_count: ${SysIdState.data.length}`
     ];
-    
+
     // Dodatkowe metadane specyficzne dla typu testu
     if (testType === 'balance') {
         metadataLines.push(`# kp_used: ${SysIdState.kp}`);
@@ -5440,12 +5666,12 @@ function exportSysIdCSV() {
         metadataLines.push(`# step_value_position: ${SysIdState.stepValue}`);
     }
     metadataLines.push('');
-    
+
     const metadata = metadataLines.join('\n');
 
     // Nagłówek i dane w zależności od typu testu
     let header, rows;
-    
+
     if (testType === 'balance') {
         header = 'time_s,angle_deg,impulse_percent,pwm_output,speed_enc,encoder_left,encoder_right,gyro_y\n';
         rows = SysIdState.data.map(d =>
