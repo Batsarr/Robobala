@@ -31,22 +31,6 @@
 class AppStore {
     constructor() {
         this.state = {
-            // Connection state
-            connection: {
-                isConnected: false,
-                isSynced: false,
-                deviceName: null,
-                syncTimeout: null
-            },
-
-            // Robot state
-            robot: {
-                state: 'IDLE', // IDLE, BALANCING, EMERGENCY_STOP, etc.
-                balancing: false,
-                holdingPosition: false,
-                speedMode: false
-            },
-
             // Telemetry data
             telemetry: {
                 pitch: 0,
@@ -61,14 +45,6 @@ class AppStore {
                 qy: 0,
                 qz: 0
             },
-
-            // UI state
-            ui: {
-                isApplyingConfig: false,
-                isSyncingConfig: false,
-                isLocked: true
-            },
-
             // Tuning state
             tuning: {
                 isActive: false,
@@ -1783,22 +1759,29 @@ async function generateQRCode(deviceName) {
     if (linkInput) linkInput.value = connectionURL;
 
     try {
-        // Use QRCode library to generate
         if (typeof QRCode !== 'undefined') {
             const canvas = document.createElement('canvas');
             await QRCode.toCanvas(canvas, connectionURL, {
                 width: 200,
                 margin: 2,
-                color: {
-                    dark: '#000000',
-                    light: '#ffffff'
-                }
+                color: { dark: '#000000', light: '#ffffff' }
             });
             container.appendChild(canvas);
-        } else {
-            container.innerHTML = '<p style="color: #ff6347;">Biblioteka QRCode niedostępna</p>';
-            console.error('QRCode library not loaded');
+            return;
         }
+
+        // Fallback via Google Chart API (server-side image)
+        const encoded = encodeURIComponent(connectionURL);
+        const size = 200;
+        const src = `https://chart.googleapis.com/chart?cht=qr&chs=${size}x${size}&chl=${encoded}&chld=L|1`;
+        const img = document.createElement('img');
+        img.src = src;
+        img.alt = 'QR code';
+        img.width = size;
+        img.height = size;
+        img.style.background = '#ffffff';
+        container.appendChild(img);
+        console.warn('QRCode lib not available - using Google Chart API fallback');
     } catch (error) {
         console.error('Error generating QR code:', error);
         container.innerHTML = '<p style="color: #ff6347;">Błąd generowania kodu QR</p>';
@@ -1840,6 +1823,27 @@ function showQRModal() {
     // Generate QR and show modal
     generateQRCode(deviceName);
     modal.style.display = 'flex';
+    // Set connect button handler to call connectBLE with deviceName
+    const connectBtn = document.getElementById('qr-connect-btn');
+    if (connectBtn) {
+        // Remove previous handlers
+        connectBtn.replaceWith(connectBtn.cloneNode(true));
+    }
+    const newConnectBtn = document.getElementById('qr-connect-btn');
+    if (newConnectBtn) {
+        newConnectBtn.addEventListener('click', () => {
+            // Close modal, then attempt connection with target device
+            hideQRModal();
+            // Call connectBLE which will read device param; set temporarily in URL so logic can use same path
+            const url = new URL(window.location);
+            url.searchParams.set('device', deviceName);
+            window.history.replaceState({}, '', url);
+            // Trigger connect directly with target name if commLayer supports it
+            if (typeof connectBLE === 'function') {
+                connectBLE();
+            }
+        });
+    }
 }
 
 /**
