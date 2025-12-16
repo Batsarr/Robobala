@@ -2403,24 +2403,19 @@ function handleTunerResult(data) {
 }
 
 // --- IMU rate UI updater ---
+// Uses actual IMU rate from firmware (ir field) instead of measuring telemetry packet rate
 (function setupImuRateUpdater() {
-    // Update UI element with moving average over last ~1s
     function updateImuRateUI() {
         try {
             const el = document.getElementById('imuRateValue');
             if (!el) return;
-            const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-            const timestamps = (window._imuRateTimestamps || []).filter(t => t > now - 1100);
-            const count = timestamps.length;
-            // If fewer than 2 samples, show as '--'
-            if (count < 2) {
+            // Read IMU rate from last telemetry data (field 'ir' = imu_rate_hz)
+            const imuRate = window._lastImuRateHz;
+            if (imuRate !== undefined && imuRate > 0) {
+                el.textContent = imuRate;
+            } else {
                 el.textContent = '--';
-                return;
             }
-            // Compute average frequency: (N-1) intervals over span
-            const span = timestamps[timestamps.length - 1] - timestamps[0];
-            const hz = span > 0 ? ((count - 1) * 1000.0 / span) : 0;
-            el.textContent = hz.toFixed(0);
         } catch (e) { /* no-op */ }
     }
 
@@ -2592,16 +2587,10 @@ function updateTelemetryUI(data) {
         ...(window.telemetryData || {}),
         ...data
     };
-    // --- IMU rate tracking: store timestamps of received telemetry messages ---
-    try {
-        window._imuRateTimestamps = window._imuRateTimestamps || [];
-        const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-        window._imuRateTimestamps.push(now);
-        const cutoff = now - 1100; // keep ~1s window
-        while (window._imuRateTimestamps.length && window._imuRateTimestamps[0] < cutoff) {
-            window._imuRateTimestamps.shift();
-        }
-    } catch (e) { /* no-op */ }
+    // --- IMU rate: store value from firmware (field 'ir' = imu_rate_hz) ---
+    if (data.ir !== undefined) {
+        window._lastImuRateHz = data.ir;
+    }
     if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
     // Fitness paused indicator
     const dash = document.getElementById('autotune-dashboard');
