@@ -363,7 +363,8 @@ class BLECommunication extends CommunicationLayer {
         this.buffer = '';
         this.messageQueue = [];
         this.isSending = false;
-        this.sendInterval = 20; // ms between messages
+        // OPTYMALIZACJA: Zmniejszono interwał z 20ms na 5ms dla szybszego przetwarzania kolejki
+        this.sendInterval = 5; // ms between messages
 
         // Chunked message handling
         this.chunks = new Map();
@@ -539,6 +540,23 @@ class BLECommunication extends CommunicationLayer {
     async send(message) {
         this.messageQueue.push(message);
         this.processQueue();
+    }
+
+    /**
+     * Send message immediately without queue (for time-critical messages like joystick)
+     * OPTYMALIZACJA: Priorytetowe wysyłanie dla joysticka - omija kolejkę
+     * @param {Object} message - Message to send immediately
+     */
+    async sendImmediate(message) {
+        if (!this.rxCharacteristic || !this.isConnected) return;
+        try {
+            const encoder = new TextEncoder();
+            const data = JSON.stringify(message) + '\n';
+            await this.rxCharacteristic.writeValueWithoutResponse(encoder.encode(data));
+        } catch (error) {
+            // Silently ignore errors for immediate sends (joystick)
+            // to avoid blocking the UI thread
+        }
     }
 
     /**
@@ -838,12 +856,14 @@ let bleBuffer = '', bleMessageQueue = [], isSendingBleMessage = false; const ble
 const BLE_SEND_INTERVAL = 20;
 
 let joystickCenter, joystickRadius, knobRadius, isDragging = false, lastJoystickSendTime = 0;
-const JOYSTICK_SEND_INTERVAL = 20;
+// OPTYMALIZACJA: Zmniejszono interwał z 20ms (50Hz) na 2ms (500Hz) dla natychmiastowej reakcji
+const JOYSTICK_SEND_INTERVAL = 2;
 let currentJoystickX = 0, currentJoystickY = 0;
 
 let gamepadIndex = null, lastGamepadState = [], gamepadMappings = {}; const GAMEPAD_MAPPING_KEY = 'pid_gamepad_mappings_v3';
 let isMappingButton = false, actionToMap = null, lastGamepadSendTime = 0;
-const GAMEPAD_SEND_INTERVAL = 20; // throttle gamepad joystick sends to 50Hz (same as screen joystick)
+// OPTYMALIZACJA: Zmniejszono interwał z 20ms (50Hz) na 2ms (500Hz) dla natychmiastowej reakcji
+const GAMEPAD_SEND_INTERVAL = 2;
 
 const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v4_';
 // Pitch trim: UI pokazuje wartości w stopniach. Firmware stosuje TRIM w kwaternionie (Quaternion-First),
@@ -2037,7 +2057,12 @@ function sendBleMessage(message) {
         }
     } catch (e) { /* ignore logging errors */ }
     if (commLayer && commLayer.getConnectionStatus()) {
-        commLayer.send(message);
+        // OPTYMALIZACJA: Joystick wysyłany natychmiast (priorytet) bez kolejki
+        if (message.type === 'joystick' && typeof commLayer.sendImmediate === 'function') {
+            commLayer.sendImmediate(message);
+        } else {
+            commLayer.send(message);
+        }
     } else {
         // Fallback to old method for backward compatibility
         bleMessageQueue.push(message);
@@ -2377,6 +2402,32 @@ function handleTunerResult(data) {
     }
 }
 
+// --- IMU rate UI updater ---
+(function setupImuRateUpdater() {
+    // Update UI element with moving average over last ~1s
+    function updateImuRateUI() {
+        try {
+            const el = document.getElementById('imuRateValue');
+            if (!el) return;
+            const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            const timestamps = (window._imuRateTimestamps || []).filter(t => t > now - 1100);
+            const count = timestamps.length;
+            // If fewer than 2 samples, show as '--'
+            if (count < 2) {
+                el.textContent = '--';
+                return;
+            }
+            // Compute average frequency: (N-1) intervals over span
+            const span = timestamps[timestamps.length - 1] - timestamps[0];
+            const hz = span > 0 ? ((count - 1) * 1000.0 / span) : 0;
+            el.textContent = hz.toFixed(0);
+        } catch (e) { /* no-op */ }
+    }
+
+    // Run update periodically (200ms) for responsive display
+    setInterval(updateImuRateUI, 200);
+})();
+
 // Handler for iteration updates from tuners (update progress display & best actor)
 function handleTuningIterationResult(data) {
     if (!data) return;
@@ -2541,6 +2592,16 @@ function updateTelemetryUI(data) {
         ...(window.telemetryData || {}),
         ...data
     };
+    // --- IMU rate tracking: store timestamps of received telemetry messages ---
+    try {
+        window._imuRateTimestamps = window._imuRateTimestamps || [];
+        const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        window._imuRateTimestamps.push(now);
+        const cutoff = now - 1100; // keep ~1s window
+        while (window._imuRateTimestamps.length && window._imuRateTimestamps[0] < cutoff) {
+            window._imuRateTimestamps.shift();
+        }
+    } catch (e) { /* no-op */ }
     if (data.robot_state !== undefined) document.getElementById('robotStateVal').textContent = data.robot_state;
     // Fitness paused indicator
     const dash = document.getElementById('autotune-dashboard');
