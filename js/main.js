@@ -6563,3 +6563,506 @@ function clearSysIdData() {
 
     addLogMessage('[SysID] Dane wyczyszczone.', 'info');
 }
+
+// ========================================================================
+// MODUŁ NAUKA PID - Wizualizacja edukacyjna składowych PID
+// ========================================================================
+
+/**
+ * Stan modułu PID Education
+ */
+const PIDEducation = {
+    isLiveMode: true,
+    isStepMode: false,
+    stepHistory: [],
+    currentStepIndex: 0,
+    maxStepHistory: 100,
+
+    // Wewnętrzny symulator PID dla UI (oblicza składowe na podstawie telemetrii)
+    simulator: {
+        prevError: 0,
+        integral: 0,
+        prevPitch: 0,
+        lastTimestamp: 0
+    },
+
+    // Wykres składowych
+    chart: null,
+    chartData: {
+        labels: [],
+        pValues: [],
+        iValues: [],
+        dValues: [],
+        sumValues: [],
+        errorValues: []
+    },
+
+    // Dynamiczne wskazówki edukacyjne
+    tips: [
+        "Obserwuj, jak zmienia się każda składowa podczas ruchu robota. Składowa P reaguje natychmiast na odchylenie, I rośnie powoli przy stałym błędzie, a D hamuje szybkie zmiany.",
+        "Gdy robot odchyla się od pionu, składowa P (czerwona) natychmiast rośnie proporcjonalnie do błędu.",
+        "Składowa I (zielona) powoli akumuluje błędy w czasie - obserwuj jej wzrost przy stałym odchyleniu.",
+        "Składowa D (niebieska) reaguje na szybkość zmian - zauważ jak 'hamuje' gdy robot szybko się pochyla.",
+        "Suma P+I+D (żółta) to finalne wyjście PID, które steruje silnikami.",
+        "Zwiększając Kp, zobaczysz większą amplitudę czerwonej linii - robot reaguje mocniej.",
+        "Składowa D działa jak amortyzator - porównaj jej wartość przy szybkim i wolnym ruchu.",
+        "W trybie krokowym możesz analizować dokładnie jedną iterację pętli sterowania."
+    ],
+    currentTipIndex: 0
+};
+
+/**
+ * Inicjalizacja modułu PID Education
+ */
+function initPIDEducation() {
+    // Wykres składowych PID
+    const ctx = document.getElementById('pidComponentsChart');
+    if (ctx) {
+        PIDEducation.chart = new Chart(ctx.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'P (Proporcjonalna)',
+                        data: [],
+                        borderColor: '#e74c3c',
+                        backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                        fill: false,
+                        tension: 0.2,
+                        pointRadius: 0,
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'I (Całkująca)',
+                        data: [],
+                        borderColor: '#27ae60',
+                        backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                        fill: false,
+                        tension: 0.2,
+                        pointRadius: 0,
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'D (Różniczkująca)',
+                        data: [],
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        fill: false,
+                        tension: 0.2,
+                        pointRadius: 0,
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Suma (Output)',
+                        data: [],
+                        borderColor: '#f1c40f',
+                        backgroundColor: 'rgba(241, 196, 15, 0.1)',
+                        fill: false,
+                        tension: 0.2,
+                        pointRadius: 0,
+                        borderWidth: 3
+                    },
+                    {
+                        label: 'Błąd',
+                        data: [],
+                        borderColor: '#9b59b6',
+                        backgroundColor: 'rgba(155, 89, 182, 0.1)',
+                        fill: false,
+                        tension: 0.2,
+                        pointRadius: 0,
+                        borderWidth: 1,
+                        borderDash: [5, 5],
+                        hidden: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    x: {
+                        display: true,
+                        title: { display: true, text: 'Czas', color: '#888' },
+                        ticks: { color: '#888', maxTicksLimit: 10 }
+                    },
+                    y: {
+                        display: true,
+                        title: { display: true, text: 'Wartość', color: '#888' },
+                        ticks: { color: '#888' },
+                        grid: { color: 'rgba(255,255,255,0.1)' }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: { color: '#fff', usePointStyle: true, padding: 15 }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                }
+            }
+        });
+    }
+
+    // Event listeners dla przycisków trybu
+    document.getElementById('pidEduLiveBtn')?.addEventListener('click', () => setLiveMode());
+    document.getElementById('pidEduStepBtn')?.addEventListener('click', () => setStepMode());
+    document.getElementById('pidEduResetBtn')?.addEventListener('click', () => resetPIDEducation());
+
+    // Event listeners dla przycisków trybu krokowego
+    document.getElementById('stepPrevBtn')?.addEventListener('click', () => navigateStep(-1));
+    document.getElementById('stepNextBtn')?.addEventListener('click', () => navigateStep(1));
+    document.getElementById('stepCaptureBtn')?.addEventListener('click', () => captureCurrentStep());
+
+    // Event listeners dla checkboxów widoczności
+    document.getElementById('showPComponent')?.addEventListener('change', (e) => toggleDataset(0, e.target.checked));
+    document.getElementById('showIComponent')?.addEventListener('change', (e) => toggleDataset(1, e.target.checked));
+    document.getElementById('showDComponent')?.addEventListener('change', (e) => toggleDataset(2, e.target.checked));
+    document.getElementById('showPIDSum')?.addEventListener('change', (e) => toggleDataset(3, e.target.checked));
+    document.getElementById('showPIDError')?.addEventListener('change', (e) => toggleDataset(4, e.target.checked));
+
+    // Rotacja wskazówek edukacyjnych
+    setInterval(() => rotateTip(), 10000);
+
+    // Help icon toggle
+    document.getElementById('pidEducationHelp')?.addEventListener('click', () => {
+        const helpText = document.getElementById('pidEducationHelpText');
+        if (helpText) helpText.classList.toggle('visible');
+    });
+
+    addLogMessage('[UI] Moduł Nauka PID zainicjalizowany.', 'info');
+}
+
+/**
+ * Przełącz na tryb na żywo
+ */
+function setLiveMode() {
+    PIDEducation.isLiveMode = true;
+    PIDEducation.isStepMode = false;
+
+    document.getElementById('pidEduLiveBtn')?.classList.add('active');
+    document.getElementById('pidEduStepBtn')?.classList.remove('active');
+    document.getElementById('pidStepModePanel').style.display = 'none';
+
+    addLogMessage('[UI] Tryb PID: Na żywo', 'info');
+}
+
+/**
+ * Przełącz na tryb krokowy
+ */
+function setStepMode() {
+    PIDEducation.isLiveMode = false;
+    PIDEducation.isStepMode = true;
+
+    document.getElementById('pidEduLiveBtn')?.classList.remove('active');
+    document.getElementById('pidEduStepBtn')?.classList.add('active');
+    document.getElementById('pidStepModePanel').style.display = 'block';
+
+    updateStepDisplay();
+    addLogMessage('[UI] Tryb PID: Krokowy - użyj przycisków do nawigacji między zapisanymi krokami', 'info');
+}
+
+/**
+ * Reset modułu edukacyjnego
+ */
+function resetPIDEducation() {
+    PIDEducation.simulator.prevError = 0;
+    PIDEducation.simulator.integral = 0;
+    PIDEducation.simulator.prevPitch = 0;
+    PIDEducation.stepHistory = [];
+    PIDEducation.currentStepIndex = 0;
+
+    // Reset wykresu
+    if (PIDEducation.chart) {
+        PIDEducation.chart.data.labels = [];
+        PIDEducation.chart.data.datasets.forEach(ds => ds.data = []);
+        PIDEducation.chart.update('none');
+    }
+
+    // Reset wartości na żywo
+    updateLiveValues(0, 0, 0, 0);
+    updateStepDisplay();
+
+    addLogMessage('[UI] Moduł Nauka PID zresetowany.', 'info');
+}
+
+/**
+ * Oblicza składowe PID na podstawie telemetrii
+ * To jest symulacja po stronie UI - obliczamy na podstawie aktualnych parametrów i telemetrii
+ */
+function calculatePIDComponents(telemetryData) {
+    const sim = PIDEducation.simulator;
+
+    // Pobierz aktualne parametry PID z UI
+    const Kp = parseFloat(document.getElementById('balanceKpInput')?.value) || 95;
+    const Ki = parseFloat(document.getElementById('balanceKiInput')?.value) || 0;
+    const Kd = parseFloat(document.getElementById('balanceKdInput')?.value) || 3.23;
+    const integralLimit = parseFloat(document.getElementById('balanceIntegralLimitInput')?.value) || 50;
+
+    // Pobierz pitch z telemetrii (to jest błąd od 0, bo robot stara się być pionowy)
+    const pitch = telemetryData.pitch || telemetryData.raw_pitch || 0;
+    const timestamp = Date.now();
+
+    // Oblicz dt w sekundach
+    const dt = sim.lastTimestamp > 0 ? (timestamp - sim.lastTimestamp) / 1000 : 0.02; // domyślnie 20ms
+
+    // Setpoint dla balansu to zazwyczaj 0 (lub trim angle)
+    const setpoint = 0;
+    const error = setpoint - pitch;
+
+    // P - proporcjonalna
+    const P_out = Kp * error;
+
+    // I - całkująca (z anti-windup)
+    if (dt > 0 && Ki > 0.00001) {
+        sim.integral += error * dt;
+        sim.integral = Math.max(-integralLimit, Math.min(integralLimit, sim.integral));
+    }
+    const I_out = Ki * sim.integral;
+
+    // D - różniczkująca (na pomiarze, nie na błędzie - tak jak w firmware)
+    let D_out = 0;
+    if (dt > 0) {
+        const pitchDerivative = (pitch - sim.prevPitch) / dt;
+        D_out = -Kd * pitchDerivative; // minus bo pochodna na pomiarze
+    }
+
+    // Suma
+    const output = P_out + I_out + D_out;
+
+    // Zapisz stan
+    sim.prevError = error;
+    sim.prevPitch = pitch;
+    sim.lastTimestamp = timestamp;
+
+    return {
+        setpoint,
+        input: pitch,
+        error,
+        Kp, Ki, Kd,
+        P_out,
+        I_out,
+        D_out,
+        integral: sim.integral,
+        derivative: dt > 0 ? (pitch - sim.prevPitch) / dt : 0,
+        output,
+        timestamp
+    };
+}
+
+/**
+ * Aktualizuje wizualizację PID na podstawie telemetrii
+ */
+function updatePIDEducation(telemetryData) {
+    if (!telemetryData) return;
+
+    const components = calculatePIDComponents(telemetryData);
+
+    // Zapisz krok do historii
+    PIDEducation.stepHistory.push(components);
+    if (PIDEducation.stepHistory.length > PIDEducation.maxStepHistory) {
+        PIDEducation.stepHistory.shift();
+    }
+
+    if (PIDEducation.isLiveMode) {
+        // Aktualizuj wartości na żywo
+        updateLiveValues(components.P_out, components.I_out, components.D_out, components.output);
+
+        // Aktualizuj wykres
+        updatePIDChart(components);
+
+        // Aktualizuj licznik kroków
+        document.getElementById('stepTotal').textContent = PIDEducation.stepHistory.length.toString();
+    }
+}
+
+/**
+ * Aktualizuje wartości na żywo w boxach
+ */
+function updateLiveValues(P, I, D, output) {
+    const format = (v) => v.toFixed(2);
+
+    const liveP = document.getElementById('liveP');
+    const liveI = document.getElementById('liveI');
+    const liveD = document.getElementById('liveD');
+    const liveOutput = document.getElementById('liveOutput');
+
+    if (liveP) {
+        const prev = parseFloat(liveP.textContent) || 0;
+        liveP.textContent = format(P);
+        highlightChange(liveP.parentElement, P, prev);
+    }
+    if (liveI) {
+        const prev = parseFloat(liveI.textContent) || 0;
+        liveI.textContent = format(I);
+        highlightChange(liveI.parentElement, I, prev);
+    }
+    if (liveD) {
+        const prev = parseFloat(liveD.textContent) || 0;
+        liveD.textContent = format(D);
+        highlightChange(liveD.parentElement, D, prev);
+    }
+    if (liveOutput) liveOutput.textContent = format(output);
+}
+
+/**
+ * Podświetla zmianę wartości
+ */
+function highlightChange(element, newVal, oldVal) {
+    if (!element) return;
+    element.classList.remove('highlight-positive', 'highlight-negative');
+
+    const diff = newVal - oldVal;
+    if (Math.abs(diff) > 0.1) {
+        element.classList.add(diff > 0 ? 'highlight-positive' : 'highlight-negative');
+    }
+}
+
+/**
+ * Aktualizuje wykres składowych PID
+ */
+function updatePIDChart(components) {
+    if (!PIDEducation.chart) return;
+
+    const chart = PIDEducation.chart;
+    const maxPoints = 100;
+
+    // Dodaj nowy punkt czasowy
+    const timeLabel = ((components.timestamp % 100000) / 1000).toFixed(1);
+    chart.data.labels.push(timeLabel);
+
+    // Dodaj wartości do datasetów
+    chart.data.datasets[0].data.push(components.P_out);
+    chart.data.datasets[1].data.push(components.I_out);
+    chart.data.datasets[2].data.push(components.D_out);
+    chart.data.datasets[3].data.push(components.output);
+    chart.data.datasets[4].data.push(components.error);
+
+    // Ogranicz liczbę punktów
+    if (chart.data.labels.length > maxPoints) {
+        chart.data.labels.shift();
+        chart.data.datasets.forEach(ds => ds.data.shift());
+    }
+
+    chart.update('none');
+}
+
+/**
+ * Przełącza widoczność datasetu
+ */
+function toggleDataset(index, visible) {
+    if (PIDEducation.chart && PIDEducation.chart.data.datasets[index]) {
+        PIDEducation.chart.data.datasets[index].hidden = !visible;
+        PIDEducation.chart.update();
+    }
+}
+
+/**
+ * Nawigacja między zapisanymi krokami (tryb krokowy)
+ */
+function navigateStep(direction) {
+    const newIndex = PIDEducation.currentStepIndex + direction;
+    if (newIndex >= 0 && newIndex < PIDEducation.stepHistory.length) {
+        PIDEducation.currentStepIndex = newIndex;
+        updateStepDisplay();
+    }
+}
+
+/**
+ * Zapisz aktualny krok
+ */
+function captureCurrentStep() {
+    if (PIDEducation.stepHistory.length > 0) {
+        PIDEducation.currentStepIndex = PIDEducation.stepHistory.length - 1;
+        updateStepDisplay();
+        addLogMessage('[UI] Zapisano bieżący krok PID.', 'success');
+    }
+}
+
+/**
+ * Aktualizuje wyświetlanie kroku w trybie krokowym
+ */
+function updateStepDisplay() {
+    const history = PIDEducation.stepHistory;
+    const index = PIDEducation.currentStepIndex;
+
+    document.getElementById('stepCounter').textContent = history.length > 0 ? (index + 1).toString() : '0';
+    document.getElementById('stepTotal').textContent = history.length.toString();
+
+    if (history.length === 0 || index >= history.length) {
+        // Brak danych - pokaż zera
+        setStepValues({
+            setpoint: 0, input: 0, error: 0,
+            Kp: 0, Ki: 0, Kd: 0,
+            P_out: 0, I_out: 0, D_out: 0,
+            integral: 0, derivative: 0, output: 0
+        });
+        return;
+    }
+
+    setStepValues(history[index]);
+}
+
+/**
+ * Ustawia wartości w panelu trybu krokowego
+ */
+function setStepValues(step) {
+    const format = (v, decimals = 2) => (v || 0).toFixed(decimals);
+
+    // Wartości główne
+    document.getElementById('stepSetpoint').textContent = format(step.setpoint) + '°';
+    document.getElementById('stepInput').textContent = format(step.input) + '°';
+    document.getElementById('stepError').textContent = format(step.error) + '°';
+
+    // Składowa P
+    document.getElementById('stepKp').textContent = format(step.Kp);
+    document.getElementById('stepErrorP').textContent = format(step.error);
+    document.getElementById('stepPOut').textContent = '= ' + format(step.P_out);
+
+    // Składowa I
+    document.getElementById('stepKi').textContent = format(step.Ki);
+    document.getElementById('stepIntegral').textContent = format(step.integral);
+    document.getElementById('stepIOut').textContent = '= ' + format(step.I_out);
+
+    // Składowa D
+    document.getElementById('stepKd').textContent = format(step.Kd);
+    document.getElementById('stepDerivative').textContent = format(step.derivative);
+    document.getElementById('stepDOut').textContent = '= ' + format(step.D_out);
+
+    // Suma
+    document.getElementById('stepPVal').textContent = format(step.P_out);
+    document.getElementById('stepIVal').textContent = format(step.I_out);
+    document.getElementById('stepDVal').textContent = format(step.D_out);
+    document.getElementById('stepOutput').textContent = format(step.output);
+}
+
+/**
+ * Rotacja wskazówek edukacyjnych
+ */
+function rotateTip() {
+    PIDEducation.currentTipIndex = (PIDEducation.currentTipIndex + 1) % PIDEducation.tips.length;
+    const tipEl = document.getElementById('pidTipText');
+    if (tipEl) {
+        tipEl.textContent = PIDEducation.tips[PIDEducation.currentTipIndex];
+    }
+}
+
+// Inicjalizacja modułu PID Education przy załadowaniu DOM
+document.addEventListener('DOMContentLoaded', () => {
+    initPIDEducation();
+});
+
+// Hook do updateTelemetryUI - wywołaj aktualizację PID Education
+(function () {
+    const originalUpdateTelemetryUI = window.updateTelemetryUI || function () { };
+    window.updateTelemetryUI = function (data) {
+        originalUpdateTelemetryUI(data);
+        updatePIDEducation(data);
+    };
+})();
+
