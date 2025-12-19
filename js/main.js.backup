@@ -1,744 +1,3 @@
-// Central helper namespace to avoid duplicate global functions. Safe to include in both dev and prod.
-(function () {
-    window.RB = window.RB || {};
-    window.RB.helpers = window.RB.helpers || {};
-
-    if (!window.RB.helpers.delay) {
-        window.RB.helpers.delay = function (ms) {
-            return new Promise((resolve) => setTimeout(resolve, ms));
-        };
-    }
-
-    // Expose a global delay function if not already present (backwards compatibility)
-    if (typeof window.delay === 'undefined') {
-        window.delay = function (ms) {
-            return window.RB.helpers.delay(ms);
-        };
-    }
-})();
-// ========================================================================
-// STATE MANAGER - Centralized State Management
-// ========================================================================
-// This module provides a centralized store for application state with
-// observer pattern for reactive updates. It replaces scattered global
-// variables with a single source of truth.
-// ========================================================================
-
-/**
- * AppStore - Centralized application state manager
- * Implements observer pattern for reactive state updates
- */
-class AppStore {
-    constructor() {
-        this.state = {
-            // Connection state
-            connection: {
-                isConnected: false,
-                isSynced: false,
-                deviceName: null,
-                syncTimeout: null
-            },
-
-            // Robot state
-            robot: {
-                state: 'IDLE', // IDLE, BALANCING, EMERGENCY_STOP, etc.
-                balancing: false,
-                holdingPosition: false,
-                speedMode: false
-            },
-
-            // Telemetry data
-            telemetry: {
-                pitch: 0,
-                roll: 0,
-                yaw: 0,
-                speed: 0,
-                encoderLeft: 0,
-                encoderRight: 0,
-                loopTime: 0,
-                qw: 0,
-                qx: 0,
-                qy: 0,
-                qz: 0
-            },
-
-            // UI state
-            ui: {
-                isApplyingConfig: false,
-                isSyncingConfig: false,
-                isLocked: true
-            },
-
-            // Tuning state
-            tuning: {
-                isActive: false,
-                activeMethod: '',
-                isPaused: false
-            },
-
-            // Sequence state
-            sequence: {
-                isRunning: false,
-                currentStep: 0
-            },
-
-            // Temporary sync data
-            sync: {
-                tempParams: {},
-                tempTuningParams: {},
-                tempStates: {}
-            },
-
-            // Joystick state
-            joystick: {
-                isDragging: false,
-                lastSendTime: 0
-            },
-
-            // Gamepad state
-            gamepad: {
-                index: null,
-                lastState: [],
-                mappings: {},
-                isMappingButton: false,
-                actionToMap: null
-            }
-        };
-
-        this.listeners = new Map();
-        this.nextListenerId = 0;
-    }
-
-    /**
-     * Get current state or a specific path in the state
-     * @param {string} path - Optional dot-notation path (e.g., 'connection.isConnected')
-     * @returns {any} State value
-     */
-    getState(path = null) {
-        if (!path) return this.state;
-
-        const keys = path.split('.');
-        let value = this.state;
-        for (const key of keys) {
-            if (value && typeof value === 'object' && key in value) {
-                value = value[key];
-            } else {
-                return undefined;
-            }
-        }
-        return value;
-    }
-
-    /**
-     * Update state and notify listeners
-     * @param {string} path - Dot-notation path or object with updates
-     * @param {any} value - New value (if path is string)
-     */
-    setState(path, value = undefined) {
-        let updates = {};
-
-        if (typeof path === 'object' && value === undefined) {
-            // Direct object update: setState({ 'connection.isConnected': true })
-            updates = path;
-        } else {
-            // Path update: setState('connection.isConnected', true)
-            updates[path] = value;
-        }
-
-        // Apply updates
-        const changedPaths = [];
-        for (const [updatePath, updateValue] of Object.entries(updates)) {
-            const keys = updatePath.split('.');
-            let current = this.state;
-
-            for (let i = 0; i < keys.length - 1; i++) {
-                const key = keys[i];
-                if (!(key in current)) {
-                    current[key] = {};
-                }
-                current = current[key];
-            }
-
-            const lastKey = keys[keys.length - 1];
-            if (current[lastKey] !== updateValue) {
-                current[lastKey] = updateValue;
-                changedPaths.push(updatePath);
-            }
-        }
-
-        // Notify listeners for changed paths
-        if (changedPaths.length > 0) {
-            this.notifyListeners(changedPaths);
-        }
-    }
-
-    /**
-     * Subscribe to state changes
-     * @param {string|Array<string>} paths - Path(s) to watch (e.g., 'connection.isConnected')
-     * @param {Function} callback - Callback function(newValue, oldValue, path)
-     * @returns {number} Listener ID for unsubscribing
-     */
-    subscribe(paths, callback) {
-        const id = this.nextListenerId++;
-        const pathArray = Array.isArray(paths) ? paths : [paths];
-
-        this.listeners.set(id, {
-            paths: pathArray,
-            callback
-        });
-
-        return id;
-    }
-
-    /**
-     * Unsubscribe from state changes
-     * @param {number} id - Listener ID returned from subscribe()
-     */
-    unsubscribe(id) {
-        this.listeners.delete(id);
-    }
-
-    /**
-     * Notify listeners about state changes
-     * @param {Array<string>} changedPaths - Paths that changed
-     */
-    notifyListeners(changedPaths) {
-        for (const [id, listener] of this.listeners.entries()) {
-            const { paths, callback } = listener;
-
-            // Check if any watched path was changed
-            for (const watchPath of paths) {
-                for (const changedPath of changedPaths) {
-                    // Match exact path or parent path (e.g., 'connection' matches 'connection.isConnected')
-                    if (changedPath === watchPath ||
-                        changedPath.startsWith(watchPath + '.') ||
-                        watchPath.startsWith(changedPath + '.')) {
-                        try {
-                            const newValue = this.getState(changedPath);
-                            callback(newValue, changedPath);
-                        } catch (error) {
-                            console.error(`Error in state listener ${id}:`, error);
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Reset state to initial values
-     */
-    reset() {
-        this.setState({
-            'connection.isConnected': false,
-            'connection.isSynced': false,
-            'connection.deviceName': null,
-            'robot.state': 'IDLE',
-            'robot.balancing': false,
-            'robot.holdingPosition': false,
-            'robot.speedMode': false,
-            'ui.isLocked': true,
-            'tuning.isActive': false,
-            'tuning.activeMethod': '',
-            'tuning.isPaused': false,
-            'sequence.isRunning': false,
-            'sequence.currentStep': 0
-        });
-    }
-
-    /**
-     * Batch update multiple state values
-     * More efficient than multiple setState calls
-     * @param {Object} updates - Object with path: value pairs
-     */
-    batchUpdate(updates) {
-        this.setState(updates);
-    }
-}
-
-// Create singleton instance
-const appStore = new AppStore();
-
-// Export for use in other modules
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { AppStore, appStore };
-}
-// ========================================================================
-// COMMUNICATION LAYER - Abstract Communication Interface
-// ========================================================================
-// This module provides an abstract layer for robot communication,
-// decoupling the application from specific communication protocols (BLE).
-// This makes the code more testable and allows easier protocol changes.
-// ========================================================================
-
-/**
- * Abstract base class for communication
- * All communication implementations should extend this class
- */
-class CommunicationLayer {
-    constructor() {
-        this.messageHandlers = new Map();
-        this.isConnected = false;
-    }
-
-    /**
-     * Connect to the device
-     * @returns {Promise<boolean>} Success status
-     */
-    async connect() {
-        throw new Error('connect() must be implemented by subclass');
-    }
-
-    /**
-     * Disconnect from the device
-     */
-    async disconnect() {
-        throw new Error('disconnect() must be implemented by subclass');
-    }
-
-    /**
-     * Send a message to the device
-     * @param {Object} message - Message object to send
-     * @returns {Promise<void>}
-     */
-    async send(message) {
-        throw new Error('send() must be implemented by subclass');
-    }
-
-    /**
-     * Register a handler for incoming messages
-     * @param {string} type - Message type to handle
-     * @param {Function} handler - Handler function(data)
-     */
-    onMessage(type, handler) {
-        if (!this.messageHandlers.has(type)) {
-            this.messageHandlers.set(type, []);
-        }
-        this.messageHandlers.get(type).push(handler);
-    }
-
-    /**
-     * Remove a message handler
-     * @param {string} type - Message type
-     * @param {Function} handler - Handler function to remove
-     */
-    offMessage(type, handler) {
-        if (this.messageHandlers.has(type)) {
-            const handlers = this.messageHandlers.get(type);
-            const index = handlers.indexOf(handler);
-            if (index !== -1) {
-                handlers.splice(index, 1);
-            }
-        }
-    }
-
-    /**
-     * Notify all handlers for a message type
-     * @param {string} type - Message type
-     * @param {Object} data - Message data
-     */
-    notifyHandlers(type, data) {
-        if (this.messageHandlers.has(type)) {
-            for (const handler of this.messageHandlers.get(type)) {
-                try {
-                    handler(data);
-                } catch (error) {
-                    console.error(`Error in message handler for ${type}:`, error);
-                }
-            }
-        }
-
-        // Also notify wildcard handlers (type '*')
-        if (this.messageHandlers.has('*')) {
-            for (const handler of this.messageHandlers.get('*')) {
-                try {
-                    handler(type, data);
-                } catch (error) {
-                    console.error('Error in wildcard message handler:', error);
-                }
-            }
-        }
-    }
-
-    /**
-     * Get connection status
-     * @returns {boolean}
-     */
-    getConnectionStatus() {
-        return this.isConnected;
-    }
-}
-
-/**
- * Bluetooth Low Energy (BLE) implementation of CommunicationLayer
- */
-class BLECommunication extends CommunicationLayer {
-    constructor(serviceUuid, rxUuid, txUuid) {
-        super();
-        this.serviceUuid = serviceUuid;
-        this.rxUuid = rxUuid;
-        this.txUuid = txUuid;
-
-        this.device = null;
-        this.rxCharacteristic = null;
-        this.txCharacteristic = null;
-
-        this.buffer = '';
-        this.messageQueue = [];
-        this.isSending = false;
-        this.sendInterval = 20; // ms between messages
-
-        // Chunked message handling
-        this.chunks = new Map();
-    }
-
-    /**
-     * Connect to BLE device
-     * @returns {Promise<boolean>}
-     */
-    async connect() {
-        try {
-            // Request device
-            this.device = await navigator.bluetooth.requestDevice({
-                filters: [{ name: 'RoboBala' }],
-                optionalServices: [this.serviceUuid]
-            });
-
-            // Listen for disconnection
-            this.device.addEventListener('gattserverdisconnected', () => {
-                this.handleDisconnection();
-            });
-
-            // Connect to GATT server
-            const server = await this.device.gatt.connect();
-            const service = await server.getPrimaryService(this.serviceUuid);
-
-            // Get characteristics
-            this.rxCharacteristic = await service.getCharacteristic(this.rxUuid);
-            this.txCharacteristic = await service.getCharacteristic(this.txUuid);
-
-            // Start receiving notifications
-            await this.txCharacteristic.startNotifications();
-            this.txCharacteristic.addEventListener('characteristicvaluechanged',
-                (event) => this.handleNotification(event));
-
-            this.isConnected = true;
-            return true;
-        } catch (error) {
-            console.error('BLE connection error:', error);
-            this.isConnected = false;
-            return false;
-        }
-    }
-
-    /**
-     * Disconnect from BLE device
-     */
-    async disconnect() {
-        if (this.device && this.device.gatt.connected) {
-            await this.device.gatt.disconnect();
-        }
-        this.handleDisconnection();
-    }
-
-    /**
-     * Handle disconnection event
-     */
-    handleDisconnection() {
-        this.isConnected = false;
-        this.device = null;
-        this.rxCharacteristic = null;
-        this.txCharacteristic = null;
-        this.messageQueue = [];
-        this.buffer = '';
-        this.chunks.clear();
-
-        // Notify handlers about disconnection
-        this.notifyHandlers('disconnected', {});
-    }
-
-    /**
-     * Handle incoming BLE notification
-     * @param {Event} event - Characteristic value changed event
-     */
-    handleNotification(event) {
-        const value = event.target.value;
-        const decoder = new TextDecoder('utf-8');
-        this.buffer += decoder.decode(value);
-
-        // Process complete lines
-        let newlineIndex;
-        while ((newlineIndex = this.buffer.indexOf('\n')) !== -1) {
-            const line = this.buffer.substring(0, newlineIndex).trim();
-            this.buffer = this.buffer.substring(newlineIndex + 1);
-
-            if (line) {
-                try {
-                    const data = JSON.parse(line);
-
-                    // Handle chunked messages (legacy 'chunk') or new firmware 'chunk_stream')
-                    if ((data.type === 'chunk' || data.type === 'chunk_stream') && data.id !== undefined) {
-                        this.handleChunk({
-                            id: data.id,
-                            i: data.i,
-                            total: data.total,
-                            data: data.data
-                        });
-                    } else {
-                        // Regular message
-                        this.notifyHandlers(data.type, data);
-                    }
-                } catch (error) {
-                    console.error('JSON parse error:', error, 'Data:', line);
-                }
-            }
-        }
-    }
-
-    /**
-     * Handle chunked message assembly
-     * @param {Object} chunk - Chunk data
-     */
-    handleChunk(chunk) {
-        const { id, i, total, data } = chunk;
-
-        // Get or create chunk entry
-        let entry = this.chunks.get(id);
-        if (!entry) {
-            entry = {
-                total: total || 0,
-                parts: new Map(),
-                timer: setTimeout(() => {
-                    if (this.chunks.has(id)) {
-                        this.chunks.delete(id);
-                        console.error(`Chunk assembly timeout for ID: ${id}`);
-                    }
-                }, 5000)
-            };
-            this.chunks.set(id, entry);
-        }
-
-        // Store chunk part
-        entry.parts.set(i, data || '');
-        if (total) entry.total = total;
-
-        // Check if all chunks received
-        if (entry.parts.size === entry.total && entry.total > 0) {
-            clearTimeout(entry.timer);
-
-            // Combine chunks
-            let combined = '';
-            for (let idx = 0; idx < entry.total; idx++) {
-                combined += entry.parts.get(idx) || '';
-            }
-
-            this.chunks.delete(id);
-
-            // Parse and notify
-            try {
-                const fullMessage = JSON.parse(combined);
-                this.notifyHandlers(fullMessage.type, fullMessage);
-            } catch (error) {
-                console.error('Error assembling chunks:', error, 'Data:', combined);
-            }
-        }
-    }
-
-    /**
-     * Send message to device
-     * @param {Object} message - Message to send
-     */
-    async send(message) {
-        this.messageQueue.push(message);
-        this.processQueue();
-    }
-
-    /**
-     * Process message queue
-     */
-    async processQueue() {
-        if (this.isSending || this.messageQueue.length === 0 || !this.rxCharacteristic) {
-            return;
-        }
-
-        this.isSending = true;
-        const message = this.messageQueue.shift();
-
-        try {
-            const encoder = new TextEncoder();
-            const data = JSON.stringify(message) + '\n';
-            await this.rxCharacteristic.writeValueWithoutResponse(encoder.encode(data));
-        } catch (error) {
-            console.error('BLE send error:', error);
-        }
-
-        // Schedule next message
-        setTimeout(() => {
-            this.isSending = false;
-            this.processQueue();
-        }, this.sendInterval);
-    }
-
-    /**
-     * Get device name
-     * @returns {string|null}
-     */
-    getDeviceName() {
-        return this.device ? this.device.name : null;
-    }
-}
-
-/**
- * Mock communication for testing
- */
-class MockCommunication extends CommunicationLayer {
-    constructor() {
-        super();
-        this.mockDelay = 50; // Simulate network delay
-    }
-
-    async connect() {
-        await this.delay(this.mockDelay);
-        this.isConnected = true;
-        return true;
-    }
-
-    async disconnect() {
-        await this.delay(this.mockDelay);
-        this.isConnected = false;
-        this.notifyHandlers('disconnected', {});
-    }
-
-    async send(message) {
-        if (!this.isConnected) {
-            throw new Error('Not connected');
-        }
-
-        // Simulate sending and echo back (for testing)
-        await this.delay(this.mockDelay);
-        console.log('Mock send:', message);
-
-        // Simulate some responses
-        if (message.type === 'request_full_config') {
-            setTimeout(() => {
-                this.notifyHandlers('sync_begin', {});
-                this.notifyHandlers('set_param', { key: 'kp_b', value: 95.0 });
-                this.notifyHandlers('sync_end', {});
-            }, 100);
-        }
-    }
-
-    delay(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    getDeviceName() {
-        return 'MockRoboBala';
-    }
-}
-
-// Export classes
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { CommunicationLayer, BLECommunication, MockCommunication };
-}
-// Central path visualization module
-(function () {
-    window.RB = window.RB || {};
-    window.RB.path = window.RB.path || {};
-
-    const P = window.RB.path;
-
-    P.CM_PER_PIXEL = 1.0;
-    P.pathCanvas = null;
-    P.pathCtx = null;
-    P.robotPathX = 0;
-    P.robotPathY = 0;
-    P.robotPathHeading = 0;
-    P.plannedPath = [];
-    P.actualPath = [];
-
-    P.initPathVisualization = function initPathVisualization() {
-        P.pathCanvas = document.getElementById('pathCanvas');
-        if (!P.pathCanvas) return;
-        P.pathCtx = P.pathCanvas.getContext('2d');
-        P.pathCanvas.width = P.pathCanvas.clientWidth;
-        P.pathCanvas.height = P.pathCanvas.clientHeight;
-        P.resetPathVisualization();
-    };
-
-    P.drawPathVisualization = function drawPathVisualization() {
-        if (!P.pathCtx) return;
-        P.pathCtx.clearRect(0, 0, P.pathCanvas.width, P.pathCanvas.height);
-        const drawPath = (path, color) => {
-            P.pathCtx.strokeStyle = color;
-            P.pathCtx.lineWidth = 2;
-            P.pathCtx.beginPath();
-            if (path.length > 0) {
-                P.pathCtx.moveTo(path[0].x, path[0].y);
-                path.forEach(p => P.pathCtx.lineTo(p.x, p.y));
-            }
-            P.pathCtx.stroke();
-        };
-        drawPath(P.plannedPath, '#61dafb');
-        drawPath(P.actualPath, '#a2f279');
-        if (P.actualPath.length > 0) {
-            const lastPos = P.actualPath[P.actualPath.length - 1];
-            P.pathCtx.fillStyle = '#ff6347';
-            P.pathCtx.beginPath();
-            P.pathCtx.arc(lastPos.x, lastPos.y, 4, 0, Math.PI * 2);
-            P.pathCtx.fill();
-        }
-    };
-
-    P.addPlannedPathSegment = function addPlannedPathSegment(type, value) {
-        let { x, y, heading } = P.plannedPath.length > 0 ? P.plannedPath[P.plannedPath.length - 1] : { x: P.robotPathX, y: P.robotPathY, heading: P.robotPathHeading };
-        let newX = x, newY = y, newHeading = heading;
-        const angleRad = (heading - 90) * Math.PI / 180;
-        if (type === 'move_fwd') {
-            newX += Math.cos(angleRad) * value / P.CM_PER_PIXEL;
-            newY += Math.sin(angleRad) * value / P.CM_PER_PIXEL;
-        } else if (type === 'move_bwd') {
-            newX -= Math.cos(angleRad) * value / P.CM_PER_PIXEL;
-            newY -= Math.sin(angleRad) * value / P.CM_PER_PIXEL;
-        } else if (type === 'rotate_r') {
-            newHeading += value;
-        } else if (type === 'rotate_l') {
-            newHeading -= value;
-        }
-        P.plannedPath.push({ x: newX, y: newY, heading: newHeading });
-        P.drawPathVisualization();
-    };
-
-    P.updateActualPath = function updateActualPath(data) {
-        if (data.pos_x_cm !== undefined && data.pos_y_cm !== undefined && data.yaw !== undefined) {
-            const actualX = P.robotPathX + (data.pos_x_cm / P.CM_PER_PIXEL);
-            const actualY = P.robotPathY - (data.pos_y_cm / P.CM_PER_PIXEL);
-            P.actualPath.push({ x: actualX, y: actualY, heading: data.yaw });
-            P.drawPathVisualization();
-        }
-    };
-
-    P.resetPathVisualization = function resetPathVisualization() {
-        if (!P.pathCanvas) return;
-        P.robotPathX = P.pathCanvas.width / 2;
-        P.robotPathY = P.pathCanvas.height / 2;
-        P.robotPathHeading = 0;
-        P.plannedPath = [{ x: P.robotPathX, y: P.robotPathY, heading: P.robotPathHeading }];
-        P.actualPath = [{ x: P.robotPathX, y: P.robotPathY, heading: P.robotPathHeading }];
-        const ReportPanel = document.getElementById('sequenceReportPanel');
-        if (ReportPanel) { ReportPanel.style.display = 'none'; }
-        P.drawPathVisualization();
-    };
-
-    // Backwards-compatible global wrappers (do not re-declare existing globals)
-    if (typeof window.initPathVisualization === 'undefined') window.initPathVisualization = function () { P.initPathVisualization(); };
-    if (typeof window.drawPathVisualization === 'undefined') window.drawPathVisualization = function () { P.drawPathVisualization(); };
-    if (typeof window.addPlannedPathSegment === 'undefined') window.addPlannedPathSegment = function (type, value) { P.addPlannedPathSegment(type, value); };
-    if (typeof window.updateActualPath === 'undefined') window.updateActualPath = function (data) { P.updateActualPath(data); };
-    if (typeof window.resetPathVisualization === 'undefined') window.resetPathVisualization = function () { P.resetPathVisualization(); };
-
-})();
 // ========================================================================
 // MAIN APPLICATION - Logika główna aplikacji
 // ========================================================================
@@ -829,8 +88,10 @@ const parameterMapping = {
     // PID parameters
     'balanceKpInput': 'kp_b', 'balanceKiInput': 'ki_b', 'balanceKdInput': 'kd_b', 'balanceFilterAlphaInput': 'balance_pid_derivative_filter_alpha', 'balanceIntegralLimitInput': 'balance_pid_integral_limit', 'joystickAngleSensitivityInput': 'joystick_angle_sensitivity', 'speedKpInput': 'kp_s', 'speedKiInput': 'ki_s', 'speedKdInput': 'kd_s', 'speedFilterAlphaInput': 'speed_pid_filter_alpha', 'maxTargetAngleInput': 'max_target_angle_from_speed_pid', 'speedIntegralLimitInput': 'speed_pid_integral_limit', 'speedDeadbandInput': 'speed_pid_deadband', 'positionKpInput': 'kp_p', 'positionKiInput': 'ki_p', 'positionKdInput': 'kd_p', 'positionFilterAlphaInput': 'position_pid_filter_alpha', 'maxTargetSpeedInput': 'max_target_speed_from_pos_pid', 'positionIntegralLimitInput': 'position_pid_integral_limit', 'positionDeadbandInput': 'position_pid_deadband', 'rotationKpInput': 'kp_r', 'rotationKdInput': 'kd_r', 'headingKpInput': 'kp_h', 'headingKiInput': 'ki_h', 'headingKdInput': 'kd_h', 'rotationToPwmScaleInput': 'rotation_to_pwm_scale',
     // Joystick and mechanical parameters
-    'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'maxAccelJoystickInput': 'max_accel_joystick', 'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd',
-    // Auto-tuning parameters (safety, space, weights, GA, PSO)
+    'joystickSensitivityInput': 'joystick_sensitivity', 'expoJoystickInput': 'expo_joystick', 'maxSpeedJoystickInput': 'max_speed_joystick', 'turnFactorInput': 'turn_factor', 'joystickDeadzoneInput': 'joystick_deadzone', 'wheelDiameterInput': 'wheel_diameter_cm', 'trackWidthInput': 'track_width_cm', 'encoderPprInput': 'encoder_ppr', 'minPwmLeftFwdInput': 'min_pwm_left_fwd', 'minPwmLeftBwdInput': 'min_pwm_left_bwd', 'minPwmRightFwdInput': 'min_pwm_right_fwd', 'minPwmRightBwdInput': 'min_pwm_right_bwd',
+    // Trim parameters
+    'trimValueDisplay': 'trim_angle', 'rollTrimValueDisplay': 'roll_trim',
+    // Auto-tuning parameters (safety, space, weights, GA, PSO, ZN)
     'safetyMaxAngle': 'safety_max_angle', 'safetyMaxSpeed': 'safety_max_speed', 'safetyMaxPwm': 'safety_max_pwm',
     'ga-kp-min': 'space_kp_min', 'ga-kp-max': 'space_kp_max', 'ga-ki-min': 'space_ki_min', 'ga-ki-max': 'space_ki_max', 'ga-kd-min': 'space_kd_min', 'ga-kd-max': 'space_kd_max',
     'include-ki-checkbox': 'search_ki',
@@ -838,10 +99,7 @@ const parameterMapping = {
     'ga-weight-itae': 'weights_itae', 'ga-weight-overshoot': 'weights_overshoot', 'ga-weight-control-effort': 'weights_control_effort',
     'ga-generations': 'ga_generations', 'ga-population': 'ga_population', 'ga-mutation-rate': 'ga_mutation_rate', 'ga-elitism': 'ga_elitism', 'ga-adaptive': 'ga_adaptive', 'ga-convergence-check': 'ga_convergence_check',
     'pso-iterations': 'pso_iterations', 'pso-particles': 'pso_particles', 'pso-inertia': 'pso_inertia', 'pso-adaptive-inertia': 'pso_adaptive_inertia', 'pso-velocity-clamp': 'pso_velocity_clamp', 'pso-neighborhood': 'pso_neighborhood',
-    // Mahony filter parameters
-    'useMahonyFilterInput': 'use_mahony_filter', 'mahonyKpInput': 'mahony_kp', 'mahonyKiInput': 'mahony_ki',
-    // Angle prediction parameters
-    'predictionModeInput': 'prediction_mode', 'predictionTimeMsInput': 'prediction_time_ms'
+    'zn-trial-duration': 'tuning_trial_duration_ms', 'zn-max-amplitude': 'zn_amplitude'
 };
 // Map toggle for disabling magnetometer (now included in parameterMapping)
 
@@ -852,11 +110,9 @@ const BLE_SEND_INTERVAL = 20;
 
 let joystickCenter, joystickRadius, knobRadius, isDragging = false, lastJoystickSendTime = 0;
 const JOYSTICK_SEND_INTERVAL = 20;
-let currentJoystickX = 0, currentJoystickY = 0;
 
 let gamepadIndex = null, lastGamepadState = [], gamepadMappings = {}; const GAMEPAD_MAPPING_KEY = 'pid_gamepad_mappings_v3';
-let isMappingButton = false, actionToMap = null, lastGamepadSendTime = 0;
-const GAMEPAD_SEND_INTERVAL = 20; // throttle gamepad joystick sends to 50Hz (same as screen joystick)
+let isMappingButton = false, actionToMap = null;
 
 const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v4_';
 // Pitch trim: UI pokazuje wartości w stopniach. Firmware stosuje TRIM w kwaternionie (Quaternion-First),
@@ -880,9 +136,9 @@ window.telemetryData = {};
 let isCalibrationModalShown = false;
 // UI base for 'Set Zero' feature — apparent trim is actualTrim - uiTrimZeroBase
 // Prosty model trymów:
-//  - firmware trzyma jedną wartość trim_angle / roll_trim (w stopniach) - korekta montażu czujnika
-//  - firmware trzyma osobno pitch_offset / roll_offset (w stopniach) - offset pionu dla balansu
-//  - UI pokazuje dokładnie te wartości
+//  - firmware trzyma jedną wartość trim_angle / roll_trim (w stopniach)
+//  - UI pokazuje dokładnie tę wartość, a kąt liczymy z kwaternionu + trim
+//  - przycisk "Ustaw 0" wylicza nowy trim tak, aby aktualna pozycja dawała 0°.
 let originalFirmwareTrimPitch = null; // tylko do celów informacyjnych/logów
 let originalFirmwareTrimRoll = null;
 
@@ -968,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (d !== null && d >= 90) {
                 clearInterval(sensorWizard.monitorId); sensorWizard.monitorId = null;
                 // auto-zamknięcie kroku rotacji
-                sendBleMessage({ type: 'mount_calib2_capture_rot_end' });
+                sendBleMessage({ type: 'sensor_map_capture_rot_end' });
                 sensorWizard.progress.rotation = true;
                 sensorWizard.step = 2; updateSensorWizardUI(); setWizardProgress();
                 addLogMessage('[UI] Wykryto rotację ≥ 90°. Przechodzę do kroku Zapis.', 'success');
@@ -981,29 +237,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('imuMappingSaveBtn')?.addEventListener('click', () => {
         if (!AppState.isConnected) { addLogMessage('[UI] Musisz być połączony z robotem aby zapisać mapowanie IMU.', 'warn'); return; }
         if (!confirm('Zapisz mapowanie IMU do pamięci EEPROM robota?')) return;
-        // Oblicz obroty z sensorPreview.cube.quaternion
-        const q = sensorPreview.cube.quaternion;
-        const eul = new THREE.Euler().setFromQuaternion(q, 'ZYX');
-        const yawDeg = THREE.MathUtils.radToDeg(eul.x);
-        const pitchDeg = THREE.MathUtils.radToDeg(eul.y);
-        const rollDeg = THREE.MathUtils.radToDeg(eul.z);
-        // Wyślij rotate_mount_90 dla każdej osi z niezerowym obrotem
-        if (Math.abs(pitchDeg) >= 45) { // tolerancja dla błędów zaokrąglenia
-            const steps = Math.round(pitchDeg / 90);
-            sendBleMessage({ type: 'rotate_mount_90', axis: 'x', steps });
-            addLogMessage(`[UI] Obrót montażu X: steps=${steps}`, 'info');
-        }
-        if (Math.abs(yawDeg) >= 45) {
-            const steps = Math.round(yawDeg / 90);
-            sendBleMessage({ type: 'rotate_mount_90', axis: 'y', steps });
-            addLogMessage(`[UI] Obrót montażu Y: steps=${steps}`, 'info');
-        }
-        if (Math.abs(rollDeg) >= 45) {
-            const steps = Math.round(rollDeg / 90);
-            sendBleMessage({ type: 'rotate_mount_90', axis: 'z', steps });
-            addLogMessage(`[UI] Obrót montażu Z: steps=${steps}`, 'info');
-        }
-        addLogMessage('[UI] Wysłano obroty montażu do robota (rotate_mount_90).', 'info');
+        const mapping = gatherIMUMappingFromUI();
+        sendBleMessage({ type: 'set_imu_mapping', mapping });
+        addLogMessage('[UI] Wysłano mapowanie IMU do robota (set_imu_mapping).', 'info');
     });
     // Add change handler for selects to apply runtime mapping for immediate feedback (no EEPROM save)
     ['imuPitchSource', 'imuYawSource', 'imuRollSource'].forEach(selectId => {
@@ -1028,7 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('markFrontFaceChk')?.addEventListener('change', (e) => {
         try { if (sensorPreview && sensorPreview.faceIndicator) sensorPreview.faceIndicator.visible = e.target.checked; } catch (err) { /* no-op */ }
     });
-    document.getElementById('sensorWizardCancelBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'mount_calib2_cancel' }); closeSensorMappingModal(); });
+    document.getElementById('sensorWizardCancelBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'sensor_map_cancel' }); closeSensorMappingModal(); });
     document.getElementById('sensorWizardBackBtn')?.addEventListener('click', () => {
         if (sensorWizard.step === 0) return; // nic
         if (sensorWizard.step === 1) { if (sensorWizard.monitorId) { clearInterval(sensorWizard.monitorId); sensorWizard.monitorId = null; } }
@@ -1037,16 +273,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('sensorWizardNextBtn')?.addEventListener('click', async () => {
         if (sensorWizard.step === 0) {
             // Start i rejestracja pozycji pionowej
-            sendBleMessage({ type: 'mount_calib2_start' });
+            sendBleMessage({ type: 'sensor_map_start' });
             await RB.helpers.delay(80);
-            sendBleMessage({ type: 'mount_calib2_capture_upright' });
+            sendBleMessage({ type: 'sensor_map_capture_upright' });
             sensorWizard.progress.upright = true; setWizardProgress();
             // Rozpocznij krok rotacji i monitoring
-            sendBleMessage({ type: 'mount_calib2_capture_rot_start' });
+            sendBleMessage({ type: 'sensor_map_capture_rot_start' });
             sensorWizard.step = 1; updateSensorWizardUI(); startRotationMonitor();
         } else if (sensorWizard.step === 2) {
             // Zapis
-            sendBleMessage({ type: 'mount_calib2_commit' });
+            sendBleMessage({ type: 'sensor_map_commit' });
             sensorWizard.progress.saved = true; setWizardProgress();
             closeSensorMappingModal();
         }
@@ -1074,17 +310,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize sensor mapping preview (Three.js cube) and controls
     initSensorMappingPreview();
     initAutotuneTuningChart();
-    // Ensure current telemetry canvas has correct resolution and resizes with window
-    (function () {
-        const canvas = document.getElementById('current-telemetry-chart');
-        if (!canvas) return;
-        function resizeCanvas() {
-            canvas.width = canvas.clientWidth;
-            canvas.height = canvas.clientHeight;
-        }
-        resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
-    })();
     // Start strojenia dostępny dopiero po wyborze metody
     const startBtnInit = document.getElementById('start-tuning-btn');
     if (startBtnInit) startBtnInit.disabled = true;
@@ -1138,9 +363,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     document.getElementById('closeHistoryBtn')?.addEventListener('click', () => { histModal.style.display = 'none'; });
     document.getElementById('exportHistoryCsvBtn')?.addEventListener('click', exportHistoryCsv);
-
-    // Init fitness modal
-    if (typeof initFitnessModal === 'function') initFitnessModal();
 });
 // Osobny bufor logów systemowych (kanał 'log' z robota i ważne wpisy UI)
 // Pojedynczy, scalony bufor logów
@@ -1247,15 +469,6 @@ function initSensorMappingPreview() {
     });
     document.getElementById('setModalPitchZeroBtn')?.addEventListener('click', () => { setPitchZero(); });
     document.getElementById('setModalRollZeroBtn')?.addEventListener('click', () => { setRollZero(); });
-    // Małe korekty trimów
-    document.getElementById('pitchTrimPlus01Btn')?.addEventListener('click', () => { adjustTrim('pitch', 0.1); });
-    document.getElementById('pitchTrimMinus01Btn')?.addEventListener('click', () => { adjustTrim('pitch', -0.1); });
-    document.getElementById('pitchTrimPlus001Btn')?.addEventListener('click', () => { adjustTrim('pitch', 0.01); });
-    document.getElementById('pitchTrimMinus001Btn')?.addEventListener('click', () => { adjustTrim('pitch', -0.01); });
-    document.getElementById('rollTrimPlus01Btn')?.addEventListener('click', () => { adjustTrim('roll', 0.1); });
-    document.getElementById('rollTrimMinus01Btn')?.addEventListener('click', () => { adjustTrim('roll', -0.1); });
-    document.getElementById('rollTrimPlus001Btn')?.addEventListener('click', () => { adjustTrim('roll', 0.01); });
-    document.getElementById('rollTrimMinus001Btn')?.addEventListener('click', () => { adjustTrim('roll', -0.01); });
     document.getElementById('clearModalPitchZeroBtn')?.addEventListener('click', () => {
         // Nowy model: trymy nie są stosowane runtime – nic do czyszczenia.
         addLogMessage('[UI] Trym (Pitch) jest częścią montażu (qcorr) i nie podlega czyszczeniu wartością 0. Użyj przycisków ± lub Ustaw punkt 0.', 'warn');
@@ -1263,8 +476,7 @@ function initSensorMappingPreview() {
     document.getElementById('clearModalRollZeroBtn')?.addEventListener('click', () => {
         addLogMessage('[UI] Trym (Roll) jest częścią montażu (qcorr) i nie podlega czyszczeniu wartością 0. Użyj przycisków ± lub Ustaw punkt 0.', 'warn');
     });
-    // Nowe: przyciski obrotu montażu (qcorr) o 90° wokół osi X/Y/Z - ZAKOMENTOWANE, bo robot nie obsługuje rotate_mount_90
-    /*
+    // Nowe: przyciski obrotu montażu (qcorr) o 90° wokół osi X/Y/Z
     const rotate90 = (axis, steps) => {
         sendBleMessage({ type: 'rotate_mount_90', axis, steps });
         addLogMessage(`[UI] Obrót montażu 90°: axis=${axis.toUpperCase()} steps=${steps}`, 'info');
@@ -1275,7 +487,6 @@ function initSensorMappingPreview() {
     document.getElementById('mountYPlus90Btn')?.addEventListener('click', () => rotate90('y', 1));
     document.getElementById('mountZMinus90Btn')?.addEventListener('click', () => rotate90('z', -1));
     document.getElementById('mountZPlus90Btn')?.addEventListener('click', () => rotate90('z', 1));
-    */
 }
 
 // Gather IMU mapping from sensor mapping modal
@@ -1557,40 +768,41 @@ function getRawEuler() {
 }
 
 // GLOBALNE: ustawianie punktu 0 dla Pitch i Roll.
-// Firmware: adjust_zero dodaje deltę do baseTargetAngleTrim.
-// Telemetria pitch to już kąt po trymach, więc delta = -pitch spowoduje że następny odczyt będzie 0.
-// Uwzględniamy też offset UI, który jest tymczasową korektą wyświetlania.
+// UWAGA: Kwaternion z telemetrii ma już zastosowane trymy (firmware wysyła q_final),
+// więc aby uzyskać surowy fizyczny kąt przed trybem, odejmujemy aktualny trim.
 function setPitchZero() {
     if (!window.telemetryData) {
         addLogMessage('[UI] Brak danych telemetrii (pitch).', 'warn');
         return;
     }
-    // Odczytaj aktualny pitch z telemetrii (już po trymach i offsetach)
-    let currentPitch = Number(window.telemetryData.pitch);
-    if (typeof currentPitch !== 'number' || isNaN(currentPitch)) {
+    // Oblicz skorygowany kąt bezpośrednio z kwaternionu (q_final z firmware)
+    let correctedPitch = Number(window.telemetryData.pitch);
+    if (typeof correctedPitch !== 'number' || isNaN(correctedPitch)) {
         if (typeof window.telemetryData.qw === 'number') {
             const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
-            currentPitch = eul ? eul.pitch : 0;
+            correctedPitch = eul ? eul.pitch : 0;
         } else {
-            addLogMessage('[UI] Nieprawidłowy odczyt pitch.', 'error');
-            return;
+            correctedPitch = 0;
         }
     }
+    const currentTrim = Number(window.telemetryData.trim_angle || 0);
     // Zaokrąglij lekko, by uniknąć flipa znaku przy ±0.00x
-    currentPitch = Math.round(currentPitch * 100) / 100;
-    if (isNaN(currentPitch)) {
+    correctedPitch = Math.round(correctedPitch * 100) / 100;
+    const rawPitch = correctedPitch - currentTrim; // surowy kąt przed trimem
+    if (isNaN(rawPitch)) {
         addLogMessage('[UI] Nieprawidlowy odczyt pitch.', 'error');
         return;
     }
-    // Delta = -currentPitch -> po dodaniu do trim montażu, następny odczyt pitch = 0
-    const delta = -currentPitch;
+    const delta = -rawPitch; // obróć montaż o -pitch aby uzyskać 0°
     sendBleMessage({ type: 'adjust_zero', value: delta });
+    const span = document.getElementById('trimValueDisplay');
+    if (span) span.textContent = '0.00';
     const val = document.getElementById('angleVal');
     if (val) val.textContent = '0.0 °';
     pitchHistory.push(0);
     if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
     updateChart({ pitch: 0 });
-    addLogMessage(`[UI] Punkt 0 (Pitch) ustawiony. Delta trim=${delta.toFixed(2)}°.`, 'success');
+    addLogMessage(`[UI] Punkt 0 (Pitch) ustawiony. Obrót montażu Y+=${delta.toFixed(2)}° (persist).`, 'success');
 }
 
 function setRollZero() {
@@ -1598,36 +810,30 @@ function setRollZero() {
         addLogMessage('[UI] Brak danych telemetrii (roll).', 'warn');
         return;
     }
-    // Odczytaj aktualny roll z telemetrii (już po trymach i offsetach)
-    let currentRoll = Number(window.telemetryData.roll);
-    if (typeof currentRoll !== 'number' || isNaN(currentRoll)) {
+    let correctedRoll = Number(window.telemetryData.roll);
+    if (typeof correctedRoll !== 'number' || isNaN(correctedRoll)) {
         if (typeof window.telemetryData.qw === 'number') {
             const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
-            currentRoll = eul ? eul.roll : 0;
+            correctedRoll = eul ? eul.roll : 0;
         } else {
-            addLogMessage('[UI] Nieprawidłowy odczyt roll.', 'error');
-            return;
+            correctedRoll = 0;
         }
     }
-    currentRoll = Math.round(currentRoll * 100) / 100;
-    if (isNaN(currentRoll)) {
+    const currentRollTrim = Number(window.telemetryData.roll_trim || 0);
+    correctedRoll = Math.round(correctedRoll * 100) / 100;
+    const rawRoll = correctedRoll - currentRollTrim;
+    if (isNaN(rawRoll)) {
         addLogMessage('[UI] Nieprawidlowy odczyt roll.', 'error');
         return;
     }
-    // Delta = -currentRoll -> po dodaniu do trim montażu, następny odczyt roll = 0
-    const delta = -currentRoll;
-    sendBleMessage({ type: 'adjust_roll_trim', value: delta });
+    const delta = -rawRoll;
+    sendBleMessage({ type: 'adjust_roll', value: delta });
+    const span = document.getElementById('rollTrimValueDisplay');
+    if (span) span.textContent = '0.00';
     const val = document.getElementById('rollVal');
     if (val) val.textContent = '0.0 °';
     updateChart({ roll: 0 });
-    addLogMessage(`[UI] Punkt 0 (Roll) ustawiony. Delta trim=${delta.toFixed(2)}°.`, 'success');
-}
-
-function adjustTrim(axis, delta) {
-    // axis: 'pitch' or 'roll'
-    // delta: number like 0.1 or -0.01
-    sendBleMessage({ type: axis === 'pitch' ? 'adjust_zero' : 'adjust_roll_trim', value: delta });
-    addLogMessage(`[UI] Korekta ${axis} o ${delta.toFixed(2)}°`, 'success');
+    addLogMessage(`[UI] Punkt 0 (Roll) ustawiony. Obrót montażu X+=${delta.toFixed(2)}° (persist).`, 'success');
 }
 
 const debounce = (func, delay) => { let timeout; return function (...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
@@ -1696,8 +902,9 @@ function relocateAutotuneChart(method) {
     const chartWrapper = document.querySelector('.autotune-tuning-chart-wrapper');
     if (!chartWrapper) return;
     let targetBtn = null;
-    if (method === 'ga-genetic' || method === 'ga') targetBtn = document.getElementById('run-ga-tune');
-    else if (method === 'pso-particle' || method === 'pso') targetBtn = document.getElementById('run-pso-tune');
+    if (method === 'zn-relay') targetBtn = document.getElementById('run-zn-test');
+    else if (method === 'ga-genetic') targetBtn = document.getElementById('run-ga-tune');
+    else if (method === 'pso-particle') targetBtn = document.getElementById('run-pso-tune');
     else if (method === 'single-tests') targetBtn = document.querySelector('.run-test-btn[data-test-type="step_response"]');
     if (!targetBtn) return;
     // Wstaw chart tuż za przyciskiem
@@ -2197,6 +1404,14 @@ function applySingleParam(snakeKey, value) {
             }
         }
     }
+    // Trim fields są wygaszone runtime – pozostawiamy UI jak jest lub ustawiamy 0.00
+    if (snakeKey === 'trim_angle') {
+        const span = document.getElementById('trimValueDisplay');
+        if (span) span.textContent = (Number(value) || 0).toFixed(2);
+    } else if (snakeKey === 'roll_trim') {
+        const span = document.getElementById('rollTrimValueDisplay');
+        if (span) span.textContent = (Number(value) || 0).toFixed(2);
+    }
     // Feedback sign params - special handling: update sign buttons
     if (snakeKey === 'balance_feedback_sign') {
         const v = parseInt(value);
@@ -2282,7 +1497,6 @@ function normalizeTelemetryData(d) {
     if (d.el !== undefined && d.encoder_left === undefined) d.encoder_left = d.el;
     if (d.er !== undefined && d.encoder_right === undefined) d.encoder_right = d.er;
     if (d.o !== undefined && d.output === undefined) d.output = d.o;
-    if (d.gy !== undefined && d.gyroY === undefined) d.gyroY = d.gy;  // prędkość kątowa pitch
     if (d.cs !== undefined && d.calib_sys === undefined) d.calib_sys = d.cs;
     if (d.cg !== undefined && d.calib_gyro === undefined) d.calib_gyro = d.cg;
     if (d.ca !== undefined && d.calib_accel === undefined) d.calib_accel = d.ca;
@@ -2290,12 +1504,8 @@ function normalizeTelemetryData(d) {
     if (d.lt !== undefined && d.loop_time === undefined) d.loop_time = d.lt;
     if (d.ta !== undefined && d.trim_angle === undefined) d.trim_angle = d.ta; // legacy alias
     if (d.rt !== undefined && d.roll_trim === undefined) d.roll_trim = d.rt;   // legacy alias
-    if (d.po !== undefined && d.pitch_offset === undefined) d.pitch_offset = d.po; // offset pionu pitch
-    if (d.ro !== undefined && d.roll_offset === undefined) d.roll_offset = d.ro;   // offset pionu roll
     if (d.trim_angle === undefined) d.trim_angle = 0.0;
     if (d.roll_trim === undefined) d.roll_trim = 0.0;
-    if (d.pitch_offset === undefined) d.pitch_offset = 0.0;
-    if (d.roll_offset === undefined) d.roll_offset = 0.0;
     if (d.states && typeof d.states === 'object') {
         const s = d.states;
         if (s.b !== undefined && s.balancing === undefined) s.balancing = s.b;
@@ -2339,11 +1549,16 @@ function updateTelemetryUI(data) {
         }
     }
     if (typeof data.raw_pitch === 'number' || typeof data.pitch === 'number') {
-        // Firmware już zastosował trymy do kwaternionu; UI wyświetla rzeczywisty kąt sensora
+        // Firmware już zastosował trymy do kwaternionu; UI używa bezpośrednio skorygowanego kąta.
         const correctedPitch = (data.pitch !== undefined) ? data.pitch : (typeof data.raw_pitch === 'number' ? data.raw_pitch : 0);
         document.getElementById('angleVal').textContent = correctedPitch.toFixed(1) + ' \u00B0';
         const vizPitchVal = (data.viz_pitch !== undefined) ? data.viz_pitch : correctedPitch || 0;
         document.getElementById('robot3d-pitch').textContent = vizPitchVal.toFixed(1) + '°';
+        const span = document.getElementById('trimValueDisplay');
+        if (span) {
+            const t = (data.trim_angle !== undefined) ? Number(data.trim_angle) : Number((window.telemetryData && window.telemetryData.trim_angle) || 0);
+            span.textContent = (isNaN(t) ? 0 : t).toFixed(2);
+        }
         pitchHistory.push(correctedPitch);
         if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
     }
@@ -2352,6 +1567,11 @@ function updateTelemetryUI(data) {
         const vizRollVal = (data.viz_roll !== undefined) ? data.viz_roll : correctedRoll || 0;
         document.getElementById('robot3d-roll').textContent = vizRollVal.toFixed(1) + '°';
         document.getElementById('rollVal').textContent = correctedRoll.toFixed(1) + ' \u00B0';
+        const rollSpan = document.getElementById('rollTrimValueDisplay');
+        if (rollSpan) {
+            const rt = (data.roll_trim !== undefined) ? Number(data.roll_trim) : Number((window.telemetryData && window.telemetryData.roll_trim) || 0);
+            rollSpan.textContent = (isNaN(rt) ? 0 : rt).toFixed(2);
+        }
     }
     if (data.yaw !== undefined) {
         document.getElementById('yawVal').textContent = data.yaw.toFixed(1) + ' °';
@@ -2412,38 +1632,42 @@ function updateTelemetryUI(data) {
     if (calibGyro !== undefined) { document.getElementById('calibGyroVal').textContent = calibGyro; updateCalibrationProgress('gyro', calibGyro); }
     const calibMag = (data.calib_mag !== undefined) ? data.calib_mag : data.cm;
     if (calibMag !== undefined) { document.getElementById('calibMagVal').textContent = calibMag; updateCalibrationProgress('mag', calibMag); }
+    const trimAngle = (data.trim_angle !== undefined)
+        ? Number(data.trim_angle)
+        : (typeof data.ta !== 'undefined' ? Number(data.ta) : undefined);
 
-    // Aktualizacja Dashboard: Korekta montażu (z firmware) i Offset pionu (z firmware)
-    const trimPitch = Number(data.trim_angle) || 0;
-    const trimRoll = Number(data.roll_trim) || 0;
-    const pitchOffset = Number(data.pitch_offset) || 0;
-    const rollOffset = Number(data.roll_offset) || 0;
+    if (typeof trimAngle !== 'undefined' && !isNaN(trimAngle)) {
+        if (originalFirmwareTrimPitch === null) originalFirmwareTrimPitch = trimAngle;
+        // Aparantna wartość trima to teraz bezpośrednio wartość firmware
+        const apparentTrim = trimAngle;
 
-    const angleOffsetValEl = document.getElementById('angleOffsetVal');
-    if (angleOffsetValEl) angleOffsetValEl.textContent = trimPitch.toFixed(1) + ' °';
-    const rollMountOffsetValEl = document.getElementById('rollMountOffsetVal');
-    if (rollMountOffsetValEl) rollMountOffsetValEl.textContent = trimRoll.toFixed(1) + ' °';
-    // Aktualizacja też w kontrolkach trim (montaż)
-    const trimValueDisplay = document.getElementById('trimValueDisplay');
-    if (trimValueDisplay) trimValueDisplay.textContent = trimPitch.toFixed(2);
-    const rollTrimValueDisplay = document.getElementById('rollTrimValueDisplay');
-    if (rollTrimValueDisplay) rollTrimValueDisplay.textContent = trimRoll.toFixed(2);
-    // Offset pionu (z firmware - wpływa na balans)
-    const pitchUIOffsetValEl = document.getElementById('pitchUIOffsetVal');
-    if (pitchUIOffsetValEl) pitchUIOffsetValEl.textContent = pitchOffset.toFixed(1) + ' °';
-    const rollUIOffsetValEl = document.getElementById('rollUIOffsetVal');
-    if (rollUIOffsetValEl) rollUIOffsetValEl.textContent = rollOffset.toFixed(1) + ' °';
-    // Aktualizacja kontrolek offsetu
-    const pitchOffsetDisplay = document.getElementById('pitchOffsetDisplay');
-    if (pitchOffsetDisplay) pitchOffsetDisplay.textContent = pitchOffset.toFixed(2);
-    const rollOffsetDisplay = document.getElementById('rollOffsetDisplay');
-    if (rollOffsetDisplay) rollOffsetDisplay.textContent = rollOffset.toFixed(2);
-    // Delta vs initial (różnica między aktualnym a pierwotnym trymem)
-    if (originalFirmwareTrimPitch === null && trimPitch !== 0) originalFirmwareTrimPitch = trimPitch;
-    const offsetDelta = originalFirmwareTrimPitch !== null ? (trimPitch - originalFirmwareTrimPitch) : 0;
-    const offsetDeltaValEl = document.getElementById('offsetDeltaVal');
-    if (offsetDeltaValEl) offsetDeltaValEl.textContent = offsetDelta.toFixed(1) + ' °';
+        const span = document.getElementById('trimValueDisplay');
+        if (span) span.textContent = apparentTrim.toFixed(2);
 
+        const origSpan = document.getElementById('trimOriginalDisplay');
+        if (origSpan) origSpan.textContent = originalFirmwareTrimPitch.toFixed(2);
+
+        const deltaSpan = document.getElementById('trimDeltaDisplay');
+        if (deltaSpan) deltaSpan.textContent = (trimAngle - (originalFirmwareTrimPitch || 0)).toFixed(2);
+    }
+
+    const rollTrim = (data.roll_trim !== undefined)
+        ? Number(data.roll_trim)
+        : (typeof data.rt !== 'undefined' ? Number(data.rt) : undefined);
+
+    if (typeof rollTrim !== 'undefined' && !isNaN(rollTrim)) {
+        if (originalFirmwareTrimRoll === null) originalFirmwareTrimRoll = rollTrim;
+        const apparentRollTrim = rollTrim;
+
+        const rollSpan = document.getElementById('rollTrimValueDisplay');
+        if (rollSpan) rollSpan.textContent = apparentRollTrim.toFixed(2);
+
+        const origRollSpan = document.getElementById('rollTrimOriginalDisplay');
+        if (origRollSpan) origRollSpan.textContent = originalFirmwareTrimRoll.toFixed(2);
+
+        const rollDeltaSpan = document.getElementById('rollTrimDeltaDisplay');
+        if (rollDeltaSpan) rollDeltaSpan.textContent = (rollTrim - (originalFirmwareTrimRoll || 0)).toFixed(2);
+    }
     if (data.states && !AppState.isApplyingConfig) {
         AppState.isApplyingConfig = true;
         // states short keys fallback
@@ -2862,10 +2086,6 @@ function activateMethodTab(method) {
     // Odblokuj Start po wyborze metody
     const startBtn = document.getElementById('start-tuning-btn');
     if (startBtn) startBtn.disabled = false;
-    // If Bayesian tab is selected, ensure ml5 is available
-    if (method === 'bayesian') {
-        ensureTuningDependencies('bayesian').then(() => { try { addLogMessage('[UI] Bayesian support (ml5) zaladowany.', 'info'); } catch (_) { } }).catch(err => { try { addLogMessage('[UI] Nie mozna zaladowac ml5: ' + err.message, 'warn'); } catch (_) { } });
-    }
 }
 
 function setupAutotuningTabs() {
@@ -2917,635 +2137,6 @@ function setupAutotuningTabs() {
     updateSearchSpaceInputs();
 }
 
-// Ensure algorithm classes (GA/PSO/ZN/Bayesian) and optional ML dependencies (ml5) are available.
-// Loads scripts dynamically when needed so the production `main.js` can be used while keeping
-// modular development files separate.
-function ensureTuningDependencies(method) {
-    return new Promise(async (resolve, reject) => {
-        // If we've already flagged the algorithms as loaded (inlined or previously set), only ensure ml5 if Bayesian is requested
-        if (window.__tuning_algos_loaded) {
-            if (method === 'bayesian' && typeof window.ml5 === 'undefined') {
-                try { await loadMl5(); resolve(true); } catch (e) { reject(e); }
-                return;
-            }
-            resolve(true);
-            return;
-        }
-
-        // When the code is inlined in main.js we simply mark them as loaded and optionally load ml5
-        window.__tuning_algos_loaded = true;
-        if (method === 'bayesian' && typeof window.ml5 === 'undefined') {
-            try { await loadMl5(); resolve(true); } catch (e) { reject(e); }
-            return;
-        }
-        resolve(true);
-    });
-}
-
-function loadMl5() {
-    return new Promise((resolve, reject) => {
-        if (typeof window.ml5 !== 'undefined') return resolve(true);
-        const src = 'https://unpkg.com/ml5@0.6.1/dist/ml5.min.js';
-        const script = document.createElement('script');
-        script.src = src;
-        script.async = true;
-        let handled = false;
-        const to = setTimeout(() => { if (!handled) { handled = true; reject(new Error('Timed out loading ml5')); } }, 15000);
-        script.onload = () => { clearTimeout(to); handled = true; console.info('[UI] ml5 loaded'); resolve(true); };
-        script.onerror = (e) => { clearTimeout(to); if (!handled) { handled = true; reject(new Error('Failed to load ml5')); } };
-        document.head.appendChild(script);
-    });
-}
-
-// Inline tuning algorithms (GA/PSO/ZN/Bayesian) from tuning_algorithms.js
-// Guard - do not inline multiple times
-if (!window.__tuning_algos_inlined) {
-    window.__tuning_algos_inlined = true;
-
-    // ========================================================================
-    // Minimal tuning helpers (moved from tuning_algorithms.js) - keep these
-    // available globally so we can reintroduce algorithm classes safely.
-    // ========================================================================
-
-    // Global tuning session management
-    let fitnessChartData = [];
-
-    // Baseline PID parameters (captured from UI)
-    let baselinePID = { kp: 0, ki: 0, kd: 0 };
-    const PARAMETER_SETTLING_TIME_MS = 300;
-
-    function showNotification(message) {
-        if (typeof addLogMessage === 'function') {
-            addLogMessage(`[Tuning] ${message}`, 'info');
-        } else {
-            console.log(`[Notification] ${message}`);
-        }
-    }
-
-    function mean(arr) { if (!Array.isArray(arr) || arr.length === 0) return 0; return arr.reduce((a, b) => a + b, 0) / arr.length; }
-
-    function computeTestTimeout() {
-        const trialInput = document.getElementById('tuningTrialDurationInput');
-        let trialMs = 2000;
-        if (trialInput) {
-            const v = parseInt(trialInput.value, 10);
-            if (!isNaN(v)) trialMs = v;
-        }
-        let t = trialMs + 1500;
-        if (t < 3000) t = 3000;
-        if (t > 15000) t = 15000;
-        return t;
-    }
-
-    function getPIDParamKeys(loop) {
-        let suffix = '';
-        if (loop === 'balance') suffix = 'b';
-        else if (loop === 'speed') suffix = 's';
-        else if (loop === 'position') suffix = 'p';
-        else suffix = 'b';
-        return { kp: `kp_${suffix}`, ki: `ki_${suffix}`, kd: `kd_${suffix}` };
-    }
-
-    async function runTelemetryBasedTest(kp, ki, kd) {
-        return new Promise((resolve, reject) => {
-            const testStartTime = Date.now();
-            const telemetrySamples = [];
-            let resolved = false;
-
-            const trialInput = document.getElementById('tuningTrialDurationInput');
-            let testDurationMs = 2000;
-            if (trialInput) {
-                const v = parseInt(trialInput.value, 10);
-                if (!isNaN(v) && v > 0) testDurationMs = v;
-            }
-
-            const settlingTimeMs = PARAMETER_SETTLING_TIME_MS;
-            const totalDurationMs = testDurationMs + settlingTimeMs;
-            const timeoutMs = totalDurationMs * 2;
-
-            let timeoutHandle = setTimeout(() => {
-                if (!resolved) { cleanup(); resolved = true; reject(new Error('test_timeout')); }
-            }, timeoutMs);
-
-            function cleanup() { window.removeEventListener('ble_message', telemetryHandler); clearTimeout(timeoutHandle); }
-
-            function telemetryHandler(evt) {
-                const d = evt.detail || evt;
-                if (d.type !== 'telemetry') return;
-                const elapsedTime = Date.now() - testStartTime;
-                if (elapsedTime < settlingTimeMs) return;
-                const sample = { timestamp: elapsedTime - settlingTimeMs, pitch: Number(d.pitch) || 0, roll: Number(d.roll) || 0, speed: Number(d.speed || d.sp) || 0, loopTime: Number(d.loop_time || d.lt) || 0 };
-                telemetrySamples.push(sample);
-                if (telemetrySamples.length % 12 === 0 && typeof updateCurrentTelemetryPlot === 'function') { try { updateCurrentTelemetryPlot(telemetrySamples); } catch (_) { } }
-                if (elapsedTime >= totalDurationMs) finishTest();
-            }
-
-            function finishTest() {
-                if (resolved) return; resolved = true; cleanup();
-                if (telemetrySamples.length < 5) { resolve({ fitness: Infinity, itae: 0, overshoot: 0, steady_state_error: 0, raw: { samples: telemetrySamples.length, reason: 'insufficient_data' } }); return; }
-                const metrics = calculateFitnessFromTelemetry(telemetrySamples);
-                resolve(metrics);
-            }
-
-            window.addEventListener('ble_message', telemetryHandler);
-            const loop = document.getElementById('tuning-loop-selector')?.value || 'balance';
-            const paramKeys = getPIDParamKeys(loop);
-            sendBleCommand('set_param', { key: paramKeys.kp, value: kp });
-            sendBleCommand('set_param', { key: paramKeys.ki, value: ki });
-            sendBleCommand('set_param', { key: paramKeys.kd, value: kd });
-            try { addLogMessage(`[TelemetryTest] Started test with Kp=${kp.toFixed(3)}, Ki=${ki.toFixed(3)}, Kd=${kd.toFixed(3)}, duration=${testDurationMs}ms`, 'info'); } catch (_) { }
-        });
-    }
-
-    function calculateFitnessFromTelemetry(samples) {
-        if (!samples || samples.length === 0) return { fitness: Infinity, itae: 0, overshoot: 0, steady_state_error: 0, raw: { samples: 0 } };
-        const targetAngle = 0; let itae = 0;
-        for (let i = 0; i < samples.length; i++) { const error = Math.abs(samples[i].pitch - targetAngle); const timeWeight = samples[i].timestamp / 1000; itae += error * timeWeight; }
-        itae = itae / samples.length;
-        let maxDeviation = 0; for (let i = 0; i < samples.length; i++) { const deviation = Math.abs(samples[i].pitch - targetAngle); if (deviation > maxDeviation) maxDeviation = deviation; }
-        const overshoot = maxDeviation;
-        const steadyStateStart = Math.floor(samples.length * 0.7); let sseSum = 0; let sseCount = 0;
-        for (let i = steadyStateStart; i < samples.length; i++) { sseSum += Math.abs(samples[i].pitch - targetAngle); sseCount++; }
-        const steadyStateError = sseCount > 0 ? (sseSum / sseCount) : 0;
-        let oscillationPenalty = 0;
-        if (samples.length > 3) { let signChanges = 0; for (let i = 1; i < samples.length; i++) { const prevError = samples[i - 1].pitch - targetAngle; const currError = samples[i].pitch - targetAngle; if ((prevError > 0 && currError < 0) || (prevError < 0 && currError > 0)) signChanges++; } const oscillationRate = signChanges / samples.length; if (oscillationRate > 0.3) oscillationPenalty = oscillationRate * 20; }
-
-        const weightsState = appStore.getState('tuning.weights') || { itae: 50, overshoot: 30, sse: 20 };
-        const totalPoints = (weightsState.itae || 0) + (weightsState.overshoot || 0) + (weightsState.sse || 0) || 100;
-        const wItae = (weightsState.itae || 0) / totalPoints; const wOvershoot = (weightsState.overshoot || 0) / totalPoints; const wSse = (weightsState.sse || 0) / totalPoints;
-        const compItae = itae; const compOvershoot = overshoot * 10; const compSse = steadyStateError * 5;
-        const weighted = wItae * compItae + wOvershoot * compOvershoot + wSse * compSse; const finalFitness = weighted + oscillationPenalty;
-        try { addLogMessage(`[TelemetryTest] Calculated fitness: ITAE=${itae.toFixed(2)}, Overshoot=${overshoot.toFixed(2)}°, SSE=${steadyStateError.toFixed(2)}°, Fitness=${finalFitness.toFixed(2)} (weights:${wItae.toFixed(2)},${wOvershoot.toFixed(2)},${wSse.toFixed(2)})`, 'info'); } catch (_) { }
-        return { fitness: finalFitness, itae: itae, overshoot: overshoot, steady_state_error: steadyStateError, raw: { samples: samples.length, oscillationPenalty: oscillationPenalty } };
-    }
-
-    function updateBestDisplay(params) {
-        const elKp = document.getElementById('best-kp'); const elKi = document.getElementById('best-ki'); const elKd = document.getElementById('best-kd'); const elF = document.getElementById('best-fitness');
-        if (elKp) elKp.textContent = params.kp.toFixed(3); if (elKi) elKi.textContent = params.ki.toFixed(3); if (elKd) elKd.textContent = params.kd.toFixed(3);
-        if (elF && params.fitness !== undefined && params.fitness !== Infinity) elF.textContent = params.fitness.toFixed(4);
-        const applyBtn = document.getElementById('apply-best-btn'); if (applyBtn) applyBtn.disabled = false;
-    }
-
-    function updateProgressDisplay(current, total, bestFitness) {
-        const itEl = document.getElementById('current-iteration'); const totEl = document.getElementById('total-iterations'); const fEl = document.getElementById('best-fitness');
-        if (itEl) itEl.textContent = current; if (totEl) totEl.textContent = total; if (fEl && bestFitness !== undefined && bestFitness !== Infinity) fEl.textContent = bestFitness.toFixed(4);
-        fitnessChartData.push({ x: current, y: bestFitness }); try { updateFitnessChart(); } catch (_) { }
-    }
-
-    function updateFitnessChart() {
-        const canvas = document.getElementById('fitness-chart'); if (!canvas) return; const ctx = canvas.getContext('2d'); if (!ctx) return; ctx.clearRect(0, 0, canvas.width, canvas.height); if (!Array.isArray(fitnessChartData) || fitnessChartData.length === 0) return; const minFitness = Math.min(...fitnessChartData.map(d => d.y)); const maxFitness = Math.max(...fitnessChartData.map(d => d.y)); const maxIteration = Math.max(...fitnessChartData.map(d => d.x)); const padding = 40; const width = canvas.width - 2 * padding; const height = canvas.height - 2 * padding; ctx.strokeStyle = '#61dafb'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(padding, padding); ctx.lineTo(padding, canvas.height - padding); ctx.lineTo(canvas.width - padding, canvas.height - padding); ctx.stroke(); ctx.fillStyle = '#ffffff'; ctx.font = '12px Arial'; ctx.fillText('Fitness', 5, padding); ctx.fillText('Iteracja', canvas.width - padding, canvas.height - padding + 20); ctx.strokeStyle = '#a2f279'; ctx.lineWidth = 2; ctx.beginPath(); fitnessChartData.forEach((p, i) => { const x = padding + (p.x / (maxIteration || 1)) * width; const y = canvas.height - padding - ((p.y - minFitness) / ((maxFitness - minFitness) || 0.0001)) * height; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.stroke(); ctx.fillStyle = '#a2f279'; fitnessChartData.forEach((p) => { const x = padding + (p.x / (maxIteration || 1)) * width; const y = canvas.height - padding - ((p.y - minFitness) / ((maxFitness - minFitness) || 0.0001)) * height; ctx.beginPath(); ctx.arc(x, y, 3, 0, 2 * Math.PI); ctx.fill(); });
-    }
-
-    function addTestToResultsTable(testNum, params, fitness, itae, overshoot, testType = 'metrics_test', meta = {}) {
-        const tbody = document.getElementById('results-table-body'); try { if (Array.isArray(tuningHistory)) { tuningHistory.push({ idx: testNum, kp: params.kp, ki: params.ki, kd: params.kd, fitness, itae, overshoot, testType }); if (typeof refreshRecentList === 'function') refreshRecentList(); } } catch (_) { }
-        if (!tbody) return; const metaText = (meta && meta.gen && meta.individualIdx) ? ` (Gen ${meta.gen}/${meta.totalGen}, Osobnik ${meta.individualIdx}/${meta.pop})` : ''; const row = tbody.insertRow(0); row.innerHTML = `<td>${testNum}${metaText}</td><td>${params.kp.toFixed(3)}</td><td>${params.ki.toFixed(3)}</td><td>${params.kd.toFixed(3)}</td><td>${(fitness === Infinity || isNaN(fitness)) ? '---' : fitness.toFixed(4)}</td><td>${(isNaN(itae) ? '---' : itae.toFixed(2))}</td><td>${isNaN(overshoot) ? '---' : overshoot.toFixed(2)}${(testType === 'metrics_test') ? '°' : '%'}</td><td><button onclick="applyParameters(${params.kp}, ${params.ki}, ${params.kd})" class="btn-small">Zastosuj</button></td>`;
-        const method = AppState.activeTuningMethod; let blockContainer; if (method && method.startsWith('ga')) blockContainer = document.getElementById('ga-results-blocks'); else if (method && method.startsWith('pso')) blockContainer = document.getElementById('pso-results-blocks'); if (blockContainer) { const block = document.createElement('div'); block.className = 'result-entry'; const header = document.createElement('div'); header.className = 'result-header'; const genInfo = (meta.gen && meta.totalGen) ? `Gen ${meta.gen}/${meta.totalGen}` : ''; const indInfo = (meta.individualIdx && meta.pop) ? ` · Osobnik ${meta.individualIdx}/${meta.pop}` : ''; header.innerHTML = `<strong>Wynik #${testNum} ${genInfo}${indInfo}:</strong> Fitness = ${(fitness !== undefined && fitness !== Infinity) ? fitness.toFixed(4) : '---'}`; const paramsDiv = document.createElement('div'); paramsDiv.className = 'result-params'; paramsDiv.textContent = `Kp: ${params.kp !== undefined ? params.kp.toFixed(4) : '---'}, Ki: ${params.ki !== undefined ? params.ki.toFixed(4) : '---'}, Kd: ${params.kd !== undefined ? params.kd.toFixed(4) : '---'}`; const metricsDiv = document.createElement('div'); metricsDiv.className = 'result-metrics'; metricsDiv.textContent = `Overshoot: ${overshoot !== undefined ? overshoot.toFixed(2) + '%' : '---'}, ITAE: ${itae !== undefined ? itae.toFixed(2) : '---'}`; const applyBtnBlock = document.createElement('button'); applyBtnBlock.textContent = 'Zastosuj'; applyBtnBlock.className = 'test-btn'; applyBtnBlock.addEventListener('click', () => { applyParameters(params.kp, params.ki, params.kd); addLogMessage('[UI] Zastosowano parametry z historii strojenia.', 'info'); }); block.appendChild(header); block.appendChild(paramsDiv); block.appendChild(metricsDiv); block.appendChild(applyBtnBlock); blockContainer.insertBefore(block, blockContainer.firstChild); }
-    }
-
-
-
-
-    // Expose a few helpers globally so the UI and algorithms can call them even if not inlined
-    if (typeof window.runTelemetryBasedTest === 'undefined') window.runTelemetryBasedTest = runTelemetryBasedTest;
-    if (typeof window.calculateFitnessFromTelemetry === 'undefined') window.calculateFitnessFromTelemetry = calculateFitnessFromTelemetry;
-    if (typeof window.addTestToResultsTable === 'undefined') window.addTestToResultsTable = addTestToResultsTable;
-    if (typeof window.applyParameters === 'undefined') window.applyParameters = applyParameters;
-    if (typeof window.captureBaselinePID === 'undefined') window.captureBaselinePID = captureBaselinePID;
-    if (typeof window.sendBaselinePIDToRobot === 'undefined') window.sendBaselinePIDToRobot = sendBaselinePIDToRobot;
-}
-
-function applyParameters(kp, ki, kd) {
-    const loop = document.getElementById('tuning-loop-selector').value;
-    const paramKeys = getPIDParamKeys(loop);
-    sendBleCommand('set_param', { key: paramKeys.kp, value: kp }); sendBleCommand('set_param', { key: paramKeys.ki, value: ki }); sendBleCommand('set_param', { key: paramKeys.kd, value: kd }); showNotification(`Zastosowano parametry: Kp=${kp.toFixed(3)}, Ki=${ki.toFixed(3)}, Kd=${kd.toFixed(3)}`);
-}
-
-function sendBaselinePIDToRobot() {
-    const loop = document.getElementById('tuning-loop-selector')?.value || 'balance';
-    const paramKeys = getPIDParamKeys(loop);
-    sendBleCommand('set_param', { key: paramKeys.kp, value: baselinePID.kp }); sendBleCommand('set_param', { key: paramKeys.ki, value: baselinePID.ki }); sendBleCommand('set_param', { key: paramKeys.kd, value: baselinePID.kd }); console.log(`[Tuning] Restored baseline PID: Kp=${baselinePID.kp.toFixed(3)}, Ki=${baselinePID.ki.toFixed(3)}, Kd=${baselinePID.kd.toFixed(3)}`);
-}
-
-function captureBaselinePID() {
-    const loop = document.getElementById('tuning-loop-selector')?.value || 'balance';
-    let kpInputId, kiInputId, kdInputId;
-    if (loop === 'balance') { kpInputId = 'balanceKpInput'; kiInputId = 'balanceKiInput'; kdInputId = 'balanceKdInput'; } else if (loop === 'speed') { kpInputId = 'speedKpInput'; kiInputId = 'speedKiInput'; kdInputId = 'speedKdInput'; } else if (loop === 'position') { kpInputId = 'positionKpInput'; kiInputId = 'positionKiInput'; kdInputId = 'positionKdInput'; }
-    const kpElement = document.getElementById(kpInputId); const kiElement = document.getElementById(kiInputId); const kdElement = document.getElementById(kdInputId);
-    if (kpElement && kiElement && kdElement) { baselinePID.kp = parseFloat(kpElement.value) || 0; baselinePID.ki = parseFloat(kiElement.value) || 0; baselinePID.kd = parseFloat(kdElement.value) || 0; console.log(`[Tuning] Captured baseline PID: Kp=${baselinePID.kp.toFixed(3)}, Ki=${baselinePID.ki.toFixed(3)}, Kd=${baselinePID.kd.toFixed(3)}`); } else { console.warn('[Tuning] Could not capture baseline PID - input elements not found'); }
-
-}
-// Inserted original, well-formatted GeneticAlgorithm class
-class GeneticAlgorithm {
-    constructor(config) {
-        this.populationSize = config.populationSize || 20;
-        this.generations = config.generations || 30;
-        this.mutationRate = config.mutationRate || 0.1;
-        this.crossoverRate = config.crossoverRate || 0.7;
-        this.elitism = config.elitism !== false;
-        this.searchSpace = config.searchSpace;
-
-        this.population = [];
-        this.generation = 0;
-        this.bestIndividual = null;
-        this.isRunning = false;
-        this.isPaused = false;
-        this.testCounter = 0;
-        // Debug id to correlate logs for multiple sessions
-        this._debugId = (Date.now() >>> 0) & 0xFFFF;
-        try { addLogMessage(`[GA:${this._debugId}] Constructed GA session: pop=${this.populationSize} gen=${this.generations}`, 'info'); } catch (e) { console.debug('[GA] log failed', e); }
-    }
-
-    initialize() {
-        this.population = [];
-        for (let i = 0; i < this.populationSize; i++) {
-            this.population.push(this.createRandomIndividual());
-        }
-        // Seed first individual with baseline PID captured from UI (if available)
-        if (typeof baselinePID !== 'undefined' && baselinePID && typeof baselinePID.kp === 'number') {
-            this.population[0] = { kp: baselinePID.kp, ki: baselinePID.ki, kd: baselinePID.kd, fitness: Infinity };
-        }
-        this.generation = 0;
-        this.testCounter = 0;
-        fitnessChartData = [];
-        try { addLogMessage(`[GA:${this._debugId}] initialize: population length = ${this.population.length}`, 'info'); } catch (e) { console.debug('GA init log failed', e); }
-        // Safety: if population ended up empty for some reason, repopulate with at least 1
-        if (!this.population || this.population.length === 0) {
-            const fallbackSize = Math.max(1, this.populationSize || 20);
-            for (let i = 0; i < fallbackSize; i++) {
-                this.population.push(this.createRandomIndividual());
-            }
-            try { addLogMessage(`[GA:${this._debugId}] Warning: population was empty, repopulated to ${this.population.length}`, 'warn'); } catch (e) { console.debug('GA repopulate warn', e); }
-        }
-    }
-
-    createRandomIndividual() {
-        const includeKi = !!document.getElementById('include-ki-checkbox')?.checked;
-        const getRandom = (min, max) => Math.random() * (max - min) + min;
-        return {
-            kp: getRandom(this.searchSpace.kp_min, this.searchSpace.kp_max),
-            ki: includeKi ? getRandom(this.searchSpace.ki_min, this.searchSpace.ki_max) : (baselinePID?.ki ?? ((this.searchSpace.ki_min + this.searchSpace.ki_max) / 2)),
-            kd: getRandom(this.searchSpace.kd_min, this.searchSpace.kd_max),
-            fitness: Infinity
-        };
-    }
-
-    async evaluateFitness(individual) {
-        this.testCounter++;
-        try {
-            const res = await runTelemetryBasedTest(individual.kp, individual.ki, individual.kd);
-            individual.fitness = res.fitness;
-            // Wykres: X = generacja + indeks/populacja
-            try { fitnessChartData.push({ x: this.generation + (this.testCounter / Math.max(1, this.population.length)), y: res.fitness }); updateFitnessChart(); } catch (_) { }
-            const meta = { gen: this.generation + 1, totalGen: this.generations, individualIdx: this.testCounter, pop: this.population.length };
-            addTestToResultsTable(this.testCounter, individual, res.fitness, res.itae, res.overshoot, 'telemetry_test', meta);
-            return res.fitness;
-        } catch (err) {
-            if (err && err.reason === 'interrupted_by_emergency') {
-                throw err; // obsługa w runGeneration
-            }
-            // Penalizuj i kontynuuj
-            individual.fitness = Infinity;
-            addTestToResultsTable(this.testCounter, individual, Infinity, 0, 0, 'telemetry_test');
-            return Infinity;
-        }
-    }
-
-    async runGeneration() {
-        // Evaluate all individuals
-        for (let i = 0; i < this.population.length; i++) {
-            // Pause handling - keep loop alive while paused
-            while (this.isPaused && this.isRunning) {
-                await RB.helpers.delay(100);
-            }
-
-            if (!this.isRunning) break;
-
-            // Update UI about the currently tested candidate
-            try {
-                if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.generation + 1, this.generations, i + 1, this.population.length, this.population[i].kp, this.population[i].ki, this.population[i].kd, this.population[i].fitness);
-            } catch (_) { }
-
-            if (this.population[i].fitness === Infinity) {
-                try {
-                    await this.evaluateFitness(this.population[i], i + 1);
-                } catch (error) {
-                    console.error('Test failed:', error);
-                    // Handle emergency stop - pause and wait for user to resume
-                    if (error && error.reason === 'interrupted_by_emergency') {
-                        console.log('[GA] Emergency stop detected, entering pause state');
-                        this.isPaused = true;
-                        sendBaselinePIDToRobot();
-
-                        // Wait for resume
-                        while (this.isPaused && this.isRunning) {
-                            await RB.helpers.delay(100);
-                        }
-
-                        // Retry the same test after resume
-                        if (this.isRunning) {
-                            console.log('[GA] Retrying interrupted test after resume');
-                            i--; // Retry this individual
-                            continue;
-                        }
-                    } else {
-                        // Other errors - mark as failed
-                        this.population[i].fitness = Infinity;
-                    }
-                }
-            } else {
-                // Already has a fitness; refresh UI with its fitness value
-                try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.generation + 1, this.generations, i + 1, this.population.length, this.population[i].kp, this.population[i].ki, this.population[i].kd, this.population[i].fitness); } catch (_) { }
-            }
-        }
-
-        // Sort by fitness
-        this.population.sort((a, b) => a.fitness - b.fitness);
-
-        // Update best
-        if (!this.bestIndividual || this.population[0].fitness < this.bestIndividual.fitness) {
-            this.bestIndividual = { ...this.population[0] };
-            updateBestDisplay(this.bestIndividual);
-        }
-
-        // Create new population
-        const newPopulation = [];
-
-        // Elitism
-        if (this.elitism) {
-            newPopulation.push({ ...this.population[0] });
-        }
-
-        // Selection, crossover, mutation
-        while (newPopulation.length < this.populationSize) {
-            const parent1 = this.tournamentSelection();
-            const parent2 = this.tournamentSelection();
-
-            let offspring;
-            if (Math.random() < this.crossoverRate) {
-                offspring = this.crossover(parent1, parent2);
-            } else {
-                offspring = { ...parent1 };
-            }
-
-            offspring = this.mutate(offspring);
-            offspring.fitness = Infinity;
-            newPopulation.push(offspring);
-        }
-
-        this.population = newPopulation;
-        this.generation++;
-
-        updateProgressDisplay(this.generation, this.generations, this.bestIndividual.fitness);
-    }
-
-    tournamentSelection() {
-        const tournamentSize = 3;
-        let best = null;
-
-        for (let i = 0; i < tournamentSize; i++) {
-            const candidate = this.population[Math.floor(Math.random() * this.population.length)];
-            if (!best || candidate.fitness < best.fitness) {
-                best = candidate;
-            }
-        }
-
-        return best;
-    }
-
-    crossover(parent1, parent2) {
-        const alpha = Math.random();
-        return {
-            kp: alpha * parent1.kp + (1 - alpha) * parent2.kp,
-            ki: alpha * parent1.ki + (1 - alpha) * parent2.ki,
-            kd: alpha * parent1.kd + (1 - alpha) * parent2.kd,
-            fitness: Infinity
-        };
-    }
-
-    mutate(individual) {
-        const mutated = { ...individual };
-
-        if (Math.random() < this.mutationRate) {
-            mutated.kp += (Math.random() - 0.5) * (this.searchSpace.kp_max - this.searchSpace.kp_min) * 0.1;
-            mutated.kp = Math.max(this.searchSpace.kp_min, Math.min(this.searchSpace.kp_max, mutated.kp));
-        }
-
-        const includeKi = !!document.getElementById('include-ki-checkbox')?.checked;
-        if (includeKi && Math.random() < this.mutationRate) {
-            mutated.ki += (Math.random() - 0.5) * (this.searchSpace.ki_max - this.searchSpace.ki_min) * 0.1;
-            mutated.ki = Math.max(this.searchSpace.ki_min, Math.min(this.searchSpace.ki_max, mutated.ki));
-        }
-
-        if (Math.random() < this.mutationRate) {
-            mutated.kd += (Math.random() - 0.5) * (this.searchSpace.kd_max - this.searchSpace.kd_min) * 0.1;
-            mutated.kd = Math.max(this.searchSpace.kd_min, Math.min(this.searchSpace.kd_max, mutated.kd));
-        }
-
-        return mutated;
-    }
-
-    async run() {
-        this.isRunning = true;
-        try {
-            this.initialize();
-            const progressEl = document.getElementById('tuning-progress-panel');
-            if (progressEl) progressEl.style.display = 'block';
-            try { addLogMessage(`[GA:${this._debugId}] run() started: generations=${this.generations} population=${this.population.length}`, 'info'); } catch (e) { console.debug('[GA] run start log failed', e); }
-
-            while (this.generation < this.generations && this.isRunning) {
-                if (!this.isPaused) {
-                    await this.runGeneration();
-                } else {
-                    await RB.helpers.delay(100);
-                }
-            }
-
-            this.isRunning = false;
-            // Be defensive: bestIndividual might be null if initialization failed or no population
-            try {
-                if (this.bestIndividual && typeof this.bestIndividual.fitness === 'number' && isFinite(this.bestIndividual.fitness)) {
-                    showNotification(`Optymalizacja GA zakończona! Najlepsze fitness: ${this.bestIndividual.fitness.toFixed(4)}`);
-                } else {
-                    showNotification(`Optymalizacja GA zakończona: brak wyników`);
-                }
-            } catch (err) {
-                console.error('[GA] showNotification error:', err);
-            }
-            try { addLogMessage(`[GA:${this._debugId}] run() finished: generation=${this.generation} population=${this.population.length} best=${this.bestIndividual ? JSON.stringify(this.bestIndividual) : 'null'}`, 'info'); } catch (e) { console.debug('[GA] run finish log failed', e); }
-        } catch (err) {
-            this.isRunning = false;
-            console.error(`[GA:${this._debugId}] run() error:`, err);
-            try { addLogMessage(`[GA:${this._debugId}] run() error: ${err && err.message ? err.message : String(err)}`, 'error'); } catch (e) { console.debug('[GA] log failed', e); }
-            throw err;
-        }
-    }
-
-    pause() {
-        this.isPaused = true;
-        setTimeout(() => {
-            if (this.isPaused) {
-                sendBaselinePIDToRobot();
-            }
-        }, 100);
-    }
-
-    resume() {
-        this.isPaused = false;
-    }
-
-    stop() {
-        this.isRunning = false;
-        sendBaselinePIDToRobot();
-    }
-}
-
-// ========================================================================
-// PSO ALGORITHM
-// ========================================================================
-
-class ParticleSwarmOptimization {
-    constructor(config) {
-        this.numParticles = config.numParticles || 20;
-        this.iterations = config.iterations || 30;
-        this.inertiaWeight = config.inertiaWeight || 0.7;
-        this.cognitiveWeight = config.cognitiveWeight || 1.5;
-        this.socialWeight = config.socialWeight || 1.5;
-        this.searchSpace = config.searchSpace;
-        this.particles = []; this.globalBest = null; this.iteration = 0; this.isRunning = false; this.isPaused = false; this.testCounter = 0; this._debugId = (Date.now() >>> 0) & 0xFFFF; try { addLogMessage(`[PSO:${this._debugId}] Constructed PSO: particles=${this.numParticles} iterations=${this.iterations}`, 'info'); } catch (e) { console.debug('[PSO] log failed', e); }
-    }
-
-    initialize() { this.particles = []; for (let i = 0; i < this.numParticles; i++) this.particles.push(this.createRandomParticle()); if (typeof baselinePID !== 'undefined' && baselinePID && typeof baselinePID.kp === 'number') this.particles[0] = { position: { kp: baselinePID.kp, ki: baselinePID.ki, kd: baselinePID.kd }, velocity: { kp: 0, ki: 0, kd: 0 }, bestPosition: { kp: baselinePID.kp, ki: baselinePID.ki, kd: baselinePID.kd }, bestFitness: Infinity, fitness: Infinity }; this.globalBest = null; this.iteration = 0; this.testCounter = 0; fitnessChartData = []; }
-
-    createRandomParticle() { const includeKi = !!document.getElementById('include-ki-checkbox')?.checked; const getRandom = (min, max) => Math.random() * (max - min) + min; const position = { kp: getRandom(this.searchSpace.kp_min, this.searchSpace.kp_max), ki: includeKi ? getRandom(this.searchSpace.ki_min, this.searchSpace.ki_max) : (baselinePID?.ki ?? ((this.searchSpace.ki_min + this.searchSpace.ki_max) / 2)), kd: getRandom(this.searchSpace.kd_min, this.searchSpace.kd_max) }; return { position: position, velocity: { kp: 0, ki: 0, kd: 0 }, bestPosition: { ...position }, bestFitness: Infinity, fitness: Infinity }; }
-
-    async evaluateFitness(particle, idx = 0) { this.testCounter++; try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, idx, this.particles.length, particle.position.kp, particle.position.ki, particle.position.kd, particle.fitness); } catch (_) { } try { const res = await runTelemetryBasedTest(particle.position.kp, particle.position.ki, particle.position.kd); const fitness = res.fitness; particle.fitness = fitness; if (fitness < particle.bestFitness) { particle.bestFitness = fitness; particle.bestPosition = { ...particle.position }; } if (!this.globalBest || fitness < this.globalBest.fitness) { this.globalBest = { position: { ...particle.position }, fitness: fitness }; updateBestDisplay(this.globalBest.position); } const meta = { gen: this.iteration + 1, totalGen: this.iterations, individualIdx: idx, pop: this.particles.length }; try { fitnessChartData.push({ x: this.iteration + (idx / Math.max(1, this.particles.length)), y: fitness }); updateFitnessChart(); } catch (_) { } addTestToResultsTable(this.testCounter, particle.position, fitness, res.itae, res.overshoot, 'telemetry_test', meta); return fitness; } catch (error) { console.error('[PSO] Test failed:', error); particle.fitness = Infinity; addTestToResultsTable(this.testCounter, particle.position, Infinity, 0, 0, 'telemetry_test'); throw error; } }
-
-    async runIteration() { for (let i = 0; i < this.particles.length; i++) { if (this.isPaused) { await RB.helpers.delay(100); i--; continue; } if (!this.isRunning) break; try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, i + 1, this.particles.length, this.particles[i].position.kp, this.particles[i].position.ki, this.particles[i].position.kd, this.particles[i].fitness); await this.evaluateFitness(this.particles[i], i + 1); } catch (error) { console.error('Test failed:', error); if (error.reason === 'interrupted_by_emergency') { console.log('[PSO] Emergency stop detected, entering pause state'); this.isPaused = true; sendBaselinePIDToRobot(); while (this.isPaused && this.isRunning) await RB.helpers.delay(100); if (this.isRunning) { console.log('[PSO] Retrying interrupted test after resume'); i--; continue; } } else { this.particles[i].fitness = Infinity; } } } for (let particle of this.particles) { this.updateVelocity(particle); this.updatePosition(particle); } this.iteration++; updateProgressDisplay(this.iteration, this.iterations, this.globalBest ? this.globalBest.fitness : Infinity); }
-
-    updateVelocity(particle) { const r1 = Math.random(); const r2 = Math.random(); for (let dim of ['kp', 'ki', 'kd']) { const cognitive = this.cognitiveWeight * r1 * (particle.bestPosition[dim] - particle.position[dim]); const social = this.socialWeight * r2 * (this.globalBest.position[dim] - particle.position[dim]); particle.velocity[dim] = this.inertiaWeight * particle.velocity[dim] + cognitive + social; const maxVel = (this.searchSpace[dim + '_max'] - this.searchSpace[dim + '_min']) * 0.2; particle.velocity[dim] = Math.max(-maxVel, Math.min(maxVel, particle.velocity[dim])); } }
-
-    updatePosition(particle) { for (let dim of ['kp', 'ki', 'kd']) { particle.position[dim] += particle.velocity[dim]; particle.position[dim] = Math.max(this.searchSpace[dim + '_min'], Math.min(this.searchSpace[dim + '_max'], particle.position[dim])); } }
-
-    async run() { this.isRunning = true; try { this.initialize(); const progressEl = document.getElementById('tuning-progress-panel'); if (progressEl) progressEl.style.display = 'block'; while (this.iteration < this.iterations && this.isRunning) { if (!this.isPaused) await this.runIteration(); else await RB.helpers.delay(100); } this.isRunning = false; try { if (this.globalBest && typeof this.globalBest.fitness === 'number' && isFinite(this.globalBest.fitness)) showNotification(`Optymalizacja PSO zakończona! Najlepsze fitness: ${this.globalBest.fitness.toFixed(4)}`); else showNotification(`Optymalizacja PSO zakonczona: brak wynikow`); } catch (err) { console.error('[PSO] showNotification error:', err); } try { addLogMessage(`[PSO] run finished: iteration=${this.iteration} particles=${this.particles.length} globalBest=${this.globalBest ? JSON.stringify(this.globalBest) : 'null'}`, 'info'); } catch (e) { console.debug('[PSO] log failed', e); } } catch (err) { this.isRunning = false; console.error('[PSO] run() error:', err); try { addLogMessage(`[PSO] run() error: ${err && err.message ? err.message : String(err)}`, 'error'); } catch (e) { console.debug('[PSO] log failed', e); } throw err; } }
-
-    pause() { this.isPaused = true; setTimeout(() => { if (this.isPaused) sendBaselinePIDToRobot(); }, 100); }
-    resume() { this.isPaused = false; }
-    stop() { this.isRunning = false; sendBaselinePIDToRobot(); }
-}
-
-// ========================================================================
-// ZIEGLER-NICHOLS RELAY METHOD
-// ========================================================================
-
-class ZieglerNicholsRelay {
-    constructor(config) { this.amplitude = config.amplitude || 2.0; this.minCycles = config.minCycles || 3; this.isRunning = false; this.oscillationData = []; this.peaks = []; this.valleys = []; this._debugId = (Date.now() >>> 0) & 0xFFFF; try { addLogMessage(`[ZN:${this._debugId}] Constructed ZN: amplitude=${this.amplitude} minCycles=${this.minCycles}`, 'info'); } catch (e) { console.debug('[ZN] log failed', e); } }
-
-    async run() {
-        this.isRunning = true;
-        const testId = Date.now() >>> 0;
-        this.oscillationData = []; this.peaks = []; this.valleys = [];
-        try {
-            const znDisplay = document.getElementById('zn-oscillation-display'); if (znDisplay) znDisplay.style.display = 'block'; try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(1, 1, 1, 1, 0, 0, 0, null); } catch (_) { }
-            return new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => { reject(new Error('ZN test timeout')); }, 30000);
-                const handler = (evt) => { const data = (evt && evt.detail) ? evt.detail : evt; if (data.type === 'relay_state' && Number(data.testId) === testId) { this.oscillationData.push({ time: data.time, angle: data.angle, relayOutput: data.relay_output }); this.detectPeaksValleys(); this.updateRelayChart(); const znCyclesEl = document.getElementById('zn-detected-cycles'); if (znCyclesEl) znCyclesEl.textContent = Math.min(this.peaks.length, this.valleys.length); if (this.peaks.length >= this.minCycles && this.valleys.length >= this.minCycles) { clearTimeout(timeout); window.removeEventListener('ble_message', handler); const results = this.calculateZNParameters(); this.displayResults(results); try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(1, 1, 1, 1, results.kp, results.ki, results.kd, 0); } catch (_) { } resolve(results); } } else if (data.type === 'test_complete' && Number(data.testId) === testId) { clearTimeout(timeout); window.removeEventListener('ble_message', handler); if (this.peaks.length >= this.minCycles && this.valleys.length >= this.minCycles) { const results = this.calculateZNParameters(); this.displayResults(results); try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(1, 1, 1, 1, results.kp, results.ki, results.kd, 0); } catch (_) { } resolve(results); } else { reject(new Error('Not enough oscillation cycles detected')); } } };
-                window.addEventListener('ble_message', handler);
-                const ackHandlerZN = (evt) => { const d = (evt && evt.detail) ? evt.detail : evt; if (d.type === 'ack' && d.command === 'run_relay_test') { if (!d.success) { clearTimeout(timeout); window.removeEventListener('ble_message', handler); window.removeEventListener('ble_message', ackHandlerZN); try { addLogMessage(`[ZN] run_relay_test ACK failed: ${d.message || 'N/A'}`, 'error'); } catch (e) { console.debug('[ZN] ack log failed', e); } reject({ reason: 'ack_failed', message: d.message }); return; } else { window.removeEventListener('ble_message', ackHandlerZN); } } };
-                window.addEventListener('ble_message', ackHandlerZN);
-                try { addLogMessage(`[ZN] Sending run_relay_test: testId=${testId} amplitude=${this.amplitude}`, 'info'); } catch (e) { console.debug('[ZN] log failed', e); }
-                // sendBleCommand('run_relay_test', { amplitude: this.amplitude, testId: testId }); - ZAKOMENTOWANE, bo robot nie obsługuje
-            });
-        } catch (err) { this.isRunning = false; console.error('[ZN] run() error:', err); try { addLogMessage(`[ZN] run() error: ${err && err.message ? err.message : String(err)}`, 'error'); } catch (e) { console.debug('[ZN] log failed', e); } throw err; }
-    }
-
-    detectPeaksValleys() { const data = this.oscillationData; const n = data.length; if (n < 3) return; const last = data[n - 1]; const prev = data[n - 2]; const prevPrev = data[n - 3]; if (prev.angle > prevPrev.angle && prev.angle > last.angle) { if (this.peaks.length === 0 || prev.time - this.peaks[this.peaks.length - 1].time > 0.1) this.peaks.push({ time: prev.time, value: prev.angle }); } if (prev.angle < prevPrev.angle && prev.angle < last.angle) { if (this.valleys.length === 0 || prev.time - this.valleys[this.valleys.length - 1].time > 0.1) this.valleys.push({ time: prev.time, value: prev.angle }); } }
-
-    calculateZNParameters() { const peakValues = this.peaks.slice(-this.minCycles).map(p => p.value); const valleyValues = this.valleys.slice(-this.minCycles).map(v => v.value); const avgAmplitude = (mean(peakValues) - mean(valleyValues)) / 2; const ku = (4 * this.amplitude) / (Math.PI * avgAmplitude); const periods = []; for (let i = 1; i < this.peaks.length; i++) periods.push(this.peaks[i].time - this.peaks[i - 1].time); const tu = mean(periods); return { ku: ku, tu: tu, kp: 0.6 * ku, ki: 1.2 * ku / tu, kd: 0.075 * ku * tu }; }
-
-    displayResults(results) { updateBestDisplay({ kp: results.kp, ki: results.ki, kd: results.kd, fitness: 0 }); showNotification(`ZN: Ku=${results.ku.toFixed(3)}, Tu=${results.tu.toFixed(3)}s`); }
-
-    updateRelayChart() { const canvas = document.getElementById('zn-oscillation-chart'); if (!canvas) return; const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height); if (this.oscillationData.length === 0) return; const times = this.oscillationData.map(d => d.time); const angles = this.oscillationData.map(d => d.angle); const minTime = Math.min(...times); const maxTime = Math.max(...times); const minAngle = Math.min(...angles); const maxAngle = Math.max(...angles); const padding = 30; const width = canvas.width - 2 * padding; const height = canvas.height - 2 * padding; ctx.strokeStyle = '#61dafb'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(padding, padding); ctx.lineTo(padding, canvas.height - padding); ctx.lineTo(canvas.width - padding, canvas.height - padding); ctx.stroke(); ctx.strokeStyle = '#a2f279'; ctx.lineWidth = 2; ctx.beginPath(); this.oscillationData.forEach((point, i) => { const x = padding + ((point.time - minTime) / (maxTime - minTime + 0.001)) * width; const y = canvas.height - padding - ((point.angle - minAngle) / (maxAngle - minAngle + 0.001)) * height; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.stroke(); ctx.fillStyle = '#ff6b6b'; this.peaks.forEach(peak => { const x = padding + ((peak.time - minTime) / (maxTime - minTime + 0.001)) * width; const y = canvas.height - padding - ((peak.value - minAngle) / (maxAngle - minAngle + 0.001)) * height; ctx.beginPath(); ctx.arc(x, y, 4, 0, 2 * Math.PI); ctx.fill(); }); ctx.fillStyle = '#4ecdc4'; this.valleys.forEach(valley => { const x = padding + ((valley.time - minTime) / (maxTime - minTime + 0.001)) * width; const y = canvas.height - padding - ((valley.value - minAngle) / (maxAngle - minAngle + 0.001)) * height; ctx.beginPath(); ctx.arc(x, y, 4, 0, 2 * Math.PI); ctx.fill(); }); }
-
-    stop() { this.isRunning = false; /* sendBleCommand('cancel_test', {}); */ sendBaselinePIDToRobot(); }
-}
-
-// ========================================================================
-// BAYESIAN OPTIMIZATION
-// ========================================================================
-
-class BayesianOptimization {
-    constructor(config) { this.iterations = config.iterations || 25; this.initialSamples = config.initialSamples || 5; this.searchSpace = config.searchSpace; this.acquisitionFunction = config.acquisitionFunction || 'ei'; this.xi = config.xi || 0.01; this.samples = []; this.iteration = 0; this.isRunning = false; this.neuralNetwork = null; this.testCounter = 0; }
-
-    async initialize() { this.samples = []; this.iteration = 0; this.testCounter = 0; fitnessChartData = []; for (let i = 0; i < this.initialSamples; i++) { const sample = this.sampleRandom(); try { const fitness = await this.evaluateSample(sample); this.samples.push({ ...sample, fitness }); } catch (error) { console.error('Initial sample failed:', error); this.samples.push({ ...sample, fitness: Infinity }); } } if (typeof baselinePID !== 'undefined' && baselinePID && typeof baselinePID.kp === 'number') { const baseSample = { kp: baselinePID.kp, ki: baselinePID.ki, kd: baselinePID.kd }; try { const fitness = await this.evaluateSample(baseSample); this.samples.push({ ...baseSample, fitness }); } catch (error) { console.warn('Baseline sample evaluation failed:', error); this.samples.push({ ...baseSample, fitness: Infinity }); } } await this.trainSurrogate(); document.getElementById('bayesian-visualization').style.display = 'block'; this.updateVisualization(); }
-
-    async trainSurrogate() { if (!this.neuralNetwork) { this.neuralNetwork = ml5.neuralNetwork({ inputs: 3, outputs: 1, task: 'regression', layers: [{ type: 'dense', units: 32, activation: 'relu' }, { type: 'dense', units: 16, activation: 'relu' }] }); } this.neuralNetwork.data.data.raw = []; const validSamples = this.samples.filter(s => s.fitness !== Infinity); validSamples.forEach(sample => { this.neuralNetwork.addData({ kp: sample.kp, ki: sample.ki, kd: sample.kd }, { fitness: sample.fitness }); }); if (validSamples.length < 2) { console.warn('Not enough valid samples to train surrogate'); return; } await this.neuralNetwork.normalizeData(); const trainingOptions = { epochs: 30, batchSize: Math.min(8, validSamples.length), validationSplit: 0.1 }; await this.neuralNetwork.train(trainingOptions); }
-
-    async acquireNext() { let bestAcquisition = -Infinity; let bestSample = null; const gridSize = 8; for (let i = 0; i < gridSize; i++) { for (let j = 0; j < gridSize; j++) { for (let k = 0; k < gridSize; k++) { const kp = this.searchSpace.kp_min + (i / (gridSize - 1)) * (this.searchSpace.kp_max - this.searchSpace.kp_min); const ki = this.searchSpace.ki_min + (j / (gridSize - 1)) * (this.searchSpace.ki_max - this.searchSpace.ki_min); const kd = this.searchSpace.kd_min + (k / (gridSize - 1)) * (this.searchSpace.kd_max - this.searchSpace.kd_min); const acquisition = await this.calculateAcquisition({ kp, ki, kd }); if (acquisition > bestAcquisition) { bestAcquisition = acquisition; bestSample = { kp, ki, kd }; } } } } return bestSample; }
-
-    async calculateAcquisition(sample) { const prediction = await this.neuralNetwork.predict({ kp: sample.kp, ki: sample.ki, kd: sample.kd }); const predictedFitness = prediction[0].fitness; const validSamples = this.samples.filter(s => s.fitness !== Infinity); if (validSamples.length === 0) return 0; const currentBest = Math.min(...validSamples.map(s => s.fitness)); if (this.acquisitionFunction === 'ei') { const improvement = currentBest - predictedFitness; return Math.max(0, improvement + this.xi); } else if (this.acquisitionFunction === 'ucb') { const uncertainty = 1.0; return -predictedFitness + 2.0 * uncertainty; } else if (this.acquisitionFunction === 'pi') { const improvement = currentBest - predictedFitness; return improvement > 0 ? 1 : 0; } return -predictedFitness; }
-
-    async evaluateSample(sample) { this.testCounter++; try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, null); } catch (_) { } try { const res = await runTelemetryBasedTest(sample.kp, sample.ki, sample.kd); const fitness = res.fitness; try { if (typeof updateCurrentTestDisplay === 'function') updateCurrentTestDisplay(this.iteration + 1, this.iterations, this.testCounter, this.initialSamples + 1, sample.kp, sample.ki, sample.kd, fitness); } catch (_) { } addTestToResultsTable(this.testCounter, sample, fitness, res.itae, res.overshoot, 'telemetry_test'); return fitness; } catch (error) { console.error('[Bayesian] Test failed:', error); addTestToResultsTable(this.testCounter, sample, Infinity, 0, 0, 'telemetry_test'); throw error; } }
-
-    sampleRandom() { const includeKi = !!document.getElementById('include-ki-checkbox')?.checked; const getRandom = (min, max) => Math.random() * (max - min) + min; return { kp: getRandom(this.searchSpace.kp_min, this.searchSpace.kp_max), ki: includeKi ? getRandom(this.searchSpace.ki_min, this.searchSpace.ki_max) : (baselinePID?.ki ?? ((this.searchSpace.ki_min + this.searchSpace.ki_max) / 2)), kd: getRandom(this.searchSpace.kd_min, this.searchSpace.kd_max) }; }
-
-    updateVisualization() { const canvas = document.getElementById('bayesian-space-chart'); const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height); if (this.samples.length === 0) return; const padding = 40; const width = canvas.width - 2 * padding; const height = canvas.height - 2 * padding; ctx.strokeStyle = '#61dafb'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(padding, padding); ctx.lineTo(padding, canvas.height - padding); ctx.lineTo(canvas.width - padding, canvas.height - padding); ctx.stroke(); ctx.fillStyle = '#ffffff'; ctx.font = '12px Arial'; ctx.fillText('Kp', canvas.width - padding + 5, canvas.height - padding + 5); ctx.fillText('Kd', padding - 30, padding); const validSamples = this.samples.filter(s => s.fitness !== Infinity); const bestSample = validSamples.length > 0 ? validSamples.reduce((a, b) => a.fitness < b.fitness ? a : b) : null; this.samples.forEach(sample => { if (sample.fitness === Infinity) return; const x = padding + ((sample.kp - this.searchSpace.kp_min) / (this.searchSpace.kp_max - this.searchSpace.kp_min)) * width; const y = canvas.height - padding - ((sample.kd - this.searchSpace.kd_min) / (this.searchSpace.kd_max - this.searchSpace.kd_min)) * height; const minFitness = Math.min(...validSamples.map(s => s.fitness)); const maxFitness = Math.max(...validSamples.map(s => s.fitness)); const normalized = (sample.fitness - minFitness) / (maxFitness - minFitness + 0.001); const hue = (1 - normalized) * 240; ctx.fillStyle = `hsl(${hue}, 70%, 50%)`; ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.fill(); }); if (bestSample) { const x = padding + ((bestSample.kp - this.searchSpace.kp_min) / (this.searchSpace.kp_max - this.searchSpace.kp_min)) * width; const y = canvas.height - padding - ((bestSample.kd - this.searchSpace.kd_min) / (this.searchSpace.kd_max - this.searchSpace.kd_min)) * height; ctx.strokeStyle = '#a2f279'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 8, 0, 2 * Math.PI); ctx.stroke(); } }
-
-    async run() { this.isRunning = true; try { const progressEl = document.getElementById('tuning-progress-panel'); if (progressEl) progressEl.style.display = 'block'; try { showNotification('Inicjalizacja Bayesian Optimization...'); } catch (e) { console.debug('[Bayes] notify init failed', e); } await this.initialize(); while (this.iteration < this.iterations && this.isRunning) { const nextSample = await this.acquireNext(); if (!nextSample) { console.error('Failed to acquire next sample'); break; } try { const fitness = await this.evaluateSample(nextSample); this.samples.push({ ...nextSample, fitness }); } catch (error) { console.error('Sample evaluation failed:', error); this.samples.push({ ...nextSample, fitness: Infinity }); } await this.trainSurrogate(); const validSamples = this.samples.filter(s => s.fitness !== Infinity); const best = validSamples.length > 0 ? validSamples.reduce((a, b) => a.fitness < b.fitness ? a : b) : null; if (best) { updateBestDisplay(best); updateProgressDisplay(this.iteration + 1, this.iterations, best.fitness); } this.updateVisualization(); this.iteration++; } this.isRunning = false; const validSamples = this.samples.filter(s => s.fitness !== Infinity); const best = validSamples.length > 0 ? validSamples.reduce((a, b) => a.fitness < b.fitness ? a : b) : null; if (best) { try { if (best && typeof best.fitness === 'number' && isFinite(best.fitness)) { showNotification(`Bayesian Optimization zakończona! Najlepsze fitness: ${best.fitness.toFixed(4)}`); } else { showNotification('Bayesian Optimization zakończona - brak udanych testów'); } } catch (err) { console.error('[Bayes] showNotification error:', err); } } else { showNotification('Bayesian Optimization zakończona - brak udanych testów'); } } catch (err) { this.isRunning = false; console.error('[Bayes] run() error:', err); try { addLogMessage(`[Bayes] run() error: ${err && err.message ? err.message : String(err)}`, 'error'); } catch (e) { console.debug('[Bayes] log failed', e); } throw err; } }
-
-    stop() { this.isRunning = false; sendBaselinePIDToRobot(); }
-}
-
-// Expose relevant functions globally so existing code paths still work
-if (typeof window.GeneticAlgorithm === 'undefined') window.GeneticAlgorithm = GeneticAlgorithm;
-if (typeof window.ParticleSwarmOptimization === 'undefined') window.ParticleSwarmOptimization = ParticleSwarmOptimization;
-if (typeof window.ZieglerNicholsRelay === 'undefined') window.ZieglerNicholsRelay = ZieglerNicholsRelay;
-if (typeof window.BayesianOptimization === 'undefined') window.BayesianOptimization = BayesianOptimization;
-if (typeof window.runTelemetryBasedTest === 'undefined') window.runTelemetryBasedTest = runTelemetryBasedTest;
-if (typeof window.calculateFitnessFromTelemetry === 'undefined') window.calculateFitnessFromTelemetry = calculateFitnessFromTelemetry;
-if (typeof window.addTestToResultsTable === 'undefined') window.addTestToResultsTable = addTestToResultsTable;
-if (typeof window.applyParameters === 'undefined') window.applyParameters = applyParameters;
-if (typeof window.captureBaselinePID === 'undefined') window.captureBaselinePID = captureBaselinePID;
-if (typeof window.sendBaselinePIDToRobot === 'undefined') window.sendBaselinePIDToRobot = sendBaselinePIDToRobot;
-if (typeof window.updateBestDisplay === 'undefined') window.updateBestDisplay = updateBestDisplay;
-if (typeof window.updateFitnessChart === 'undefined') window.updateFitnessChart = updateFitnessChart;
-
-
-// Draw a mini telemetry plot for the currently tested candidate
-function updateCurrentTelemetryPlot(samples) {
-    const canvas = document.getElementById('current-telemetry-chart');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (!Array.isArray(samples) || samples.length === 0) return;
-
-    const padding = 6;
-    const w = canvas.width - padding * 2;
-    const h = canvas.height - padding * 2;
-    const pitches = samples.map(s => s.pitch);
-    const minVal = Math.min(...pitches);
-    const maxVal = Math.max(...pitches);
-    const range = (maxVal - minVal) || 1;
-
-    ctx.strokeStyle = '#61dafb';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    samples.forEach((s, i) => {
-        const x = padding + (i / (samples.length - 1)) * w;
-        const y = padding + h - (((s.pitch - minVal) / range) * h);
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-    // Mark last sample
-    const last = samples[samples.length - 1];
-    const lastX = padding + w;
-    const lastY = padding + h - (((last.pitch - minVal) / range) * h);
-    ctx.fillStyle = '#a2f279';
-    ctx.beginPath();
-    ctx.arc(lastX - 2, lastY, 3, 0, 2 * Math.PI);
-    ctx.fill();
-}
-
 // Główne zakładki w panelu optymalizacji (Konfiguracja/Metody)
 function setupMainAutotuneTabs() {
     const tabs = document.querySelectorAll('.autotune-main-tab');
@@ -3566,67 +2157,6 @@ function setupMainAutotuneTabs() {
     const activeMain = document.querySelector('.autotune-main-tab.active')?.dataset.tab || 'config';
     if (controlsBar) controlsBar.style.display = (activeMain === 'methods' || AppState.isTuningActive) ? 'flex' : 'none';
 }
-
-// Initialize the fitness weights modal and wire controls
-function initFitnessModal() {
-    const TOTAL_POINTS = 100;
-    const openBtn = document.getElementById('open-fitness-modal-btn');
-    const modal = document.getElementById('fitness-modal');
-    const closeBtn = document.getElementById('close-fitness-modal');
-    const applyBtn = document.getElementById('apply-fitness-btn');
-    const itaeInput = document.getElementById('weight-itae');
-    const overshootInput = document.getElementById('weight-overshoot');
-    const sseInput = document.getElementById('weight-sse');
-    const remainingEl = document.getElementById('weight-remaining');
-
-    if (!modal || !openBtn || !closeBtn || !applyBtn || !itaeInput || !overshootInput || !sseInput || !remainingEl) return;
-
-    function sanitizeAndClamp(v) { let n = parseInt(v, 10); if (Number.isNaN(n)) n = 0; if (n < 0) n = 0; if (n > TOTAL_POINTS) n = TOTAL_POINTS; return n; }
-
-    function updateWeightUi() {
-        const itae = sanitizeAndClamp(itaeInput.value);
-        const overs = sanitizeAndClamp(overshootInput.value);
-        const sse = sanitizeAndClamp(sseInput.value);
-        itaeInput.value = itae; overshootInput.value = overs; sseInput.value = sse;
-        const sum = itae + overs + sse;
-        const remaining = TOTAL_POINTS - sum;
-        remainingEl.textContent = remaining;
-        // Show negative remainder in red
-        remainingEl.style.color = remaining === 0 ? '#61dafb' : '#ff6347';
-        applyBtn.disabled = (remaining !== 0);
-    }
-
-    // Initialize values from appStore or defaults
-    function initValuesFromState() {
-        const stateWeights = appStore.getState('tuning.weights') || { itae: 50, overshoot: 30, sse: 20 };
-        itaeInput.value = sanitizeAndClamp(stateWeights.itae);
-        overshootInput.value = sanitizeAndClamp(stateWeights.overshoot);
-        sseInput.value = sanitizeAndClamp(stateWeights.sse);
-        updateWeightUi();
-    }
-
-    openBtn.addEventListener('click', () => { initValuesFromState(); modal.style.display = 'flex'; });
-    closeBtn.addEventListener('click', () => { modal.style.display = 'none'; });
-    [itaeInput, overshootInput, sseInput].forEach(inp => inp.addEventListener('input', updateWeightUi));
-
-    applyBtn.addEventListener('click', () => {
-        const itae = sanitizeAndClamp(itaeInput.value);
-        const overs = sanitizeAndClamp(overshootInput.value);
-        const sse = sanitizeAndClamp(sseInput.value);
-        const sum = itae + overs + sse;
-        if (sum !== TOTAL_POINTS) {
-            addLogMessage('[UI] Musisz rozdzielić dokładnie 100 punktów pomiędzy wagi.', 'warn');
-            return;
-        }
-        appStore.setState('tuning.weights', { itae, overshoot: overs, sse });
-        // Send to robot as set_tuning_config_param keys - map sse to control effort key name
-        sendBleCommand('set_tuning_config_param', { key: 'weights_itae', value: itae });
-        sendBleCommand('set_tuning_config_param', { key: 'weights_overshoot', value: overs });
-        sendBleCommand('set_tuning_config_param', { key: 'weights_control_effort', value: sse });
-        addLogMessage('[UI] Wagi fitness zastosowane.', 'info');
-        modal.style.display = 'none';
-    });
-}
 function updateSearchSpaceInputs() {
     const __loopEl = document.getElementById('tuning-loop-selector');
     const selectedLoop = __loopEl ? __loopEl.value : 'balance';
@@ -3639,82 +2169,13 @@ function updateSearchSpaceInputs() {
         if (kiMinWrap) kiMinWrap.style.display = showKi ? 'block' : 'none';
     });
 }
-// Wait for one of desired robot states to appear on appStore
-function waitForRobotState(desiredStates = ['BALANSUJE', 'TRZYMA_POZYCJE'], timeoutMs = 5000) {
-    return new Promise((resolve) => {
-        try {
-            if (desiredStates.includes(AppState.lastKnownRobotState)) { resolve(true); return; }
-            const id = appStore.subscribe('robot.state', (newVal) => {
-                try {
-                    if (desiredStates.includes(newVal)) {
-                        appStore.unsubscribe(id);
-                        resolve(true);
-                    }
-                } catch (e) { /* ignore */ }
-            });
-            setTimeout(() => { try { appStore.unsubscribe(id); } catch (e) { } resolve(false); }, timeoutMs);
-        } catch (e) { resolve(false); }
-    });
-}
-
-// Asynchronous check of prerequisites - shows clearer messages and optionally toggles balancing on user consent.
-async function checkTuningPrerequisites() {
-    if (!AppState.isConnected || !AppState.isSynced) {
-        addLogMessage('[UI] Blad: Polacz i zsynchronizuj z robotem.', 'error');
-        const statusEl = document.getElementById('tuning-status-text'); if (statusEl) statusEl.textContent = 'Blad: brak polaczenia/synchronizacji';
-        return false;
-    }
-
-    if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState)) {
-        // Ask user whether we should try to enable balance automatically
-        const msg = `Robot musi byc w stanie BALANSUJE lub TRZYMA_POZYCJE aby uruchomic testy. Aktualny stan: '${AppState.lastKnownRobotState}'.\nCzy wlaczyc balansowanie teraz?`;
-        const ok = confirm(msg);
-        if (!ok) {
-            addLogMessage(`[UI] Wymagany stan 'BALANSUJE'. Aktualny: '${AppState.lastKnownRobotState}'.`, 'error');
-            const statusEl = document.getElementById('tuning-status-text'); if (statusEl) statusEl.textContent = 'Wymagany stan: BALANSUJE';
-            return false;
-        }
-
-        // Try to enable balancing via UI or direct command, then wait for the robot to switch state
-        try {
-            const bsEl = document.getElementById('balanceSwitch');
-            if (bsEl) {
-                bsEl.checked = true;
-                // dispatch change to trigger standard handler
-                bsEl.dispatchEvent(new Event('change'));
-            } else {
-                // fallback: direct command
-                sendBleMessage({ type: 'balance_toggle', enabled: true });
-            }
-            addLogMessage('[UI] Wlaczono balansowanie. Oczekiwanie na stan BALANSUJE...', 'info');
-            const success = await waitForRobotState(['BALANSUJE', 'TRZYMA_POZYCJE'], 8000);
-            if (!success) {
-                addLogMessage('[UI] Robot nie przeszedl do stanu BALANSUJE po wlaczeniu balansowania.', 'error');
-                const statusEl = document.getElementById('tuning-status-text'); if (statusEl) statusEl.textContent = 'Brak oczekiwanego stanu BALANSUJE';
-                return false;
-            }
-            return true;
-        } catch (e) {
-            addLogMessage('[UI] Blad przy probie wlaczenia balansowania: ' + (e && e.message ? e.message : String(e)), 'error');
-            return false;
-        }
-    }
-
-    if (AppState.isTuningActive) {
-        addLogMessage('[UI] Blad: Inna sesja strojenia jest juz w toku.', 'warn');
-        return false;
-    }
-    return true;
-}
+function checkTuningPrerequisites() { if (!AppState.isConnected || !AppState.isSynced) { addLogMessage('[UI] Blad: Polacz i zsynchronizuj z robotem.', 'error'); return false; } if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState)) { addLogMessage(`[UI] Blad: Wymagany stan 'BALANSUJE'. Aktualny: '${AppState.lastKnownRobotState}'.`, 'error'); return false; } if (AppState.isTuningActive) { addLogMessage('[UI] Blad: Inna sesja strojenia jest juz w toku.', 'warn'); return false; } return true; }
 function setTuningUiLock(isLocked, method) {
     AppState.isTuningActive = isLocked;
     AppState.activeTuningMethod = isLocked ? method : '';
 
     // Globalny tryb strojenia (odblokowane: Sterowanie, Optymalizacja, Logi)
-    // Dla pojedynczych testów nie blokuj UI, tylko dla algorytmów optymalizacji
-    if (method !== 'single-tests') {
-        document.body.classList.toggle('tuning-active', isLocked);
-    }
+    document.body.classList.toggle('tuning-active', isLocked);
 
     // Wyłączamy przełączanie zakładek. Disable run test buttons OUTSIDE of autotune card only
     document.querySelectorAll('.run-test-btn').forEach(btn => {
@@ -3844,8 +2305,8 @@ function sendBleCommand(type, payload) {
 }
 
 // Refaktoryzacja: wykorzystuj Simple Test API (run_metrics_test / run_relay_test)
-async function runDynamicTest(testType) {
-    if (!(await checkTuningPrerequisites())) return;
+function runDynamicTest(testType) {
+    if (!checkTuningPrerequisites()) return;
     addLogMessage(`[Test] Uruchamianie testu: ${testType}`, 'info');
 
     const testId = Date.now() >>> 0;
@@ -3867,8 +2328,8 @@ async function runDynamicTest(testType) {
     const kp = parseFloat(document.getElementById('balanceKpInput')?.value) || 0;
     const ki = parseFloat(document.getElementById('balanceKiInput')?.value) || 0;
     const kd = parseFloat(document.getElementById('balanceKdInput')?.value) || 0;
-    // Ujednolicenie: firmware oczekuje komendy 'run_metrics_test' - ZAKOMENTOWANE, bo robot nie obsługuje
-    // sendBleCommand('run_metrics_test', { kp, ki, kd, testId });
+    // Ujednolicenie: firmware oczekuje komendy 'run_metrics_test'
+    sendBleCommand('run_metrics_test', { kp, ki, kd, testId });
     setTuningUiLock(true, 'single-tests');
 }
 function handleDynamicTestResult(raw) {
@@ -3925,12 +2386,11 @@ function drawJoystick(ctx, x, y) {
     ctx.fillStyle = '#61dafb';
     ctx.fill();
 }
-function handleJoystickStart(event) { event.preventDefault(); isDragging = true; pollJoystick(); }
-function handleJoystickMove(event) { if (!isDragging) return; event.preventDefault(); const joystickCanvas = document.getElementById('joystickCanvas'); let { x, y } = getJoystickPosition(event); const dx = x - joystickCenter.x; const dy = y - joystickCenter.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; } drawJoystick(joystickCanvas.getContext('2d'), x, y); const joyX = (x - joystickCenter.x) / joystickRadius; const joyY = -(y - joystickCenter.y) / joystickRadius; currentJoystickX = joyX; currentJoystickY = joyY; const now = Date.now(); if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) { sendBleMessage({ type: 'joystick', x: joyX, y: joyY }); lastJoystickSendTime = now; } }
+function handleJoystickStart(event) { event.preventDefault(); isDragging = true; }
+function handleJoystickMove(event) { if (!isDragging) return; event.preventDefault(); const joystickCanvas = document.getElementById('joystickCanvas'); let { x, y } = getJoystickPosition(event); const dx = x - joystickCenter.x; const dy = y - joystickCenter.y; const distance = Math.sqrt(dx * dx + dy * dy); if (distance > joystickRadius) { x = joystickCenter.x + (dx / distance) * joystickRadius; y = joystickCenter.y + (dy / distance) * joystickRadius; } drawJoystick(joystickCanvas.getContext('2d'), x, y); const now = Date.now(); if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) { const joyX = (x - joystickCenter.x) / joystickRadius; const joyY = -(y - joystickCenter.y) / joystickRadius; sendBleMessage({ type: 'joystick', x: joyX, y: joyY }); lastJoystickSendTime = now; } }
 function getJoystickPosition(event) { const rect = document.getElementById('joystickCanvas').getBoundingClientRect(); const touch = event.touches ? event.touches[0] : event; return { x: touch.clientX - rect.left, y: touch.clientY - rect.top }; }
 function handleJoystickEnd(event) { if (!isDragging) return; event.preventDefault(); isDragging = false; drawJoystick(document.getElementById('joystickCanvas').getContext('2d'), joystickCenter.x, joystickCenter.y); sendBleMessage({ type: 'joystick', x: 0, y: 0 }); }
-function pollGamepad() { if (gamepadIndex !== null) { const gp = navigator.getGamepads()[gamepadIndex]; if (!gp) return; if (isMappingButton && actionToMap) { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { Object.keys(gamepadMappings).forEach(key => { if (gamepadMappings[key] === actionToMap) delete gamepadMappings[key]; }); gamepadMappings[i] = actionToMap; saveGamepadMappings(); addLogMessage(`[UI] Akcja '${availableActions[actionToMap].label}' przypisana do przycisku ${i}.`, 'success'); isMappingButton = false; actionToMap = null; renderMappingModal(); } }); } else { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { const action = gamepadMappings[i]; if (action && availableActions[action]) { const element = document.getElementById(availableActions[action].elementId); if (element && !element.disabled) { element.click(); flashElement(element); } } } }); } lastGamepadState = gp.buttons.map(b => b.pressed); let x = gp.axes[0] || 0; let y = gp.axes[1] || 0; if (Math.abs(x) < 0.15) x = 0; if (Math.abs(y) < 0.15) y = 0; const now = Date.now(); if (now - lastGamepadSendTime > GAMEPAD_SEND_INTERVAL) { sendBleMessage({ type: 'joystick', x: x, y: -y }); lastGamepadSendTime = now; } } requestAnimationFrame(pollGamepad); }
-function pollJoystick() { if (isDragging) { const now = Date.now(); if (now - lastJoystickSendTime > JOYSTICK_SEND_INTERVAL) { sendBleMessage({ type: 'joystick', x: currentJoystickX, y: currentJoystickY }); lastJoystickSendTime = now; } requestAnimationFrame(pollJoystick); } }
+function pollGamepad() { if (gamepadIndex !== null) { const gp = navigator.getGamepads()[gamepadIndex]; if (!gp) return; if (isMappingButton && actionToMap) { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { Object.keys(gamepadMappings).forEach(key => { if (gamepadMappings[key] === actionToMap) delete gamepadMappings[key]; }); gamepadMappings[i] = actionToMap; saveGamepadMappings(); addLogMessage(`[UI] Akcja '${availableActions[actionToMap].label}' przypisana do przycisku ${i}.`, 'success'); isMappingButton = false; actionToMap = null; renderMappingModal(); } }); } else { gp.buttons.forEach((button, i) => { if (button.pressed && !lastGamepadState[i]) { const action = gamepadMappings[i]; if (action && availableActions[action]) { const element = document.getElementById(availableActions[action].elementId); if (element && !element.disabled) { element.click(); flashElement(element); } } } }); } lastGamepadState = gp.buttons.map(b => b.pressed); let x = gp.axes[0] || 0; let y = gp.axes[1] || 0; if (Math.abs(x) < 0.15) x = 0; if (Math.abs(y) < 0.15) y = 0; sendBleMessage({ type: 'joystick', x: x, y: -y }); } requestAnimationFrame(pollGamepad); }
 window.addEventListener('gamepadconnected', (e) => { gamepadIndex = e.gamepad.index; document.getElementById('gamepadStatus').textContent = 'Polaczony'; document.getElementById('gamepadStatus').style.color = '#a2f279'; addLogMessage(`[UI] Gamepad polaczony: ${e.gamepad.id}`, 'success'); });
 window.addEventListener('gamepaddisconnected', (e) => { gamepadIndex = null; document.getElementById('gamepadStatus').textContent = 'Brak'; document.getElementById('gamepadStatus').style.color = '#f7b731'; addLogMessage('[UI] Gamepad rozlaczony.', 'warn'); });
 function startMapping(action, buttonElement) { if (gamepadIndex === null) { addLogMessage("Podlacz gamepada, aby rozpoczac mapowanie!", "warn"); return; } isMappingButton = true; actionToMap = action; document.querySelectorAll('.mapping-button').forEach(btn => btn.textContent = "Przypisz"); buttonElement.textContent = "Czekam..."; addLogMessage(`[UI] Nasluchiwanie na przycisk dla akcji: ${availableActions[action].label}...`, "info"); }
@@ -3946,69 +2406,39 @@ function setupNumericInputs() {
         const step = parseFloat(input.step) || 1;
         const isFloat = input.step.includes('.');
 
-        // Funkcja sprawdzająca czy wartość jest w zakresie i oznaczająca pole
-        const validateAndMark = (inputEl) => {
-            const value = parseFloat(inputEl.value);
-            const min = parseFloat(inputEl.min);
-            const max = parseFloat(inputEl.max);
-
-            if (inputEl.value === '' || inputEl.value === '-') {
-                // Pole puste lub tylko minus - pozwól na edycję, nie zaznaczaj na czerwono
-                inputEl.style.borderColor = '';
-                inputEl.style.backgroundColor = '';
-                return;
-            }
-
-            if (isNaN(value)) {
-                inputEl.style.borderColor = '#ff6b6b';
-                inputEl.style.backgroundColor = 'rgba(255, 107, 107, 0.1)';
-                return;
-            }
-
-            const outOfRange = (!isNaN(min) && value < min) || (!isNaN(max) && value > max);
-            if (outOfRange) {
-                inputEl.style.borderColor = '#ff6b6b';
-                inputEl.style.backgroundColor = 'rgba(255, 107, 107, 0.1)';
-            } else {
-                inputEl.style.borderColor = '';
-                inputEl.style.backgroundColor = '';
-            }
-        };
-
-        // Walidacja podczas pisania - tylko zaznaczenie kolorem, bez clampowania
+        // Add automatic value clamping on input
         input.addEventListener('input', (e) => {
-            validateAndMark(e.target);
-        });
-
-        // Clampowanie tylko gdy użytkownik opuszcza pole z wartością poza zakresem
-        input.addEventListener('blur', (e) => {
             let value = parseFloat(e.target.value);
+            if (isNaN(value)) return;
+
             const min = parseFloat(e.target.min);
             const max = parseFloat(e.target.max);
 
-            // Jeśli pole puste, ustaw domyślną wartość (min lub 0)
-            if (e.target.value === '' || isNaN(value)) {
-                e.target.value = !isNaN(min) ? min : 0;
-                e.target.style.borderColor = '';
-                e.target.style.backgroundColor = '';
-                e.target.dispatchEvent(new Event('change', { bubbles: true }));
-                return;
-            }
-
-            // Clampuj wartość przy blur jeśli poza zakresem
-            let clamped = false;
             if (!isNaN(min) && value < min) {
                 e.target.value = min;
-                clamped = true;
             }
             if (!isNaN(max) && value > max) {
                 e.target.value = max;
-                clamped = true;
+            }
+        });
+
+        // Also clamp on blur (when user leaves the field)
+        input.addEventListener('blur', (e) => {
+            let value = parseFloat(e.target.value);
+            if (isNaN(value)) {
+                e.target.value = parseFloat(e.target.min) || 0;
+                return;
             }
 
-            if (clamped) {
-                e.target.style.borderColor = '';
-                e.target.style.backgroundColor = '';
+            const min = parseFloat(e.target.min);
+            const max = parseFloat(e.target.max);
+
+            if (!isNaN(min) && value < min) {
+                e.target.value = min;
+                e.target.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            if (!isNaN(max) && value > max) {
+                e.target.value = max;
                 e.target.dispatchEvent(new Event('change', { bubbles: true }));
             }
         });
@@ -4026,8 +2456,6 @@ function setupNumericInputs() {
             if (!isNaN(min)) newValue = Math.max(min, newValue);
             if (!isNaN(max)) newValue = Math.min(max, newValue);
             input.value = newValue;
-            input.style.borderColor = '';
-            input.style.backgroundColor = '';
             input.dispatchEvent(new Event('change', { bubbles: true }));
         };
         minusBtn.addEventListener('click', () => updateValue(-step));
@@ -4055,9 +2483,9 @@ function sendFullConfigToRobot() {
         }
         params[snakeKey] = value;
     }
-    // Add trim parameters from displays - now always 0 since corrections are in quaternion
-    params['trim_angle'] = 0;
-    params['roll_trim'] = 0;
+    // Add trim parameters from displays
+    params['trim_angle'] = parseFloat(document.getElementById('trimValueDisplay').textContent) || 0;
+    params['roll_trim'] = parseFloat(document.getElementById('rollTrimValueDisplay').textContent) || 0;
     addLogMessage('[UI] Wysylam pelna konfiguracje do robota...', 'info');
     sendBleMessage({ type: 'full_config', params });
 }
@@ -4076,21 +2504,7 @@ function setupParameterListeners() {
         }
     };
     const debouncedSendSingleParam = debounce(sendSingleParam, 400);
-    // Obsługa wszystkich pól .config-value (number i checkbox)
-    document.querySelectorAll('.config-value').forEach(input => {
-        input.addEventListener('change', (e) => {
-            if (e.target.type === 'checkbox') {
-                // Dla checkboxów: wyślij 1.0 lub 0.0
-                const snakeKey = parameterMapping[e.target.id];
-                if (snakeKey) {
-                    sendBleMessage({ type: 'set_param', key: snakeKey, value: e.target.checked ? 1.0 : 0.0 });
-                }
-            } else {
-                // Dla pól numerycznych
-                debouncedSendSingleParam(e.target.id, parseFloat(e.target.value));
-            }
-        });
-    });
+    document.querySelectorAll('.config-value').forEach(input => { input.addEventListener('change', (e) => { debouncedSendSingleParam(e.target.id, parseFloat(e.target.value)); }); });
     // AUTOTUNING: wysyłanie parametrów metod (GA/PSO/ZN) jako set_tuning_config_param z odpowiednimi konwersjami
     const sendTuningParam = (snakeKey, rawValue) => {
         if (AppState.isApplyingConfig) return;
@@ -4163,67 +2577,18 @@ function setupParameterListeners() {
     document.getElementById('resetRollZeroBtn')?.addEventListener('click', () => setRollZero());
     // Reset korekty pionu (pitch trim) - ustawia trim tak, by skorygowany kąt wynosił 0
     document.getElementById('resetZeroBtn')?.addEventListener('click', () => setPitchZero());
-    // Reset encoders -> wyślij komendę do firmware
-    document.getElementById('resetEncodersBtn')?.addEventListener('click', () => {
-        if (!AppState.isConnected) {
-            addLogMessage('[UI] Nie połączono z robotem. Nie można zresetować enkoderów.', 'warn');
-            return;
-        }
-        if (confirm('Czy na pewno chcesz zresetować enkodery (ustawić 0)?')) {
-            addLogMessage('[UI] Wysłano żądanie resetu enkoderów.', 'info');
-            sendBleMessage({ type: 'reset_encoders' });
-        }
-    });
     function updateAndSendRollTrim(delta) {
         const span = document.getElementById('rollTrimValueDisplay');
         if (!span) return;
         const preview = (parseFloat(span.textContent) || 0) + delta;
         span.textContent = preview.toFixed(2);
-        sendBleMessage({ type: 'adjust_roll_trim', value: delta });
+        sendBleMessage({ type: 'adjust_roll', value: delta });
         addLogMessage(`[UI] Montaż: Roll X+=${delta.toFixed(2)}° (persist)`, 'info');
     }
     document.getElementById('rollTrimMinus01Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.1));
     document.getElementById('rollTrimMinus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.01));
     document.getElementById('rollTrimPlus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.01));
     document.getElementById('rollTrimPlus01Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.1));
-
-    // Offset pionu (wysyłane do firmware, zapisywane w EEPROM, wpływa na punkt równowagi balansu)
-    function updateAndSendPitchOffset(delta) {
-        const span = document.getElementById('pitchOffsetDisplay');
-        if (!span) return;
-        const preview = (parseFloat(span.textContent) || 0) + delta;
-        span.textContent = preview.toFixed(2);
-        sendBleMessage({ type: 'adjust_pitch_offset', value: delta });
-        addLogMessage(`[UI] Offset pionu (Pitch): ${delta > 0 ? '+' : ''}${delta.toFixed(2)}° (zapisz do EEPROM!)`, 'info');
-    }
-    function updateAndSendRollOffset(delta) {
-        const span = document.getElementById('rollOffsetDisplay');
-        if (!span) return;
-        const preview = (parseFloat(span.textContent) || 0) + delta;
-        span.textContent = preview.toFixed(2);
-        sendBleMessage({ type: 'adjust_roll_offset', value: delta });
-        addLogMessage(`[UI] Offset pionu (Roll): ${delta > 0 ? '+' : ''}${delta.toFixed(2)}° (zapisz do EEPROM!)`, 'info');
-    }
-    document.getElementById('pitchOffsetMinus01Btn')?.addEventListener('click', () => updateAndSendPitchOffset(-0.1));
-    document.getElementById('pitchOffsetMinus001Btn')?.addEventListener('click', () => updateAndSendPitchOffset(-0.01));
-    document.getElementById('pitchOffsetPlus001Btn')?.addEventListener('click', () => updateAndSendPitchOffset(0.01));
-    document.getElementById('pitchOffsetPlus01Btn')?.addEventListener('click', () => updateAndSendPitchOffset(0.1));
-    document.getElementById('resetPitchOffsetBtn')?.addEventListener('click', () => {
-        sendBleMessage({ type: 'reset_pitch_offset' });
-        const span = document.getElementById('pitchOffsetDisplay');
-        if (span) span.textContent = '0.00';
-        addLogMessage('[UI] Offset pionu (Pitch) wyzerowany (zapisz do EEPROM!).', 'success');
-    });
-    document.getElementById('rollOffsetMinus01Btn')?.addEventListener('click', () => updateAndSendRollOffset(-0.1));
-    document.getElementById('rollOffsetMinus001Btn')?.addEventListener('click', () => updateAndSendRollOffset(-0.01));
-    document.getElementById('rollOffsetPlus001Btn')?.addEventListener('click', () => updateAndSendRollOffset(0.01));
-    document.getElementById('rollOffsetPlus01Btn')?.addEventListener('click', () => updateAndSendRollOffset(0.1));
-    document.getElementById('resetRollOffsetBtn')?.addEventListener('click', () => {
-        sendBleMessage({ type: 'reset_roll_offset' });
-        const span = document.getElementById('rollOffsetDisplay');
-        if (span) span.textContent = '0.00';
-        addLogMessage('[UI] Offset pionu (Roll) wyzerowany (zapisz do EEPROM!).', 'success');
-    });
 
 
     document.getElementById('saveBtn')?.addEventListener('click', () => {
@@ -4619,22 +2984,11 @@ async function requestFullConfigAndSync(timeoutMs = 20000) {
 }
 
 async function startTuning() {
-    if (!(await checkTuningPrerequisites())) return;
+    if (!checkTuningPrerequisites()) return;
 
     const method = document.querySelector('.method-tab.active')?.dataset.method;
-    const startBtn = document.getElementById('start-tuning-btn');
-    if (startBtn) startBtn.disabled = true; // Prevent double-click while loading deps
     if (!method) {
         addLogMessage('[UI] Nie wybrano metody optymalizacji.', 'warn');
-        return;
-    }
-
-    // CRITICAL: Request tuning dependencies (algorithms, ml5 for Bayesian) and full configuration from robot
-    try {
-        await ensureTuningDependencies(method);
-    } catch (err) {
-        addLogMessage('[UI] Blad: nie udalo sie zaladowac zaleznosci strojenia. Sprobuj ponownie lub otworz debug konsole.', 'error');
-        setTuningUiLock(false, '');
         return;
     }
 
@@ -4671,7 +3025,7 @@ async function startTuning() {
 
     try {
         let config;
-        if (method === 'ga' || method === 'ga-genetic') {
+        if (method === 'ga') {
             config = {
                 populationSize: parseInt(document.getElementById('ga-population').value),
                 generations: parseInt(document.getElementById('ga-generations').value),
@@ -4687,7 +3041,7 @@ async function startTuning() {
                 return;
             }
             try { addLogMessage(`[UI] GA config: pop=${config.populationSize} gen=${config.generations} mut=${config.mutationRate} xo=${config.crossoverRate}`, 'info'); } catch (e) { console.debug('[UI] GA config log failed', e); }
-        } else if (method === 'pso' || method === 'pso-particle') {
+        } else if (method === 'pso') {
             config = {
                 numParticles: parseInt(document.getElementById('pso-particles').value),
                 iterations: parseInt(document.getElementById('pso-iterations').value),
@@ -4699,6 +3053,17 @@ async function startTuning() {
             currentTuningSession = new ParticleSwarmOptimization(config);
             if (isNaN(config.numParticles) || config.numParticles <= 0 || isNaN(config.iterations) || config.iterations <= 0) {
                 addLogMessage('[UI] Niepoprawna konfiguracja PSO: numParticles i iterations muszą być > 0', 'error');
+                setTuningUiLock(false, '');
+                return;
+            }
+        } else if (method === 'zn') {
+            config = {
+                amplitude: parseFloat(document.getElementById('zn-amplitude').value),
+                minCycles: parseInt(document.getElementById('zn-min-cycles').value)
+            };
+            currentTuningSession = new ZieglerNicholsRelay(config);
+            if (isNaN(config.minCycles) || config.minCycles <= 0 || isNaN(config.amplitude) || config.amplitude <= 0) {
+                addLogMessage('[UI] Niepoprawna konfiguracja ZN: amplitude i minCycles muszą być > 0', 'error');
                 setTuningUiLock(false, '');
                 return;
             }
@@ -4720,13 +3085,15 @@ async function startTuning() {
             throw new Error(`Nieznana metoda: ${method}`);
         }
 
+        const runStartTime = Date.now();
         try { addLogMessage(`[UI] currentTuningSession: ${currentTuningSession.constructor.name} debugId=${currentTuningSession._debugId || 'N/A'} config=${JSON.stringify(config)}`, 'info'); } catch (e) { console.debug('[UI] tuning session log failed', e); }
-
-        // Start the tuning session
-        currentTuningSession.run().catch((err) => {
+        currentTuningSession.run().then(() => {
+            addLogMessage(`[UI] Autostrojenie zakonczone (metoda: ${method.toUpperCase()}) po ${Date.now() - runStartTime}ms`, 'success');
+        }).catch((err) => {
             console.error('[UI] Autostrojenie error:', err);
-            addLogMessage(`[UI] Błąd podczas sesji strojenia: ${err?.message ?? String(err)}`, 'error');
+            addLogMessage(`[UI] Błąd podczas sesji strojenia: ${(err && err.message) ? err.message : String(err)} (after ${Date.now() - runStartTime}ms)`, 'error');
         }).finally(() => {
+            addLogMessage(`[UI] finalizing run() after ${Date.now() - runStartTime}ms (method ${method})`, 'debug');
             stopTuning(false);
         });
 
@@ -4734,7 +3101,6 @@ async function startTuning() {
         console.error('Błąd inicjalizacji strojenia:', error);
         addLogMessage('Błąd inicjalizacji strojenia: ' + error.message, 'error');
         stopTuning(false);
-        if (startBtn) startBtn.disabled = false;
     }
 }
 
@@ -4802,779 +3168,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (pauseBtn) pauseBtn.addEventListener('click', pauseTuning);
     if (resumeBtn) resumeBtn.addEventListener('click', resumeTuning);
     if (stopBtn) stopBtn.addEventListener('click', () => stopTuning(true));
-
-    // Apply best found parameters to the robot
-    const applyBestBtn = document.getElementById('apply-best-btn');
-    if (applyBestBtn) {
-        applyBestBtn.addEventListener('click', () => {
-            const kp = parseFloat(document.getElementById('best-kp')?.textContent) || 0;
-            const ki = parseFloat(document.getElementById('best-ki')?.textContent) || 0;
-            const kd = parseFloat(document.getElementById('best-kd')?.textContent) || 0;
-            applyParameters(kp, ki, kd);
-            addLogMessage('[UI] Zastosowano najlepsze parametry (Apply Best).', 'info');
-        });
-    }
-    // Preload algorithms in background to avoid delay on first start
-    ensureTuningDependencies().then(() => {
-        try { addLogMessage('[UI] Moduly strojenia (GA/PSO) zaladowane i gotowe.', 'info'); } catch (e) { }
-    }).catch((err) => {
-        try { addLogMessage('[UI] Ostrzezenie: Nie mozna wstępnie zaladowac modulow strojenia: ' + err.message, 'warn'); } catch (e) { }
-    });
-
-    // ========================================================================
-    // SYSTEM IDENTIFICATION (SYSID) MODULE
-    // ========================================================================
-    initSystemIdentification();
 });
 
-// ========================================================================
-// SYSTEM IDENTIFICATION - Telemetry Recording for Model Identification
-// ========================================================================
 
-const SysIdState = {
-    isRecording: false,
-    data: [],
-    startTime: 0,
-    duration: 5000,
-    sampleRate: 200,
-    kp: 50,
-    impulse: 200,  // PWM value instead of degrees
-    impulseApplied: false,
-    impulseStartTime: 0,
-    chart: null,
-    chartCtx: null,
-    telemetryHandler: null,
-    // Nowe pola dla różnych typów testów
-    testType: 'balance',  // 'balance', 'speed', 'position'
-    stepValue: 50,        // Wartość skoku dla speed/position
-    stepApplied: false,
-    savedPID: null,       // Zapisane PID do przywrócenia
-    savedSpeedPID: null,  // Zapisane PID prędkości
-    savedPositionPID: null, // Zapisane PID pozycji
-    currentSetpoint: 0    // Aktualny setpoint (prędkość/pozycja)
-};
-
-function initSystemIdentification() {
-    const startBtn = document.getElementById('sysid-start-btn');
-    const stopBtn = document.getElementById('sysid-stop-btn');
-    const exportCsvBtn = document.getElementById('sysid-export-csv-btn');
-    const exportMatBtn = document.getElementById('sysid-export-mat-btn');
-    const clearBtn = document.getElementById('sysid-clear-btn');
-    const testImpulseBtn = document.getElementById('sysid-test-impulse-btn');
-    const testTypeSelect = document.getElementById('sysid-test-type');
-
-    if (startBtn) startBtn.addEventListener('click', startSysIdRecording);
-    if (stopBtn) stopBtn.addEventListener('click', stopSysIdRecording);
-    if (exportCsvBtn) exportCsvBtn.addEventListener('click', exportSysIdCSV);
-    if (exportMatBtn) exportMatBtn.addEventListener('click', exportSysIdMAT);
-    if (clearBtn) clearBtn.addEventListener('click', clearSysIdData);
-    if (testImpulseBtn) testImpulseBtn.addEventListener('click', testSysIdImpulse);
-    if (testTypeSelect) testTypeSelect.addEventListener('change', handleSysIdTestTypeChange);
-
-    // Initialize chart context
-    const canvas = document.getElementById('sysid-preview-chart');
-    if (canvas) {
-        SysIdState.chartCtx = canvas.getContext('2d');
-    }
-
-    // Initialize UI visibility based on default test type
-    handleSysIdTestTypeChange();
-}
-
-// Obsługa zmiany typu testu - pokazuje/ukrywa odpowiednie kontrolki
-function handleSysIdTestTypeChange() {
-    const testType = document.getElementById('sysid-test-type')?.value || 'balance';
-    SysIdState.testType = testType;
-
-    const kpContainer = document.getElementById('sysid-kp-container');
-    const impulseContainer = document.getElementById('sysid-impulse-container');
-    const stepContainer = document.getElementById('sysid-step-container');
-    const stepInput = document.getElementById('sysid-step-value');
-
-    if (testType === 'balance') {
-        // Test balansu - pokaż Kp i impuls
-        if (kpContainer) kpContainer.style.display = '';
-        if (impulseContainer) impulseContainer.style.display = '';
-        if (stepContainer) stepContainer.style.display = 'none';
-    } else if (testType === 'speed') {
-        // Test prędkości - ukryj Kp, pokaż step value
-        if (kpContainer) kpContainer.style.display = 'none';
-        if (impulseContainer) impulseContainer.style.display = 'none';
-        if (stepContainer) {
-            stepContainer.style.display = '';
-            // Zmień etykietę i zakres dla prędkości
-            const label = stepContainer.querySelector('label');
-            if (label) label.innerHTML = 'Setpoint prędkości [imp/s]<span class="help-icon">?</span>';
-            if (stepInput) {
-                stepInput.value = 100;
-                stepInput.min = 10;
-                stepInput.max = 500;
-                stepInput.step = 10;
-            }
-        }
-    } else if (testType === 'position') {
-        // Test pozycji - ukryj Kp, pokaż step value
-        if (kpContainer) kpContainer.style.display = 'none';
-        if (impulseContainer) impulseContainer.style.display = 'none';
-        if (stepContainer) {
-            stepContainer.style.display = '';
-            // Zmień etykietę i zakres dla pozycji
-            const label = stepContainer.querySelector('label');
-            if (label) label.innerHTML = 'Setpoint pozycji [cm]<span class="help-icon">?</span>';
-            if (stepInput) {
-                stepInput.value = 30;
-                stepInput.min = 5;
-                stepInput.max = 200;
-                stepInput.step = 5;
-            }
-        }
-    }
-}
-
-// Test impulse without recording - allows user to check impulse strength
-function testSysIdImpulse() {
-    if (!AppState.isConnected) {
-        addLogMessage('[SysID] Błąd: Połącz się z robotem.', 'error');
-        return;
-    }
-
-    // Check robot state - robot musi balansować
-    if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState)) {
-        addLogMessage(`[SysID] Robot musi balansować. Aktualny stan: '${AppState.lastKnownRobotState}'.`, 'warn');
-        return;
-    }
-
-    // Pobierz wartość impulsu jako % joysticka (25% = 0.25)
-    const impulsePercent = (parseFloat(document.getElementById('sysid-impulse')?.value) || 25) / 100;
-    const testBtn = document.getElementById('sysid-test-impulse-btn');
-
-    // Disable button during test
-    if (testBtn) {
-        testBtn.disabled = true;
-        testBtn.textContent = '⏳ Test...';
-    }
-
-    addLogMessage(`[SysID] Test impulsu: Joystick ${impulsePercent * 100}% (podwójny: przód→tył)`, 'info');
-
-    // Impuls do przodu przez joystick
-    sendBleMessage({ type: 'joystick', x: 0, y: impulsePercent });
-
-    // Po 100ms impuls do tyłu
-    setTimeout(() => {
-        sendBleMessage({ type: 'joystick', x: 0, y: -impulsePercent });
-    }, 100);
-
-    // Po 200ms stop (joystick neutralny)
-    setTimeout(() => {
-        sendBleMessage({ type: 'joystick', x: 0, y: 0 });
-        addLogMessage(`[SysID] Test impulsu zakończony`, 'success');
-
-        // Re-enable button
-        if (testBtn) {
-            testBtn.disabled = false;
-            testBtn.textContent = '🔧 Testuj';
-        }
-    }, 200);
-}
-
-async function startSysIdRecording() {
-    if (SysIdState.isRecording) return;
-
-    // Check connection
-    if (!AppState.isConnected) {
-        addLogMessage('[SysID] Błąd: Połącz się z robotem.', 'error');
-        return;
-    }
-
-    // Pobierz typ testu
-    SysIdState.testType = document.getElementById('sysid-test-type')?.value || 'balance';
-
-    // Check robot state - robot musi balansować żeby reagował na zakłócenie
-    if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState)) {
-        const ok = confirm(`Robot musi balansować. Aktualny stan: '${AppState.lastKnownRobotState}'.\nCzy włączyć balansowanie?`);
-        if (ok) {
-            const bsEl = document.getElementById('balanceSwitch');
-            if (bsEl) { bsEl.checked = true; bsEl.dispatchEvent(new Event('change')); }
-            await new Promise(r => setTimeout(r, 2000));
-        } else {
-            return;
-        }
-    }
-
-    // Get common config
-    SysIdState.duration = (parseFloat(document.getElementById('sysid-duration')?.value) || 5) * 1000;
-    SysIdState.sampleRate = parseInt(document.getElementById('sysid-sample-rate')?.value) || 200;
-    SysIdState.stepApplied = false;
-    SysIdState.impulseApplied = false;
-    SysIdState.impulseStartTime = 0;
-    SysIdState.impulsePhase = 0;
-    SysIdState.currentSetpoint = 0;
-
-    // Konfiguracja specyficzna dla typu testu
-    if (SysIdState.testType === 'balance') {
-        // Test balansu - Kp-only mode
-        SysIdState.kp = parseFloat(document.getElementById('sysid-kp')?.value) || 50;
-        SysIdState.impulse = (parseFloat(document.getElementById('sysid-impulse')?.value) || 25) / 100;
-
-        // Zapisz i ustaw PID
-        const currentKp = parseFloat(document.getElementById('balanceKpInput')?.value) || SysIdState.kp;
-        const currentKi = parseFloat(document.getElementById('balanceKiInput')?.value) || 0;
-        const currentKd = parseFloat(document.getElementById('balanceKdInput')?.value) || 0;
-        SysIdState.savedPID = { kp: currentKp, ki: currentKi, kd: currentKd };
-
-        sendBleMessage({ type: 'set_param', key: 'kp_b', value: SysIdState.kp });
-        sendBleMessage({ type: 'set_param', key: 'ki_b', value: 0 });
-        sendBleMessage({ type: 'set_param', key: 'kd_b', value: 0 });
-        addLogMessage(`[SysID Balance] Ustawiono Kp=${SysIdState.kp}, Ki=0, Kd=0`, 'info');
-
-    } else if (SysIdState.testType === 'speed') {
-        // Test pętli prędkości - skok setpointu prędkości
-        SysIdState.stepValue = parseFloat(document.getElementById('sysid-step-value')?.value) || 100;
-
-        // Zapisz aktualne PID prędkości (opcjonalnie możemy je wyzerować dla testu)
-        const currentKpS = parseFloat(document.getElementById('speedKpInput')?.value) || 0;
-        const currentKiS = parseFloat(document.getElementById('speedKiInput')?.value) || 0;
-        const currentKdS = parseFloat(document.getElementById('speedKdInput')?.value) || 0;
-        SysIdState.savedSpeedPID = { kp: currentKpS, ki: currentKiS, kd: currentKdS };
-
-        addLogMessage(`[SysID Speed] Test pętli prędkości, skok: ${SysIdState.stepValue} imp/s`, 'info');
-
-    } else if (SysIdState.testType === 'position') {
-        // Test pętli pozycji - skok setpointu pozycji
-        SysIdState.stepValue = parseFloat(document.getElementById('sysid-step-value')?.value) || 30;
-
-        // Zapisz aktualne PID pozycji
-        const currentKpP = parseFloat(document.getElementById('positionKpInput')?.value) || 0;
-        const currentKiP = parseFloat(document.getElementById('positionKiInput')?.value) || 0;
-        const currentKdP = parseFloat(document.getElementById('positionKdInput')?.value) || 0;
-        SysIdState.savedPositionPID = { kp: currentKpP, ki: currentKiP, kd: currentKdP };
-
-        addLogMessage(`[SysID Position] Test pętli pozycji, skok: ${SysIdState.stepValue} cm`, 'info');
-    }
-
-    // Clear data
-    SysIdState.data = [];
-    SysIdState.isRecording = true;
-    SysIdState.startTime = performance.now();
-
-    // Update UI
-    updateSysIdUI('recording');
-
-    // Subscribe to telemetry
-    SysIdState.telemetryHandler = (evt) => {
-        if (!SysIdState.isRecording) return;
-        const data = evt.detail || evt;
-        if (data.type === 'telemetry') {
-            const elapsed = performance.now() - SysIdState.startTime;
-            const elapsedSec = elapsed / 1000;
-
-            // Normalize telemetry data
-            const normData = (typeof normalizeTelemetryData === 'function') ? normalizeTelemetryData(data) : data;
-
-            // Zbierz dane w zależności od typu testu
-            const record = {
-                time: elapsedSec,
-                angle: normData.pitch ?? normData.angle ?? 0,
-                speed: normData.speed ?? 0,
-                encoder_left: normData.encoder_left ?? 0,
-                encoder_right: normData.encoder_right ?? 0,
-                gyroY: normData.gyroY ?? 0,
-                pwm_output: normData.output ?? 0,
-                // Pola specyficzne dla typu testu
-                test_type: SysIdState.testType,
-                setpoint: SysIdState.currentSetpoint,
-                input_signal: 0  // Sygnał wejściowy (impuls/step)
-            };
-
-            if (SysIdState.testType === 'balance') {
-                // Impuls joysticka
-                let currentImpulse = 0;
-                if (SysIdState.impulseApplied && SysIdState.impulseStartTime > 0) {
-                    const impulseElapsed = elapsed - SysIdState.impulseStartTime;
-                    if (impulseElapsed >= 0 && impulseElapsed < 100) {
-                        currentImpulse = SysIdState.impulse * 100;
-                    } else if (impulseElapsed >= 100 && impulseElapsed < 200) {
-                        currentImpulse = -SysIdState.impulse * 100;
-                    }
-                }
-                record.input_signal = currentImpulse;
-                record.impulse_pwm = currentImpulse;  // Kompatybilność wsteczna
-
-            } else if (SysIdState.testType === 'speed') {
-                // Setpoint prędkości
-                record.input_signal = SysIdState.stepApplied ? SysIdState.stepValue : 0;
-                record.setpoint_speed = record.input_signal;
-                record.speed_error = record.input_signal - record.speed;
-
-            } else if (SysIdState.testType === 'position') {
-                // Setpoint pozycji - oblicz pozycję z enkoderów
-                const avgEncoder = (record.encoder_left + record.encoder_right) / 2;
-                // Konwersja enkodera na cm (wymaga parametrów mechanicznych)
-                const encoderPpr = parseFloat(document.getElementById('encoderPprInput')?.value) || 820;
-                const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput')?.value) || 8.2;
-                const wheelCircum = Math.PI * wheelDiameter; // cm
-                const positionCm = (avgEncoder / encoderPpr) * wheelCircum;
-
-                record.position_cm = positionCm;
-                record.input_signal = SysIdState.stepApplied ? SysIdState.stepValue : 0;
-                record.setpoint_position = record.input_signal;
-                record.position_error = record.input_signal - positionCm;
-            }
-
-            SysIdState.data.push(record);
-
-            // Update progress
-            const progress = Math.min(100, (elapsed / SysIdState.duration) * 100);
-            const progressEl = document.getElementById('sysid-progress');
-            if (progressEl) progressEl.value = progress;
-
-            const countEl = document.getElementById('sysid-sample-count');
-            if (countEl) countEl.textContent = SysIdState.data.length;
-
-            // Auto-stop when duration reached
-            if (elapsed >= SysIdState.duration) {
-                stopSysIdRecording();
-            }
-        }
-    };
-    window.addEventListener('ble_message', SysIdState.telemetryHandler);
-
-    // Zastosuj skok/impuls po 1 sekundzie
-    setTimeout(() => {
-        if (!SysIdState.isRecording) return;
-
-        if (SysIdState.testType === 'balance') {
-            // Podwójny impuls joysticka
-            SysIdState.impulseApplied = true;
-            SysIdState.impulseStartTime = performance.now() - SysIdState.startTime;
-            const impulsePercent = SysIdState.impulse;
-
-            addLogMessage(`[SysID] Impuls joystick ${impulsePercent * 100}% (przód→tył)`, 'info');
-
-            sendBleMessage({ type: 'joystick', x: 0, y: impulsePercent });
-            setTimeout(() => {
-                if (SysIdState.isRecording) {
-                    sendBleMessage({ type: 'joystick', x: 0, y: -impulsePercent });
-                }
-            }, 100);
-            setTimeout(() => {
-                if (SysIdState.isRecording) {
-                    sendBleMessage({ type: 'joystick', x: 0, y: 0 });
-                    addLogMessage(`[SysID] Impuls zakończony`, 'info');
-                }
-            }, 200);
-
-        } else if (SysIdState.testType === 'speed') {
-            // Skok setpointu prędkości - włączamy tryb TRZYMA_POZYCJE z zadaną prędkością
-            SysIdState.stepApplied = true;
-            SysIdState.currentSetpoint = SysIdState.stepValue;
-
-            addLogMessage(`[SysID] Skok prędkości: ${SysIdState.stepValue} imp/s`, 'info');
-
-            // Wyślij setpoint prędkości przez joystick (proporcjonalnie)
-            // Maksymalny joystick = 100%, więc normalizujemy do max_speed
-            const maxSpeed = parseFloat(document.getElementById('maxSpeedInput')?.value) || 200;
-            const joystickY = Math.min(1.0, SysIdState.stepValue / maxSpeed);
-            sendBleMessage({ type: 'joystick', x: 0, y: joystickY });
-
-            // Po połowie czasu nagrywania zeruj setpoint (żeby zobaczyć odpowiedź na skok w dół)
-            setTimeout(() => {
-                if (SysIdState.isRecording) {
-                    SysIdState.currentSetpoint = 0;
-                    sendBleMessage({ type: 'joystick', x: 0, y: 0 });
-                    addLogMessage(`[SysID] Zerowanie prędkości`, 'info');
-                }
-            }, SysIdState.duration / 2 - 1000);
-
-        } else if (SysIdState.testType === 'position') {
-            // Skok setpointu pozycji
-            SysIdState.stepApplied = true;
-            SysIdState.currentSetpoint = SysIdState.stepValue;
-
-            addLogMessage(`[SysID] Skok pozycji: ${SysIdState.stepValue} cm`, 'info');
-
-            // Wyślij komendę position_setpoint (jeśli firmware obsługuje)
-            // Alternatywnie: krótki impuls joysticka żeby robot ruszył
-            sendBleMessage({ type: 'set_param', key: 'pos_setpoint', value: SysIdState.stepValue });
-
-            // Po połowie czasu zeruj setpoint
-            setTimeout(() => {
-                if (SysIdState.isRecording) {
-                    SysIdState.currentSetpoint = 0;
-                    sendBleMessage({ type: 'set_param', key: 'pos_setpoint', value: 0 });
-                    addLogMessage(`[SysID] Zerowanie pozycji`, 'info');
-                }
-            }, SysIdState.duration / 2 - 1000);
-        }
-    }, 1000);
-
-    const testNames = { balance: 'Balans', speed: 'Prędkość', position: 'Pozycja' };
-    addLogMessage(`[SysID] Nagrywanie ${testNames[SysIdState.testType]} (${SysIdState.duration / 1000}s). Skok za 1s.`, 'info');
-}
-
-function stopSysIdRecording() {
-    if (!SysIdState.isRecording) return;
-
-    SysIdState.isRecording = false;
-    SysIdState.impulseApplied = false;
-    SysIdState.stepApplied = false;
-    SysIdState.impulseStartTime = 0;
-    SysIdState.currentSetpoint = 0;
-
-    // Remove telemetry handler
-    if (SysIdState.telemetryHandler) {
-        window.removeEventListener('ble_message', SysIdState.telemetryHandler);
-        SysIdState.telemetryHandler = null;
-    }
-
-    // Upewnij się że joystick jest w pozycji neutralnej
-    sendBleMessage({ type: 'joystick', x: 0, y: 0 });
-
-    // Przywróć ustawienia w zależności od typu testu
-    if (SysIdState.testType === 'balance' && SysIdState.savedPID) {
-        sendBleMessage({ type: 'set_param', key: 'kp_b', value: SysIdState.savedPID.kp });
-        sendBleMessage({ type: 'set_param', key: 'ki_b', value: SysIdState.savedPID.ki });
-        sendBleMessage({ type: 'set_param', key: 'kd_b', value: SysIdState.savedPID.kd });
-        addLogMessage(`[SysID] Przywrócono PID balansu: Kp=${SysIdState.savedPID.kp}`, 'info');
-        SysIdState.savedPID = null;
-    }
-
-    if (SysIdState.testType === 'position') {
-        // Zeruj setpoint pozycji
-        sendBleMessage({ type: 'set_param', key: 'pos_setpoint', value: 0 });
-    }
-
-    // Update UI
-    updateSysIdUI('stopped');
-
-    // Draw chart
-    drawSysIdChart();
-
-    const testNames = { balance: 'Balans', speed: 'Prędkość', position: 'Pozycja' };
-    addLogMessage(`[SysID ${testNames[SysIdState.testType]}] Zakończone. Zebrano ${SysIdState.data.length} próbek.`, 'success');
-}
-
-function updateSysIdUI(state) {
-    const startBtn = document.getElementById('sysid-start-btn');
-    const stopBtn = document.getElementById('sysid-stop-btn');
-    const exportCsvBtn = document.getElementById('sysid-export-csv-btn');
-    const exportMatBtn = document.getElementById('sysid-export-mat-btn');
-    const clearBtn = document.getElementById('sysid-clear-btn');
-    const statusText = document.getElementById('sysid-status-text');
-
-    if (state === 'recording') {
-        if (startBtn) startBtn.disabled = true;
-        if (stopBtn) stopBtn.disabled = false;
-        if (exportCsvBtn) exportCsvBtn.disabled = true;
-        if (exportMatBtn) exportMatBtn.disabled = true;
-        if (clearBtn) clearBtn.disabled = true;
-        if (statusText) statusText.textContent = 'Nagrywanie...';
-        if (statusText) statusText.style.color = '#61dafb';
-    } else if (state === 'stopped') {
-        if (startBtn) startBtn.disabled = false;
-        if (stopBtn) stopBtn.disabled = true;
-        const hasData = SysIdState.data.length > 0;
-        if (exportCsvBtn) exportCsvBtn.disabled = !hasData;
-        if (exportMatBtn) exportMatBtn.disabled = !hasData;
-        if (clearBtn) clearBtn.disabled = !hasData;
-        if (statusText) statusText.textContent = hasData ? 'Gotowy do eksportu' : 'Gotowy';
-        if (statusText) statusText.style.color = hasData ? '#a2f279' : '#aaa';
-    }
-}
-
-function drawSysIdChart() {
-    const canvas = document.getElementById('sysid-preview-chart');
-    if (!canvas || !SysIdState.chartCtx) return;
-
-    const ctx = SysIdState.chartCtx;
-    const data = SysIdState.data;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (data.length < 2) return;
-
-    const padding = { left: 50, right: 60, top: 20, bottom: 30 };
-    const width = canvas.width - padding.left - padding.right;
-    const height = canvas.height - padding.top - padding.bottom;
-
-    const times = data.map(d => d.time);
-    const minTime = Math.min(...times);
-    const maxTime = Math.max(...times);
-
-    // Dane do wykresu w zależności od typu testu
-    let primaryData, secondaryData, primaryLabel, secondaryLabel;
-    const testType = SysIdState.testType || 'balance';
-
-    if (testType === 'balance') {
-        primaryData = data.map(d => d.angle);
-        secondaryData = data.map(d => d.impulse_pwm || d.input_signal || 0);
-        primaryLabel = '● Kąt';
-        secondaryLabel = '● Impuls';
-    } else if (testType === 'speed') {
-        primaryData = data.map(d => d.speed);
-        secondaryData = data.map(d => d.setpoint_speed || d.input_signal || 0);
-        primaryLabel = '● Prędkość';
-        secondaryLabel = '● Setpoint';
-    } else if (testType === 'position') {
-        primaryData = data.map(d => d.position_cm || 0);
-        secondaryData = data.map(d => d.setpoint_position || d.input_signal || 0);
-        primaryLabel = '● Pozycja';
-        secondaryLabel = '● Setpoint';
-    }
-
-    const minPrimary = Math.min(...primaryData) - 1;
-    const maxPrimary = Math.max(...primaryData) + 1;
-    const maxSecondary = Math.max(...secondaryData.map(Math.abs), 1);
-
-    // Scale functions
-    const scaleX = (t) => padding.left + ((t - minTime) / (maxTime - minTime + 0.001)) * width;
-    const scaleYPrimary = (v) => padding.top + height - ((v - minPrimary) / (maxPrimary - minPrimary + 0.001)) * height;
-    const scaleYSecondary = (v) => padding.top + height - (v / maxSecondary) * height * 0.5;
-
-    // Draw grid
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    for (let i = 0; i <= 5; i++) {
-        const y = padding.top + (height / 5) * i;
-        ctx.moveTo(padding.left, y);
-        ctx.lineTo(canvas.width - padding.right, y);
-    }
-    ctx.stroke();
-
-    // Draw zero line
-    if (minPrimary < 0 && maxPrimary > 0) {
-        ctx.strokeStyle = '#666';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        const zeroY = scaleYPrimary(0);
-        ctx.moveTo(padding.left, zeroY);
-        ctx.lineTo(canvas.width - padding.right, zeroY);
-        ctx.stroke();
-    }
-
-    // Draw secondary data (filled area) - setpoint/impulse
-    ctx.fillStyle = 'rgba(247, 183, 49, 0.3)';
-    ctx.strokeStyle = '#f7b731';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(scaleX(data[0].time), padding.top + height);
-    data.forEach((d, i) => {
-        const x = scaleX(d.time);
-        const y = scaleYSecondary(secondaryData[i]);
-        ctx.lineTo(x, y);
-    });
-    ctx.lineTo(scaleX(data[data.length - 1].time), padding.top + height);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Draw primary data (solid line) - angle/speed/position
-    ctx.strokeStyle = '#a2f279';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    data.forEach((d, i) => {
-        const x = scaleX(d.time);
-        const y = scaleYPrimary(primaryData[i]);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-
-    // Draw labels
-    ctx.fillStyle = '#aaa';
-    ctx.font = '10px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${minTime.toFixed(1)}s`, padding.left, canvas.height - 5);
-    ctx.fillText(`${maxTime.toFixed(1)}s`, canvas.width - padding.right, canvas.height - 5);
-
-    ctx.textAlign = 'right';
-    const unitSuffix = testType === 'balance' ? '°' : (testType === 'speed' ? '' : 'cm');
-    ctx.fillText(`${maxPrimary.toFixed(1)}${unitSuffix}`, padding.left - 5, padding.top + 10);
-    ctx.fillText(`${minPrimary.toFixed(1)}${unitSuffix}`, padding.left - 5, canvas.height - padding.bottom);
-
-    // Legend
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#a2f279';
-    ctx.fillText(primaryLabel, canvas.width - 70, 15);
-    ctx.fillStyle = '#f7b731';
-    ctx.fillText(secondaryLabel, canvas.width - 70, 28);
-}
-
-function exportSysIdCSV() {
-    if (SysIdState.data.length === 0) {
-        addLogMessage('[SysID] Brak danych do eksportu.', 'warn');
-        return;
-    }
-
-    // Get mechanical parameters from UI
-    const encoderPpr = document.getElementById('encoderPprInput')?.value || 820;
-    const wheelDiameter = document.getElementById('wheelDiameterInput')?.value || 8.2;
-    const trackWidth = document.getElementById('trackWidthInput')?.value || 15;
-
-    // Typ testu
-    const testType = SysIdState.testType || 'balance';
-
-    // Create header with metadata (commented lines starting with #)
-    const metadataLines = [
-        `# RoboBala System Identification Data`,
-        `# generated: ${new Date().toISOString()}`,
-        `# test_type: ${testType}`,
-        `# sample_rate_hz: ${SysIdState.sampleRate}`,
-        `# recording_duration_s: ${SysIdState.duration / 1000}`,
-        `# encoder_ppr: ${encoderPpr}`,
-        `# wheel_diameter_cm: ${wheelDiameter}`,
-        `# track_width_cm: ${trackWidth}`,
-        `# samples_count: ${SysIdState.data.length}`
-    ];
-
-    // Dodatkowe metadane specyficzne dla typu testu
-    if (testType === 'balance') {
-        metadataLines.push(`# kp_used: ${SysIdState.kp}`);
-        metadataLines.push(`# impulse_joystick_percent: ${SysIdState.impulse * 100}`);
-        metadataLines.push(`# impulse_type: double_pulse_fwd_bwd`);
-        metadataLines.push(`# impulse_duration_ms: 200`);
-    } else if (testType === 'speed') {
-        metadataLines.push(`# step_value_speed: ${SysIdState.stepValue}`);
-    } else if (testType === 'position') {
-        metadataLines.push(`# step_value_position: ${SysIdState.stepValue}`);
-    }
-    metadataLines.push('');
-
-    const metadata = metadataLines.join('\n');
-
-    // Nagłówek i dane w zależności od typu testu
-    let header, rows;
-
-    if (testType === 'balance') {
-        header = 'time_s,angle_deg,impulse_percent,pwm_output,speed_enc,encoder_left,encoder_right,gyro_y\n';
-        rows = SysIdState.data.map(d =>
-            `${d.time.toFixed(4)},${d.angle.toFixed(4)},${(d.impulse_pwm || 0).toFixed(2)},${d.pwm_output.toFixed(2)},${d.speed.toFixed(2)},${d.encoder_left},${d.encoder_right},${d.gyroY.toFixed(4)}`
-        ).join('\n');
-    } else if (testType === 'speed') {
-        header = 'time_s,setpoint_speed,speed_actual,speed_error,angle_deg,pwm_output,encoder_left,encoder_right\n';
-        rows = SysIdState.data.map(d =>
-            `${d.time.toFixed(4)},${(d.setpoint_speed || d.input_signal || 0).toFixed(2)},${d.speed.toFixed(2)},${(d.speed_error || 0).toFixed(2)},${d.angle.toFixed(4)},${d.pwm_output.toFixed(2)},${d.encoder_left},${d.encoder_right}`
-        ).join('\n');
-    } else if (testType === 'position') {
-        header = 'time_s,setpoint_position,position_actual,position_error,speed_enc,angle_deg,encoder_left,encoder_right\n';
-        rows = SysIdState.data.map(d =>
-            `${d.time.toFixed(4)},${(d.setpoint_position || d.input_signal || 0).toFixed(2)},${(d.position_cm || 0).toFixed(2)},${(d.position_error || 0).toFixed(2)},${d.speed.toFixed(2)},${d.angle.toFixed(4)},${d.encoder_left},${d.encoder_right}`
-        ).join('\n');
-    }
-
-    const csv = metadata + header + rows;
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sysid_data_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-
-    addLogMessage(`[SysID] Eksportowano ${SysIdState.data.length} próbek do CSV (z parametrami mechanicznymi).`, 'success');
-}
-
-function exportSysIdMAT() {
-    if (SysIdState.data.length === 0) {
-        addLogMessage('[SysID] Brak danych do eksportu.', 'warn');
-        return;
-    }
-
-    // Create MATLAB script with embedded data
-    const time = SysIdState.data.map(d => d.time.toFixed(4)).join(', ');
-    const angle = SysIdState.data.map(d => d.angle.toFixed(4)).join(', ');
-    const impulse_pwm = SysIdState.data.map(d => d.impulse_pwm.toFixed(2)).join(', ');
-    const pwm_output = SysIdState.data.map(d => d.pwm_output.toFixed(2)).join(', ');
-    const speed = SysIdState.data.map(d => d.speed.toFixed(2)).join(', ');
-    const encoder_left = SysIdState.data.map(d => d.encoder_left).join(', ');
-    const encoder_right = SysIdState.data.map(d => d.encoder_right).join(', ');
-    const gyroY = SysIdState.data.map(d => d.gyroY.toFixed(4)).join(', ');
-
-    const matlabScript = `%% System Identification Data - RoboBala
-% Generated: ${new Date().toISOString()}
-% Kp used: ${SysIdState.kp}
-% Impulse PWM: ${SysIdState.impulse}
-% Sample rate: ${SysIdState.sampleRate} Hz
-% Duration: ${SysIdState.duration / 1000} s
-% Impulse applied at: 1.0s (duration: 50ms)
-
-% Data arrays
-time = [${time}];                     % Time in seconds
-angle = [${angle}];                   % Measured angle in degrees
-impulse_pwm = [${impulse_pwm}];       % Impulse PWM input signal
-pwm_output = [${pwm_output}];         % Balance output (PID output)
-speed = [${speed}];                   % Encoder speed
-encoder_left = [${encoder_left}];     % Left encoder position
-encoder_right = [${encoder_right}];   % Right encoder position
-gyro_y = [${gyroY}];                  % Gyroscope Y axis (pitch velocity)
-
-% Create iddata object for System Identification Toolbox
-% y = output (angle), u = input (impulse_pwm)
-Ts = ${(1 / SysIdState.sampleRate).toFixed(6)};  % Sample time
-data = iddata(angle', impulse_pwm', Ts);
-data.InputName = 'Impulse_PWM';
-data.OutputName = 'Angle';
-data.InputUnit = 'PWM';
-data.OutputUnit = 'deg';
-
-% Plot data
-figure;
-subplot(3,1,1);
-plot(time, angle, 'b-');
-xlabel('Time [s]'); ylabel('Angle [deg]');
-title('Measured Angle Response');
-grid on;
-
-subplot(3,1,2);
-plot(time, impulse_pwm, 'r-', 'LineWidth', 2);
-xlabel('Time [s]'); ylabel('PWM');
-title('Impulse Input Signal');
-grid on;
-
-subplot(3,1,3);
-plot(time, pwm_output, 'g-');
-xlabel('Time [s]'); ylabel('PWM');
-title('Control Effort (Balance Output)');
-grid on;
-
-% System identification example:
-% sys = tfest(data, 2);  % Estimate 2nd order transfer function
-% compare(data, sys);
-
-disp('Data loaded successfully!');
-disp(['Samples: ' num2str(length(time))]);
-disp(['Impulse PWM: ${SysIdState.impulse}']);
-`;
-
-    const blob = new Blob([matlabScript], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sysid_data_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}.m`;
-    a.click();
-    URL.revokeObjectURL(url);
-
-    addLogMessage(`[SysID] Eksportowano ${SysIdState.data.length} próbek do skryptu MATLAB (.m).`, 'success');
-}
-
-function clearSysIdData() {
-    SysIdState.data = [];
-    updateSysIdUI('stopped');
-
-    // Clear chart
-    const canvas = document.getElementById('sysid-preview-chart');
-    if (canvas && SysIdState.chartCtx) {
-        SysIdState.chartCtx.clearRect(0, 0, canvas.width, canvas.height);
-    }
-
-    const countEl = document.getElementById('sysid-sample-count');
-    if (countEl) countEl.textContent = '0';
-
-    const progressEl = document.getElementById('sysid-progress');
-    if (progressEl) progressEl.value = 0;
-
-    addLogMessage('[SysID] Dane wyczyszczone.', 'info');
-}
