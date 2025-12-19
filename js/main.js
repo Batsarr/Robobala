@@ -1811,14 +1811,21 @@ async function generateQRCode(deviceName) {
 }
 
 /**
- * Show QR modal with current device or prompt for device name
+ * Show QR modal with current connected device
+ * QR code can only be generated when connected to a device
  */
 function showQRModal() {
     const modal = document.getElementById('qr-modal');
     if (!modal) return;
 
-    // Get current connected device name or use default
-    let deviceName = 'RoboBala';
+    // QR code generation requires an active connection
+    if (!AppState.isConnected) {
+        addLogMessage('[UI] Aby wygenerować kod QR, najpierw połącz się z robotem.', 'warning');
+        return;
+    }
+
+    // Get current connected device name
+    let deviceName = null;
 
     if (commLayer && commLayer.getDeviceName && commLayer.getDeviceName()) {
         deviceName = commLayer.getDeviceName();
@@ -1827,45 +1834,14 @@ function showQRModal() {
         if (storedName) deviceName = storedName;
     }
 
-    // If not connected, prompt for device name
-    if (!AppState.isConnected) {
-        const userInput = prompt(
-            'Podaj nazwę urządzenia BLE robota:\n' +
-            '(np. RoboBala, RoboBala-01, RoboBala-02)\n\n' +
-            'Każdy robot powinien mieć unikalną nazwę w config.h',
-            deviceName
-        );
-        if (userInput && userInput.trim()) {
-            deviceName = userInput.trim();
-        } else {
-            return; // User cancelled
-        }
+    if (!deviceName) {
+        addLogMessage('[UI] Nie można określić nazwy połączonego urządzenia.', 'error');
+        return;
     }
 
     // Generate QR and show modal
     generateQRCode(deviceName);
     modal.style.display = 'flex';
-    // Set connect button handler to call connectBLE with deviceName
-    const connectBtn = document.getElementById('qr-connect-btn');
-    if (connectBtn) {
-        // Remove previous handlers
-        connectBtn.replaceWith(connectBtn.cloneNode(true));
-    }
-    const newConnectBtn = document.getElementById('qr-connect-btn');
-    if (newConnectBtn) {
-        newConnectBtn.addEventListener('click', () => {
-            // Close modal, then attempt connection with target device
-            hideQRModal();
-            // Call connectBLE which will read device param; set temporarily in URL so logic can use same path
-            const url = new URL(window.location);
-            url.searchParams.set('device', deviceName);
-            window.history.replaceState({}, '', url);
-            // Trigger connect directly with target name if commLayer supports it
-            if (typeof connectBLE === 'function') {
-                connectBLE();
-            }
-        });
-    }
 }
 
 /**
@@ -1929,17 +1905,13 @@ function initQRCodeUI() {
         if (e.target === modal) hideQRModal();
     });
 
-    // Auto-connect if device parameter present in URL
+    // Auto-connect if device parameter present in URL (from QR code scan)
     const targetDevice = getTargetDeviceFromURL();
     if (targetDevice) {
-        addLogMessage(`[UI] Wykryto parametr urządzenia w URL: ${targetDevice}`, 'info');
-        // Show prompt to connect
+        addLogMessage(`[UI] Automatyczne łączenie z urządzeniem: ${targetDevice}`, 'info');
+        // Auto-connect without confirmation - this is the expected behavior from QR code
         setTimeout(() => {
-            if (confirm(`Czy chcesz połączyć się z robotem "${targetDevice}"?`)) {
-                connectBLE();
-            } else {
-                clearDeviceFromURL();
-            }
+            connectBLE();
         }, 500);
     }
 }
@@ -1994,6 +1966,15 @@ async function connectBLE() {
         document.body.classList.remove('ui-locked');
         document.getElementById('connectBleBtn').textContent = 'Synchronizowanie...';
 
+        // Enable QR button after successful connection
+        const qrBtn = document.getElementById('showQrBtn');
+        if (qrBtn) {
+            qrBtn.disabled = false;
+            qrBtn.style.background = '#61dafb';
+            qrBtn.style.opacity = '1';
+            qrBtn.title = 'Pokaż kod QR do połączenia z tym robotem';
+        }
+
         // Reset sync state
         AppState.isSynced = false;
         AppState.tempParams = {};
@@ -2039,6 +2020,15 @@ function onDisconnected() {
 
     document.getElementById('connectionStatus').className = 'status-indicator status-disconnected';
     document.getElementById('connectionText').textContent = 'Rozlaczony';
+
+    // Disable QR button when disconnected
+    const qrBtn = document.getElementById('showQrBtn');
+    if (qrBtn) {
+        qrBtn.disabled = true;
+        qrBtn.style.background = '#555';
+        qrBtn.style.opacity = '0.5';
+        qrBtn.title = 'Połącz się z robotem, aby wygenerować kod QR';
+    }
 
     ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => {
         const el = document.getElementById(id);
