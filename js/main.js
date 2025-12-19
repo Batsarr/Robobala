@@ -377,17 +377,26 @@ class BLECommunication extends CommunicationLayer {
      */
     async connect(targetDeviceName = null) {
         try {
-            // Build filter - if targetDeviceName provided, filter by exact name
-            // Otherwise use prefix filter to allow RoboBala, RoboBala-01, RoboBala-02, etc.
+            // Build filter - if targetDeviceName provided, filter by exact name AND service
+            // This ensures only the specific device appears in the browser's device picker
             const filters = [];
             if (targetDeviceName) {
-                filters.push({ name: targetDeviceName });
+                // Filter by exact name AND service UUID for maximum specificity
+                filters.push({
+                    name: targetDeviceName,
+                    services: [this.serviceUuid]
+                });
             } else {
-                // Use namePrefix to match all RoboBala* devices
-                filters.push({ namePrefix: 'RoboBala' });
+                // Use namePrefix to match all RoboBala* devices with our service
+                filters.push({
+                    namePrefix: 'RoboBala',
+                    services: [this.serviceUuid]
+                });
             }
 
-            // Request device
+            // Request device - browser will show picker with filtered devices
+            // Note: Even with exact name filter, browser MUST show picker (security requirement)
+            // But only devices matching ALL filter criteria will appear
             this.device = await navigator.bluetooth.requestDevice({
                 filters: filters,
                 optionalServices: [this.serviceUuid]
@@ -2025,12 +2034,17 @@ function showAutoConnectBanner(deviceName) {
             <div style="font-size: 48px; margin-bottom: 20px;">🤖</div>
             <h2 style="color: #61dafb; margin-bottom: 15px;">Połączenie z Robotem</h2>
             <p style="color: #ccc; margin-bottom: 10px;">Wykryto kod QR dla urządzenia:</p>
-            <div style="background: #333; padding: 12px 20px; border-radius: 8px; margin-bottom: 25px;">
+            <div style="background: #333; padding: 12px 20px; border-radius: 8px; margin-bottom: 20px;">
                 <strong style="color: #4caf50; font-size: 1.3em;">${deviceName}</strong>
             </div>
-            <p style="color: #888; font-size: 0.9em; margin-bottom: 25px;">
-                Upewnij się, że robot jest włączony i w zasięgu Bluetooth.
+            <p style="color: #888; font-size: 0.85em; margin-bottom: 20px;">
+                Upewnij się, że robot jest <strong style="color: #4caf50;">włączony</strong> i w zasięgu Bluetooth.
             </p>
+            <div style="background: #2a2a3a; border: 1px solid #61dafb; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+                <p style="color: #aaa; font-size: 0.8em; margin: 0;">
+                    💡 Po kliknięciu pojawi się okno przeglądarki - wybierz urządzenie <strong style="color: #61dafb;">${deviceName}</strong> i kliknij "Paruj"
+                </p>
+            </div>
             <button id="qr-autoconnect-btn" style="
                 background: #4caf50;
                 color: white;
