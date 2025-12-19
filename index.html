@@ -8,6 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 </head>
 <body class="ui-locked">
     <div id="emergency-banner">ZATRZYMANIE AWARYJNE</div>
@@ -45,15 +46,46 @@
         </div>
     </div>
 
+    <div id="qr-modal" class="modal-backdrop">
+        <div class="modal-content" style="max-width: 400px;">
+            <h2>🔗 Kod QR Połączenia</h2>
+            <p style="font-size: 0.9em; color: #aaa; margin-bottom: 15px;">Zeskanuj kod QR, aby połączyć się z tym robotem z innego urządzenia.</p>
+            <div id="qr-device-info" style="margin-bottom: 15px; padding: 10px; background: #333; border-radius: 6px;">
+                <strong>Nazwa urządzenia:</strong> <span id="qr-device-name">---</span>
+            </div>
+            <div id="qr-code-container" style="display: flex; justify-content: center; padding: 20px; background: white; border-radius: 8px; margin-bottom: 15px;"></div>
+            <div style="font-size: 0.85em; color: #888; margin-bottom: 15px;">
+                <strong>Link:</strong> <input id="qr-link-input" type="text" readonly style="width: 100%; padding: 5px; font-family: monospace; font-size: 0.85em; background: #222; color: #61dafb; border: 1px solid #444; border-radius: 4px; margin-top: 5px;">
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button id="qr-copy-link-btn" style="flex: 1; background: #61dafb;">📋 Kopiuj Link</button>
+                <button id="qr-connect-btn" style="flex: 1; background: #4caf50; color: white;">Połącz</button>
+                <button id="qr-close-btn" style="flex: 1;">Zamknij</button>
+            </div>
+        </div>
+    </div>
+
     <h1>Robot PID - Panel Sterowania v21.2</h1>
     <div class="main-grid">
         <div class="card" id="controls-card">
             <h2>Sterowanie</h2>
             <div id="joystickWrapper"><canvas id="joystickCanvas"></canvas></div>
-            <div class="control-row"><span class="control-label">Balansowanie</span><label class="switch"><input type="checkbox" id="balanceSwitch"><span class="slider round"></span></label></div>
-            <div class="control-row"><span class="control-label">Trzymaj Pozycje</span><label class="switch"><input type="checkbox" id="holdPositionSwitch"><span class="slider round"></span></label></div>
-            <div class="control-row"><span class="control-label">Tryb Predkosci</span><label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label></div>
-            <div class="control-row"><span class="control-label">Wylacz Magnetometr</span><label class="switch"><input type="checkbox" id="disableMagnetometerSwitch"><span class="slider round"></span></label></div>
+            <div class="control-row">
+                <span class="control-label">Balansowanie <span class="help-icon" title="Włącza główną pętlę PID odpowiedzialną za utrzymanie robota w pionie. Robot aktywnie koryguje swoje położenie wykorzystując dane z czujnika IMU.">?</span></span>
+                <label class="switch"><input type="checkbox" id="balanceSwitch"><span class="slider round"></span></label>
+            </div>
+            <div class="control-row">
+                <span class="control-label">Trzymaj Pozycje <span class="help-icon" title="Aktywuje pętlę PID pozycji - robot stara się pozostać w miejscu, kompensując dryf. Wymaga działającego balansowania.">?</span></span>
+                <label class="switch"><input type="checkbox" id="holdPositionSwitch"><span class="slider round"></span></label>
+            </div>
+            <div class="control-row">
+                <span class="control-label">Tryb Predkosci <span class="help-icon" title="Zmienia tryb sterowania z pozycyjnego na prędkościowy. Joystick kontroluje prędkość jazdy zamiast docelowej pozycji.">?</span></span>
+                <label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label>
+            </div>
+            <div class="control-row">
+                <span class="control-label">Wylacz Magnetometr <span class="help-icon" title="Wyłącza magnetometr w algorytmie fuzji sensorów. Przydatne gdy magnetometr jest zakłócany przez silniki lub metalowe elementy.">?</span></span>
+                <label class="switch"><input type="checkbox" id="disableMagnetometerSwitch"><span class="slider round"></span></label>
+            </div>
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
             <fieldset style="margin-top:10px; border: 1px solid #444; padding: 10px; border-radius: 6px;">
                 <legend style="color: #61dafb; font-weight: bold;">Korekta montażu (EEPROM)</legend>
@@ -108,7 +140,10 @@
         </div>
         <div class="card">
             <h2>Dashboard</h2>
-            <button id="connectBleBtn" style="width: 100%; margin-bottom: 15px;">POLACZ Z ROBOTEM</button>
+            <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+                <button id="connectBleBtn" style="flex: 1;">POLACZ Z ROBOTEM</button>
+                <button id="showQrBtn" style="width: 50px; background: #61dafb;" title="Pokaż kod QR do połączenia">📱</button>
+            </div>
             <div style="display: grid; grid-template-columns: 1fr auto; gap: 15px; align-items: start; margin-bottom: 15px;">
                 <div class="status-grid">
                     <strong>Polaczenie:</strong> <div><span id="connectionStatus" class="status-indicator status-disconnected"></span> <span id="connectionText">Rozlaczony</span></div>
@@ -142,6 +177,11 @@
                     <span class="value">Sys: <span id="calibSysVal">-</span></span>
                     <div class="historical-metric">Acc: <span id="calibAccelVal">-</span> Gyro: <span id="calibGyroVal">-</span> Mag: <span id="calibMagVal">-</span></div>
                 </div>
+                    <div class="dashboard-item" id="imuRateItem">
+                        <span class="label">IMU rate</span>
+                        <span class="value"><span id="imuRateValue">--</span> Hz</span>
+                        <div style="font-size:0.8em;color:#cfd8dc;margin-top:6px;">Pokazuje rzeczywistą prędkość odświeżania danych IMU (średnia z ostatniej sekundy).</div>
+                    </div>
                 <div class="dashboard-item">
                     <span class="label">Korekta montażu (Pitch)</span>
                     <span class="value" id="angleOffsetVal">0.0 °</span>
@@ -247,6 +287,140 @@
             </div>
             <div class="chart-controls" id="signalChartControls"></div>
         </div>
+        
+        <!-- NOWA KARTA: Nauka PID - Wizualizacja edukacyjna -->
+        <div class="card" id="pid-education-card">
+            <h2>📚 Nauka PID <span class="help-icon" id="pidEducationHelp">?</span></h2>
+            <div id="pidEducationHelpText" class="help-text" style="margin-bottom: 12px;">
+                <strong>Cel:</strong> Wizualizacja działania regulatora PID w czasie rzeczywistym.<br>
+                <strong>Składowa P (Proporcjonalna):</strong> Reaguje na aktualny błąd - im większe odchylenie, tym silniejsza reakcja.<br>
+                <strong>Składowa I (Całkująca):</strong> Sumuje błędy w czasie - eliminuje stałe odchylenie od celu.<br>
+                <strong>Składowa D (Różniczkująca):</strong> Reaguje na szybkość zmian - działa jak hamulec, tłumi oscylacje.<br>
+                <strong>Tryb krokowy:</strong> Pozwala analizować pojedyncze iteracje PID krok po kroku.
+            </div>
+            
+            <!-- Tryb pracy -->
+            <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                <button id="pidEduLiveBtn" class="active" style="flex: 1; min-width: 120px;">📡 Na żywo</button>
+                <button id="pidEduStepBtn" style="flex: 1; min-width: 120px;">⏯️ Tryb krokowy</button>
+                <button id="pidEduResetBtn" style="flex: 1; min-width: 100px; background: #f7b731;">🔄 Reset</button>
+            </div>
+            
+            <!-- Panel trybu krokowego (domyślnie ukryty) -->
+            <div id="pidStepModePanel" style="display: none; background: #1a1d24; border: 1px solid #61dafb; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                <h4 style="margin: 0 0 12px 0; color: #61dafb;">⏯️ Analiza krok po kroku</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 15px;">
+                    <div class="step-info-box">
+                        <div class="step-label">Wartość zadana (Setpoint)</div>
+                        <div class="step-value" id="stepSetpoint">0.00°</div>
+                    </div>
+                    <div class="step-info-box">
+                        <div class="step-label">Wartość aktualna (Input)</div>
+                        <div class="step-value" id="stepInput">0.00°</div>
+                    </div>
+                    <div class="step-info-box">
+                        <div class="step-label">Błąd (Error)</div>
+                        <div class="step-value" id="stepError" style="color: #ff6b6b;">0.00°</div>
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 15px;">
+                    <div class="step-component-box" style="border-color: #e74c3c;">
+                        <div class="component-header" style="background: #e74c3c;">P (Proporcjonalna)</div>
+                        <div class="component-formula">Kp × Error</div>
+                        <div class="component-calc"><span id="stepKp">0.00</span> × <span id="stepErrorP">0.00</span></div>
+                        <div class="component-result" id="stepPOut">= 0.00</div>
+                    </div>
+                    <div class="step-component-box" style="border-color: #27ae60;">
+                        <div class="component-header" style="background: #27ae60;">I (Całkująca)</div>
+                        <div class="component-formula">Ki × ∫Error dt</div>
+                        <div class="component-calc"><span id="stepKi">0.00</span> × <span id="stepIntegral">0.00</span></div>
+                        <div class="component-result" id="stepIOut">= 0.00</div>
+                    </div>
+                    <div class="step-component-box" style="border-color: #3498db;">
+                        <div class="component-header" style="background: #3498db;">D (Różniczkująca)</div>
+                        <div class="component-formula">Kd × dError/dt</div>
+                        <div class="component-calc"><span id="stepKd">0.00</span> × <span id="stepDerivative">0.00</span></div>
+                        <div class="component-result" id="stepDOut">= 0.00</div>
+                    </div>
+                </div>
+                
+                <div class="step-sum-box">
+                    <span>Suma: P + I + D = </span>
+                    <span id="stepPVal" style="color: #e74c3c;">0.00</span> + 
+                    <span id="stepIVal" style="color: #27ae60;">0.00</span> + 
+                    <span id="stepDVal" style="color: #3498db;">0.00</span> = 
+                    <strong id="stepOutput" style="color: #f1c40f; font-size: 1.2em;">0.00</strong>
+                    <span style="color: #888;"> → PWM</span>
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button id="stepPrevBtn" style="flex: 1;">⏮️ Poprzedni</button>
+                    <button id="stepCaptureBtn" style="flex: 2; background: #61dafb;">📸 Zapisz krok</button>
+                    <button id="stepNextBtn" style="flex: 1;">Następny ⏭️</button>
+                </div>
+                <div style="margin-top: 10px; font-size: 0.85em; color: #888;">
+                    Krok: <span id="stepCounter">0</span> / <span id="stepTotal">0</span>
+                </div>
+            </div>
+            
+            <!-- Wykres składowych PID -->
+            <div style="margin-bottom: 10px;">
+                <strong>Wykres składowych PID:</strong>
+                <div style="display: flex; gap: 15px; margin-top: 8px; flex-wrap: wrap;">
+                    <label style="display: flex; align-items: center; gap: 5px;">
+                        <input type="checkbox" id="showPComponent" checked>
+                        <span style="color: #e74c3c;">■</span> P (Proporcjonalna)
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 5px;">
+                        <input type="checkbox" id="showIComponent" checked>
+                        <span style="color: #27ae60;">■</span> I (Całkująca)
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 5px;">
+                        <input type="checkbox" id="showDComponent" checked>
+                        <span style="color: #3498db;">■</span> D (Różniczkująca)
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 5px;">
+                        <input type="checkbox" id="showPIDSum" checked>
+                        <span style="color: #f1c40f;">■</span> Suma (Output)
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 5px;">
+                        <input type="checkbox" id="showPIDError">
+                        <span style="color: #9b59b6;">■</span> Błąd
+                    </label>
+                </div>
+            </div>
+            <div style="position: relative; height: 250px; background: #101014; border: 1px solid #2a2a35; border-radius: 6px;">
+                <canvas id="pidComponentsChart"></canvas>
+            </div>
+            
+            <!-- Aktualne wartości -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 15px;">
+                <div class="pid-live-box" style="border-left: 3px solid #e74c3c;">
+                    <div class="pid-live-label">P (Kp × e)</div>
+                    <div class="pid-live-value" id="liveP">0.00</div>
+                </div>
+                <div class="pid-live-box" style="border-left: 3px solid #27ae60;">
+                    <div class="pid-live-label">I (Ki × ∫e)</div>
+                    <div class="pid-live-value" id="liveI">0.00</div>
+                </div>
+                <div class="pid-live-box" style="border-left: 3px solid #3498db;">
+                    <div class="pid-live-label">D (Kd × de/dt)</div>
+                    <div class="pid-live-value" id="liveD">0.00</div>
+                </div>
+                <div class="pid-live-box" style="border-left: 3px solid #f1c40f;">
+                    <div class="pid-live-label">Output (PWM)</div>
+                    <div class="pid-live-value" id="liveOutput">0.00</div>
+                </div>
+            </div>
+            
+            <!-- Wskazówki edukacyjne -->
+            <div id="pidEducationTips" style="margin-top: 15px; padding: 12px; background: #20232a; border-radius: 6px; font-size: 0.9em;">
+                <strong style="color: #61dafb;">💡 Wskazówka:</strong>
+                <span id="pidTipText">Obserwuj, jak zmienia się każda składowa podczas ruchu robota. Składowa P reaguje natychmiast na odchylenie, I rośnie powoli przy stałym błędzie, a D hamuje szybkie zmiany.</span>
+            </div>
+        </div>
+        
         <div class="card">
              <button class="accordion-header" onclick="toggleAccordion(this)">Sterowanie Autonomiczne</button>
             <div class="accordion-content">
@@ -502,7 +676,8 @@
                 <div class="accordion-content" id="sysid-content">
                     <p style="color: #aaa; font-size: 0.9em; margin-bottom: 15px;">
                         📊 Nagraj odpowiedź skokową dla wybranej pętli. 
-                        Eksportuj dane do Python aby obliczyć optymalne PID.
+                        Kliknij <strong style="color: #9b59b6;">🔬 Analizuj</strong> aby obliczyć optymalne PID bezpośrednio w przeglądarce,
+                        lub eksportuj dane do Python/MATLAB.
                     </p>
                     
                     <div class="setting-container">
@@ -584,12 +759,59 @@
                         <button id="sysid-export-mat-btn" style="flex: 1; min-width: 100px; padding: 10px; background: #f7b731; color: #000; border: none; border-radius: 6px; cursor: pointer;" disabled>
                             📐 Eksport MAT
                         </button>
+                        <button id="sysid-analyze-btn" style="flex: 1; min-width: 100px; padding: 10px; background: #9b59b6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;" disabled>
+                            🔬 Analizuj
+                        </button>
                         <button id="sysid-clear-btn" style="flex: 1; min-width: 100px; padding: 10px; background: #4a4f58; color: #fff; border: none; border-radius: 6px; cursor: pointer;" disabled>
                             🗑️ Wyczyść Dane
                         </button>
                     </div>
                     
                     <canvas id="sysid-preview-chart" height="150" style="width: 100%; background: #101014; border: 1px solid #2a2a35; border-radius: 6px;"></canvas>
+                    
+                    <!-- Panel wyników analizy -->
+                    <div id="sysid-analysis-results" style="display: none; margin-top: 15px; background: #1a1d24; border: 1px solid #9b59b6; border-radius: 8px; padding: 15px;">
+                        <h4 style="margin: 0 0 12px 0; color: #9b59b6; font-size: 1em;">🔬 Wyniki Analizy</h4>
+                        
+                        <!-- Ostrzeżenia -->
+                        <div id="sysid-warnings" style="display: none; margin-bottom: 12px; padding: 10px; background: #332200; border: 1px solid #f7b731; border-radius: 6px; font-size: 0.9em;">
+                        </div>
+                        
+                        <!-- Parametry modelu -->
+                        <div style="margin-bottom: 15px;">
+                            <div style="font-weight: bold; color: #61dafb; margin-bottom: 8px;">📊 Parametry Modelu</div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; font-size: 0.9em;">
+                                <div style="background: #20232a; padding: 8px; border-radius: 4px;">
+                                    <div style="color: #888;">Wzmocnienie (K)</div>
+                                    <div id="sysid-result-k" style="font-weight: bold; color: #fff;">-</div>
+                                </div>
+                                <div style="background: #20232a; padding: 8px; border-radius: 4px;">
+                                    <div style="color: #888;">Tłumienie (ζ)</div>
+                                    <div id="sysid-result-zeta" style="font-weight: bold; color: #fff;">-</div>
+                                </div>
+                                <div style="background: #20232a; padding: 8px; border-radius: 4px;">
+                                    <div style="color: #888;">Częst. własna (ωn)</div>
+                                    <div id="sysid-result-wn" style="font-weight: bold; color: #fff;">-</div>
+                                </div>
+                                <div style="background: #20232a; padding: 8px; border-radius: 4px;">
+                                    <div style="color: #888;">Przeregulowanie</div>
+                                    <div id="sysid-result-overshoot" style="font-weight: bold; color: #fff;">-</div>
+                                </div>
+                                <div style="background: #20232a; padding: 8px; border-radius: 4px;">
+                                    <div style="color: #888;">Czas ustalania</div>
+                                    <div id="sysid-result-settling" style="font-weight: bold; color: #fff;">-</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Sugestie PID -->
+                        <div>
+                            <div style="font-weight: bold; color: #a2f279; margin-bottom: 8px;">🎯 Sugerowane PID</div>
+                            <div id="sysid-pid-suggestions" style="display: grid; gap: 10px;">
+                                <!-- Wypełniane dynamicznie -->
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
