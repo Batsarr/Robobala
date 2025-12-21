@@ -2399,6 +2399,10 @@ function processCompleteMessage(data) {
                     AppState.tempStates[data.key] = data.value;
                 } else {
                     AppState.tempParams[data.key] = data.value;
+                    // Aktualizuj cache profili PID dla dwóch trybów fuzji
+                    if (typeof FusionPIDProfiles !== 'undefined') {
+                        FusionPIDProfiles.updateFromSync(data.key, data.value);
+                    }
                 }
             } else {
                 applySingleParam(data.key, data.value);
@@ -2452,6 +2456,11 @@ function processCompleteMessage(data) {
             if (AppState.tempStates.holding_pos !== undefined) document.getElementById('holdPositionSwitch').checked = AppState.tempStates.holding_pos;
             if (AppState.tempStates.speed_mode !== undefined) document.getElementById('speedModeSwitch').checked = AppState.tempStates.speed_mode;
             AppState.isApplyingConfig = false;
+
+            // Po synchronizacji załaduj aktualny profil PID (mahony lub NDOF) do UI
+            if (typeof FusionPIDProfiles !== 'undefined') {
+                FusionPIDProfiles.loadCurrentPIDToUI();
+            }
 
             // Zaktualizuj UI
             clearTimeout(AppState.syncTimeout);
@@ -4542,12 +4551,21 @@ function sendFullConfigToRobot() {
 // (Jeśli potrzebne w przyszłości: przenieść potrzebne listenery do setupParameterListeners.)
 
 function setupParameterListeners() {
+    // Lista kluczy PID które mają być translowane na wersję _ndof w trybie NDOF
+    const pidKeys = ['kp_b', 'ki_b', 'kd_b', 'balance_pid_derivative_filter_alpha', 'balance_pid_integral_limit',
+        'kp_s', 'ki_s', 'kd_s', 'speed_pid_filter_alpha', 'speed_pid_integral_limit',
+        'kp_p', 'ki_p', 'kd_p', 'position_pid_filter_alpha', 'position_pid_integral_limit'];
+
     const sendSingleParam = (inputId, value) => {
         if (AppState.isApplyingConfig) return;
-        const snakeKey = parameterMapping[inputId];
+        let snakeKey = parameterMapping[inputId];
         if (snakeKey) {
             if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha', 'weights_itae', 'weights_overshoot', 'weights_control_effort'].includes(snakeKey)) {
                 value /= 100.0;
+            }
+            // Użyj FusionPIDProfiles do przetłumaczenia klucza PID na wersję _ndof w trybie NDOF
+            if (pidKeys.includes(snakeKey) && typeof FusionPIDProfiles !== 'undefined') {
+                snakeKey = FusionPIDProfiles.getParamKey(snakeKey);
             }
             sendBleMessage({ type: 'set_param', key: snakeKey, value: value });
         }
@@ -4711,6 +4729,12 @@ function setupParameterListeners() {
         if (AppState.isConnected && confirm("Czy na pewno chcesz trwale zapisać bieżącą konfigurację z panelu do pamięci EEPROM robota?")) {
             addLogMessage('[UI] Wyslano polecenie zapisu konfiguracji do EEPROM...', 'info');
             sendBleMessage({ type: 'save_tunings' });
+
+            // Zapisz też profile PID dla obu trybów fuzji do localStorage
+            if (typeof FusionPIDProfiles !== 'undefined') {
+                FusionPIDProfiles.saveCurrentToProfile(); // Zapisz aktualny tryb
+                addLogMessage('[FusionPID] 💾 Profile PID dla Mahony/NDOF zapisane lokalnie', 'success');
+            }
         } else if (!AppState.isConnected) { addLogMessage('[UI] Połącz z robotem przed zapisem konfiguracji.', 'warn'); }
     });
     document.getElementById('loadBtn')?.addEventListener('click', () => { if (confirm("UWAGA! Spowoduje to nadpisanie wszystkich niezapisanych zmian w panelu. Kontynuowac?")) { AppState.isSynced = false; AppState.tempParams = {}; AppState.tempStates = {}; sendBleMessage({ type: 'request_full_config' }); } });
@@ -5332,81 +5356,48 @@ document.addEventListener('DOMContentLoaded', () => {
 // - Ki: zwykle 0 lub bardzo małe dla balansu
 // ========================================================================
 
-const FUSION_PID_STORAGE_KEY = 'robobala_fusion_pid_profiles_v1';
-
 /**
- * FusionPIDProfiles - Manager osobnych ustawień PID dla Mahony i NDOF
+ * FusionPIDProfiles - Manager dwóch zestawów PID (Mahony/NDOF) przechowywanych w EEPROM robota
+ * 
+ * EDUKACYJNE WYJAŚNIENIE:
+ * Robot posiada dwa zestawy parametrów PID - jeden dla szybkiej własnej fuzji Mahony (~500Hz),
+ * drugi dla wolniejszej wbudowanej fuzji NDOF (~100Hz). Oba zestawy są przechowywane w EEPROM
+ * robota i synchronizowane przez BLE. Ten moduł zarządza przełączaniem między nimi w UI.
+ * 
+ * Różnice między trybami:
+ * - Mahony (~500Hz): Wymaga mniejszych wzmocnień PID (Kp, Kd) ze względu na szybszą pętlę
+ * - NDOF (~100Hz): Wymaga większych wzmocnień (~1.6x Kp, ~2.2x Kd) ze względu na wolniejszą pętlę
  */
 const FusionPIDProfiles = {
-    // Aktualne profile PID zapamiętane lokalnie
-    profiles: {
-        // Profil dla Mahony (~500Hz) - mniejsze wzmocnienia
-        mahony: {
-            balance: { Kp: 60, Ki: 0, Kd: 1.5, filterAlpha: 100, integralLimit: 50 },
-            speed: { Kp: 0.3, Ki: 0.01, Kd: 0, filterAlpha: 80, integralLimit: 20 },
-            position: { Kp: 1.5, Ki: 0, Kd: 0.1, filterAlpha: 90, integralLimit: 100 }
-        },
-        // Profil dla NDOF (~100Hz) - większe wzmocnienia
-        ndof: {
-            balance: { Kp: 95, Ki: 0, Kd: 3.23, filterAlpha: 100, integralLimit: 50 },
-            speed: { Kp: 0.5, Ki: 0.02, Kd: 0.01, filterAlpha: 80, integralLimit: 20 },
-            position: { Kp: 2.5, Ki: 0, Kd: 0.2, filterAlpha: 90, integralLimit: 100 }
-        }
+    // Tymczasowe przechowywanie wartości PID (odbierane z robota przez sync)
+    // Mahony PID (kp_b, ki_b, kd_b, etc.)
+    mahonyPID: {
+        balance: { Kp: 100, Ki: 0, Kd: 1.3, filterAlpha: 1.0, integralLimit: 50 },
+        speed: { Kp: 0.1, Ki: 0, Kd: 0.05, filterAlpha: 0.8, integralLimit: 20 },
+        position: { Kp: 0.05, Ki: 0, Kd: 0.02, filterAlpha: 0.9, integralLimit: 100 }
+    },
+    // NDOF PID (kp_b_ndof, ki_b_ndof, kd_b_ndof, etc.)
+    ndofPID: {
+        balance: { Kp: 160, Ki: 0, Kd: 2.86, filterAlpha: 1.0, integralLimit: 50 },
+        speed: { Kp: 0.16, Ki: 0, Kd: 0.11, filterAlpha: 0.8, integralLimit: 20 },
+        position: { Kp: 0.08, Ki: 0, Kd: 0.044, filterAlpha: 0.9, integralLimit: 100 }
     },
 
     // Aktywny tryb fuzji (wykrywany z checkbox)
     currentFusionMode: 'mahony', // 'mahony' lub 'ndof'
 
-    // Flaga - czy automatyczne przełączanie jest włączone
-    autoSwitchEnabled: true,
-
     // Flaga - czy właśnie trwa przełączanie (blokuje pętlę zdarzeń)
     isSwitching: false,
 
     /**
-     * Inicjalizacja modułu - załaduj profile z localStorage
+     * Inicjalizacja modułu
      */
     init() {
-        this.loadFromStorage();
         this.detectCurrentMode();
         this.setupEventListeners();
         this.updateFusionIndicator();
-        addLogMessage('[FusionPID] 📊 Moduł profilów fuzji zainicjalizowany. Tryb: ' +
+        addLogMessage('[FusionPID] 📊 Moduł profili PID zainicjalizowany. Tryb: ' +
             (this.currentFusionMode === 'mahony' ? '⚡ Mahony (~500Hz)' : '🔄 NDOF (~100Hz)'), 'info');
-    },
-
-    /**
-     * Załaduj profile z localStorage
-     */
-    loadFromStorage() {
-        try {
-            const stored = localStorage.getItem(FUSION_PID_STORAGE_KEY);
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                // Połącz z domyślnymi (w razie nowych pól)
-                this.profiles.mahony = { ...this.profiles.mahony, ...parsed.mahony };
-                this.profiles.ndof = { ...this.profiles.ndof, ...parsed.ndof };
-                this.autoSwitchEnabled = parsed.autoSwitchEnabled ?? true;
-            }
-        } catch (e) {
-            console.warn('[FusionPID] Nie można załadować profili:', e);
-        }
-    },
-
-    /**
-     * Zapisz profile do localStorage
-     */
-    saveToStorage() {
-        try {
-            const data = {
-                mahony: this.profiles.mahony,
-                ndof: this.profiles.ndof,
-                autoSwitchEnabled: this.autoSwitchEnabled
-            };
-            localStorage.setItem(FUSION_PID_STORAGE_KEY, JSON.stringify(data));
-        } catch (e) {
-            console.warn('[FusionPID] Nie można zapisać profili:', e);
-        }
     },
 
     /**
@@ -5419,122 +5410,118 @@ const FusionPIDProfiles = {
     },
 
     /**
-     * Zapisz aktualne PID z UI do profilu dla aktywnego trybu fuzji
+     * Aktualizuj wartości z synchronizacji (wywoływane przez processSetParam)
      */
-    saveCurrentToProfile() {
-        const mode = this.currentFusionMode;
-
-        // Zapisz PID balansu
-        this.profiles[mode].balance = {
-            Kp: parseFloat(document.getElementById('balanceKpInput')?.value) || 0,
-            Ki: parseFloat(document.getElementById('balanceKiInput')?.value) || 0,
-            Kd: parseFloat(document.getElementById('balanceKdInput')?.value) || 0,
-            filterAlpha: parseFloat(document.getElementById('balanceFilterAlphaInput')?.value) || 100,
-            integralLimit: parseFloat(document.getElementById('balanceIntegralLimitInput')?.value) || 50
+    updateFromSync(key, value) {
+        // Mapowanie kluczy na strukturę wewnętrzną
+        const mappings = {
+            // Mahony PID
+            'kp_b': () => this.mahonyPID.balance.Kp = value,
+            'ki_b': () => this.mahonyPID.balance.Ki = value,
+            'kd_b': () => this.mahonyPID.balance.Kd = value,
+            'balance_pid_derivative_filter_alpha': () => this.mahonyPID.balance.filterAlpha = value,
+            'balance_pid_integral_limit': () => this.mahonyPID.balance.integralLimit = value,
+            'kp_s': () => this.mahonyPID.speed.Kp = value,
+            'ki_s': () => this.mahonyPID.speed.Ki = value,
+            'kd_s': () => this.mahonyPID.speed.Kd = value,
+            'speed_pid_filter_alpha': () => this.mahonyPID.speed.filterAlpha = value,
+            'speed_pid_integral_limit': () => this.mahonyPID.speed.integralLimit = value,
+            'kp_p': () => this.mahonyPID.position.Kp = value,
+            'ki_p': () => this.mahonyPID.position.Ki = value,
+            'kd_p': () => this.mahonyPID.position.Kd = value,
+            'position_pid_filter_alpha': () => this.mahonyPID.position.filterAlpha = value,
+            'position_pid_integral_limit': () => this.mahonyPID.position.integralLimit = value,
+            // NDOF PID
+            'kp_b_ndof': () => this.ndofPID.balance.Kp = value,
+            'ki_b_ndof': () => this.ndofPID.balance.Ki = value,
+            'kd_b_ndof': () => this.ndofPID.balance.Kd = value,
+            'balance_pid_derivative_filter_alpha_ndof': () => this.ndofPID.balance.filterAlpha = value,
+            'balance_pid_integral_limit_ndof': () => this.ndofPID.balance.integralLimit = value,
+            'kp_s_ndof': () => this.ndofPID.speed.Kp = value,
+            'ki_s_ndof': () => this.ndofPID.speed.Ki = value,
+            'kd_s_ndof': () => this.ndofPID.speed.Kd = value,
+            'speed_pid_filter_alpha_ndof': () => this.ndofPID.speed.filterAlpha = value,
+            'speed_pid_integral_limit_ndof': () => this.ndofPID.speed.integralLimit = value,
+            'kp_p_ndof': () => this.ndofPID.position.Kp = value,
+            'ki_p_ndof': () => this.ndofPID.position.Ki = value,
+            'kd_p_ndof': () => this.ndofPID.position.Kd = value,
+            'position_pid_filter_alpha_ndof': () => this.ndofPID.position.filterAlpha = value,
+            'position_pid_integral_limit_ndof': () => this.ndofPID.position.integralLimit = value,
         };
 
-        // Zapisz PID prędkości
-        this.profiles[mode].speed = {
-            Kp: parseFloat(document.getElementById('speedKpInput')?.value) || 0,
-            Ki: parseFloat(document.getElementById('speedKiInput')?.value) || 0,
-            Kd: parseFloat(document.getElementById('speedKdInput')?.value) || 0,
-            filterAlpha: parseFloat(document.getElementById('speedFilterAlphaInput')?.value) || 80,
-            integralLimit: parseFloat(document.getElementById('speedIntegralLimitInput')?.value) || 20
-        };
-
-        // Zapisz PID pozycji
-        this.profiles[mode].position = {
-            Kp: parseFloat(document.getElementById('positionKpInput')?.value) || 0,
-            Ki: parseFloat(document.getElementById('positionKiInput')?.value) || 0,
-            Kd: parseFloat(document.getElementById('positionKdInput')?.value) || 0,
-            filterAlpha: parseFloat(document.getElementById('positionFilterAlphaInput')?.value) || 90,
-            integralLimit: parseFloat(document.getElementById('positionIntegralLimitInput')?.value) || 100
-        };
-
-        this.saveToStorage();
-        const modeName = mode === 'mahony' ? '⚡ Mahony' : '🔄 NDOF';
-        addLogMessage(`[FusionPID] 💾 Zapisano PID do profilu ${modeName}`, 'success');
+        if (mappings[key]) {
+            mappings[key]();
+        }
     },
 
     /**
-     * Załaduj PID z profilu do UI (i wyślij do robota jeśli połączony)
+     * Pobierz aktualny zestaw PID (dla aktywnego trybu)
      */
-    loadProfileToUI(mode) {
+    getCurrentPID() {
+        return this.currentFusionMode === 'mahony' ? this.mahonyPID : this.ndofPID;
+    },
+
+    /**
+     * Załaduj odpowiedni zestaw PID do UI
+     */
+    loadCurrentPIDToUI() {
         if (this.isSwitching) return;
         this.isSwitching = true;
 
-        const profile = this.profiles[mode];
-        if (!profile) {
-            this.isSwitching = false;
-            return;
-        }
+        const pid = this.getCurrentPID();
 
-        // PID Balansu
-        this.setInputValue('balanceKpInput', profile.balance.Kp);
-        this.setInputValue('balanceKiInput', profile.balance.Ki);
-        this.setInputValue('balanceKdInput', profile.balance.Kd);
-        this.setInputValue('balanceFilterAlphaInput', profile.balance.filterAlpha);
-        this.setInputValue('balanceIntegralLimitInput', profile.balance.integralLimit);
+        // Balance PID
+        this.setInputValue('balanceKpInput', pid.balance.Kp);
+        this.setInputValue('balanceKiInput', pid.balance.Ki);
+        this.setInputValue('balanceKdInput', pid.balance.Kd);
+        this.setInputValue('balanceFilterAlphaInput', pid.balance.filterAlpha * 100); // 0-1 -> 0-100
+        this.setInputValue('balanceIntegralLimitInput', pid.balance.integralLimit);
 
-        // PID Prędkości
-        this.setInputValue('speedKpInput', profile.speed.Kp);
-        this.setInputValue('speedKiInput', profile.speed.Ki);
-        this.setInputValue('speedKdInput', profile.speed.Kd);
-        this.setInputValue('speedFilterAlphaInput', profile.speed.filterAlpha);
-        this.setInputValue('speedIntegralLimitInput', profile.speed.integralLimit);
+        // Speed PID
+        this.setInputValue('speedKpInput', pid.speed.Kp);
+        this.setInputValue('speedKiInput', pid.speed.Ki);
+        this.setInputValue('speedKdInput', pid.speed.Kd);
+        this.setInputValue('speedFilterAlphaInput', pid.speed.filterAlpha * 100);
+        this.setInputValue('speedIntegralLimitInput', pid.speed.integralLimit);
 
-        // PID Pozycji
-        this.setInputValue('positionKpInput', profile.position.Kp);
-        this.setInputValue('positionKiInput', profile.position.Ki);
-        this.setInputValue('positionKdInput', profile.position.Kd);
-        this.setInputValue('positionFilterAlphaInput', profile.position.filterAlpha);
-        this.setInputValue('positionIntegralLimitInput', profile.position.integralLimit);
-
-        // Wyślij do robota jeśli połączony
-        if (AppState.isConnected) {
-            setTimeout(() => {
-                this.sendPIDToRobot(profile);
-            }, 100);
-        }
+        // Position PID
+        this.setInputValue('positionKpInput', pid.position.Kp);
+        this.setInputValue('positionKiInput', pid.position.Ki);
+        this.setInputValue('positionKdInput', pid.position.Kd);
+        this.setInputValue('positionFilterAlphaInput', pid.position.filterAlpha * 100);
+        this.setInputValue('positionIntegralLimitInput', pid.position.integralLimit);
 
         this.isSwitching = false;
     },
 
     /**
-     * Helper - ustaw wartość inputa bez triggerowania pętli zdarzeń
+     * Helper - ustaw wartość inputa
      */
     setInputValue(inputId, value) {
         const input = document.getElementById(inputId);
         if (input) {
             input.value = value;
-            // Triggerujemy change tylko dla UI update, nie dla wysyłania
         }
     },
 
     /**
-     * Wyślij PID z profilu do robota
+     * Pobierz klucz BLE dla parametru PID (z sufiksem _ndof jeśli tryb NDOF)
      */
-    sendPIDToRobot(profile) {
-        // Balance PID
-        sendBleMessage({ type: 'set_param', key: 'kp_b', value: profile.balance.Kp });
-        sendBleMessage({ type: 'set_param', key: 'ki_b', value: profile.balance.Ki });
-        sendBleMessage({ type: 'set_param', key: 'kd_b', value: profile.balance.Kd });
-        sendBleMessage({ type: 'set_param', key: 'balance_pid_derivative_filter_alpha', value: profile.balance.filterAlpha / 100 });
-        sendBleMessage({ type: 'set_param', key: 'balance_pid_integral_limit', value: profile.balance.integralLimit });
-
-        // Speed PID
-        sendBleMessage({ type: 'set_param', key: 'kp_s', value: profile.speed.Kp });
-        sendBleMessage({ type: 'set_param', key: 'ki_s', value: profile.speed.Ki });
-        sendBleMessage({ type: 'set_param', key: 'kd_s', value: profile.speed.Kd });
-
-        // Position PID
-        sendBleMessage({ type: 'set_param', key: 'kp_p', value: profile.position.Kp });
-        sendBleMessage({ type: 'set_param', key: 'ki_p', value: profile.position.Ki });
-        sendBleMessage({ type: 'set_param', key: 'kd_p', value: profile.position.Kd });
+    getParamKey(baseKey) {
+        if (this.currentFusionMode === 'ndof') {
+            // Dodaj sufiks _ndof dla parametrów PID balansu/speed/position
+            const ndofKeys = ['kp_b', 'ki_b', 'kd_b', 'balance_pid_derivative_filter_alpha', 'balance_pid_integral_limit',
+                'kp_s', 'ki_s', 'kd_s', 'speed_pid_filter_alpha', 'speed_pid_integral_limit',
+                'kp_p', 'ki_p', 'kd_p', 'position_pid_filter_alpha', 'position_pid_integral_limit'];
+            if (ndofKeys.includes(baseKey)) {
+                return baseKey + '_ndof';
+            }
+        }
+        return baseKey;
     },
 
     /**
-     * Obsługa zmiany trybu fuzji - główna logika przełączania
+     * Obsługa zmiany trybu fuzji
      */
     onFusionModeChange(newMode) {
         if (this.isSwitching) return;
@@ -5542,49 +5529,33 @@ const FusionPIDProfiles = {
         const oldMode = this.currentFusionMode;
         if (oldMode === newMode) return;
 
-        // Zapisz aktualne PID do starego profilu przed przełączeniem
-        this.saveCurrentToProfile();
-
-        // Zmień tryb
         this.currentFusionMode = newMode;
 
-        // Załaduj nowy profil
-        if (this.autoSwitchEnabled) {
-            this.loadProfileToUI(newMode);
-            const modeName = newMode === 'mahony' ? '⚡ Mahony (~500Hz)' : '🔄 NDOF (~100Hz)';
-            addLogMessage(`[FusionPID] 🔄 Przełączono na profil ${modeName}`, 'info');
-        }
+        // Załaduj odpowiedni zestaw PID do UI
+        this.loadCurrentPIDToUI();
 
         // Zaktualizuj wskaźnik UI
         this.updateFusionIndicator();
+
+        const modeName = newMode === 'mahony' ? '⚡ Mahony (~500Hz)' : '🔄 NDOF (~100Hz)';
+        addLogMessage(`[FusionPID] 🔄 Przełączono na profil ${modeName}`, 'info');
     },
 
     /**
-     * Aktualizuj wskaźnik trybu fuzji w UI (główny w nagłówku + SysID)
+     * Aktualizuj wskaźnik trybu fuzji w UI
      */
     updateFusionIndicator() {
-        // Wskaźnik w nagłówku sekcji Mahony
         const indicator = document.getElementById('fusionModeIndicator');
-        // Wskaźnik w nagłówku sekcji SysID
         const sysidIndicator = document.getElementById('sysidFusionIndicator');
-
         const indicators = [indicator, sysidIndicator].filter(el => el);
 
         indicators.forEach(ind => {
             if (this.currentFusionMode === 'mahony') {
-                if (ind.id === 'sysidFusionIndicator') {
-                    ind.innerHTML = '⚡ Mahony';
-                } else {
-                    ind.innerHTML = '⚡ Mahony (~500Hz)';
-                }
+                ind.innerHTML = ind.id === 'sysidFusionIndicator' ? '⚡ Mahony' : '⚡ Mahony (~500Hz)';
                 ind.className = 'fusion-indicator fusion-mahony';
                 ind.title = 'Własna fuzja Mahony - szybka (~500Hz), mniejsze Kp/Kd';
             } else {
-                if (ind.id === 'sysidFusionIndicator') {
-                    ind.innerHTML = '🔄 NDOF';
-                } else {
-                    ind.innerHTML = '🔄 NDOF (~100Hz)';
-                }
+                ind.innerHTML = ind.id === 'sysidFusionIndicator' ? '🔄 NDOF' : '🔄 NDOF (~100Hz)';
                 ind.className = 'fusion-indicator fusion-ndof';
                 ind.title = 'Wbudowana fuzja BNO055 - stabilna (~100Hz), większe Kp/Kd';
             }
@@ -5595,7 +5566,6 @@ const FusionPIDProfiles = {
      * Setup event listeners
      */
     setupEventListeners() {
-        // Obserwuj zmianę checkboxa fuzji
         const checkbox = document.getElementById('useMahonyFilterInput');
         if (checkbox) {
             checkbox.addEventListener('change', (e) => {
@@ -5603,82 +5573,6 @@ const FusionPIDProfiles = {
                 this.onFusionModeChange(newMode);
             });
         }
-
-        // Przyciski zapisywania profilu
-        const saveMahonyBtn = document.getElementById('saveMahonyProfileBtn');
-        const saveNdofBtn = document.getElementById('saveNdofProfileBtn');
-
-        if (saveMahonyBtn) {
-            saveMahonyBtn.addEventListener('click', () => {
-                if (this.currentFusionMode === 'mahony') {
-                    this.saveCurrentToProfile();
-                } else {
-                    addLogMessage('[FusionPID] ⚠️ Przełącz najpierw na Mahony żeby zapisać profil', 'warn');
-                }
-            });
-        }
-
-        if (saveNdofBtn) {
-            saveNdofBtn.addEventListener('click', () => {
-                if (this.currentFusionMode === 'ndof') {
-                    this.saveCurrentToProfile();
-                } else {
-                    addLogMessage('[FusionPID] ⚠️ Przełącz najpierw na NDOF żeby zapisać profil', 'warn');
-                }
-            });
-        }
-
-        // Toggle auto-switch
-        const autoSwitchToggle = document.getElementById('fusionAutoSwitchToggle');
-        if (autoSwitchToggle) {
-            autoSwitchToggle.checked = this.autoSwitchEnabled;
-            autoSwitchToggle.addEventListener('change', (e) => {
-                this.autoSwitchEnabled = e.target.checked;
-                this.saveToStorage();
-                addLogMessage(`[FusionPID] Automatyczne przełączanie PID: ${this.autoSwitchEnabled ? 'włączone' : 'wyłączone'}`, 'info');
-            });
-        }
-    },
-
-    /**
-     * Pobierz współczynnik skalowania między Mahony a NDOF (edukacyjny)
-     */
-    getScalingFactor() {
-        // Orientacyjny współczynnik skalowania PID między trybami
-        // Mahony ~500Hz, NDOF ~100Hz → współczynnik ~5x
-        return {
-            Kp: 1.6,  // NDOF Kp ≈ Mahony Kp × 1.6
-            Ki: 2.0,  // Ki skaluje się mocniej
-            Kd: 2.2   // Kd skaluje się mocniej (pochodna wrażliwa na dt)
-        };
-    },
-
-    /**
-     * Automatycznie przeskaluj PID z jednego trybu na drugi (helper edukacyjny)
-     */
-    scaleProfileBetweenModes(fromMode, toMode) {
-        const scale = this.getScalingFactor();
-        const from = this.profiles[fromMode];
-        const to = this.profiles[toMode];
-
-        const factor = (toMode === 'ndof') ? 1 : -1;
-        const multiplier = (param) => factor > 0 ? scale[param] : (1 / scale[param]);
-
-        // Skaluj tylko jeśli profil docelowy ma domyślne wartości
-        to.balance.Kp = from.balance.Kp * multiplier('Kp');
-        to.balance.Ki = from.balance.Ki * multiplier('Ki');
-        to.balance.Kd = from.balance.Kd * multiplier('Kd');
-
-        to.speed.Kp = from.speed.Kp * multiplier('Kp');
-        to.speed.Ki = from.speed.Ki * multiplier('Ki');
-        to.speed.Kd = from.speed.Kd * multiplier('Kd');
-
-        to.position.Kp = from.position.Kp * multiplier('Kp');
-        to.position.Ki = from.position.Ki * multiplier('Ki');
-        to.position.Kd = from.position.Kd * multiplier('Kd');
-
-        this.saveToStorage();
-        addLogMessage(`[FusionPID] 📐 Przeskalowano PID z ${fromMode} do ${toMode}`, 'info');
     }
 };
 

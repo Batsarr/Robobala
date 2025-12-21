@@ -580,17 +580,19 @@ body.ui-locked #connectBleBtn, body.ui-locked #emergencyStopBtn {
  * FUSION PID PROFILES - Wskaźniki trybu fuzji IMU
  * ======================================================================== */
 
-/* Wskaźnik trybu fuzji w nagłówku akordeonu */
+/* Wskaźnik trybu fuzji w nagłówku akordeonu - kompaktowy żeby nie kolidował z + */
 .fusion-indicator {
     display: inline-block;
-    padding: 3px 8px;
-    border-radius: 12px;
-    font-size: 0.75em;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 0.65em;
     font-weight: bold;
-    margin-left: 10px;
+    margin-left: 6px;
+    margin-right: 25px; /* Miejsce na znaczek + */
     vertical-align: middle;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
 }
 
 /* Mahony - zielony/niebieski (szybki) */
@@ -633,32 +635,12 @@ body.ui-locked #connectBleBtn, body.ui-locked #emergencyStopBtn {
     position: relative;
 }
 
-.fusion-profiles-section::before {
-    content: '🔄';
-    position: absolute;
-    top: -8px;
-    right: 10px;
-    font-size: 1.2em;
-    opacity: 0.3;
-}
-
-/* Przyciski zapisywania profili */
-#saveMahonyProfileBtn:hover {
-    background: #27ae60;
-    transform: scale(1.02);
-}
-
-#saveNdofProfileBtn:hover {
-    background: #8e44ad;
-    transform: scale(1.02);
-}
-
 /* Responsywność */
 @media (max-width: 500px) {
     .fusion-indicator {
-        display: block;
-        margin: 5px 0 0 0;
-        font-size: 0.7em;
+        font-size: 0.6em;
+        padding: 1px 4px;
+        margin-right: 20px;
     }
     
     .fusion-profiles-section button {

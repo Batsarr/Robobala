@@ -70,7 +70,9 @@
         </div>
     </div>
 
-    <h1>Robot PID - Panel Sterowania v21.2</h1>
+    <!-- UWAGA: Nazwa "RoboBala" jest oficjalną nazwą projektu i NIE powinna być zmieniana.
+         Zmieniaj tylko numer wersji (v23.2 → v23.3 itd.) przy aktualizacjach. -->
+    <h1>RoboBala v23.2</h1>
     <div class="main-grid">
         <div class="card" id="controls-card">
             <h2>Sterowanie</h2>
@@ -495,24 +497,17 @@
                     <div class="setting-container"> <label for="mahonyKiInput">Ki (Całkujący)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="mahonyKiInput" min="0" max="1" step="0.01" value="0.05"><button>+</button></div> <div class="help-text">Całkujące wzmocnienie - kompensuje dryf żyroskopu. Wyższa wartość = lepsza korekta dryfu, ale wolniejsza odpowiedź. Kluczowy parametr dla stabilności długoterminowej robota balansującego. Typowy zakres: 0.01-0.1.</div> </div>
                     <div class="setting-container"> <label for="useMahonyFilterInput">Użyj własnej fuzji IMU<span class="help-icon">?</span></label> <input type="checkbox" class="config-value" id="useMahonyFilterInput" checked> <div class="help-text">Włącz własną fuzję danych IMU z filtrem Mahony zamiast wbudowanej w BNO055. Filtr Mahony jest optymalny dla robotów balansujących dzięki wbudowanej kompensacji dryfu żyroskopu i niższemu opóźnieniu.</div> </div>
                     
-                    <!-- ===== ZARZĄDZANIE PROFILAMI PID DLA FUZJI ===== -->
+                    <!-- ===== AUTOMATYCZNE PRZEŁĄCZANIE PROFILI PID ===== -->
                     <hr style="border-color: #4a4f58; margin: 15px 0;">
                     <div class="fusion-profiles-section" style="background: #20232a; border-radius: 6px; padding: 12px; margin-bottom: 15px;">
                         <h5 style="color: #61dafb; margin: 0 0 10px 0; font-size: 0.9em;">🔄 Profile PID dla trybów fuzji</h5>
-                        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px;">
+                        <div style="display: flex; gap: 8px; align-items: center;">
                             <input type="checkbox" id="fusionAutoSwitchToggle" checked style="width: 18px; height: 18px;">
                             <label for="fusionAutoSwitchToggle" style="color: #aaa; font-size: 0.85em;">Automatycznie przełączaj PID przy zmianie fuzji</label>
                         </div>
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <button id="saveMahonyProfileBtn" style="flex: 1; min-width: 120px; padding: 8px; background: #2ecc71; color: #000; border: none; border-radius: 4px; font-size: 0.85em; cursor: pointer;">
-                                💾 Zapisz profil Mahony
-                            </button>
-                            <button id="saveNdofProfileBtn" style="flex: 1; min-width: 120px; padding: 8px; background: #9b59b6; color: #fff; border: none; border-radius: 4px; font-size: 0.85em; cursor: pointer;">
-                                💾 Zapisz profil NDOF
-                            </button>
-                        </div>
                         <p style="color: #666; font-size: 0.8em; margin: 8px 0 0 0;">
-                            💡 Dostosuj PID dla każdego trybu osobno. Profile są zapisywane w przeglądarce.
+                            � Po zmianie trybu fuzji, wartości PID dla wszystkich pętli zostaną automatycznie wczytane z zapisanego profilu.
+                            Profile zapisują się razem z przyciskiem "Zapisz na Robocie".
                         </p>
                     </div>
                     
