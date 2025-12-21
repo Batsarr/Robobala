@@ -2603,15 +2603,14 @@ function handleTunerResult(data) {
     }
 }
 
-// --- BNO055 Rate UI updater ---
-// Uses actual BNO055 data rate from firmware (ir field) instead of measuring telemetry packet rate
-// Mahony mode: ~550Hz (raw sensor data), NDOF mode: ~100Hz (built-in fusion)
+// --- IMU rate UI updater ---
+// Uses actual IMU rate from firmware (ir field) instead of measuring telemetry packet rate
 (function setupImuRateUpdater() {
     function updateImuRateUI() {
         try {
             const el = document.getElementById('imuRateValue');
             if (!el) return;
-            // Read BNO055 data rate from last telemetry (field 'ir' = imu_rate_hz)
+            // Read IMU rate from last telemetry data (field 'ir' = imu_rate_hz)
             const imuRate = window._lastImuRateHz;
             if (imuRate !== undefined && imuRate > 0) {
                 el.textContent = imuRate;
@@ -2789,8 +2788,7 @@ function updateTelemetryUI(data) {
         ...(window.telemetryData || {}),
         ...data
     };
-    // --- BNO055 data rate: store value from firmware (field 'ir' = imu_rate_hz) ---
-    // Mahony: ~550Hz, NDOF: ~100Hz - measured actual data change rate, not I2C polling rate
+    // --- IMU rate: store value from firmware (field 'ir' = imu_rate_hz) ---
     if (data.ir !== undefined) {
         window._lastImuRateHz = data.ir;
     }
