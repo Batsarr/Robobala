@@ -2603,14 +2603,15 @@ function handleTunerResult(data) {
     }
 }
 
-// --- IMU rate UI updater ---
-// Uses actual IMU rate from firmware (ir field) instead of measuring telemetry packet rate
+// --- BNO055 Rate UI updater ---
+// Uses actual BNO055 data rate from firmware (ir field) instead of measuring telemetry packet rate
+// Mahony mode: ~550Hz (raw sensor data), NDOF mode: ~100Hz (built-in fusion)
 (function setupImuRateUpdater() {
     function updateImuRateUI() {
         try {
             const el = document.getElementById('imuRateValue');
             if (!el) return;
-            // Read IMU rate from last telemetry data (field 'ir' = imu_rate_hz)
+            // Read BNO055 data rate from last telemetry (field 'ir' = imu_rate_hz)
             const imuRate = window._lastImuRateHz;
             if (imuRate !== undefined && imuRate > 0) {
                 el.textContent = imuRate;
@@ -2788,7 +2789,8 @@ function updateTelemetryUI(data) {
         ...(window.telemetryData || {}),
         ...data
     };
-    // --- IMU rate: store value from firmware (field 'ir' = imu_rate_hz) ---
+    // --- BNO055 data rate: store value from firmware (field 'ir' = imu_rate_hz) ---
+    // Mahony: ~550Hz, NDOF: ~100Hz - measured actual data change rate, not I2C polling rate
     if (data.ir !== undefined) {
         window._lastImuRateHz = data.ir;
     }
@@ -5306,10 +5308,423 @@ document.addEventListener('DOMContentLoaded', () => {
     // SYSTEM IDENTIFICATION (SYSID) MODULE
     // ========================================================================
     initSystemIdentification();
+
+    // ========================================================================
+    // FUSION PID PROFILES MODULE - Automatyczne przełączanie PID dla trybów fuzji
+    // ========================================================================
+    initFusionPIDProfiles();
 });
 
 // ========================================================================
+// FUSION PID PROFILES - Osobne ustawienia PID dla Mahony i NDOF
+// ========================================================================
+// 
+// Ten moduł rozwiązuje problem różnych optymalnych PID dla dwóch trybów fuzji IMU:
+// - MAHONY (własna fuzja): ~500Hz, szybsza reakcja → potrzebuje mniejszych Kp/Kd
+// - NDOF (wbudowana BNO055): ~100Hz, wolniejsza → potrzebuje większych Kp/Kd
+//
+// Edukacyjne wyjaśnienie:
+// Częstotliwość pętli sterowania ma KLUCZOWY wpływ na dobór parametrów PID:
+// - Szybsza pętla (Mahony 500Hz) = więcej aktualizacji na sekundę = mniejsze wzmocnienia
+// - Wolniejsza pętla (NDOF 100Hz) = mniej aktualizacji = większe wzmocnienia potrzebne
+// 
+// Współczynnik skalowania (orientacyjny): przy 5x różnicy częstotliwości:
+// - Kp: skaluje się ~liniowo (Kp_NDOF ≈ Kp_Mahony × 1.5-2.0)  
+// - Kd: skaluje się silniej (Kd_NDOF ≈ Kd_Mahony × 3.0-5.0)
+// - Ki: zwykle 0 lub bardzo małe dla balansu
+// ========================================================================
+
+const FUSION_PID_STORAGE_KEY = 'robobala_fusion_pid_profiles_v1';
+
+/**
+ * FusionPIDProfiles - Manager osobnych ustawień PID dla Mahony i NDOF
+ */
+const FusionPIDProfiles = {
+    // Aktualne profile PID zapamiętane lokalnie
+    profiles: {
+        // Profil dla Mahony (~500Hz) - mniejsze wzmocnienia
+        mahony: {
+            balance: { Kp: 60, Ki: 0, Kd: 1.5, filterAlpha: 100, integralLimit: 50 },
+            speed: { Kp: 0.3, Ki: 0.01, Kd: 0, filterAlpha: 80, integralLimit: 20 },
+            position: { Kp: 1.5, Ki: 0, Kd: 0.1, filterAlpha: 90, integralLimit: 100 }
+        },
+        // Profil dla NDOF (~100Hz) - większe wzmocnienia
+        ndof: {
+            balance: { Kp: 95, Ki: 0, Kd: 3.23, filterAlpha: 100, integralLimit: 50 },
+            speed: { Kp: 0.5, Ki: 0.02, Kd: 0.01, filterAlpha: 80, integralLimit: 20 },
+            position: { Kp: 2.5, Ki: 0, Kd: 0.2, filterAlpha: 90, integralLimit: 100 }
+        }
+    },
+
+    // Aktywny tryb fuzji (wykrywany z checkbox)
+    currentFusionMode: 'mahony', // 'mahony' lub 'ndof'
+
+    // Flaga - czy automatyczne przełączanie jest włączone
+    autoSwitchEnabled: true,
+
+    // Flaga - czy właśnie trwa przełączanie (blokuje pętlę zdarzeń)
+    isSwitching: false,
+
+    /**
+     * Inicjalizacja modułu - załaduj profile z localStorage
+     */
+    init() {
+        this.loadFromStorage();
+        this.detectCurrentMode();
+        this.setupEventListeners();
+        this.updateFusionIndicator();
+        addLogMessage('[FusionPID] 📊 Moduł profilów fuzji zainicjalizowany. Tryb: ' +
+            (this.currentFusionMode === 'mahony' ? '⚡ Mahony (~500Hz)' : '🔄 NDOF (~100Hz)'), 'info');
+    },
+
+    /**
+     * Załaduj profile z localStorage
+     */
+    loadFromStorage() {
+        try {
+            const stored = localStorage.getItem(FUSION_PID_STORAGE_KEY);
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                // Połącz z domyślnymi (w razie nowych pól)
+                this.profiles.mahony = { ...this.profiles.mahony, ...parsed.mahony };
+                this.profiles.ndof = { ...this.profiles.ndof, ...parsed.ndof };
+                this.autoSwitchEnabled = parsed.autoSwitchEnabled ?? true;
+            }
+        } catch (e) {
+            console.warn('[FusionPID] Nie można załadować profili:', e);
+        }
+    },
+
+    /**
+     * Zapisz profile do localStorage
+     */
+    saveToStorage() {
+        try {
+            const data = {
+                mahony: this.profiles.mahony,
+                ndof: this.profiles.ndof,
+                autoSwitchEnabled: this.autoSwitchEnabled
+            };
+            localStorage.setItem(FUSION_PID_STORAGE_KEY, JSON.stringify(data));
+        } catch (e) {
+            console.warn('[FusionPID] Nie można zapisać profili:', e);
+        }
+    },
+
+    /**
+     * Wykryj aktualny tryb fuzji z checkboxa
+     */
+    detectCurrentMode() {
+        const checkbox = document.getElementById('useMahonyFilterInput');
+        this.currentFusionMode = checkbox?.checked ? 'mahony' : 'ndof';
+        return this.currentFusionMode;
+    },
+
+    /**
+     * Zapisz aktualne PID z UI do profilu dla aktywnego trybu fuzji
+     */
+    saveCurrentToProfile() {
+        const mode = this.currentFusionMode;
+
+        // Zapisz PID balansu
+        this.profiles[mode].balance = {
+            Kp: parseFloat(document.getElementById('balanceKpInput')?.value) || 0,
+            Ki: parseFloat(document.getElementById('balanceKiInput')?.value) || 0,
+            Kd: parseFloat(document.getElementById('balanceKdInput')?.value) || 0,
+            filterAlpha: parseFloat(document.getElementById('balanceFilterAlphaInput')?.value) || 100,
+            integralLimit: parseFloat(document.getElementById('balanceIntegralLimitInput')?.value) || 50
+        };
+
+        // Zapisz PID prędkości
+        this.profiles[mode].speed = {
+            Kp: parseFloat(document.getElementById('speedKpInput')?.value) || 0,
+            Ki: parseFloat(document.getElementById('speedKiInput')?.value) || 0,
+            Kd: parseFloat(document.getElementById('speedKdInput')?.value) || 0,
+            filterAlpha: parseFloat(document.getElementById('speedFilterAlphaInput')?.value) || 80,
+            integralLimit: parseFloat(document.getElementById('speedIntegralLimitInput')?.value) || 20
+        };
+
+        // Zapisz PID pozycji
+        this.profiles[mode].position = {
+            Kp: parseFloat(document.getElementById('positionKpInput')?.value) || 0,
+            Ki: parseFloat(document.getElementById('positionKiInput')?.value) || 0,
+            Kd: parseFloat(document.getElementById('positionKdInput')?.value) || 0,
+            filterAlpha: parseFloat(document.getElementById('positionFilterAlphaInput')?.value) || 90,
+            integralLimit: parseFloat(document.getElementById('positionIntegralLimitInput')?.value) || 100
+        };
+
+        this.saveToStorage();
+        const modeName = mode === 'mahony' ? '⚡ Mahony' : '🔄 NDOF';
+        addLogMessage(`[FusionPID] 💾 Zapisano PID do profilu ${modeName}`, 'success');
+    },
+
+    /**
+     * Załaduj PID z profilu do UI (i wyślij do robota jeśli połączony)
+     */
+    loadProfileToUI(mode) {
+        if (this.isSwitching) return;
+        this.isSwitching = true;
+
+        const profile = this.profiles[mode];
+        if (!profile) {
+            this.isSwitching = false;
+            return;
+        }
+
+        // PID Balansu
+        this.setInputValue('balanceKpInput', profile.balance.Kp);
+        this.setInputValue('balanceKiInput', profile.balance.Ki);
+        this.setInputValue('balanceKdInput', profile.balance.Kd);
+        this.setInputValue('balanceFilterAlphaInput', profile.balance.filterAlpha);
+        this.setInputValue('balanceIntegralLimitInput', profile.balance.integralLimit);
+
+        // PID Prędkości
+        this.setInputValue('speedKpInput', profile.speed.Kp);
+        this.setInputValue('speedKiInput', profile.speed.Ki);
+        this.setInputValue('speedKdInput', profile.speed.Kd);
+        this.setInputValue('speedFilterAlphaInput', profile.speed.filterAlpha);
+        this.setInputValue('speedIntegralLimitInput', profile.speed.integralLimit);
+
+        // PID Pozycji
+        this.setInputValue('positionKpInput', profile.position.Kp);
+        this.setInputValue('positionKiInput', profile.position.Ki);
+        this.setInputValue('positionKdInput', profile.position.Kd);
+        this.setInputValue('positionFilterAlphaInput', profile.position.filterAlpha);
+        this.setInputValue('positionIntegralLimitInput', profile.position.integralLimit);
+
+        // Wyślij do robota jeśli połączony
+        if (AppState.isConnected) {
+            setTimeout(() => {
+                this.sendPIDToRobot(profile);
+            }, 100);
+        }
+
+        this.isSwitching = false;
+    },
+
+    /**
+     * Helper - ustaw wartość inputa bez triggerowania pętli zdarzeń
+     */
+    setInputValue(inputId, value) {
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.value = value;
+            // Triggerujemy change tylko dla UI update, nie dla wysyłania
+        }
+    },
+
+    /**
+     * Wyślij PID z profilu do robota
+     */
+    sendPIDToRobot(profile) {
+        // Balance PID
+        sendBleMessage({ type: 'set_param', key: 'kp_b', value: profile.balance.Kp });
+        sendBleMessage({ type: 'set_param', key: 'ki_b', value: profile.balance.Ki });
+        sendBleMessage({ type: 'set_param', key: 'kd_b', value: profile.balance.Kd });
+        sendBleMessage({ type: 'set_param', key: 'balance_pid_derivative_filter_alpha', value: profile.balance.filterAlpha / 100 });
+        sendBleMessage({ type: 'set_param', key: 'balance_pid_integral_limit', value: profile.balance.integralLimit });
+
+        // Speed PID
+        sendBleMessage({ type: 'set_param', key: 'kp_s', value: profile.speed.Kp });
+        sendBleMessage({ type: 'set_param', key: 'ki_s', value: profile.speed.Ki });
+        sendBleMessage({ type: 'set_param', key: 'kd_s', value: profile.speed.Kd });
+
+        // Position PID
+        sendBleMessage({ type: 'set_param', key: 'kp_p', value: profile.position.Kp });
+        sendBleMessage({ type: 'set_param', key: 'ki_p', value: profile.position.Ki });
+        sendBleMessage({ type: 'set_param', key: 'kd_p', value: profile.position.Kd });
+    },
+
+    /**
+     * Obsługa zmiany trybu fuzji - główna logika przełączania
+     */
+    onFusionModeChange(newMode) {
+        if (this.isSwitching) return;
+
+        const oldMode = this.currentFusionMode;
+        if (oldMode === newMode) return;
+
+        // Zapisz aktualne PID do starego profilu przed przełączeniem
+        this.saveCurrentToProfile();
+
+        // Zmień tryb
+        this.currentFusionMode = newMode;
+
+        // Załaduj nowy profil
+        if (this.autoSwitchEnabled) {
+            this.loadProfileToUI(newMode);
+            const modeName = newMode === 'mahony' ? '⚡ Mahony (~500Hz)' : '🔄 NDOF (~100Hz)';
+            addLogMessage(`[FusionPID] 🔄 Przełączono na profil ${modeName}`, 'info');
+        }
+
+        // Zaktualizuj wskaźnik UI
+        this.updateFusionIndicator();
+    },
+
+    /**
+     * Aktualizuj wskaźnik trybu fuzji w UI (główny w nagłówku + SysID)
+     */
+    updateFusionIndicator() {
+        // Wskaźnik w nagłówku sekcji Mahony
+        const indicator = document.getElementById('fusionModeIndicator');
+        // Wskaźnik w nagłówku sekcji SysID
+        const sysidIndicator = document.getElementById('sysidFusionIndicator');
+
+        const indicators = [indicator, sysidIndicator].filter(el => el);
+
+        indicators.forEach(ind => {
+            if (this.currentFusionMode === 'mahony') {
+                if (ind.id === 'sysidFusionIndicator') {
+                    ind.innerHTML = '⚡ Mahony';
+                } else {
+                    ind.innerHTML = '⚡ Mahony (~500Hz)';
+                }
+                ind.className = 'fusion-indicator fusion-mahony';
+                ind.title = 'Własna fuzja Mahony - szybka (~500Hz), mniejsze Kp/Kd';
+            } else {
+                if (ind.id === 'sysidFusionIndicator') {
+                    ind.innerHTML = '🔄 NDOF';
+                } else {
+                    ind.innerHTML = '🔄 NDOF (~100Hz)';
+                }
+                ind.className = 'fusion-indicator fusion-ndof';
+                ind.title = 'Wbudowana fuzja BNO055 - stabilna (~100Hz), większe Kp/Kd';
+            }
+        });
+    },
+
+    /**
+     * Setup event listeners
+     */
+    setupEventListeners() {
+        // Obserwuj zmianę checkboxa fuzji
+        const checkbox = document.getElementById('useMahonyFilterInput');
+        if (checkbox) {
+            checkbox.addEventListener('change', (e) => {
+                const newMode = e.target.checked ? 'mahony' : 'ndof';
+                this.onFusionModeChange(newMode);
+            });
+        }
+
+        // Przyciski zapisywania profilu
+        const saveMahonyBtn = document.getElementById('saveMahonyProfileBtn');
+        const saveNdofBtn = document.getElementById('saveNdofProfileBtn');
+
+        if (saveMahonyBtn) {
+            saveMahonyBtn.addEventListener('click', () => {
+                if (this.currentFusionMode === 'mahony') {
+                    this.saveCurrentToProfile();
+                } else {
+                    addLogMessage('[FusionPID] ⚠️ Przełącz najpierw na Mahony żeby zapisać profil', 'warn');
+                }
+            });
+        }
+
+        if (saveNdofBtn) {
+            saveNdofBtn.addEventListener('click', () => {
+                if (this.currentFusionMode === 'ndof') {
+                    this.saveCurrentToProfile();
+                } else {
+                    addLogMessage('[FusionPID] ⚠️ Przełącz najpierw na NDOF żeby zapisać profil', 'warn');
+                }
+            });
+        }
+
+        // Toggle auto-switch
+        const autoSwitchToggle = document.getElementById('fusionAutoSwitchToggle');
+        if (autoSwitchToggle) {
+            autoSwitchToggle.checked = this.autoSwitchEnabled;
+            autoSwitchToggle.addEventListener('change', (e) => {
+                this.autoSwitchEnabled = e.target.checked;
+                this.saveToStorage();
+                addLogMessage(`[FusionPID] Automatyczne przełączanie PID: ${this.autoSwitchEnabled ? 'włączone' : 'wyłączone'}`, 'info');
+            });
+        }
+    },
+
+    /**
+     * Pobierz współczynnik skalowania między Mahony a NDOF (edukacyjny)
+     */
+    getScalingFactor() {
+        // Orientacyjny współczynnik skalowania PID między trybami
+        // Mahony ~500Hz, NDOF ~100Hz → współczynnik ~5x
+        return {
+            Kp: 1.6,  // NDOF Kp ≈ Mahony Kp × 1.6
+            Ki: 2.0,  // Ki skaluje się mocniej
+            Kd: 2.2   // Kd skaluje się mocniej (pochodna wrażliwa na dt)
+        };
+    },
+
+    /**
+     * Automatycznie przeskaluj PID z jednego trybu na drugi (helper edukacyjny)
+     */
+    scaleProfileBetweenModes(fromMode, toMode) {
+        const scale = this.getScalingFactor();
+        const from = this.profiles[fromMode];
+        const to = this.profiles[toMode];
+
+        const factor = (toMode === 'ndof') ? 1 : -1;
+        const multiplier = (param) => factor > 0 ? scale[param] : (1 / scale[param]);
+
+        // Skaluj tylko jeśli profil docelowy ma domyślne wartości
+        to.balance.Kp = from.balance.Kp * multiplier('Kp');
+        to.balance.Ki = from.balance.Ki * multiplier('Ki');
+        to.balance.Kd = from.balance.Kd * multiplier('Kd');
+
+        to.speed.Kp = from.speed.Kp * multiplier('Kp');
+        to.speed.Ki = from.speed.Ki * multiplier('Ki');
+        to.speed.Kd = from.speed.Kd * multiplier('Kd');
+
+        to.position.Kp = from.position.Kp * multiplier('Kp');
+        to.position.Ki = from.position.Ki * multiplier('Ki');
+        to.position.Kd = from.position.Kd * multiplier('Kd');
+
+        this.saveToStorage();
+        addLogMessage(`[FusionPID] 📐 Przeskalowano PID z ${fromMode} do ${toMode}`, 'info');
+    }
+};
+
+/**
+ * Inicjalizacja modułu FusionPIDProfiles
+ */
+function initFusionPIDProfiles() {
+    FusionPIDProfiles.init();
+}
+
+// Expose globally for debugging and console access
+window.FusionPIDProfiles = FusionPIDProfiles;
+
+// ========================================================================
 // SYSTEM IDENTIFICATION - Telemetry Recording for Model Identification
+// ========================================================================
+//
+// EDUKACYJNE WYJAŚNIENIE:
+// System Identification (SysID) to technika inżynieryjna pozwalająca na 
+// eksperymentalne wyznaczenie modelu matematycznego rzeczywistego systemu.
+//
+// Dla robota balansującego mamy 3 kaskadowe pętle sterowania:
+// 
+// 1. PĘTLA BALANSU (najszybsza, ~500Hz):
+//    - Wejście: Kąt odchylenia od pionu [°]
+//    - Wyjście: Moment obrotowy na silniki [PWM]
+//    - Model: System oscylacyjny drugiego rzędu (wahadło odwrócone)
+//    - Test: Impuls joysticka → obserwacja odpowiedzi kąta
+//
+// 2. PĘTLA PRĘDKOŚCI (średnia, ~250Hz):
+//    - Wejście: Zadana prędkość [imp/s] z joysticka lub pozycji
+//    - Wyjście: Kąt docelowy dla pętli balansu [°]
+//    - Model: System pierwszego rzędu z opóźnieniem
+//    - Test: Skok setpointu prędkości → obserwacja odpowiedzi prędkości
+//
+// 3. PĘTLA POZYCJI (najwolniejsza, ~125Hz):
+//    - Wejście: Zadana pozycja [cm]
+//    - Wyjście: Prędkość docelowa dla pętli prędkości [imp/s]
+//    - Model: Integrator z ograniczeniami
+//    - Test: Skok setpointu pozycji → obserwacja odpowiedzi pozycji
+//
+// KLUCZOWE: Tryb fuzji IMU (Mahony vs NDOF) wpływa na dynamikę pętli balansu!
+// - Mahony (~500Hz): Szybsze odświeżanie → mniejsze Kp/Kd potrzebne
+// - NDOF (~100Hz): Wolniejsze odświeżanie → większe Kp/Kd potrzebne
 // ========================================================================
 
 const SysIdState = {
@@ -5909,14 +6324,18 @@ function exportSysIdCSV() {
     const wheelDiameter = document.getElementById('wheelDiameterInput')?.value || 8.2;
     const trackWidth = document.getElementById('trackWidthInput')?.value || 15;
 
-    // Typ testu
+    // Typ testu i tryb fuzji
     const testType = SysIdState.testType || 'balance';
+    const fusionMode = (typeof FusionPIDProfiles !== 'undefined') ? FusionPIDProfiles.currentFusionMode : 'unknown';
+    const fusionHz = fusionMode === 'mahony' ? '~500' : '~100';
 
     // Create header with metadata (commented lines starting with #)
     const metadataLines = [
         `# RoboBala System Identification Data`,
         `# generated: ${new Date().toISOString()}`,
         `# test_type: ${testType}`,
+        `# fusion_mode: ${fusionMode}`,
+        `# fusion_rate_hz: ${fusionHz}`,
         `# sample_rate_hz: ${SysIdState.sampleRate}`,
         `# recording_duration_s: ${SysIdState.duration / 1000}`,
         `# encoder_ppr: ${encoderPpr}`,
@@ -6638,6 +7057,28 @@ function displayAnalysisResults(params, pidSuggestions, testType) {
     }
 
     resultsDiv.style.display = 'block';
+
+    // Dodaj informację o trybie fuzji (WAŻNE dla edukacji)
+    const fusionMode = (typeof FusionPIDProfiles !== 'undefined') ? FusionPIDProfiles.currentFusionMode : 'unknown';
+    const fusionInfo = fusionMode === 'mahony'
+        ? '<span style="color: #2ecc71;">⚡ Mahony (~500Hz)</span>'
+        : '<span style="color: #9b59b6;">🔄 NDOF (~100Hz)</span>';
+
+    // Pokaż ostrzeżenie jeśli tryb fuzji nie pasuje
+    const fusionWarning = document.getElementById('sysid-fusion-warning');
+    if (fusionWarning) {
+        fusionWarning.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 8px; background: #1a2a3a; border-radius: 4px;">
+                <span style="color: #aaa; font-size: 0.85em;">Tryb fuzji podczas testu:</span>
+                ${fusionInfo}
+            </div>
+            <div style="color: #f7b731; font-size: 0.8em; margin-bottom: 8px;">
+                ⚠️ Te wartości PID są optymalne dla trybu ${fusionMode === 'mahony' ? 'Mahony' : 'NDOF'}. 
+                Przełączenie trybu fuzji może wymagać nowej identyfikacji systemu!
+            </div>
+        `;
+        fusionWarning.style.display = 'block';
+    }
 
     // Ostrzeżenia
     if (params.warnings && params.warnings.length > 0) {

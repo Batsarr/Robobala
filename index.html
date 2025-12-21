@@ -183,9 +183,9 @@
                     <div class="historical-metric">Acc: <span id="calibAccelVal">-</span> Gyro: <span id="calibGyroVal">-</span> Mag: <span id="calibMagVal">-</span></div>
                 </div>
                     <div class="dashboard-item" id="imuRateItem">
-                        <span class="label">IMU rate</span>
+                        <span class="label">Odczyt BNO055</span>
                         <span class="value"><span id="imuRateValue">--</span> Hz</span>
-                        <div style="font-size:0.8em;color:#cfd8dc;margin-top:6px;">Pokazuje rzeczywistą prędkość odświeżania danych IMU (średnia z ostatniej sekundy).</div>
+                        <div style="font-size:0.8em;color:#cfd8dc;margin-top:6px;">Rzeczywista częstotliwość danych z IMU: Mahony ~550Hz, NDOF ~100Hz</div>
                     </div>
                 <div class="dashboard-item">
                     <span class="label">Korekta montażu (Pitch)</span>
@@ -477,11 +477,45 @@
                 <!-- Przyciski przeniesione na dół, pod wszystkimi akordeonami -->
             </fieldset>
             <div id="allSettings">
-                <button class="accordion-header" onclick="toggleAccordion(this)">1. Filtr Mahony i Predykcja</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">1. Filtr Mahony i Predykcja <span id="fusionModeIndicator" class="fusion-indicator fusion-mahony">⚡ Mahony (~500Hz)</span></button>
                 <div class="accordion-content">
+                    <!-- ===== SEKCJA EDUKACYJNA: Tryby fuzji IMU ===== -->
+                    <div class="fusion-info-box" style="background: linear-gradient(135deg, #1a2a3a 0%, #1a1d24 100%); border: 1px solid #4fc3f7; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                        <h5 style="color: #4fc3f7; margin: 0 0 8px 0; font-size: 0.95em;">📚 Wybór trybu fuzji IMU (WAŻNE!)</h5>
+                        <p style="color: #aaa; font-size: 0.85em; margin: 0 0 8px 0;">
+                            <strong>Mahony (~500Hz):</strong> Własna fuzja - szybsza reakcja, mniejsze opóźnienie.<br>
+                            <strong>NDOF (~100Hz):</strong> Wbudowana w BNO055 - stabilniejsza, automatyczna kalibracja.
+                        </p>
+                        <p style="color: #f7b731; font-size: 0.85em; margin: 0;">
+                            ⚠️ <strong>Każdy tryb wymaga INNYCH wartości PID!</strong> System automatycznie przełącza profile.
+                        </p>
+                    </div>
+                    
                     <div class="setting-container"> <label for="mahonyKpInput">Kp (Proporcjonalny)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="mahonyKpInput" min="0" max="10" step="0.1" value="1.0"><button>+</button></div> <div class="help-text">Proporcjonalne wzmocnienie filtru Mahony - szybkość korekty orientacji z akcelerometru. Wyższa wartość = szybsza konwergencja do prawidłowej orientacji, ale większa wrażliwość na przyspieszenia. Typowy zakres: 0.5-2.0.</div> </div>
                     <div class="setting-container"> <label for="mahonyKiInput">Ki (Całkujący)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="mahonyKiInput" min="0" max="1" step="0.01" value="0.05"><button>+</button></div> <div class="help-text">Całkujące wzmocnienie - kompensuje dryf żyroskopu. Wyższa wartość = lepsza korekta dryfu, ale wolniejsza odpowiedź. Kluczowy parametr dla stabilności długoterminowej robota balansującego. Typowy zakres: 0.01-0.1.</div> </div>
                     <div class="setting-container"> <label for="useMahonyFilterInput">Użyj własnej fuzji IMU<span class="help-icon">?</span></label> <input type="checkbox" class="config-value" id="useMahonyFilterInput" checked> <div class="help-text">Włącz własną fuzję danych IMU z filtrem Mahony zamiast wbudowanej w BNO055. Filtr Mahony jest optymalny dla robotów balansujących dzięki wbudowanej kompensacji dryfu żyroskopu i niższemu opóźnieniu.</div> </div>
+                    
+                    <!-- ===== ZARZĄDZANIE PROFILAMI PID DLA FUZJI ===== -->
+                    <hr style="border-color: #4a4f58; margin: 15px 0;">
+                    <div class="fusion-profiles-section" style="background: #20232a; border-radius: 6px; padding: 12px; margin-bottom: 15px;">
+                        <h5 style="color: #61dafb; margin: 0 0 10px 0; font-size: 0.9em;">🔄 Profile PID dla trybów fuzji</h5>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px;">
+                            <input type="checkbox" id="fusionAutoSwitchToggle" checked style="width: 18px; height: 18px;">
+                            <label for="fusionAutoSwitchToggle" style="color: #aaa; font-size: 0.85em;">Automatycznie przełączaj PID przy zmianie fuzji</label>
+                        </div>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button id="saveMahonyProfileBtn" style="flex: 1; min-width: 120px; padding: 8px; background: #2ecc71; color: #000; border: none; border-radius: 4px; font-size: 0.85em; cursor: pointer;">
+                                💾 Zapisz profil Mahony
+                            </button>
+                            <button id="saveNdofProfileBtn" style="flex: 1; min-width: 120px; padding: 8px; background: #9b59b6; color: #fff; border: none; border-radius: 4px; font-size: 0.85em; cursor: pointer;">
+                                💾 Zapisz profil NDOF
+                            </button>
+                        </div>
+                        <p style="color: #666; font-size: 0.8em; margin: 8px 0 0 0;">
+                            💡 Dostosuj PID dla każdego trybu osobno. Profile są zapisywane w przeglądarce.
+                        </p>
+                    </div>
+                    
                     <hr style="border-color: #4a4f58; margin: 15px 0;">
                     <h4 style="color: #4fc3f7; margin-bottom: 10px;">Predykcja kąta (Stabilność)</h4>
                     <div class="setting-container"> <label for="predictionModeInput">Tryb predykcji<span class="help-icon">?</span></label> <select class="config-value" id="predictionModeInput"><option value="0">Wyłączony (aktualny kąt)</option><option value="1" selected>Prosta (θ + ω·Δt)</option><option value="2">Kwadratowa (θ + ω·Δt + ½α·Δt²)</option></select> <div class="help-text">Predykcja kompensuje opóźnienia systemowe poprzez przewidywanie przyszłego kąta. <strong>Wyłączony:</strong> reakcja na aktualny kąt - standardowe zachowanie. <strong>Prosta:</strong> uwzględnia prędkość kątową - zalecany tryb. <strong>Kwadratowa:</strong> uwzględnia też przyspieszenie kątowe - może być niestabilna.</div> </div>
@@ -677,8 +711,22 @@
             </div>
         </div>
         
-                <button class="accordion-header" onclick="toggleAccordion(this)">8. Identyfikacja Obiektu (System ID)</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">8. Identyfikacja Obiektu (System ID) <span id="sysidFusionIndicator" class="fusion-indicator fusion-mahony" style="font-size: 0.65em;">⚡ Mahony</span></button>
                 <div class="accordion-content" id="sysid-content">
+                    <!-- Edukacyjne wprowadzenie do System ID -->
+                    <div style="background: linear-gradient(135deg, #1a2a3a 0%, #1a1d24 100%); border: 1px solid #9b59b6; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                        <h5 style="color: #9b59b6; margin: 0 0 8px 0; font-size: 0.95em;">📚 Czym jest Identyfikacja Systemu?</h5>
+                        <p style="color: #aaa; font-size: 0.85em; margin: 0 0 8px 0;">
+                            System ID to technika inżynieryjna polegająca na <strong>pomiarze rzeczywistej odpowiedzi systemu</strong> 
+                            na znane pobudzenie (impuls, skok). Na podstawie przebiegu odpowiedzi można wyznaczyć 
+                            optymalne parametry PID metodami matematycznymi.
+                        </p>
+                        <p style="color: #f7b731; font-size: 0.85em; margin: 0;">
+                            ⚠️ <strong>Ważne:</strong> Wyniki są specyficzne dla aktualnego trybu fuzji IMU! 
+                            Zmiana Mahony↔NDOF wymaga nowej identyfikacji.
+                        </p>
+                    </div>
+                    
                     <p style="color: #aaa; font-size: 0.9em; margin-bottom: 15px;">
                         📊 Nagraj odpowiedź skokową dla wybranej pętli. 
                         Kliknij <strong style="color: #9b59b6;">🔬 Analizuj</strong> aby obliczyć optymalne PID bezpośrednio w przeglądarce,
@@ -777,6 +825,9 @@
                     <!-- Panel wyników analizy -->
                     <div id="sysid-analysis-results" style="display: none; margin-top: 15px; background: #1a1d24; border: 1px solid #9b59b6; border-radius: 8px; padding: 15px;">
                         <h4 style="margin: 0 0 12px 0; color: #9b59b6; font-size: 1em;">🔬 Wyniki Analizy</h4>
+                        
+                        <!-- Informacja o trybie fuzji -->
+                        <div id="sysid-fusion-warning" style="display: none;"></div>
                         
                         <!-- Ostrzeżenia -->
                         <div id="sysid-warnings" style="display: none; margin-bottom: 12px; padding: 10px; background: #332200; border: 1px solid #f7b731; border-radius: 6px; font-size: 0.9em;">

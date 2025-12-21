@@ -575,3 +575,94 @@ body.ui-locked #connectBleBtn, body.ui-locked #emergencyStopBtn {
 }
 
 /* Usunięty nowy blok stylów autotune (powielenie) - powrót do legacy definicji powyżej */
+
+/* ========================================================================
+ * FUSION PID PROFILES - Wskaźniki trybu fuzji IMU
+ * ======================================================================== */
+
+/* Wskaźnik trybu fuzji w nagłówku akordeonu */
+.fusion-indicator {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: bold;
+    margin-left: 10px;
+    vertical-align: middle;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Mahony - zielony/niebieski (szybki) */
+.fusion-mahony {
+    background: linear-gradient(135deg, #2ecc71 0%, #3498db 100%);
+    color: #fff;
+    box-shadow: 0 0 8px rgba(46, 204, 113, 0.4);
+}
+
+/* NDOF - fioletowy (stabilny) */
+.fusion-ndof {
+    background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+    color: #fff;
+    box-shadow: 0 0 8px rgba(155, 89, 182, 0.4);
+}
+
+/* Animacja przy przełączaniu */
+.fusion-indicator {
+    transition: all 0.3s ease;
+}
+
+/* Box informacyjny o fuzji */
+.fusion-info-box {
+    position: relative;
+    overflow: hidden;
+}
+
+.fusion-info-box::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #2ecc71, #3498db, #9b59b6);
+}
+
+/* Sekcja profili fuzji */
+.fusion-profiles-section {
+    position: relative;
+}
+
+.fusion-profiles-section::before {
+    content: '🔄';
+    position: absolute;
+    top: -8px;
+    right: 10px;
+    font-size: 1.2em;
+    opacity: 0.3;
+}
+
+/* Przyciski zapisywania profili */
+#saveMahonyProfileBtn:hover {
+    background: #27ae60;
+    transform: scale(1.02);
+}
+
+#saveNdofProfileBtn:hover {
+    background: #8e44ad;
+    transform: scale(1.02);
+}
+
+/* Responsywność */
+@media (max-width: 500px) {
+    .fusion-indicator {
+        display: block;
+        margin: 5px 0 0 0;
+        font-size: 0.7em;
+    }
+    
+    .fusion-profiles-section button {
+        font-size: 0.8em;
+        padding: 6px;
+    }
+}
