@@ -5800,51 +5800,29 @@ async function startSysIdRecording() {
     SysIdState.impulsePhase = 0;
     SysIdState.currentSetpoint = 0;
 
-    // Konfiguracja specyficzna dla typu testu
+    // Konfiguracja specyficzna dla typu testu - BROWSER ONLY (bez komend firmware)
     if (SysIdState.testType === 'balance') {
-        // Test balansu - Kp-only mode (używa nowej komendy firmware)
+        // Test balansu - zbiera telemetrię i wysyła impuls joystick
         SysIdState.kp = parseFloat(document.getElementById('sysid-kp')?.value) || 50;
         SysIdState.impulse = (parseFloat(document.getElementById('sysid-impulse')?.value) || 25) / 100;
 
-        // Zapisz aktualne PID (firmware też zapisuje, ale zachowaj w UI)
+        // Zapisz aktualne PID dla referencji
         const currentKp = parseFloat(document.getElementById('balanceKpInput')?.value) || SysIdState.kp;
         const currentKi = parseFloat(document.getElementById('balanceKiInput')?.value) || 0;
         const currentKd = parseFloat(document.getElementById('balanceKdInput')?.value) || 0;
         SysIdState.savedPID = { kp: currentKp, ki: currentKi, kd: currentKd };
 
-        // Wyślij komendę SysID do firmware
-        sendBleMessage({
-            type: 'sysid_balance_test',
-            kp: SysIdState.kp,
-            duration: SysIdState.duration
-        });
-        addLogMessage(`[SysID Balance] Test uruchomiony: Kp=${SysIdState.kp}, czas=${SysIdState.duration / 1000}s`, 'info');
+        addLogMessage(`[SysID Balance] Nagrywanie: impuls=${(SysIdState.impulse * 100).toFixed(0)}%, czas=${SysIdState.duration / 1000}s`, 'info');
 
     } else if (SysIdState.testType === 'speed') {
-        // Test pętli prędkości - izolowany (bez pętli pozycji)
+        // Test pętli prędkości - zbiera telemetrię i wysyła setpoint joystick
         SysIdState.stepValue = parseFloat(document.getElementById('sysid-step-value')?.value) || 100;
-
-        // Wyślij komendę SysID do firmware
-        sendBleMessage({
-            type: 'sysid_speed_test',
-            setpoint: SysIdState.stepValue,
-            duration: SysIdState.duration,
-            step_time: 1000  // Skok po 1 sekundzie
-        });
-        addLogMessage(`[SysID Speed] Test uruchomiony: setpoint=${SysIdState.stepValue} imp/s`, 'info');
+        addLogMessage(`[SysID Speed] Nagrywanie: setpoint=${SysIdState.stepValue} imp/s, czas=${SysIdState.duration / 1000}s`, 'info');
 
     } else if (SysIdState.testType === 'position') {
-        // Test pętli pozycji - pełna kaskada
+        // Test pętli pozycji - zbiera telemetrię
         SysIdState.stepValue = parseFloat(document.getElementById('sysid-step-value')?.value) || 30;
-
-        // Wyślij komendę SysID do firmware
-        sendBleMessage({
-            type: 'sysid_position_test',
-            setpoint: SysIdState.stepValue,  // cm
-            duration: SysIdState.duration,
-            step_time: 1000  // Skok po 1 sekundzie
-        });
-        addLogMessage(`[SysID Position] Test uruchomiony: setpoint=${SysIdState.stepValue} cm`, 'info');
+        addLogMessage(`[SysID Position] Nagrywanie: setpoint=${SysIdState.stepValue} cm, czas=${SysIdState.duration / 1000}s`, 'info');
     }
 
     // Clear data
@@ -5866,11 +5844,30 @@ async function startSysIdRecording() {
             // Normalize telemetry data
             const normData = (typeof normalizeTelemetryData === 'function') ? normalizeTelemetryData(data) : data;
 
+            // Oblicz pitch z kwaternionu jeśli nie ma w danych (Quaternion-First)
+            let pitchValue = normData.pitch;
+            if (pitchValue === undefined && typeof normData.qw === 'number') {
+                // Próbuj użyć funkcji computeEulerFromQuaternion
+                if (typeof computeEulerFromQuaternion === 'function') {
+                    const eul = computeEulerFromQuaternion(normData.qw, normData.qx, normData.qy, normData.qz);
+                    if (eul) pitchValue = eul.pitch;
+                }
+                // Fallback: oblicz pitch bezpośrednio bez THREE
+                if (pitchValue === undefined) {
+                    const n = Math.hypot(normData.qw, normData.qx, normData.qy, normData.qz) || 1;
+                    const qw = normData.qw / n, qx = normData.qx / n, qy = normData.qy / n, qz = normData.qz / n;
+                    const sinp = 2 * (qw * qy - qz * qx);
+                    const pitchRad = Math.abs(sinp) >= 1 ? Math.sign(sinp) * (Math.PI / 2) : Math.asin(sinp);
+                    pitchValue = pitchRad * 180 / Math.PI;
+                }
+            }
+            if (pitchValue === undefined || Number.isNaN(pitchValue)) pitchValue = normData.angle ?? 0;
+
             // Zbierz dane w zależności od typu testu
             // Wykorzystaj nowe pola z rozszerzonej telemetrii firmware
             const record = {
                 time: elapsedSec,
-                angle: normData.pitch ?? normData.angle ?? 0,
+                angle: pitchValue,
                 speed: normData.speed ?? 0,
                 encoder_left: normData.encoder_left ?? 0,
                 encoder_right: normData.encoder_right ?? 0,
@@ -5907,10 +5904,10 @@ async function startSysIdRecording() {
                 record.impulse_pwm = currentImpulse;  // Kompatybilność wsteczna
 
             } else if (SysIdState.testType === 'speed') {
-                // Setpoint prędkości - używaj wewnętrznego setpointu z firmware
-                record.input_signal = record.target_speed;  // Z firmware
-                record.setpoint_speed = record.target_speed;
-                record.speed_error = record.target_speed - record.speed;
+                // Setpoint prędkości - używaj setpointu z UI (browser-only)
+                record.input_signal = SysIdState.currentSetpoint;
+                record.setpoint_speed = SysIdState.currentSetpoint;
+                record.speed_error = SysIdState.currentSetpoint - record.speed;
 
             } else if (SysIdState.testType === 'position') {
                 // Setpoint pozycji - oblicz pozycję z enkoderów
@@ -6034,16 +6031,8 @@ function stopSysIdRecording() {
         SysIdState.telemetryHandler = null;
     }
 
-    // Wyślij komendę sysid_stop do firmware (przywróci PID)
-    sendBleMessage({ type: 'sysid_stop' });
-
     // Upewnij się że joystick jest w pozycji neutralnej
     sendBleMessage({ type: 'joystick', x: 0, y: 0 });
-
-    // Firmware automatycznie przywraca PID - wyczyść lokalne kopie
-    SysIdState.savedPID = null;
-    SysIdState.savedSpeedPID = null;
-    SysIdState.savedPositionPID = null;
 
     // Update UI
     updateSysIdUI('stopped');
@@ -6382,17 +6371,27 @@ function analyzeSysIdData() {
         return;
     }
 
-    addLogMessage('[SysID Analiza] Rozpoczynam analizę danych...', 'info');
+    addLogMessage(`[SysID Analiza] Rozpoczynam analizę ${SysIdState.data.length} próbek...`, 'info');
 
     const testType = SysIdState.testType || 'balance';
     let params = null;
     let pidSuggestions = {};
+
+    // Debug: sprawdź czy są dane impulsu
+    const impulseData = SysIdState.data.map(d => d.impulse_pwm || d.input_signal || 0);
+    const hasImpulse = impulseData.some(v => Math.abs(v) > 5);
+    if (!hasImpulse && testType === 'balance') {
+        addLogMessage('[SysID Analiza] Brak wykrytego impulsu w danych! Sprawdź czy impuls był wykonany.', 'warn');
+        console.log('[SysID Debug] impulseData sample:', impulseData.slice(0, 50));
+    }
 
     try {
         if (testType === 'balance') {
             params = identifyBalanceLoop(SysIdState.data, SysIdState.kp);
             if (params) {
                 pidSuggestions = calculatePIDFromModel(params, SysIdState.kp, 'balance');
+            } else {
+                addLogMessage('[SysID Analiza] Nie wykryto impulsu - sprawdź czy dane zawierają sygnał zakłócenia.', 'warn');
             }
         } else if (testType === 'speed') {
             params = identifySpeedLoop(SysIdState.data);
@@ -6412,7 +6411,14 @@ function analyzeSysIdData() {
         if (params) {
             addLogMessage(`[SysID Analiza] Zakończono. Przeregulowanie: ${(params.overshoot * 100).toFixed(1)}%`, 'success');
         } else {
-            addLogMessage('[SysID Analiza] Nie udało się zidentyfikować parametrów modelu.', 'warn');
+            addLogMessage('[SysID Analiza] Nie udało się zidentyfikować parametrów modelu. Spróbuj z silniejszym impulsem.', 'warn');
+            // Pokaż statystyki debug
+            const angles = SysIdState.data.map(d => d.angle);
+            const minAngle = Math.min(...angles);
+            const maxAngle = Math.max(...angles);
+            const avgAngle = angles.reduce((a, b) => a + b, 0) / angles.length;
+            console.log(`[SysID Debug] angle range: ${minAngle.toFixed(2)} to ${maxAngle.toFixed(2)}, avg: ${avgAngle.toFixed(2)}`);
+            console.log(`[SysID Debug] first 5 samples:`, SysIdState.data.slice(0, 5));
         }
 
     } catch (err) {
