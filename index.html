@@ -297,13 +297,16 @@
         
         <!-- NOWA KARTA: Nauka PID - Wizualizacja edukacyjna -->
         <div class="card" id="pid-education-card">
-            <h2>📚 Nauka PID <span class="help-icon" id="pidEducationHelp">?</span></h2>
+            <h2>📚 Nauka PID <span class="help-icon" id="pidEducationHelp">?</span>
+                <span id="pidDataSourceBadge" style="font-size: 0.5em; padding: 2px 8px; border-radius: 10px; background: #555; color: #888; margin-left: 10px; vertical-align: middle;">Symulacja</span>
+            </h2>
             <div id="pidEducationHelpText" class="help-text" style="margin-bottom: 12px;">
                 <strong>Cel:</strong> Wizualizacja działania regulatora PID w czasie rzeczywistym.<br>
                 <strong>Składowa P (Proporcjonalna):</strong> Reaguje na aktualny błąd - im większe odchylenie, tym silniejsza reakcja.<br>
                 <strong>Składowa I (Całkująca):</strong> Sumuje błędy w czasie - eliminuje stałe odchylenie od celu.<br>
                 <strong>Składowa D (Różniczkująca):</strong> Reaguje na szybkość zmian - działa jak hamulec, tłumi oscylacje.<br>
-                <strong>Tryb krokowy:</strong> Pozwala analizować pojedyncze iteracje PID krok po kroku.
+                <strong>Tryb krokowy:</strong> Pozwala analizować pojedyncze iteracje PID krok po kroku.<br>
+                <strong style="color: #a2f279;">📡 Źródło danych:</strong> Gdy robot balansuje, dane pochodzą bezpośrednio z firmware (rzeczywiste składowe PID). W trybie IDLE używana jest symulacja.
             </div>
             
             <!-- Tryb pracy -->
@@ -426,6 +429,107 @@
                 <strong style="color: #61dafb;">💡 Wskazówka:</strong>
                 <span id="pidTipText">Obserwuj, jak zmienia się każda składowa podczas ruchu robota. Składowa P reaguje natychmiast na odchylenie, I rośnie powoli przy stałym błędzie, a D hamuje szybkie zmiany.</span>
             </div>
+            
+            <!-- NOWY: Panel diagnostyczny z inteligentnymi podpowiedziami -->
+            <div id="pidDiagnosticsPanel" style="margin-top: 15px; padding: 15px; background: linear-gradient(135deg, #1a2530 0%, #1a1d24 100%); border: 1px solid #61dafb; border-radius: 8px;">
+                <h4 style="margin: 0 0 12px 0; color: #61dafb; display: flex; align-items: center; gap: 8px;">
+                    🔍 Diagnostyka PID (Analiza na żywo)
+                    <span id="diagStatus" style="font-size: 0.8em; padding: 2px 8px; border-radius: 10px; background: #2a2a35; color: #888;">Oczekiwanie...</span>
+                </h4>
+                
+                <!-- Wskaźniki stanu -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 15px;">
+                    <div class="diag-indicator" id="diagOscillation">
+                        <span class="diag-icon">〰️</span>
+                        <span class="diag-label">Oscylacje</span>
+                        <span class="diag-value" id="diagOscValue">Brak</span>
+                    </div>
+                    <div class="diag-indicator" id="diagSteadyError">
+                        <span class="diag-icon">📍</span>
+                        <span class="diag-label">Błąd ustalony</span>
+                        <span class="diag-value" id="diagSteadyValue">0.00°</span>
+                    </div>
+                    <div class="diag-indicator" id="diagResponse">
+                        <span class="diag-icon">⚡</span>
+                        <span class="diag-label">Reakcja</span>
+                        <span class="diag-value" id="diagResponseValue">OK</span>
+                    </div>
+                    <div class="diag-indicator" id="diagStability">
+                        <span class="diag-icon">⚖️</span>
+                        <span class="diag-label">Stabilność</span>
+                        <span class="diag-value" id="diagStabilityValue">---</span>
+                    </div>
+                </div>
+                
+                <!-- Rekomendacje -->
+                <div id="pidRecommendations" style="background: #0d1117; border-radius: 6px; padding: 12px;">
+                    <div style="font-weight: bold; color: #f7b731; margin-bottom: 8px;">📋 Rekomendacje:</div>
+                    <ul id="pidRecommendationsList" style="margin: 0; padding-left: 20px; color: #ccc; line-height: 1.6;">
+                        <li>Rozpocznij balansowanie, aby zobaczyć analizę.</li>
+                    </ul>
+                </div>
+                
+                <!-- Szybkie przyciski diagnostyczne -->
+                <div style="display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap;">
+                    <button id="diagResetStatsBtn" style="flex: 1; min-width: 120px; background: #555;">🔄 Reset statystyk</button>
+                    <button id="diagExplainBtn" style="flex: 1; min-width: 120px; background: #3498db;">📖 Wyjaśnij problem</button>
+                </div>
+            </div>
+            
+            <!-- NOWY: Sekcja edukacyjna - teoria PID -->
+            <details style="margin-top: 15px;">
+                <summary style="cursor: pointer; color: #61dafb; font-weight: bold; padding: 10px; background: #20232a; border-radius: 6px;">
+                    📚 Teoria PID - Jak strojć regulator?
+                </summary>
+                <div style="padding: 15px; background: #1a1d24; border: 1px solid #333; border-radius: 0 0 6px 6px; margin-top: -1px;">
+                    <div class="pid-theory-section">
+                        <h5 style="color: #e74c3c; margin: 0 0 8px 0;">🔴 Składowa P (Proporcjonalna) - Kp</h5>
+                        <p style="color: #aaa; margin: 0 0 8px 0; font-size: 0.9em;">
+                            Reaguje proporcjonalnie do <strong>aktualnego błędu</strong>. Im większe odchylenie od celu, tym silniejsza reakcja.
+                        </p>
+                        <div class="theory-effects">
+                            <div class="effect-good">✅ <strong>Za mały Kp:</strong> Słaba reakcja, robot wolno wraca do pionu, może "dryfować"</div>
+                            <div class="effect-bad">❌ <strong>Za duży Kp:</strong> Oscylacje wokół punktu równowagi, robot "trzęsie się"</div>
+                            <div class="effect-tip">💡 <strong>Strojenie:</strong> Zwiększaj Kp, aż pojawią się lekkie oscylacje, potem zmniejsz o ~20%</div>
+                        </div>
+                    </div>
+                    
+                    <div class="pid-theory-section" style="margin-top: 15px;">
+                        <h5 style="color: #27ae60; margin: 0 0 8px 0;">🟢 Składowa I (Całkująca) - Ki</h5>
+                        <p style="color: #aaa; margin: 0 0 8px 0; font-size: 0.9em;">
+                            Sumuje błędy w czasie. Eliminuje <strong>stały błąd</strong> (offset), którego P nie może usunąć.
+                        </p>
+                        <div class="theory-effects">
+                            <div class="effect-good">✅ <strong>Za mały Ki:</strong> Robot może mieć stałe odchylenie od pionu</div>
+                            <div class="effect-bad">❌ <strong>Za duży Ki:</strong> Wolne oscylacje, "wind-up" - robot kołysze się powoli</div>
+                            <div class="effect-tip">💡 <strong>Strojenie:</strong> Zacznij od Ki=0, zwiększaj powoli, jeśli widzisz stały błąd</div>
+                        </div>
+                    </div>
+                    
+                    <div class="pid-theory-section" style="margin-top: 15px;">
+                        <h5 style="color: #3498db; margin: 0 0 8px 0;">🔵 Składowa D (Różniczkująca) - Kd</h5>
+                        <p style="color: #aaa; margin: 0 0 8px 0; font-size: 0.9em;">
+                            Reaguje na <strong>szybkość zmian</strong> błędu. Działa jak hamulec - tłumi oscylacje.
+                        </p>
+                        <div class="theory-effects">
+                            <div class="effect-good">✅ <strong>Za mały Kd:</strong> Słabe tłumienie, oscylacje trwają dłużej</div>
+                            <div class="effect-bad">❌ <strong>Za duży Kd:</strong> Nadmierne tłumienie, robot reaguje "nerwowo" na szum</div>
+                            <div class="effect-tip">💡 <strong>Strojenie:</strong> Zwiększaj Kd, aby stłumić oscylacje z kroku P</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 15px; padding: 12px; background: #2a3a2a; border: 1px solid #4caf50; border-radius: 6px;">
+                        <h5 style="color: #a2f279; margin: 0 0 8px 0;">🎯 Procedura strojenia Zieglera-Nicholsa (uproszczona)</h5>
+                        <ol style="color: #ccc; margin: 0; padding-left: 20px; font-size: 0.9em; line-height: 1.8;">
+                            <li>Ustaw Ki=0 i Kd=0</li>
+                            <li>Zwiększaj Kp aż robot zacznie oscylować (granica stabilności)</li>
+                            <li>Zapisz to Kp jako Ku (Ultimate Gain)</li>
+                            <li>Zmierz okres oscylacji Tu</li>
+                            <li>Ustaw: Kp = 0.6×Ku, Ki = 1.2×Ku/Tu, Kd = 0.075×Ku×Tu</li>
+                        </ol>
+                    </div>
+                </div>
+            </details>
         </div>
         
         <div class="card">
@@ -533,7 +637,7 @@
                     <div class="manual-tune-row" data-motor="right" data-direction="bwd"> <div class="pwm-input-row"> <label>Prawy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="2047" step="1" value="1200"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
                     <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKIE SILNIKI</button>
                 </div>
-                <button class="accordion-header" onclick="toggleAccordion(this)">4. PID Balansu (Podstawowy) <span class="sign-badge" id="balanceSignBadge">B:+</span></button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">4. PID Balansu (Podstawowy) <span class="sign-badge" id="balanceSignBadge">B:+</span> <span id="fusionModeIndicator4" class="fusion-indicator fusion-mahony" style="font-size: 0.65em;">⚡ Mahony</span></button>
                 <div class="accordion-content">
                     <div class="setting-container"> <label for="balanceKpInput">Kp - Sila<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKpInput" min="0" max="500" step="0.1" value="95"><button>+</button></div> <div class="help-text"><strong>Proporcjonalny (Kp):</strong> Określa, jak mocno robot reaguje na odchylenie od pionu. Wyższa wartość = sztywniejsze utrzymanie równowagi, szybsza reakcja na zakłócenia. Zbyt wysoka wartość powoduje szybkie oscylacje (robot "drży"). Zbyt niska = robot reaguje za wolno i może upaść. Zacznij od 80-120 i dostosuj stopniowo. Typowy zakres: 60-150.</div> </div>
                     <div class="setting-container"> <label for="balanceKiInput">Ki - Korekta<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKiInput" min="0" max="10" step="0.01" value="0.0"><button>+</button></div> <div class="help-text"><strong>Całkujący (Ki):</strong> Eliminuje długotrwały, stały błąd (np. gdy robot powoli dryfuje w jednym kierunku mimo pionowego stania). Często nie jest potrzebny dla balansu - zacznij od 0. Jeśli robot ma tendencję do dryfowania, zwiększaj bardzo ostrożnie (np. 0.05-0.2). Zbyt wysoka wartość powoduje niestabilność i oscylacje. Typowy zakres: 0-0.5.</div> </div>
@@ -542,7 +646,7 @@
                     <div class="setting-container"> <label for="balanceIntegralLimitInput">Limit Integratora<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceIntegralLimitInput" min="0" max="200" step="1" value="50"><button>+</button></div> <div class="help-text">Maksymalna wartość, jaką może osiągnąć suma całkująca (Ki). Zapobiega "rozregulowaniu" integratora przy dużych, długotrwałych błędach. Jeśli używasz Ki, ustaw limit na 30-100. Jeśli Ki=0, ten parametr nie ma wpływu. Typowy zakres: 30-100.</div> </div>
                     <div class="model-mapping-row" style="margin-top:6px;"><label>Znak sprzężenia (Balans)</label><div id="balanceSign" class="sign-toggle"><button data-sign="-1">-</button><button data-sign="1">+</button></div><div class="help-text" style="margin-top:8px;">Odwróć znak sprzężenia pętli balansu (zmiana możliwa tylko w trybie IDLE)</div></div>
                 </div>
-                <button class="accordion-header" onclick="toggleAccordion(this)">5. PID Kaskadowy (Predkosc/Pozycja)</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)">5. PID Kaskadowy (Predkosc/Pozycja) <span id="fusionModeIndicator5" class="fusion-indicator fusion-mahony" style="font-size: 0.65em;">⚡ Mahony</span></button>
                 <div class="accordion-content">
                     <div class="parameter-group"><h5>PID Predkosci <span class="sign-badge" id="speedSignBadge">S:+</span></h5>
                         <div class="setting-container"> <label for="speedKpInput">Kp - Reakcja<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKpInput" min="0" max="10" step="0.01" value="0.0"><button>+</button></div> <div class="help-text">Kontroluje, jak mocno robot pochyla się, aby osiągnąć zadaną prędkość. Wyższa wartość = szybsze przyspieszanie/zwalnianie, ale może powodować oscylacje prędkości. Zacznij od małych wartości (0.1-0.5) i zwiększaj stopniowo. Typowy zakres: 0.1-2.0.</div> </div>
@@ -803,6 +907,9 @@
                     <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;">
                         <button id="sysid-export-csv-btn" style="flex: 1; min-width: 100px; padding: 10px; background: #a2f279; color: #000; border: none; border-radius: 6px; cursor: pointer;" disabled>
                             📊 Eksport CSV
+                        </button>
+                        <button id="sysid-import-csv-btn" style="flex: 1; min-width: 100px; padding: 10px; background: #61dafb; color: #000; border: none; border-radius: 6px; cursor: pointer;">
+                            📂 Import CSV
                         </button>
                         <button id="sysid-export-mat-btn" style="flex: 1; min-width: 100px; padding: 10px; background: #f7b731; color: #000; border: none; border-radius: 6px; cursor: pointer;" disabled>
                             📐 Eksport MAT

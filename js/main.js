@@ -2457,8 +2457,10 @@ function processCompleteMessage(data) {
             if (AppState.tempStates.speed_mode !== undefined) document.getElementById('speedModeSwitch').checked = AppState.tempStates.speed_mode;
             AppState.isApplyingConfig = false;
 
-            // Po synchronizacji załaduj aktualny profil PID (mahony lub NDOF) do UI
+            // Po synchronizacji: wykryj aktualny tryb fuzji z checkboxa (zsynchronizowanego z firmware)
+            // i załaduj odpowiedni profil PID do UI
             if (typeof FusionPIDProfiles !== 'undefined') {
+                FusionPIDProfiles.syncFusionModeFromCheckbox();
                 FusionPIDProfiles.loadCurrentPIDToUI();
             }
 
@@ -5529,6 +5531,9 @@ const FusionPIDProfiles = {
         const oldMode = this.currentFusionMode;
         if (oldMode === newMode) return;
 
+        // WAŻNE: Zapisz aktualne wartości z UI do starego profilu przed przełączeniem
+        this.saveCurrentToProfile();
+
         this.currentFusionMode = newMode;
 
         // Załaduj odpowiedni zestaw PID do UI
@@ -5547,15 +5552,26 @@ const FusionPIDProfiles = {
     updateFusionIndicator() {
         const indicator = document.getElementById('fusionModeIndicator');
         const sysidIndicator = document.getElementById('sysidFusionIndicator');
-        const indicators = [indicator, sysidIndicator].filter(el => el);
+        const indicator4 = document.getElementById('fusionModeIndicator4');
+        const indicator5 = document.getElementById('fusionModeIndicator5');
+        const indicators = [indicator, sysidIndicator, indicator4, indicator5].filter(el => el);
 
         indicators.forEach(ind => {
             if (this.currentFusionMode === 'mahony') {
-                ind.innerHTML = ind.id === 'sysidFusionIndicator' ? '⚡ Mahony' : '⚡ Mahony (~500Hz)';
+                // Pełny tekst dla głównego wskaźnika, skrócony dla pozostałych
+                if (ind.id === 'fusionModeIndicator') {
+                    ind.innerHTML = '⚡ Mahony (~500Hz)';
+                } else {
+                    ind.innerHTML = '⚡ Mahony';
+                }
                 ind.className = 'fusion-indicator fusion-mahony';
                 ind.title = 'Własna fuzja Mahony - szybka (~500Hz), mniejsze Kp/Kd';
             } else {
-                ind.innerHTML = ind.id === 'sysidFusionIndicator' ? '🔄 NDOF' : '🔄 NDOF (~100Hz)';
+                if (ind.id === 'fusionModeIndicator') {
+                    ind.innerHTML = '🔄 NDOF (~100Hz)';
+                } else {
+                    ind.innerHTML = '🔄 NDOF';
+                }
                 ind.className = 'fusion-indicator fusion-ndof';
                 ind.title = 'Wbudowana fuzja BNO055 - stabilna (~100Hz), większe Kp/Kd';
             }
@@ -5572,6 +5588,64 @@ const FusionPIDProfiles = {
                 const newMode = e.target.checked ? 'mahony' : 'ndof';
                 this.onFusionModeChange(newMode);
             });
+        }
+    },
+
+    /**
+     * Zapisz aktualne wartości z UI do odpowiedniego profilu (mahonyPID lub ndofPID)
+     * Wywoływane przed zapisem EEPROM oraz przed zmianą trybu fuzji
+     */
+    saveCurrentToProfile() {
+        const pid = this.getCurrentPID();
+
+        // Balance PID - odczytaj z UI
+        pid.balance.Kp = this.getInputValue('balanceKpInput', pid.balance.Kp);
+        pid.balance.Ki = this.getInputValue('balanceKiInput', pid.balance.Ki);
+        pid.balance.Kd = this.getInputValue('balanceKdInput', pid.balance.Kd);
+        pid.balance.filterAlpha = this.getInputValue('balanceFilterAlphaInput', pid.balance.filterAlpha * 100) / 100; // 0-100 -> 0-1
+        pid.balance.integralLimit = this.getInputValue('balanceIntegralLimitInput', pid.balance.integralLimit);
+
+        // Speed PID
+        pid.speed.Kp = this.getInputValue('speedKpInput', pid.speed.Kp);
+        pid.speed.Ki = this.getInputValue('speedKiInput', pid.speed.Ki);
+        pid.speed.Kd = this.getInputValue('speedKdInput', pid.speed.Kd);
+        pid.speed.filterAlpha = this.getInputValue('speedFilterAlphaInput', pid.speed.filterAlpha * 100) / 100;
+        pid.speed.integralLimit = this.getInputValue('speedIntegralLimitInput', pid.speed.integralLimit);
+
+        // Position PID
+        pid.position.Kp = this.getInputValue('positionKpInput', pid.position.Kp);
+        pid.position.Ki = this.getInputValue('positionKiInput', pid.position.Ki);
+        pid.position.Kd = this.getInputValue('positionKdInput', pid.position.Kd);
+        pid.position.filterAlpha = this.getInputValue('positionFilterAlphaInput', pid.position.filterAlpha * 100) / 100;
+        pid.position.integralLimit = this.getInputValue('positionIntegralLimitInput', pid.position.integralLimit);
+
+        addLogMessage(`[FusionPID] 💾 Zapisano profil ${this.currentFusionMode === 'mahony' ? 'Mahony' : 'NDOF'} do cache`, 'info');
+    },
+
+    /**
+     * Helper - odczytaj wartość z inputa (z domyślną wartością)
+     */
+    getInputValue(inputId, defaultValue) {
+        const input = document.getElementById(inputId);
+        if (input) {
+            const val = parseFloat(input.value);
+            return isNaN(val) ? defaultValue : val;
+        }
+        return defaultValue;
+    },
+
+    /**
+     * Synchronizuj tryb fuzji z wartością z firmware (wywoływane przy sync_complete)
+     */
+    syncFusionModeFromCheckbox() {
+        const checkbox = document.getElementById('useMahonyFilterInput');
+        if (checkbox) {
+            const newMode = checkbox.checked ? 'mahony' : 'ndof';
+            if (this.currentFusionMode !== newMode) {
+                this.currentFusionMode = newMode;
+                this.updateFusionIndicator();
+                addLogMessage(`[FusionPID] 🔄 Tryb fuzji zsynchronizowany z firmware: ${newMode === 'mahony' ? '⚡ Mahony' : '🔄 NDOF'}`, 'info');
+            }
         }
     }
 };
@@ -5647,6 +5721,7 @@ function initSystemIdentification() {
     const stopBtn = document.getElementById('sysid-stop-btn');
     const exportCsvBtn = document.getElementById('sysid-export-csv-btn');
     const exportMatBtn = document.getElementById('sysid-export-mat-btn');
+    const importCsvBtn = document.getElementById('sysid-import-csv-btn');
     const clearBtn = document.getElementById('sysid-clear-btn');
     const testImpulseBtn = document.getElementById('sysid-test-impulse-btn');
     const testTypeSelect = document.getElementById('sysid-test-type');
@@ -5656,6 +5731,7 @@ function initSystemIdentification() {
     if (stopBtn) stopBtn.addEventListener('click', stopSysIdRecording);
     if (exportCsvBtn) exportCsvBtn.addEventListener('click', exportSysIdCSV);
     if (exportMatBtn) exportMatBtn.addEventListener('click', exportSysIdMAT);
+    if (importCsvBtn) importCsvBtn.addEventListener('click', importSysIdCSV);
     if (clearBtn) clearBtn.addEventListener('click', clearSysIdData);
     if (testImpulseBtn) testImpulseBtn.addEventListener('click', testSysIdImpulse);
     if (testTypeSelect) testTypeSelect.addEventListener('change', handleSysIdTestTypeChange);
@@ -5779,15 +5855,35 @@ async function startSysIdRecording() {
     // Pobierz typ testu
     SysIdState.testType = document.getElementById('sysid-test-type')?.value || 'balance';
 
-    // Check robot state - robot musi balansować żeby reagował na zakłócenie
-    if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(AppState.lastKnownRobotState)) {
-        const ok = confirm(`Robot musi balansować. Aktualny stan: '${AppState.lastKnownRobotState}'.\nCzy włączyć balansowanie?`);
-        if (ok) {
-            const bsEl = document.getElementById('balanceSwitch');
-            if (bsEl) { bsEl.checked = true; bsEl.dispatchEvent(new Event('change')); }
-            await new Promise(r => setTimeout(r, 2000));
-        } else {
-            return;
+    // Check robot state - wymagania zależą od typu testu
+    const currentState = AppState.lastKnownRobotState;
+
+    if (SysIdState.testType === 'position') {
+        // Test pozycji wymaga HOLDING_POSITION (TRZYMA_POZYCJE)
+        if (currentState !== 'TRZYMA_POZYCJE') {
+            const ok = confirm(`Test pozycji wymaga trybu TRZYMA_POZYCJE.\nAktualny stan: '${currentState}'.\nCzy włączyć trzymanie pozycji?`);
+            if (ok) {
+                const bsEl = document.getElementById('balanceSwitch');
+                const hpEl = document.getElementById('holdPositionSwitch');
+                if (bsEl && !bsEl.checked) { bsEl.checked = true; bsEl.dispatchEvent(new Event('change')); }
+                await new Promise(r => setTimeout(r, 500));
+                if (hpEl && !hpEl.checked) { hpEl.checked = true; hpEl.dispatchEvent(new Event('change')); }
+                await new Promise(r => setTimeout(r, 2000));
+            } else {
+                return;
+            }
+        }
+    } else {
+        // Test balansu/prędkości wymaga balansowania
+        if (!['BALANSUJE', 'TRZYMA_POZYCJE'].includes(currentState)) {
+            const ok = confirm(`Robot musi balansować. Aktualny stan: '${currentState}'.\nCzy włączyć balansowanie?`);
+            if (ok) {
+                const bsEl = document.getElementById('balanceSwitch');
+                if (bsEl) { bsEl.checked = true; bsEl.dispatchEvent(new Event('change')); }
+                await new Promise(r => setTimeout(r, 2000));
+            } else {
+                return;
+            }
         }
     }
 
@@ -5800,9 +5896,9 @@ async function startSysIdRecording() {
     SysIdState.impulsePhase = 0;
     SysIdState.currentSetpoint = 0;
 
-    // Konfiguracja specyficzna dla typu testu - BROWSER ONLY (bez komend firmware)
+    // Konfiguracja specyficzna dla typu testu - UŻYWA KOMEND FIRMWARE dla izolacji pętli
     if (SysIdState.testType === 'balance') {
-        // Test balansu - zbiera telemetrię i wysyła impuls joystick
+        // Test balansu - firmware ustawia Kp-only mode (Ki=Kd=0)
         SysIdState.kp = parseFloat(document.getElementById('sysid-kp')?.value) || 50;
         SysIdState.impulse = (parseFloat(document.getElementById('sysid-impulse')?.value) || 25) / 100;
 
@@ -5812,23 +5908,49 @@ async function startSysIdRecording() {
         const currentKd = parseFloat(document.getElementById('balanceKdInput')?.value) || 0;
         SysIdState.savedPID = { kp: currentKp, ki: currentKi, kd: currentKd };
 
-        addLogMessage(`[SysID Balance] Nagrywanie: impuls=${(SysIdState.impulse * 100).toFixed(0)}%, czas=${SysIdState.duration / 1000}s`, 'info');
+        // WAŻNE: Wyślij komendę do firmware aby ustawić tryb SysID
+        sendBleMessage({
+            type: 'sysid_balance_test',
+            kp: SysIdState.kp,
+            duration: SysIdState.duration
+        });
+
+        addLogMessage(`[SysID Balance] Nagrywanie: Kp=${SysIdState.kp}, impuls=${(SysIdState.impulse * 100).toFixed(0)}%, czas=${SysIdState.duration / 1000}s`, 'info');
 
     } else if (SysIdState.testType === 'speed') {
-        // Test pętli prędkości - zbiera telemetrię i wysyła setpoint joystick
+        // Test pętli prędkości - firmware izoluje od pętli pozycji
         SysIdState.stepValue = parseFloat(document.getElementById('sysid-step-value')?.value) || 100;
-        addLogMessage(`[SysID Speed] Nagrywanie: setpoint=${SysIdState.stepValue} imp/s, czas=${SysIdState.duration / 1000}s`, 'info');
+
+        // WAŻNE: Wyślij komendę do firmware aby ustawić tryb SysID speed
+        sendBleMessage({
+            type: 'sysid_speed_test',
+            setpoint: SysIdState.stepValue,
+            duration: SysIdState.duration,
+            step_time: 1000  // Skok po 1 sekundzie
+        });
+
+        addLogMessage(`[SysID Speed] Nagrywanie: setpoint=${SysIdState.stepValue} imp/s, czas=${SysIdState.duration / 1000}s (firmware izoluje pętlę)`, 'info');
 
     } else if (SysIdState.testType === 'position') {
-        // Test pętli pozycji - zbiera telemetrię
+        // Test pętli pozycji - firmware używa pełnej kaskady
         SysIdState.stepValue = parseFloat(document.getElementById('sysid-step-value')?.value) || 30;
-        addLogMessage(`[SysID Position] Nagrywanie: setpoint=${SysIdState.stepValue} cm, czas=${SysIdState.duration / 1000}s`, 'info');
+
+        // WAŻNE: Wyślij komendę do firmware aby ustawić tryb SysID position
+        sendBleMessage({
+            type: 'sysid_position_test',
+            setpoint: SysIdState.stepValue,  // w cm, firmware konwertuje na impulsy
+            duration: SysIdState.duration,
+            step_time: 1000  // Skok po 1 sekundzie
+        });
+
+        addLogMessage(`[SysID Position] Nagrywanie: setpoint=${SysIdState.stepValue} cm, czas=${SysIdState.duration / 1000}s (firmware zarządza kaskadą)`, 'info');
     }
 
     // Clear data
     SysIdState.data = [];
     SysIdState.isRecording = true;
     SysIdState.startTime = performance.now();
+    SysIdState._sysidTelemetryWarningShown = false;  // Reset flagi ostrzeżenia
 
     // Update UI
     updateSysIdUI('recording');
@@ -5843,6 +5965,17 @@ async function startSysIdRecording() {
 
             // Normalize telemetry data
             const normData = (typeof normalizeTelemetryData === 'function') ? normalizeTelemetryData(data) : data;
+
+            // Walidacja: sprawdź czy firmware wysyła rozszerzone dane SysID
+            // sysid_mode powinno być != 0 gdy test jest aktywny w firmware
+            if (!SysIdState._sysidTelemetryWarningShown) {
+                const hasSysIdData = normData.sysid_mode !== undefined && normData.sysid_mode !== 0;
+                if (!hasSysIdData && elapsed > 1500) {
+                    // Po 1.5s (po wysłaniu komendy do firmware) sprawdź czy mamy dane SysID
+                    addLogMessage('[SysID] ⚠️ Brak rozszerzonych danych SysID z firmware - analiza może być niedokładna', 'warn');
+                    SysIdState._sysidTelemetryWarningShown = true;
+                }
+            }
 
             // Oblicz pitch z kwaternionu jeśli nie ma w danych (Quaternion-First)
             let pitchValue = normData.pitch;
@@ -5883,6 +6016,8 @@ async function startSysIdRecording() {
                 speed_i_term: normData.speed_i_term ?? 0,
                 speed_d_term: normData.speed_d_term ?? 0,
                 sysid_mode: normData.sysid_mode ?? 0,
+                // Timestamp z firmware (ms) - do lepszej synchronizacji
+                firmware_timestamp_ms: normData.timestamp_ms ?? normData.ts ?? null,
                 // Pola specyficzne dla typu testu
                 test_type: SysIdState.testType,
                 setpoint: SysIdState.currentSetpoint,
@@ -5890,10 +6025,13 @@ async function startSysIdRecording() {
             };
 
             if (SysIdState.testType === 'balance') {
-                // Impuls joysticka
+                // Impuls joysticka - używamy opóźnienia BLE (~50ms) do korekty
+                // Impuls jest wysyłany przez UI, więc musimy szacować kiedy dotarł do firmware
+                const BLE_LATENCY_MS = 50;  // Typowe opóźnienie BLE
                 let currentImpulse = 0;
                 if (SysIdState.impulseApplied && SysIdState.impulseStartTime > 0) {
-                    const impulseElapsed = elapsed - SysIdState.impulseStartTime;
+                    // Skoryguj o szacowane opóźnienie BLE
+                    const impulseElapsed = elapsed - SysIdState.impulseStartTime - BLE_LATENCY_MS;
                     if (impulseElapsed >= 0 && impulseElapsed < 100) {
                         currentImpulse = SysIdState.impulse * 100;
                     } else if (impulseElapsed >= 100 && impulseElapsed < 200) {
@@ -5904,10 +6042,18 @@ async function startSysIdRecording() {
                 record.impulse_pwm = currentImpulse;  // Kompatybilność wsteczna
 
             } else if (SysIdState.testType === 'speed') {
-                // Setpoint prędkości - używaj setpointu z UI (browser-only)
-                record.input_signal = SysIdState.currentSetpoint;
-                record.setpoint_speed = SysIdState.currentSetpoint;
-                record.speed_error = SysIdState.currentSetpoint - record.speed;
+                // Setpoint prędkości - preferuj dane z firmware jeśli dostępne
+                // sysid_target_speed zawiera aktualny setpoint ustawiony przez firmware
+                const firmwareSetpoint = normData.sysid_target_speed ?? normData.target_speed ?? null;
+                const effectiveSetpoint = (firmwareSetpoint !== null && firmwareSetpoint !== 0)
+                    ? firmwareSetpoint
+                    : SysIdState.currentSetpoint;
+
+                record.input_signal = effectiveSetpoint;
+                record.setpoint_speed = effectiveSetpoint;
+                record.speed_error = effectiveSetpoint - record.speed;
+                // Dodaj flagę czy używamy danych z firmware
+                record.firmware_setpoint = firmwareSetpoint !== null && firmwareSetpoint !== 0;
 
             } else if (SysIdState.testType === 'position') {
                 // Setpoint pozycji - oblicz pozycję z enkoderów
@@ -5919,10 +6065,19 @@ async function startSysIdRecording() {
                 const positionCm = (avgEncoder / encoderPpr) * wheelCircum;
 
                 record.position_cm = positionCm;
-                // Dla testu pozycji setpoint jest w impulsach, przelicz na cm
-                record.input_signal = SysIdState.stepApplied ? SysIdState.stepValue : 0;
-                record.setpoint_position = record.input_signal;
-                record.position_error = record.input_signal - positionCm;
+
+                // Dla testu pozycji: preferuj sysid_target_speed z firmware (setpoint pętli pozycji)
+                // Firmware wysyła target_speed jako wyjście pętli pozycji
+                const firmwareTargetSpeed = normData.sysid_target_speed ?? normData.target_speed ?? null;
+                const hasActiveFirmwareStep = firmwareTargetSpeed !== null && Math.abs(firmwareTargetSpeed) > 0.1;
+
+                // Setpoint pozycji z UI (cm) - fallback
+                const uiSetpoint = SysIdState.stepApplied ? SysIdState.stepValue : 0;
+                record.input_signal = uiSetpoint;
+                record.setpoint_position = uiSetpoint;
+                record.position_error = uiSetpoint - positionCm;
+                // Dodatkowa informacja: czy firmware potwierdza aktywny step
+                record.firmware_step_active = hasActiveFirmwareStep;
             }
 
             SysIdState.data.push(record);
@@ -5969,44 +6124,30 @@ async function startSysIdRecording() {
             }, 200);
 
         } else if (SysIdState.testType === 'speed') {
-            // Skok setpointu prędkości - włączamy tryb TRZYMA_POZYCJE z zadaną prędkością
+            // FIRMWARE ZARZĄDZA SKOKIEM - tylko zapisz stan dla UI
             SysIdState.stepApplied = true;
             SysIdState.currentSetpoint = SysIdState.stepValue;
+            addLogMessage(`[SysID] Firmware zastosował skok prędkości: ${SysIdState.stepValue} imp/s`, 'info');
 
-            addLogMessage(`[SysID] Skok prędkości: ${SysIdState.stepValue} imp/s`, 'info');
-
-            // Wyślij setpoint prędkości przez joystick (proporcjonalnie)
-            // Maksymalny joystick = 100%, więc normalizujemy do max_speed
-            const maxSpeed = parseFloat(document.getElementById('maxSpeedInput')?.value) || 200;
-            const joystickY = Math.min(1.0, SysIdState.stepValue / maxSpeed);
-            sendBleMessage({ type: 'joystick', x: 0, y: joystickY });
-
-            // Po połowie czasu nagrywania zeruj setpoint (żeby zobaczyć odpowiedź na skok w dół)
+            // Firmware sam zeruje setpoint w połowie testu - tylko aktualizuj stan UI
             setTimeout(() => {
                 if (SysIdState.isRecording) {
                     SysIdState.currentSetpoint = 0;
-                    sendBleMessage({ type: 'joystick', x: 0, y: 0 });
-                    addLogMessage(`[SysID] Zerowanie prędkości`, 'info');
+                    addLogMessage(`[SysID] Firmware zeruje prędkość`, 'info');
                 }
             }, SysIdState.duration / 2 - 1000);
 
         } else if (SysIdState.testType === 'position') {
-            // Skok setpointu pozycji
+            // FIRMWARE ZARZĄDZA SKOKIEM - tylko zapisz stan dla UI
             SysIdState.stepApplied = true;
             SysIdState.currentSetpoint = SysIdState.stepValue;
+            addLogMessage(`[SysID] Firmware zastosował skok pozycji: ${SysIdState.stepValue} cm`, 'info');
 
-            addLogMessage(`[SysID] Skok pozycji: ${SysIdState.stepValue} cm`, 'info');
-
-            // Wyślij komendę position_setpoint (jeśli firmware obsługuje)
-            // Alternatywnie: krótki impuls joysticka żeby robot ruszył
-            sendBleMessage({ type: 'set_param', key: 'pos_setpoint', value: SysIdState.stepValue });
-
-            // Po połowie czasu zeruj setpoint
+            // Firmware sam zeruje setpoint w połowie testu - tylko aktualizuj stan UI
             setTimeout(() => {
                 if (SysIdState.isRecording) {
                     SysIdState.currentSetpoint = 0;
-                    sendBleMessage({ type: 'set_param', key: 'pos_setpoint', value: 0 });
-                    addLogMessage(`[SysID] Zerowanie pozycji`, 'info');
+                    addLogMessage(`[SysID] Firmware zeruje pozycję`, 'info');
                 }
             }, SysIdState.duration / 2 - 1000);
         }
@@ -6030,6 +6171,9 @@ function stopSysIdRecording() {
         window.removeEventListener('ble_message', SysIdState.telemetryHandler);
         SysIdState.telemetryHandler = null;
     }
+
+    // WAŻNE: Wyślij komendę sysid_stop do firmware aby przywrócić oryginalne PID
+    sendBleMessage({ type: 'sysid_stop' });
 
     // Upewnij się że joystick jest w pozycji neutralnej
     sendBleMessage({ type: 'joystick', x: 0, y: 0 });
@@ -6193,6 +6337,153 @@ function drawSysIdChart() {
     ctx.fillStyle = '#f7b731';
     ctx.fillText(secondaryLabel, canvas.width - 70, 28);
 }
+
+/**
+ * Importuje dane CSV do analizy offline
+ * Pozwala na przetestowanie algorytmu na wcześniej zapisanych danych
+ */
+function importSysIdCSV() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv';
+
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const csvText = event.target.result;
+                const { data, metadata } = parseSysIdCSV(csvText);
+
+                if (data.length < 10) {
+                    addLogMessage('[SysID Import] Za mało danych w pliku CSV', 'error');
+                    return;
+                }
+
+                // Zapisz dane do SysIdState
+                SysIdState.data = data;
+                SysIdState.testType = metadata.test_type || 'balance';
+                SysIdState.kp = metadata.kp_used || 50;
+                SysIdState.impulse = (metadata.impulse_joystick_percent || 25) / 100;
+                SysIdState.sampleRate = metadata.sample_rate_hz || 200;
+                SysIdState.duration = (metadata.recording_duration_s || 5) * 1000;
+
+                addLogMessage(`[SysID Import] Załadowano ${data.length} próbek z pliku ${file.name}`, 'success');
+                addLogMessage(`[SysID Import] Typ testu: ${SysIdState.testType}, Kp: ${SysIdState.kp}`, 'info');
+
+                // Aktualizuj UI
+                updateSysIdUI('stopped');
+                drawSysIdChart();
+
+                // Automatycznie analizuj
+                setTimeout(() => {
+                    analyzeSysIdData();
+                }, 100);
+
+            } catch (err) {
+                addLogMessage(`[SysID Import] Błąd parsowania CSV: ${err.message}`, 'error');
+                console.error('CSV parse error:', err);
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    input.click();
+}
+
+/**
+ * Parsuje tekst CSV z metadanymi (format zgodny z eksportem)
+ */
+function parseSysIdCSV(csvText) {
+    const lines = csvText.split('\n');
+    const metadata = {
+        test_type: 'balance',
+        kp_used: 50,
+        impulse_joystick_percent: 25,
+        sample_rate_hz: 200,
+        recording_duration_s: 5
+    };
+
+    let headerLine = null;
+    let dataStartIdx = 0;
+
+    // Parsuj metadane (linie zaczynające się od #)
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('#')) {
+            // Parsuj metadane: # key: value
+            const match = line.match(/^#\s*(\w+):\s*(.+)$/);
+            if (match) {
+                const key = match[1].toLowerCase().replace(/ /g, '_');
+                let value = match[2].trim();
+                // Próbuj konwersję na liczbę
+                if (!isNaN(parseFloat(value)) && isFinite(value)) {
+                    value = value.includes('.') ? parseFloat(value) : parseInt(value);
+                }
+                metadata[key] = value;
+            }
+        } else if (line && !headerLine) {
+            headerLine = line;
+            dataStartIdx = i + 1;
+            break;
+        }
+    }
+
+    if (!headerLine) {
+        throw new Error('Nie znaleziono nagłówka CSV');
+    }
+
+    // Parsuj nagłówek
+    const headers = headerLine.split(',').map(h => h.trim());
+    console.log('[SysID Import] Nagłówki:', headers);
+
+    // Parsuj dane
+    const data = [];
+    for (let i = dataStartIdx; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const values = line.split(',').map(v => parseFloat(v.trim()));
+        if (values.length !== headers.length) continue;
+
+        const row = {};
+        headers.forEach((h, idx) => {
+            row[h] = values[idx];
+        });
+
+        // Mapuj nazwy kolumn na format wewnętrzny
+        const record = {
+            time: row.time_s ?? row.time ?? 0,
+            angle: row.angle_deg ?? row.angle ?? 0,
+            impulse_pwm: row.impulse_percent ?? row.impulse_pwm ?? 0,
+            pwm_output: row.pwm_output ?? 0,
+            speed: row.speed_enc ?? row.speed_actual ?? row.speed ?? 0,
+            encoder_left: row.encoder_left ?? 0,
+            encoder_right: row.encoder_right ?? 0,
+            gyroY: row.gyro_y ?? 0,
+            // Dla testów speed/position
+            setpoint_speed: row.setpoint_speed ?? 0,
+            setpoint_position: row.setpoint_position ?? 0,
+            position_cm: row.position_actual ?? 0,
+            speed_error: row.speed_error ?? 0,
+            position_error: row.position_error ?? 0,
+            input_signal: row.impulse_percent ?? row.setpoint_speed ?? row.setpoint_position ?? 0
+        };
+
+        data.push(record);
+    }
+
+    console.log(`[SysID Import] Sparsowano ${data.length} rekordów`);
+    console.log('[SysID Import] Metadane:', metadata);
+    console.log('[SysID Import] Pierwsze 3 rekordy:', data.slice(0, 3));
+
+    return { data, metadata };
+}
+
+// Eksponuj funkcję globalnie do użycia z HTML
+window.importSysIdCSV = importSysIdCSV;
 
 function exportSysIdCSV() {
     if (SysIdState.data.length === 0) {
@@ -6459,20 +6750,33 @@ function detectImpulseType(inputSignal) {
 }
 
 /**
- * Znajduje lokalne maksima w tablicy
+ * Znajduje lokalne maksima w tablicy (zgodnie z scipy.signal.find_peaks)
+ * Zwraca tablicę indeksów gdzie wartość jest większa od sąsiadów
  */
-function findPeaks(arr) {
+function findPeaks(arr, minProminence = 0) {
     const peaks = [];
     for (let i = 1; i < arr.length - 1; i++) {
         if (arr[i] > arr[i - 1] && arr[i] > arr[i + 1]) {
-            peaks.push({ index: i, value: arr[i] });
+            // Opcjonalnie: sprawdź prominence (wybitność szczytu)
+            if (minProminence > 0) {
+                const leftMin = Math.min(...arr.slice(Math.max(0, i - 10), i));
+                const rightMin = Math.min(...arr.slice(i + 1, Math.min(arr.length, i + 11)));
+                const prominence = arr[i] - Math.max(leftMin, rightMin);
+                if (prominence < minProminence) continue;
+            }
+            peaks.push(i);  // Zwracamy tylko indeks (jak scipy)
         }
     }
     return peaks;
 }
 
 /**
- * Identyfikacja pętli balansu
+ * Identyfikacja pętli balansu - zgodnie z system_identification.py
+ * 
+ * KLUCZOWE RÓŻNICE vs poprzednia implementacja:
+ * 1. Dla podwójnego impulsu (double_fwd_bwd) analizuje tylko PIERWSZĄ fazę + 0.5s
+ * 2. Lepsze wykrywanie końca impulsu (zmiana znaku)
+ * 3. Zgodność z scipy.signal.find_peaks
  */
 function identifyBalanceLoop(data, kpUsed) {
     const time = data.map(d => d.time);
@@ -6482,96 +6786,174 @@ function identifyBalanceLoop(data, kpUsed) {
 
     // Wykryj typ impulsu
     const impulseType = detectImpulseType(inputSignal);
+    console.log(`[SysID] Wykryty typ impulsu: ${impulseType}`);
 
     // Znajdź moment impulsu
     const impulseInfo = findImpulseTime(time, inputSignal);
     if (!impulseInfo) {
+        console.log('[SysID] Nie znaleziono impulsu w danych');
         return null;
     }
     const impulseTime = impulseInfo.time;
     const impulseIdx = impulseInfo.index;
 
-    // Usuń offset z danych przed impulsem
+    // Usuń offset z danych przed impulsem (baseline removal)
     const preImpulseData = outputSignal.slice(0, impulseIdx);
     const baseline = preImpulseData.length > 0 ?
         preImpulseData.reduce((a, b) => a + b, 0) / preImpulseData.length : 0;
     const adjustedOutput = outputSignal.map(v => v - baseline);
+    console.log(`[SysID] Usunięto offset baseline: ${baseline.toFixed(4)}°`);
 
-    // Amplituda impulsu
+    // Amplituda impulsu (wartość bezwzględna)
     const impulseAmplitude = Math.max(...inputSignal.map(Math.abs));
 
-    // Analizuj odpowiedź po impulsie
-    const postImpulseMask = time.map((t, i) => t >= impulseTime ? i : -1).filter(i => i >= 0);
-    const tResponse = postImpulseMask.map(i => time[i] - impulseTime);
-    const yResponse = postImpulseMask.map(i => adjustedOutput[i]);
+    // ========================================================================
+    // KLUCZOWE: Dla podwójnego impulsu znajdź koniec PIERWSZEJ fazy
+    // To jest główna różnica vs poprzednia implementacja!
+    // ========================================================================
+    let impulseEndTime = time[time.length - 1];
+
+    if (impulseType.startsWith('double')) {
+        // Znajdź indeksy gdzie impuls jest aktywny (|input| > 5)
+        const impulseIndices = [];
+        for (let i = 0; i < inputSignal.length; i++) {
+            if (Math.abs(inputSignal[i]) > 5) {
+                impulseIndices.push(i);
+            }
+        }
+
+        if (impulseIndices.length > 1) {
+            // Znajdź gdzie impuls zmienia znak (koniec pierwszej fazy)
+            for (let i = 1; i < impulseIndices.length; i++) {
+                const curr = inputSignal[impulseIndices[i]];
+                const prev = inputSignal[impulseIndices[i - 1]];
+                if (curr * prev < 0) {
+                    // Znaleziono zmianę znaku - analizuj tylko do tego momentu + 0.5s
+                    impulseEndTime = time[impulseIndices[i]] + 0.5;
+                    console.log(`[SysID] Podwójny impuls - analizuję do t=${impulseEndTime.toFixed(3)}s`);
+                    break;
+                }
+            }
+        }
+    }
+
+    // Analizuj odpowiedź po impulsie (tylko pierwsza faza dla podwójnego impulsu)
+    const postImpulseIndices = [];
+    for (let i = 0; i < time.length; i++) {
+        if (time[i] >= impulseTime && time[i] <= impulseEndTime) {
+            postImpulseIndices.push(i);
+        }
+    }
+
+    const tResponse = postImpulseIndices.map(i => time[i] - impulseTime);
+    const yResponse = postImpulseIndices.map(i => adjustedOutput[i]);
 
     if (yResponse.length < 10) {
+        console.log('[SysID] Za mało danych do analizy odpowiedzi');
         return null;
     }
 
+    console.log(`[SysID] Analizuję ${yResponse.length} próbek odpowiedzi`);
+
     // Parametry odpowiedzi
     const yAbsMax = Math.max(...yResponse.map(Math.abs));
-    const yFinal = yResponse.slice(-Math.max(1, Math.floor(yResponse.length / 4)))
-        .reduce((a, b) => a + b, 0) / Math.max(1, Math.floor(yResponse.length / 4));
+    const quarterLen = Math.max(1, Math.floor(yResponse.length / 4));
+    const yFinal = yResponse.slice(-quarterLen).reduce((a, b) => a + b, 0) / quarterLen;
 
-    // Wzmocnienie statyczne
+    // Wzmocnienie statyczne K = y_max / u_max
     const K = impulseAmplitude > 0 ? yAbsMax / impulseAmplitude : 0;
 
-    // Przeregulowanie - znajdź szczyty
+    // ========================================================================
+    // Przeregulowanie - zgodnie z scipy.signal.find_peaks
+    // ========================================================================
     const peaksPos = findPeaks(yResponse);
     const peaksNeg = findPeaks(yResponse.map(v => -v));
 
     let overshoot = 0;
+
     if (peaksPos.length >= 2) {
-        const firstPeak = Math.abs(yResponse[peaksPos[0].index]);
-        const secondPeak = peaksPos.length > 1 ? Math.abs(yResponse[peaksPos[1].index]) : firstPeak * 0.5;
+        // Klasyczne przeregulowanie: stosunek drugiego szczytu do pierwszego
+        const firstPeak = Math.abs(yResponse[peaksPos[0]]);
+        const secondPeak = Math.abs(yResponse[peaksPos[1]]);
         overshoot = firstPeak > 0.01 ? secondPeak / firstPeak : 0;
+        console.log(`[SysID] 2 szczyty dodatnie: peak1=${firstPeak.toFixed(3)}, peak2=${secondPeak.toFixed(3)}, overshoot=${(overshoot * 100).toFixed(1)}%`);
     } else if (peaksPos.length >= 1 && peaksNeg.length >= 1) {
-        const peak1 = Math.abs(yResponse[peaksPos[0].index]);
-        const peak2 = Math.abs(yResponse[peaksNeg[0].index]);
+        // Jeden szczyt dodatni i jeden ujemny (typowe dla podwójnego impulsu)
+        const peak1 = Math.abs(yResponse[peaksPos[0]]);
+        const peak2 = Math.abs(yResponse[peaksNeg[0]]);
         const maxPeak = Math.max(peak1, peak2);
-        overshoot = maxPeak > 0.01 ? Math.min(peak1, peak2) / maxPeak : 0;
+        const minPeak = Math.min(peak1, peak2);
+        overshoot = maxPeak > 0.01 ? minPeak / maxPeak : 0;
+        console.log(`[SysID] Szczyty +/-: peak+=${peak1.toFixed(3)}, peak-=${peak2.toFixed(3)}, overshoot=${(overshoot * 100).toFixed(1)}%`);
+    } else {
+        // Brak oscylacji - system przetłumiony
+        overshoot = 0;
+        console.log('[SysID] Brak wykrytych oscylacji - system przetłumiony');
     }
 
-    // Czas ustalania (5% pasmo)
+    // ========================================================================
+    // Czas ustalania (settling time) - 5% pasmo, musi pozostać przez 10 próbek
+    // ========================================================================
     const settlingThreshold = 0.05 * yAbsMax;
     let settlingTime = tResponse[tResponse.length - 1] || 0.5;
-    for (let i = 0; i < yResponse.length; i++) {
-        if (Math.abs(yResponse[i] - yFinal) < settlingThreshold) {
-            // Sprawdź czy pozostaje w paśmie
-            let stays = true;
-            for (let j = i; j < Math.min(i + 10, yResponse.length); j++) {
-                if (Math.abs(yResponse[j] - yFinal) >= settlingThreshold) {
-                    stays = false;
+
+    // Tablica boolean: czy próbka jest w paśmie 5%
+    const settled = yResponse.map(v => Math.abs(v - yFinal) < settlingThreshold);
+
+    for (let i = 0; i < settled.length; i++) {
+        if (settled[i]) {
+            // Sprawdź czy pozostaje w paśmie przez następne 10 próbek
+            const checkEnd = Math.min(i + 10, settled.length);
+            let staysSettled = true;
+            for (let j = i; j < checkEnd; j++) {
+                if (!settled[j]) {
+                    staysSettled = false;
                     break;
                 }
             }
-            if (stays) {
+            if (staysSettled) {
                 settlingTime = tResponse[i];
                 break;
             }
         }
     }
 
-    // Oszacuj parametry modelu
+    console.log(`[SysID] Czas ustalania: ${settlingTime.toFixed(3)}s`);
+
+    // ========================================================================
+    // Oszacuj parametry modelu: zeta (tłumienie) i wn (częstotliwość naturalna)
+    // ========================================================================
     let zeta, wn;
 
     if (overshoot > 0.01 && overshoot < 1.0) {
+        // Logarytmiczny dekrement: δ = -ln(overshoot)
+        // zeta = δ / sqrt(4π² + δ²)
         const logDecrement = -Math.log(overshoot);
         zeta = logDecrement / Math.sqrt(4 * Math.PI * Math.PI + logDecrement * logDecrement);
     } else if (overshoot >= 1.0) {
+        // Bardzo słabe tłumienie (duże oscylacje)
         zeta = 0.1;
     } else {
+        // Brak oscylacji - system krytycznie lub nadkrytycznie tłumiony
         zeta = 1.0;
     }
 
+    // Częstotliwość naturalna z czasu ustalania
+    // Dla niedotłumionego: wn = 4 / (zeta * Ts) dla 2% settling
+    // Dla tłumionego: wn = 3 / Ts (przybliżenie pierwszego rzędu)
     if (settlingTime > 0.01) {
-        wn = zeta < 1.0 ? 4 / (zeta * settlingTime) : 3 / settlingTime;
+        if (zeta < 1.0) {
+            wn = 4 / (zeta * settlingTime);
+        } else {
+            wn = 3 / settlingTime;
+        }
     } else {
         wn = 10.0;
     }
 
-    // Walidacja parametrów
+    // ========================================================================
+    // Walidacja parametrów - ogranicz do fizycznie sensownych wartości
+    // ========================================================================
     if (zeta <= 0 || zeta > 2) {
         const originalZeta = zeta;
         zeta = Math.max(0.1, Math.min(1.5, Math.abs(zeta)));
@@ -6590,6 +6972,8 @@ function identifyBalanceLoop(data, kpUsed) {
         warnings.push(`ℹ️ Wysokie przeregulowanie ${(overshoot * 100).toFixed(0)}% - możliwe oscylacje lub błąd pomiaru`);
     }
 
+    console.log(`[SysID] Wyniki: K=${K.toFixed(6)}, zeta=${zeta.toFixed(4)}, wn=${wn.toFixed(2)} rad/s`);
+
     return {
         K: K,
         zeta: zeta,
@@ -6604,65 +6988,110 @@ function identifyBalanceLoop(data, kpUsed) {
 }
 
 /**
- * Identyfikacja pętli prędkości
+ * Identyfikacja pętli prędkości - zgodnie z system_identification.py
+ * 
+ * Analizuje odpowiedź prędkości na skok setpointu.
+ * Model: G(s) = K / (tau*s + 1) - system pierwszego rzędu
+ * lub G(s) = K*wn² / (s² + 2*zeta*wn*s + wn²) - drugi rząd
  */
 function identifySpeedLoop(data) {
     const time = data.map(d => d.time);
     const setpoint = data.map(d => d.setpoint_speed || d.input_signal || 0);
     const speed = data.map(d => d.speed);
+    const warnings = [];
 
-    // Znajdź moment skoku
+    console.log('[SysID Speed] Rozpoczynam analizę pętli prędkości');
+
+    // Znajdź moment skoku (setpoint > 1)
     const stepIdx = setpoint.findIndex(v => v > 1);
-    if (stepIdx < 0) return null;
+    if (stepIdx < 0) {
+        console.log('[SysID Speed] Nie znaleziono skoku setpointu');
+        return null;
+    }
 
     const stepTime = time[stepIdx];
     const stepValue = Math.max(...setpoint);
+    console.log(`[SysID Speed] Skok w t=${stepTime.toFixed(3)}s, wartość=${stepValue.toFixed(1)}`);
 
     // Odpowiedź po skoku
-    const postStepData = data.filter((d, i) => time[i] >= stepTime);
-    if (postStepData.length < 20) return null;
+    const postStepIndices = [];
+    for (let i = 0; i < time.length; i++) {
+        if (time[i] >= stepTime) {
+            postStepIndices.push(i);
+        }
+    }
 
-    const tResponse = postStepData.map(d => d.time - stepTime);
-    const yResponse = postStepData.map(d => d.speed);
+    if (postStepIndices.length < 20) {
+        console.log('[SysID Speed] Za mało danych po skoku');
+        return null;
+    }
 
-    // Wartość końcowa
-    const stableRegion = yResponse.slice(0, Math.floor(yResponse.length * 0.4));
-    const yFinal = stableRegion.length > 10 ?
-        stableRegion.slice(-Math.floor(stableRegion.length * 0.3))
-            .reduce((a, b) => a + b, 0) / Math.floor(stableRegion.length * 0.3) :
-        yResponse.slice(-10).reduce((a, b) => a + b, 0) / 10;
+    const tResponse = postStepIndices.map(i => time[i] - stepTime);
+    const yResponse = postStepIndices.map(i => speed[i]);
 
-    // Wzmocnienie
+    // Wartość końcowa (steady state) - szukaj w stabilnym regionie PRZED zerowaniem setpointu
+    // Setpoint wraca do zera w połowie testu - analizujemy region 30%-50% odpowiedzi
+    // gdzie system powinien być ustabilizowany ale setpoint jeszcze aktywny
+    const halfIdx = Math.floor(yResponse.length * 0.5);
+    const stableStart = Math.floor(halfIdx * 0.6);  // 30% całości (60% z pierwszej połowy)
+    const stableRegion = yResponse.slice(stableStart, halfIdx);
+
+    let yFinal;
+    if (stableRegion.length > 5) {
+        // Średnia z regionu stabilnego (30%-50% odpowiedzi)
+        yFinal = stableRegion.reduce((a, b) => a + b, 0) / stableRegion.length;
+    } else {
+        // Fallback: użyj regionu 20%-40%
+        const fallbackStart = Math.floor(yResponse.length * 0.2);
+        const fallbackEnd = Math.floor(yResponse.length * 0.4);
+        const fallbackRegion = yResponse.slice(fallbackStart, fallbackEnd);
+        yFinal = fallbackRegion.length > 0
+            ? fallbackRegion.reduce((a, b) => a + b, 0) / fallbackRegion.length
+            : yResponse[Math.floor(yResponse.length * 0.3)] || 0;
+    }
+
+    // Wzmocnienie statyczne K = y_final / u_step
     const K = stepValue > 0 ? yFinal / stepValue : 1.0;
+    console.log(`[SysID Speed] Wartość końcowa=${yFinal.toFixed(2)}, K=${K.toFixed(4)}`);
 
-    // Czas narastania
+    // Czas narastania (10% → 90%)
     const y10 = 0.1 * yFinal;
     const y90 = 0.9 * yFinal;
     const t10Idx = yResponse.findIndex(v => v >= y10);
     const t90Idx = yResponse.findIndex(v => v >= y90);
-    const riseTime = (t10Idx >= 0 && t90Idx >= 0) ? tResponse[t90Idx] - tResponse[t10Idx] : 0.5;
+    const riseTime = (t10Idx >= 0 && t90Idx >= 0 && t90Idx > t10Idx) ?
+        tResponse[t90Idx] - tResponse[t10Idx] : 0.5;
 
-    // Stała czasowa
+    // Stała czasowa (dla systemu pierwszego rzędu: tau ≈ rise_time / 2.2)
     const tau = riseTime / 2.2;
+    console.log(`[SysID Speed] Czas narastania=${riseTime.toFixed(3)}s, tau=${tau.toFixed(3)}s`);
 
-    // Przeregulowanie
-    const yMax = Math.max(...yResponse.slice(0, Math.floor(yResponse.length * 0.5)));
-    const overshoot = yFinal > 0.1 ? (yMax - yFinal) / yFinal : 0;
+    // Przeregulowanie - tylko w pierwszej połowie odpowiedzi
+    const halfLen = Math.floor(yResponse.length * 0.5);
+    const yMax = Math.max(...yResponse.slice(0, halfLen));
+    const overshoot = yFinal > 0.1 ? Math.max(0, (yMax - yFinal) / yFinal) : 0;
+    console.log(`[SysID Speed] Przeregulowanie=${(overshoot * 100).toFixed(1)}%`);
 
-    // Parametry modelu
+    // Parametry modelu zeta i wn
     let zeta, wn;
+
     if (overshoot > 0.05) {
+        // System niedotłumiony - używamy logarytmicznego dekrementu
         if (overshoot < 1.0) {
             const logDec = -Math.log(overshoot);
             zeta = logDec / Math.sqrt(4 * Math.PI * Math.PI + logDec * logDec);
         } else {
             zeta = 0.3;
         }
+        // wn z czasu narastania: tr ≈ 1.8/wn dla zeta ≈ 0.7
         wn = riseTime > 0.01 ? 1.8 / riseTime : 20;
     } else {
+        // System krytycznie tłumiony lub przetłumiony
         zeta = 1.0;
         wn = tau > 0.01 ? 1 / tau : 10;
     }
+
+    console.log(`[SysID Speed] Wyniki: zeta=${zeta.toFixed(4)}, wn=${wn.toFixed(2)} rad/s`);
 
     return {
         K: K,
@@ -6674,73 +7103,124 @@ function identifySpeedLoop(data) {
         stepValue: stepValue,
         steadyState: yFinal,
         loopType: 'speed',
-        warnings: []
+        warnings: warnings
     };
 }
 
 /**
- * Identyfikacja pętli pozycji
+ * Identyfikacja pętli pozycji - zgodnie z system_identification.py
+ * 
+ * Analizuje odpowiedź pozycji na skok setpointu.
+ * Pętla pozycji jest najwolniejsza (125Hz) i zawiera integrator.
  */
 function identifyPositionLoop(data) {
     const time = data.map(d => d.time);
     const setpoint = data.map(d => d.setpoint_position || d.input_signal || 0);
     const position = data.map(d => d.position_cm || 0);
+    const warnings = [];
+
+    console.log('[SysID Position] Rozpoczynam analizę pętli pozycji');
 
     // Znajdź moment skoku
     const stepIdx = setpoint.findIndex(v => v > 1);
-    if (stepIdx < 0) return null;
+    if (stepIdx < 0) {
+        console.log('[SysID Position] Nie znaleziono skoku setpointu');
+        return null;
+    }
 
     const stepTime = time[stepIdx];
     const stepValue = Math.max(...setpoint);
+    console.log(`[SysID Position] Skok w t=${stepTime.toFixed(3)}s, wartość=${stepValue.toFixed(1)} cm`);
 
-    // Pozycja początkowa
+    // Pozycja początkowa (średnia z 10 próbek przed skokiem)
+    const preStepStart = Math.max(0, stepIdx - 10);
     const positionStart = stepIdx > 10 ?
-        position.slice(Math.max(0, stepIdx - 10), stepIdx).reduce((a, b) => a + b, 0) / 10 :
+        position.slice(preStepStart, stepIdx).reduce((a, b) => a + b, 0) / (stepIdx - preStepStart) :
         position[0];
 
     // Odpowiedź po skoku
-    const postStepData = data.filter((d, i) => time[i] >= stepTime);
-    if (postStepData.length < 20) return null;
+    const postStepIndices = [];
+    for (let i = 0; i < time.length; i++) {
+        if (time[i] >= stepTime) {
+            postStepIndices.push(i);
+        }
+    }
 
-    const tResponse = postStepData.map(d => d.time - stepTime);
-    const yResponse = postStepData.map(d => (d.position_cm || 0) - positionStart);
+    if (postStepIndices.length < 20) {
+        console.log('[SysID Position] Za mało danych po skoku');
+        return null;
+    }
 
-    // Wartość końcowa
-    const stableRegion = yResponse.slice(0, Math.floor(yResponse.length * 0.4));
-    const yFinal = stableRegion.length > 10 ?
-        stableRegion.slice(-Math.floor(stableRegion.length * 0.3))
-            .reduce((a, b) => a + b, 0) / Math.floor(stableRegion.length * 0.3) :
-        yResponse[yResponse.length - 1];
+    const tResponse = postStepIndices.map(i => time[i] - stepTime);
+    const yResponse = postStepIndices.map(i => position[i] - positionStart);
 
-    // Błąd stanu ustalonego
+    // Wartość końcowa (steady state) - szukaj w stabilnym regionie PRZED zerowaniem setpointu
+    // Analogicznie do testu prędkości: region 30%-50% odpowiedzi
+    const halfIdx = Math.floor(yResponse.length * 0.5);
+    const stableStart = Math.floor(halfIdx * 0.6);  // 30% całości
+    const stableRegion = yResponse.slice(stableStart, halfIdx);
+
+    let yFinal;
+    if (stableRegion.length > 5) {
+        // Średnia z regionu stabilnego (30%-50% odpowiedzi)
+        yFinal = stableRegion.reduce((a, b) => a + b, 0) / stableRegion.length;
+    } else {
+        // Fallback: użyj regionu 20%-40%
+        const fallbackStart = Math.floor(yResponse.length * 0.2);
+        const fallbackEnd = Math.floor(yResponse.length * 0.4);
+        const fallbackRegion = yResponse.slice(fallbackStart, fallbackEnd);
+        yFinal = fallbackRegion.length > 0
+            ? fallbackRegion.reduce((a, b) => a + b, 0) / fallbackRegion.length
+            : yResponse[Math.floor(yResponse.length * 0.3)] || 0;
+    }
+
+    // Błąd stanu ustalonego (steady-state error)
     const ssError = stepValue - yFinal;
+    console.log(`[SysID Position] Wartość końcowa=${yFinal.toFixed(2)} cm, błąd SS=${ssError.toFixed(2)} cm`);
 
-    // Wzmocnienie
+    // Wzmocnienie K
     const K = stepValue > 0 ? yFinal / stepValue : 1.0;
 
-    // Czas narastania
+    // Czas narastania (10% → 90%)
     const y10 = 0.1 * yFinal;
     const y90 = 0.9 * yFinal;
     const t10Idx = yResponse.findIndex(v => v >= y10);
     const t90Idx = yResponse.findIndex(v => v >= y90);
-    const riseTime = (t10Idx >= 0 && t90Idx >= 0) ? tResponse[t90Idx] - tResponse[t10Idx] : 1.0;
+    const riseTime = (t10Idx >= 0 && t90Idx >= 0 && t90Idx > t10Idx) ?
+        tResponse[t90Idx] - tResponse[t10Idx] : 1.0;
 
     // Przeregulowanie
-    const yMax = Math.max(...yResponse.slice(0, Math.floor(yResponse.length * 0.5)));
-    const overshoot = yFinal > 0.5 ? (yMax - yFinal) / yFinal : 0;
+    const halfLen = Math.floor(yResponse.length * 0.5);
+    const yMax = Math.max(...yResponse.slice(0, halfLen));
+    const overshoot = yFinal > 0.5 ? Math.max(0, (yMax - yFinal) / yFinal) : 0;
 
-    // Czas ustalania
-    const settlingThreshold = 0.05 * yFinal;
+    // Czas ustalania (5% pasmo) - musi pozostać przez kilka próbek
+    const settlingThreshold = Math.abs(0.05 * yFinal);
     let settlingTime = tResponse[tResponse.length - 1];
+
     for (let i = 0; i < yResponse.length; i++) {
         if (Math.abs(yResponse[i] - yFinal) < settlingThreshold) {
-            settlingTime = tResponse[i];
-            break;
+            // Sprawdź czy pozostaje w paśmie
+            let stays = true;
+            for (let j = i; j < Math.min(i + 5, yResponse.length); j++) {
+                if (Math.abs(yResponse[j] - yFinal) >= settlingThreshold) {
+                    stays = false;
+                    break;
+                }
+            }
+            if (stays) {
+                settlingTime = tResponse[i];
+                break;
+            }
         }
     }
 
+    console.log(`[SysID Position] Czas narastania=${riseTime.toFixed(3)}s, ustalania=${settlingTime.toFixed(3)}s`);
+    console.log(`[SysID Position] Przeregulowanie=${(overshoot * 100).toFixed(1)}%`);
+
     // Parametry modelu
     let zeta, wn;
+
     if (overshoot > 0.05) {
         if (overshoot < 1.0) {
             const logDec = -Math.log(overshoot);
@@ -6754,6 +7234,8 @@ function identifyPositionLoop(data) {
         wn = settlingTime > 0.1 ? 3 / settlingTime : 3;
     }
 
+    console.log(`[SysID Position] Wyniki: K=${K.toFixed(4)}, zeta=${zeta.toFixed(4)}, wn=${wn.toFixed(2)} rad/s`);
+
     return {
         K: K,
         zeta: zeta,
@@ -6765,27 +7247,45 @@ function identifyPositionLoop(data) {
         steadyState: yFinal,
         ssError: ssError,
         loopType: 'position',
-        warnings: []
+        warnings: warnings
     };
 }
 
 /**
- * Oblicza sugestie PID na podstawie modelu
+ * Oblicza sugestie PID na podstawie zidentyfikowanego modelu
+ * 
+ * Wykorzystuje różne metody strojenia w zależności od pętli:
+ * - Balans: heurystyczne na podstawie przeregulowania + opcjonalnie Ziegler-Nichols
+ * - Prędkość: PI/PID z metodą ITAE lub Lambda tuning
+ * - Pozycja: P/PI z uwzględnieniem błędu stanu ustalonego
+ * 
+ * KASKADOWE STEROWANIE:
+ * - Pętla wewnętrzna (balans) musi być ~5-10x szybsza niż zewnętrzna (prędkość)
+ * - Pętla prędkości musi być ~2-5x szybsza niż pozycji
  */
 function calculatePIDFromModel(params, kpUsed, loopType) {
     const overshoot = params.overshoot || 0;
     const settlingTime = params.settlingTime || 0.5;
     const riseTime = params.riseTime || 0.3;
     const K = params.K || 1.0;
+    const zeta = params.zeta || 0.7;
+    const wn = params.wn || 10;
+    const tau = params.tau || 0.5;
     const suggestions = {};
 
+    console.log(`[SysID PID] Obliczam PID dla ${loopType}: K=${K.toFixed(4)}, zeta=${zeta.toFixed(3)}, wn=${wn.toFixed(2)}, tau=${tau.toFixed(3)}`);
+
     if (loopType === 'balance') {
-        // PĘTLA BALANSU (500 Hz) - Kp + Kd
+        // ====================================================================
+        // PĘTLA BALANSU (500 Hz) - najszybsza, głównie Kp + Kd
+        // Model: G(s) = K / (s² + 2ζωₙs + ωₙ²)
+        // ====================================================================
         const KP_MIN = 20, KP_MAX = 200;
         const KD_MIN = 0.5, KD_MAX = 15;
 
         let kpNew, kdNew, comment;
 
+        // Metoda 1: Heurystyczna na podstawie przeregulowania
         if (overshoot > 2.0) {
             kpNew = kpUsed * 0.5;
             kdNew = kpUsed * 0.06;
@@ -6817,12 +7317,30 @@ function calculatePIDFromModel(params, kpUsed, loopType) {
             Kd: parseFloat(kdNew.toFixed(2)),
             comment: comment
         };
+
+        // Metoda 2: Na podstawie modelu (pole placement)
+        // Dla systemu 2. rzędu: docelowe zeta=0.7, wn zwiększone o 20%
+        const zetaTarget = 0.7;
+        const wnTarget = wn * 1.2;
+        // Kp ≈ ωₙ² / K, Kd ≈ 2ζωₙ / K
+        if (K > 0.001) {
+            const kpModel = (wnTarget * wnTarget) / K;
+            const kdModel = (2 * zetaTarget * wnTarget) / K;
+            suggestions['Model_based'] = {
+                Kp: parseFloat(Math.max(KP_MIN, Math.min(KP_MAX, kpModel)).toFixed(1)),
+                Ki: 0,
+                Kd: parseFloat(Math.max(KD_MIN, Math.min(KD_MAX, kdModel)).toFixed(2)),
+                comment: `Pole placement (ζ=${zetaTarget}, ωₙ=${wnTarget.toFixed(1)})`
+            };
+        }
+
         suggestions['Konserwatywne'] = {
             Kp: parseFloat(Math.max(KP_MIN, kpUsed * 0.6).toFixed(1)),
             Ki: 0,
             Kd: parseFloat(Math.max(KD_MIN, Math.min(5, kpUsed * 0.03)).toFixed(2)),
             comment: "Bezpieczny start"
         };
+
         if (overshoot < 1.0) {
             suggestions['Agresywne'] = {
                 Kp: parseFloat(Math.min(KP_MAX, kpUsed * 1.2).toFixed(1)),
@@ -6833,31 +7351,50 @@ function calculatePIDFromModel(params, kpUsed, loopType) {
         }
 
     } else if (loopType === 'speed') {
+        // ====================================================================
         // PĘTLA PRĘDKOŚCI (250 Hz) - PI lub PID
-        const KP_MIN = 0.01, KP_MAX = 2.0;
-        const KI_MIN = 0.001, KI_MAX = 0.5;
+        // Model: G(s) = K / (τs + 1) lub G(s) = Kωₙ² / (s² + 2ζωₙs + ωₙ²)
+        // Wyjście: setpoint kąta dla pętli balansu
+        // ====================================================================
+        const KP_MIN = 0.001, KP_MAX = 2.0;
+        const KI_MIN = 0.0001, KI_MAX = 0.5;
         const KD_MIN = 0.0, KD_MAX = 0.1;
-
-        const tau = params.tau || 0.5;
-        let kpBase = K > 0.01 ? Math.min(KP_MAX, 0.5 / K) : 0.5;
 
         let kpNew, kiNew, kdNew, comment;
 
-        if (overshoot > 0.5) {
-            kpNew = kpBase * 0.6;
-            kiNew = tau > 0.01 ? kpBase * 0.1 / tau : 0.05;
-            kdNew = kpBase * 0.05;
-            comment = "Oscylacje - zmniejsz Kp, dodaj Ki";
-        } else if (overshoot > 0.2) {
-            kpNew = kpBase * 0.8;
-            kiNew = tau > 0.01 ? kpBase * 0.15 / tau : 0.08;
-            kdNew = kpBase * 0.03;
-            comment = "Lekkie oscylacje - standardowe PI";
-        } else {
-            kpNew = kpBase;
-            kiNew = tau > 0.01 ? kpBase * 0.2 / tau : 0.1;
+        // Metoda Lambda Tuning (dla systemu 1. rzędu)
+        // λ = desired closed-loop time constant (zwykle 1-3 * tau)
+        const lambda = tau * 2;  // Umiarkowana prędkość
+
+        if (K > 0.001 && tau > 0.01) {
+            // Lambda tuning: Kp = τ / (K * λ), Ki = 1 / (K * λ)
+            const kpLambda = tau / (K * lambda);
+            const kiLambda = 1 / (K * lambda);
+
+            kpNew = kpLambda;
+            kiNew = kiLambda;
             kdNew = 0;
-            comment = "Dobra odpowiedź - standardowe PI";
+            comment = `Lambda tuning (λ=${lambda.toFixed(2)}s)`;
+        } else {
+            // Fallback: heurystyczne
+            const kpBase = K > 0.01 ? Math.min(KP_MAX, 0.5 / K) : 0.5;
+
+            if (overshoot > 0.5) {
+                kpNew = kpBase * 0.6;
+                kiNew = tau > 0.01 ? kpBase * 0.1 / tau : 0.05;
+                kdNew = kpBase * 0.05;
+                comment = "Oscylacje - zmniejsz Kp, dodaj Ki";
+            } else if (overshoot > 0.2) {
+                kpNew = kpBase * 0.8;
+                kiNew = tau > 0.01 ? kpBase * 0.15 / tau : 0.08;
+                kdNew = kpBase * 0.03;
+                comment = "Lekkie oscylacje - standardowe PI";
+            } else {
+                kpNew = kpBase;
+                kiNew = tau > 0.01 ? kpBase * 0.2 / tau : 0.1;
+                kdNew = 0;
+                comment = "Dobra odpowiedź - standardowe PI";
+            }
         }
 
         kpNew = Math.max(KP_MIN, Math.min(KP_MAX, kpNew));
@@ -6865,35 +7402,67 @@ function calculatePIDFromModel(params, kpUsed, loopType) {
         kdNew = Math.max(KD_MIN, Math.min(KD_MAX, kdNew));
 
         suggestions['Zalecane'] = {
-            Kp: parseFloat(kpNew.toFixed(3)),
-            Ki: parseFloat(kiNew.toFixed(4)),
+            Kp: parseFloat(kpNew.toFixed(4)),
+            Ki: parseFloat(kiNew.toFixed(5)),
             Kd: parseFloat(kdNew.toFixed(4)),
             comment: comment
         };
+
+        // ITAE Optimal (Integral of Time-weighted Absolute Error)
+        // Dla systemu 1. rzędu: Kp = 0.586/K * (τ/τc)^(-0.916)
+        // gdzie τc = desired closed-loop time constant
+        const tauC = tau * 1.5;  // 1.5x szybszy niż open-loop
+        if (K > 0.001 && tau > 0.01) {
+            const kpItae = (0.586 / K) * Math.pow(tau / tauC, -0.916);
+            const kiItae = kpItae / (1.03 * tau);
+            suggestions['ITAE_optimal'] = {
+                Kp: parseFloat(Math.max(KP_MIN, Math.min(KP_MAX, kpItae)).toFixed(4)),
+                Ki: parseFloat(Math.max(KI_MIN, Math.min(KI_MAX, kiItae)).toFixed(5)),
+                Kd: 0,
+                comment: `ITAE optimal (τc=${tauC.toFixed(2)}s)`
+            };
+        }
+
         suggestions['PI_wolny'] = {
-            Kp: parseFloat((kpNew * 0.5).toFixed(3)),
-            Ki: parseFloat((kiNew * 0.5).toFixed(4)),
+            Kp: parseFloat((kpNew * 0.5).toFixed(4)),
+            Ki: parseFloat((kiNew * 0.5).toFixed(5)),
             Kd: 0,
             comment: "Wolniejszy ale stabilny"
         };
         suggestions['PI_szybki'] = {
-            Kp: parseFloat(Math.min(KP_MAX, kpNew * 1.5).toFixed(3)),
-            Ki: parseFloat(Math.min(KI_MAX, kiNew * 1.5).toFixed(4)),
+            Kp: parseFloat(Math.min(KP_MAX, kpNew * 1.5).toFixed(4)),
+            Ki: parseFloat(Math.min(KI_MAX, kiNew * 1.5).toFixed(5)),
             Kd: 0,
             comment: "Szybszy - możliwe oscylacje"
         };
 
     } else if (loopType === 'position') {
+        // ====================================================================
         // PĘTLA POZYCJI (125 Hz) - P lub PI
-        const KP_MIN = 0.1, KP_MAX = 10.0;
+        // Model: System z integratorem - G(s) = K / (s * (τs + 1))
+        // Wyjście: setpoint prędkości dla pętli prędkości
+        // ====================================================================
+        const KP_MIN = 0.01, KP_MAX = 10.0;
         const KI_MIN = 0.0, KI_MAX = 0.5;
 
-        let kpBase = K > 0.01 ? Math.min(KP_MAX, 2.0 / K) : 2.0;
         const ssError = params.ssError || 0;
-
         let kpNew, kiNew, comment;
 
-        // Błąd stanu ustalonego
+        // Dla pętli z integratorem (typ 1): błąd stanu ustalonego powinien być ~0
+        // Jeśli nie jest, to pętla prędkości nie działa poprawnie
+
+        // Bazowy Kp na podstawie wzmocnienia i czasu ustalania
+        // Dla systemu pozycji: Kp ≈ 1/(K * ts) gdzie ts = desired settling time
+        const tsDesired = settlingTime * 0.8;  // 20% szybszy
+        let kpBase;
+
+        if (K > 0.01 && tsDesired > 0.1) {
+            kpBase = 1 / (K * tsDesired);
+        } else {
+            kpBase = K > 0.01 ? Math.min(KP_MAX, 2.0 / K) : 2.0;
+        }
+
+        // Błąd stanu ustalonego - dodaj Ki tylko jeśli potrzebne
         if (Math.abs(ssError) > 0.5) {
             kiNew = 0.1;
             comment = `Błąd pozycji ${ssError.toFixed(1)}cm - dodano Ki`;
@@ -6917,20 +7486,20 @@ function calculatePIDFromModel(params, kpUsed, loopType) {
         kiNew = Math.max(KI_MIN, Math.min(KI_MAX, kiNew));
 
         suggestions['Zalecane'] = {
-            Kp: parseFloat(kpNew.toFixed(2)),
-            Ki: parseFloat(kiNew.toFixed(3)),
+            Kp: parseFloat(kpNew.toFixed(3)),
+            Ki: parseFloat(kiNew.toFixed(4)),
             Kd: 0,
             comment: comment
         };
         suggestions['P_tylko'] = {
-            Kp: parseFloat((kpNew * 0.8).toFixed(2)),
+            Kp: parseFloat((kpNew * 0.8).toFixed(3)),
             Ki: 0,
             Kd: 0,
             comment: "Tylko P - najprostsze"
         };
         suggestions['PI_precyzyjny'] = {
-            Kp: parseFloat(kpNew.toFixed(2)),
-            Ki: parseFloat(Math.max(0.05, kiNew).toFixed(3)),
+            Kp: parseFloat(kpNew.toFixed(3)),
+            Ki: parseFloat(Math.max(0.05, kiNew).toFixed(4)),
             Kd: 0,
             comment: "PI - lepsza dokładność pozycji"
         };
@@ -6940,7 +7509,7 @@ function calculatePIDFromModel(params, kpUsed, loopType) {
 }
 
 /**
- * Wyświetla wyniki analizy w UI
+ * Wyświetla wyniki analizy w UI - pełne szczegóły modelu dla każdej pętli
  */
 function displayAnalysisResults(params, pidSuggestions, testType) {
     const resultsDiv = document.getElementById('sysid-analysis-results');
@@ -6956,29 +7525,94 @@ function displayAnalysisResults(params, pidSuggestions, testType) {
 
     resultsDiv.style.display = 'block';
 
-    // Dodaj informację o trybie fuzji (WAŻNE dla edukacji)
+    // Nagłówek z typem pętli
+    const loopNames = { balance: 'Pętla Balansu', speed: 'Pętla Prędkości', position: 'Pętla Pozycji' };
+    const loopColors = { balance: '#61dafb', speed: '#f7b731', position: '#a2f279' };
+    const loopModels = {
+        balance: 'G(s) = K / (s² + 2ζωₙs + ωₙ²)',
+        speed: 'G(s) = K / (τs + 1)',
+        position: 'G(s) = K / s(τs + 1)'
+    };
+
+    // Dodaj informację o trybie fuzji (WAŻNE dla pętli balansu)
     const fusionMode = (typeof FusionPIDProfiles !== 'undefined') ? FusionPIDProfiles.currentFusionMode : 'unknown';
     const fusionInfo = fusionMode === 'mahony'
         ? '<span style="color: #2ecc71;">⚡ Mahony (~500Hz)</span>'
         : '<span style="color: #9b59b6;">🔄 NDOF (~100Hz)</span>';
 
-    // Pokaż ostrzeżenie jeśli tryb fuzji nie pasuje
+    // Panel informacyjny o modelu
     const fusionWarning = document.getElementById('sysid-fusion-warning');
     if (fusionWarning) {
-        fusionWarning.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 8px; background: #1a2a3a; border-radius: 4px;">
-                <span style="color: #aaa; font-size: 0.85em;">Tryb fuzji podczas testu:</span>
-                ${fusionInfo}
-            </div>
-            <div style="color: #f7b731; font-size: 0.8em; margin-bottom: 8px;">
-                ⚠️ Te wartości PID są optymalne dla trybu ${fusionMode === 'mahony' ? 'Mahony' : 'NDOF'}. 
-                Przełączenie trybu fuzji może wymagać nowej identyfikacji systemu!
-            </div>
+        let modelInfo = `
+            <div style="background: #1a2a3a; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="color: ${loopColors[testType]}; font-weight: bold; font-size: 1.1em;">
+                        📊 ${loopNames[testType]}
+                    </span>
+                    ${testType === 'balance' ? fusionInfo : ''}
+                </div>
+                <div style="color: #888; font-size: 0.85em; font-family: monospace; margin-bottom: 10px;">
+                    Model: ${loopModels[testType]}
+                </div>
         `;
+
+        // Szczegółowe parametry w zależności od typu
+        if (testType === 'balance') {
+            modelInfo += `
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 0.9em;">
+                    <div><span style="color: #888;">Wzmocnienie K:</span> <span style="color: #fff;">${params.K.toFixed(6)} °/%</span></div>
+                    <div><span style="color: #888;">Tłumienie ζ:</span> <span style="color: #fff;">${params.zeta.toFixed(4)}</span></div>
+                    <div><span style="color: #888;">Częst. własna ωₙ:</span> <span style="color: #fff;">${params.wn.toFixed(2)} rad/s</span></div>
+                    <div><span style="color: #888;">Przeregulowanie:</span> <span style="color: ${params.overshoot > 0.5 ? '#e74c3c' : '#2ecc71'};">${(params.overshoot * 100).toFixed(1)}%</span></div>
+                    <div><span style="color: #888;">Czas ustalania:</span> <span style="color: #fff;">${params.settlingTime.toFixed(3)} s</span></div>
+                    <div><span style="color: #888;">Typ impulsu:</span> <span style="color: #fff;">${params.impulseType || 'unknown'}</span></div>
+                </div>
+            `;
+        } else if (testType === 'speed') {
+            modelInfo += `
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 0.9em;">
+                    <div><span style="color: #888;">Wzmocnienie K:</span> <span style="color: #fff;">${params.K.toFixed(4)}</span></div>
+                    <div><span style="color: #888;">Stała czasowa τ:</span> <span style="color: #fff;">${(params.tau || 0).toFixed(3)} s</span></div>
+                    <div><span style="color: #888;">Tłumienie ζ:</span> <span style="color: #fff;">${params.zeta.toFixed(4)}</span></div>
+                    <div><span style="color: #888;">Częst. własna ωₙ:</span> <span style="color: #fff;">${params.wn.toFixed(2)} rad/s</span></div>
+                    <div><span style="color: #888;">Przeregulowanie:</span> <span style="color: ${params.overshoot > 0.3 ? '#e74c3c' : '#2ecc71'};">${(params.overshoot * 100).toFixed(1)}%</span></div>
+                    <div><span style="color: #888;">Czas narastania:</span> <span style="color: #fff;">${(params.riseTime || 0).toFixed(3)} s</span></div>
+                    <div><span style="color: #888;">Wartość setpoint:</span> <span style="color: #fff;">${(params.stepValue || 0).toFixed(1)} imp/s</span></div>
+                    <div><span style="color: #888;">Stan ustalony:</span> <span style="color: #fff;">${(params.steadyState || 0).toFixed(1)} imp/s</span></div>
+                </div>
+            `;
+        } else if (testType === 'position') {
+            modelInfo += `
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 0.9em;">
+                    <div><span style="color: #888;">Wzmocnienie K:</span> <span style="color: #fff;">${params.K.toFixed(4)}</span></div>
+                    <div><span style="color: #888;">Tłumienie ζ:</span> <span style="color: #fff;">${params.zeta.toFixed(4)}</span></div>
+                    <div><span style="color: #888;">Częst. własna ωₙ:</span> <span style="color: #fff;">${params.wn.toFixed(2)} rad/s</span></div>
+                    <div><span style="color: #888;">Przeregulowanie:</span> <span style="color: ${params.overshoot > 0.2 ? '#e74c3c' : '#2ecc71'};">${(params.overshoot * 100).toFixed(1)}%</span></div>
+                    <div><span style="color: #888;">Czas narastania:</span> <span style="color: #fff;">${(params.riseTime || 0).toFixed(3)} s</span></div>
+                    <div><span style="color: #888;">Czas ustalania:</span> <span style="color: #fff;">${(params.settlingTime || 0).toFixed(3)} s</span></div>
+                    <div><span style="color: #888;">Setpoint pozycji:</span> <span style="color: #fff;">${(params.stepValue || 0).toFixed(1)} cm</span></div>
+                    <div><span style="color: #888;">Błąd SS:</span> <span style="color: ${Math.abs(params.ssError || 0) > 1 ? '#e74c3c' : '#2ecc71'};">${(params.ssError || 0).toFixed(2)} cm</span></div>
+                </div>
+            `;
+        }
+
+        modelInfo += `</div>`;
+
+        // Ostrzeżenie o trybie fuzji (tylko dla balansu)
+        if (testType === 'balance') {
+            modelInfo += `
+                <div style="color: #f7b731; font-size: 0.8em; margin-bottom: 8px; padding: 8px; background: #332200; border-radius: 4px;">
+                    ⚠️ Te wartości PID są optymalne dla trybu ${fusionMode === 'mahony' ? 'Mahony' : 'NDOF'}. 
+                    Przełączenie trybu fuzji wymaga nowej identyfikacji!
+                </div>
+            `;
+        }
+
+        fusionWarning.innerHTML = modelInfo;
         fusionWarning.style.display = 'block';
     }
 
-    // Ostrzeżenia
+    // Ostrzeżenia z analizy
     if (params.warnings && params.warnings.length > 0) {
         warningsDiv.style.display = 'block';
         warningsDiv.innerHTML = params.warnings.map(w => `<div>⚠️ ${w}</div>`).join('');
@@ -6986,31 +7620,36 @@ function displayAnalysisResults(params, pidSuggestions, testType) {
         warningsDiv.style.display = 'none';
     }
 
-    // Parametry modelu
-    document.getElementById('sysid-result-k').textContent = params.K.toFixed(6);
-    document.getElementById('sysid-result-zeta').textContent = params.zeta ? params.zeta.toFixed(4) : '-';
-    document.getElementById('sysid-result-wn').textContent = params.wn ? `${params.wn.toFixed(2)} rad/s` : '-';
-    document.getElementById('sysid-result-overshoot').textContent = `${(params.overshoot * 100).toFixed(1)}%`;
-    document.getElementById('sysid-result-settling').textContent = params.settlingTime ? `${params.settlingTime.toFixed(3)} s` : '-';
+    // Ukryj stare elementy (zastąpione przez nowy panel)
+    const oldElements = ['sysid-result-k', 'sysid-result-zeta', 'sysid-result-wn', 'sysid-result-overshoot', 'sysid-result-settling'];
+    oldElements.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.parentElement) el.parentElement.style.display = 'none';
+    });
 
     // Sugestie PID
     suggestionsDiv.innerHTML = '';
 
-    const loopNames = { balance: 'Balansu', speed: 'Prędkości', position: 'Pozycji' };
-    const loopColors = { balance: '#61dafb', speed: '#f7b731', position: '#a2f279' };
+    // Sortuj sugestie - "Zalecane" na początku
+    const sortedSuggestions = Object.entries(pidSuggestions).sort(([a], [b]) => {
+        if (a === 'Zalecane') return -1;
+        if (b === 'Zalecane') return 1;
+        return 0;
+    });
 
-    for (const [method, pid] of Object.entries(pidSuggestions)) {
+    for (const [method, pid] of sortedSuggestions) {
         const card = document.createElement('div');
+        const isRecommended = method === 'Zalecane';
+
         card.style.cssText = `
             background: #20232a; 
-            border: 1px solid ${loopColors[testType] || '#61dafb'}; 
+            border: ${isRecommended ? '2px' : '1px'} solid ${loopColors[testType] || '#61dafb'}; 
             border-radius: 6px; 
             padding: 12px;
+            ${isRecommended ? 'box-shadow: 0 0 10px rgba(97, 218, 251, 0.3);' : ''}
         `;
 
-        const methodLabel = method === 'Zalecane' ? '⭐ Zalecane' : method;
-        const highlight = method === 'Zalecane' ? 'border-width: 2px;' : '';
-        card.style.cssText += highlight;
+        const methodLabel = isRecommended ? '⭐ Zalecane' : method.replace(/_/g, ' ');
 
         card.innerHTML = `
             <div style="font-weight: bold; color: ${loopColors[testType] || '#61dafb'}; margin-bottom: 8px;">${methodLabel}</div>
@@ -7028,11 +7667,11 @@ function displayAnalysisResults(params, pidSuggestions, testType) {
                     <div style="font-weight: bold; font-size: 1.1em;">${pid.Kd}</div>
                 </div>
             </div>
-            <div style="font-size: 0.85em; color: #aaa;">→ ${pid.comment || ''}</div>
+            <div style="font-size: 0.85em; color: #aaa; margin-bottom: 8px;">→ ${pid.comment || ''}</div>
             <button onclick="applySuggestedPID('${testType}', ${pid.Kp}, ${pid.Ki}, ${pid.Kd})" 
-                    style="margin-top: 10px; width: 100%; padding: 8px; background: ${loopColors[testType] || '#61dafb'}; 
+                    style="width: 100%; padding: 8px; background: ${loopColors[testType] || '#61dafb'}; 
                            color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                📥 Zastosuj te wartości
+                📥 Zastosuj
             </button>
         `;
 
@@ -7157,7 +7796,16 @@ const PIDEducation = {
         "Suma P+I+D (żółta) to finalne wyjście PID, które steruje silnikami.",
         "Zwiększając Kp, zobaczysz większą amplitudę czerwonej linii - robot reaguje mocniej.",
         "Składowa D działa jak amortyzator - porównaj jej wartość przy szybkim i wolnym ruchu.",
-        "W trybie krokowym możesz analizować dokładnie jedną iterację pętli sterowania."
+        "W trybie krokowym możesz analizować dokładnie jedną iterację pętli sterowania.",
+        "🎯 STROJENIE: Zacznij od samego Kp (Ki=0, Kd=0). Zwiększaj aż pojawią się oscylacje.",
+        "🎯 STROJENIE: Po znalezieniu Kp zmniejsz go o ~20% i dodaj Kd aby stłumić oscylacje.",
+        "🎯 STROJENIE: Ki dodawaj na końcu i tylko jeśli robot ma stałe odchylenie od pionu.",
+        "⚠️ Jeśli robot oscyluje szybko (trzęsie się) - zmniejsz Kp lub zwiększ Kd.",
+        "⚠️ Jeśli robot oscyluje wolno (kołysze się) - zmniejsz Ki.",
+        "⚠️ Jeśli robot reaguje zbyt wolno - zwiększ Kp, ale uważaj na oscylacje.",
+        "💡 Typowe wartości startowe dla robota balansującego: Kp=50-100, Ki=0-1, Kd=1-5.",
+        "💡 Składowa D jest szczególnie ważna dla stabilności - nie pomijaj jej!",
+        "💡 Panel 'Diagnostyka PID' analizuje zachowanie i podpowiada co poprawić."
     ],
     currentTipIndex: 0
 };
@@ -7343,50 +7991,70 @@ function resetPIDEducation() {
 }
 
 /**
- * Oblicza składowe PID na podstawie telemetrii
- * To jest symulacja po stronie UI - obliczamy na podstawie aktualnych parametrów i telemetrii
+ * Oblicza składowe PID na podstawie telemetrii.
+ * PRIORYTET: Używa rzeczywistych danych z firmware (bp, bi, bd) jeśli dostępne,
+ * w przeciwnym razie symuluje po stronie UI.
  */
 function calculatePIDComponents(telemetryData) {
     const sim = PIDEducation.simulator;
+    const timestamp = Date.now();
 
-    // Pobierz aktualne parametry PID z UI
+    // Pobierz aktualne parametry PID z UI (potrzebne do obliczeń i wyświetlania)
     const Kp = parseFloat(document.getElementById('balanceKpInput')?.value) || 95;
     const Ki = parseFloat(document.getElementById('balanceKiInput')?.value) || 0;
     const Kd = parseFloat(document.getElementById('balanceKdInput')?.value) || 3.23;
     const integralLimit = parseFloat(document.getElementById('balanceIntegralLimitInput')?.value) || 50;
 
-    // Pobierz pitch z telemetrii (to jest błąd od 0, bo robot stara się być pionowy)
+    // Pobierz pitch z telemetrii
     const pitch = telemetryData.pitch || telemetryData.raw_pitch || 0;
-    const timestamp = Date.now();
-
-    // Oblicz dt w sekundach
-    const dt = sim.lastTimestamp > 0 ? (timestamp - sim.lastTimestamp) / 1000 : 0.02; // domyślnie 20ms
-
-    // Setpoint dla balansu to zazwyczaj 0 (lub trim angle)
-    const setpoint = 0;
+    const setpoint = 0; // Dla balansu celem jest 0°
     const error = setpoint - pitch;
 
-    // P - proporcjonalna
-    const P_out = Kp * error;
+    // Oblicz dt w sekundach (dla symulacji i pochodnej)
+    const dt = sim.lastTimestamp > 0 ? (timestamp - sim.lastTimestamp) / 1000 : 0.02;
 
-    // I - całkująca (z anti-windup)
-    if (dt > 0 && Ki > 0.00001) {
-        sim.integral += error * dt;
-        sim.integral = Math.max(-integralLimit, Math.min(integralLimit, sim.integral));
+    let P_out, I_out, D_out, output;
+    let usingRealData = false;
+
+    // SPRAWDŹ CZY MAMY RZECZYWISTE DANE Z FIRMWARE
+    // Klucze: bp = balance_p_term, bi = balance_i_term, bd = balance_d_term
+    if (telemetryData.bp !== undefined && telemetryData.bi !== undefined && telemetryData.bd !== undefined) {
+        // Używamy RZECZYWISTYCH składowych PID z firmware!
+        P_out = telemetryData.bp;
+        I_out = telemetryData.bi;
+        D_out = telemetryData.bd;
+        output = telemetryData.o || (P_out + I_out + D_out); // 'o' = balance_output
+        usingRealData = true;
+
+        // Aktualizuj symulator dla spójności historii (integral)
+        if (Math.abs(Ki) > 0.00001) {
+            sim.integral = I_out / Ki;
+        }
+    } else {
+        // FALLBACK: Symulacja po stronie UI (gdy robot nie balansuje lub stary firmware)
+
+        // P - proporcjonalna
+        P_out = Kp * error;
+
+        // I - całkująca (z anti-windup)
+        if (dt > 0 && Ki > 0.00001) {
+            sim.integral += error * dt;
+            sim.integral = Math.max(-integralLimit, Math.min(integralLimit, sim.integral));
+        }
+        I_out = Ki * sim.integral;
+
+        // D - różniczkująca (na pomiarze, nie na błędzie - tak jak w firmware)
+        D_out = 0;
+        if (dt > 0) {
+            const pitchDerivative = (pitch - sim.prevPitch) / dt;
+            D_out = -Kd * pitchDerivative;
+        }
+
+        // Suma
+        output = P_out + I_out + D_out;
     }
-    const I_out = Ki * sim.integral;
 
-    // D - różniczkująca (na pomiarze, nie na błędzie - tak jak w firmware)
-    let D_out = 0;
-    if (dt > 0) {
-        const pitchDerivative = (pitch - sim.prevPitch) / dt;
-        D_out = -Kd * pitchDerivative; // minus bo pochodna na pomiarze
-    }
-
-    // Suma
-    const output = P_out + I_out + D_out;
-
-    // Zapisz stan
+    // Zapisz stan symulatora
     sim.prevError = error;
     sim.prevPitch = pitch;
     sim.lastTimestamp = timestamp;
@@ -7402,7 +8070,8 @@ function calculatePIDComponents(telemetryData) {
         integral: sim.integral,
         derivative: dt > 0 ? (pitch - sim.prevPitch) / dt : 0,
         output,
-        timestamp
+        timestamp,
+        usingRealData // flaga informująca czy używamy danych z firmware
     };
 }
 
@@ -7418,6 +8087,20 @@ function updatePIDEducation(telemetryData) {
     PIDEducation.stepHistory.push(components);
     if (PIDEducation.stepHistory.length > PIDEducation.maxStepHistory) {
         PIDEducation.stepHistory.shift();
+    }
+
+    // Aktualizuj badge źródła danych
+    const badge = document.getElementById('pidDataSourceBadge');
+    if (badge) {
+        if (components.usingRealData) {
+            badge.textContent = '📡 Dane z robota';
+            badge.style.background = '#27ae60';
+            badge.style.color = '#fff';
+        } else {
+            badge.textContent = 'Symulacja';
+            badge.style.background = '#555';
+            badge.style.color = '#888';
+        }
     }
 
     if (PIDEducation.isLiveMode) {
@@ -7603,17 +8286,487 @@ function rotateTip() {
     }
 }
 
+// ========================================================================
+// PID DIAGNOSTICS - Inteligentna analiza i podpowiedzi strojenia
+// ========================================================================
+
+/**
+ * Stan modułu diagnostyki PID
+ */
+const PIDDiagnostics = {
+    // Historia danych do analizy
+    errorHistory: [],
+    outputHistory: [],
+    pitchHistory: [],
+    maxHistoryLength: 200,
+
+    // Wyniki analizy
+    analysis: {
+        oscillationDetected: false,
+        oscillationFrequency: 0,
+        oscillationAmplitude: 0,
+        steadyStateError: 0,
+        responseTime: 0,
+        overshoot: 0,
+        stability: 'unknown'
+    },
+
+    // Aktywne rekomendacje
+    recommendations: [],
+
+    // Czas ostatniej analizy
+    lastAnalysisTime: 0,
+    analysisInterval: 500, // ms
+
+    // Stan balansowania
+    isBalancing: false
+};
+
+/**
+ * Inicjalizacja modułu diagnostyki PID
+ */
+function initPIDDiagnostics() {
+    // Event listener dla przycisku reset statystyk
+    document.getElementById('diagResetStatsBtn')?.addEventListener('click', () => {
+        resetPIDDiagnostics();
+        addLogMessage('[Diagnostyka] Statystyki zresetowane.', 'info');
+    });
+
+    // Event listener dla przycisku wyjaśnień
+    document.getElementById('diagExplainBtn')?.addEventListener('click', () => {
+        showDiagnosticExplanation();
+    });
+
+    addLogMessage('[UI] Moduł diagnostyki PID zainicjalizowany.', 'info');
+}
+
+/**
+ * Reset diagnostyki
+ */
+function resetPIDDiagnostics() {
+    PIDDiagnostics.errorHistory = [];
+    PIDDiagnostics.outputHistory = [];
+    PIDDiagnostics.pitchHistory = [];
+    PIDDiagnostics.analysis = {
+        oscillationDetected: false,
+        oscillationFrequency: 0,
+        oscillationAmplitude: 0,
+        steadyStateError: 0,
+        responseTime: 0,
+        overshoot: 0,
+        stability: 'unknown'
+    };
+    PIDDiagnostics.recommendations = [];
+    updateDiagnosticsUI();
+}
+
+/**
+ * Aktualizacja diagnostyki na podstawie nowych danych telemetrycznych
+ */
+function updatePIDDiagnostics(components) {
+    if (!components) return;
+
+    // Dodaj do historii
+    PIDDiagnostics.errorHistory.push(components.error);
+    PIDDiagnostics.outputHistory.push(components.output);
+    PIDDiagnostics.pitchHistory.push(components.input);
+
+    // Ogranicz długość historii
+    if (PIDDiagnostics.errorHistory.length > PIDDiagnostics.maxHistoryLength) {
+        PIDDiagnostics.errorHistory.shift();
+        PIDDiagnostics.outputHistory.shift();
+        PIDDiagnostics.pitchHistory.shift();
+    }
+
+    // Sprawdź czy balansowanie jest włączone
+    const balanceSwitch = document.getElementById('balanceSwitch');
+    PIDDiagnostics.isBalancing = balanceSwitch?.checked || false;
+
+    // Wykonaj analizę co określony interwał
+    const now = Date.now();
+    if (now - PIDDiagnostics.lastAnalysisTime >= PIDDiagnostics.analysisInterval) {
+        PIDDiagnostics.lastAnalysisTime = now;
+        analyzePIDPerformance();
+        generateRecommendations(components);
+        updateDiagnosticsUI();
+    }
+}
+
+/**
+ * Analizuje działanie PID
+ */
+function analyzePIDPerformance() {
+    const errors = PIDDiagnostics.errorHistory;
+    const outputs = PIDDiagnostics.outputHistory;
+
+    if (errors.length < 20) {
+        PIDDiagnostics.analysis.stability = 'collecting';
+        return;
+    }
+
+    // Analiza ostatnich 100 próbek
+    const recentErrors = errors.slice(-100);
+    const recentOutputs = outputs.slice(-100);
+
+    // 1. Wykrywanie oscylacji (zliczanie przejść przez zero)
+    let zeroCrossings = 0;
+    for (let i = 1; i < recentErrors.length; i++) {
+        if ((recentErrors[i - 1] > 0 && recentErrors[i] < 0) ||
+            (recentErrors[i - 1] < 0 && recentErrors[i] > 0)) {
+            zeroCrossings++;
+        }
+    }
+
+    // Częstotliwość oscylacji (przejścia przez zero na sekundę, zakładając ~50Hz telemetrii)
+    const oscillationFreq = zeroCrossings / (recentErrors.length / 50);
+    PIDDiagnostics.analysis.oscillationFrequency = oscillationFreq;
+
+    // Oscylacje wykryte gdy > 5 przejść przez zero na sekundę
+    PIDDiagnostics.analysis.oscillationDetected = oscillationFreq > 5;
+
+    // 2. Amplituda oscylacji (odchylenie standardowe błędu)
+    const meanError = recentErrors.reduce((a, b) => a + b, 0) / recentErrors.length;
+    const variance = recentErrors.reduce((a, b) => a + Math.pow(b - meanError, 2), 0) / recentErrors.length;
+    PIDDiagnostics.analysis.oscillationAmplitude = Math.sqrt(variance);
+
+    // 3. Błąd ustalony (średnia wartość bezwzględna błędu)
+    const avgAbsError = recentErrors.reduce((a, b) => a + Math.abs(b), 0) / recentErrors.length;
+    PIDDiagnostics.analysis.steadyStateError = avgAbsError;
+
+    // 4. Ocena stabilności
+    if (PIDDiagnostics.analysis.oscillationAmplitude > 5) {
+        PIDDiagnostics.analysis.stability = 'unstable';
+    } else if (PIDDiagnostics.analysis.oscillationAmplitude > 2) {
+        PIDDiagnostics.analysis.stability = 'marginal';
+    } else if (PIDDiagnostics.analysis.oscillationAmplitude > 0.5) {
+        PIDDiagnostics.analysis.stability = 'acceptable';
+    } else {
+        PIDDiagnostics.analysis.stability = 'good';
+    }
+
+    // 5. Przeregulowanie (overshoot) - max odchylenie po stronie przeciwnej
+    let maxOvershoot = 0;
+    let lastSign = Math.sign(recentErrors[0]);
+    let peakAfterCrossing = 0;
+
+    for (let i = 1; i < recentErrors.length; i++) {
+        const currentSign = Math.sign(recentErrors[i]);
+        if (currentSign !== lastSign && currentSign !== 0) {
+            // Przejście przez zero - szukaj max po przeciwnej stronie
+            peakAfterCrossing = Math.abs(recentErrors[i]);
+        } else if (currentSign === -lastSign) {
+            peakAfterCrossing = Math.max(peakAfterCrossing, Math.abs(recentErrors[i]));
+        }
+        lastSign = currentSign || lastSign;
+        maxOvershoot = Math.max(maxOvershoot, peakAfterCrossing);
+    }
+    PIDDiagnostics.analysis.overshoot = maxOvershoot;
+}
+
+/**
+ * Generuje rekomendacje na podstawie analizy
+ */
+function generateRecommendations(components) {
+    const recommendations = [];
+    const analysis = PIDDiagnostics.analysis;
+
+    if (!PIDDiagnostics.isBalancing) {
+        recommendations.push({
+            type: 'info',
+            text: 'Włącz balansowanie, aby rozpocząć analizę PID.',
+            priority: 0
+        });
+        PIDDiagnostics.recommendations = recommendations;
+        return;
+    }
+
+    if (analysis.stability === 'collecting') {
+        recommendations.push({
+            type: 'info',
+            text: 'Zbieranie danych do analizy... Poczekaj kilka sekund.',
+            priority: 0
+        });
+        PIDDiagnostics.recommendations = recommendations;
+        return;
+    }
+
+    // Pobierz aktualne wartości PID
+    const Kp = parseFloat(document.getElementById('balanceKpInput')?.value) || 0;
+    const Ki = parseFloat(document.getElementById('balanceKiInput')?.value) || 0;
+    const Kd = parseFloat(document.getElementById('balanceKdInput')?.value) || 0;
+
+    // 1. Problem: Silne oscylacje
+    if (analysis.oscillationDetected && analysis.oscillationAmplitude > 3) {
+        recommendations.push({
+            type: 'critical',
+            text: `🔴 SILNE OSCYLACJE wykryte (amplituda: ${analysis.oscillationAmplitude.toFixed(1)}°). ` +
+                `Zmniejsz Kp o 10-20% (obecnie ${Kp.toFixed(1)}) lub zwiększ Kd (obecnie ${Kd.toFixed(2)}).`,
+            priority: 10
+        });
+    } else if (analysis.oscillationDetected && analysis.oscillationAmplitude > 1) {
+        recommendations.push({
+            type: 'warning',
+            text: `🟡 Lekkie oscylacje (amplituda: ${analysis.oscillationAmplitude.toFixed(2)}°). ` +
+                `Spróbuj zwiększyć Kd o 10-20% (obecnie ${Kd.toFixed(2)}) aby je stłumić.`,
+            priority: 7
+        });
+    }
+
+    // 2. Problem: Duży błąd ustalony
+    if (analysis.steadyStateError > 2 && Ki < 0.1) {
+        recommendations.push({
+            type: 'warning',
+            text: `🟡 Stały błąd ${analysis.steadyStateError.toFixed(2)}° od pionu. ` +
+                `Rozważ zwiększenie Ki (obecnie ${Ki.toFixed(3)}) lub sprawdź offset montażu.`,
+            priority: 6
+        });
+    }
+
+    // 3. Problem: Bardzo duże wyjście PID (silniki przeciążone)
+    const avgOutput = PIDDiagnostics.outputHistory.slice(-50).reduce((a, b) => a + Math.abs(b), 0) / 50;
+    if (avgOutput > 200) {
+        recommendations.push({
+            type: 'warning',
+            text: `🟡 Wysokie średnie wyjście PID (${avgOutput.toFixed(0)}). ` +
+                `Może to oznaczać zbyt agresywne ustawienia lub problem z mechanicznym balansem.`,
+            priority: 5
+        });
+    }
+
+    // 4. Problem: Składowa P dominuje (słaba składowa D)
+    if (Math.abs(components.P_out) > 10 * Math.abs(components.D_out) && Math.abs(components.P_out) > 50) {
+        recommendations.push({
+            type: 'info',
+            text: `ℹ️ Składowa P dominuje nad D (${Math.abs(components.P_out).toFixed(1)} vs ${Math.abs(components.D_out).toFixed(1)}). ` +
+                `Rozważ zwiększenie Kd dla lepszego tłumienia.`,
+            priority: 4
+        });
+    }
+
+    // 5. Problem: Składowa I rośnie (wind-up)
+    if (Math.abs(components.I_out) > 30) {
+        recommendations.push({
+            type: 'warning',
+            text: `🟡 Składowa I jest duża (${components.I_out.toFixed(1)}). ` +
+                `Może występować wind-up. Zmniejsz Ki lub zwiększ limit całki.`,
+            priority: 6
+        });
+    }
+
+    // 6. Dobra stabilność
+    if (analysis.stability === 'good' && analysis.steadyStateError < 0.5) {
+        recommendations.push({
+            type: 'good',
+            text: `✅ Bardzo dobra stabilność! Błąd średni: ${analysis.steadyStateError.toFixed(2)}°, oscylacje minimalne.`,
+            priority: 3
+        });
+    } else if (analysis.stability === 'acceptable') {
+        recommendations.push({
+            type: 'good',
+            text: `✅ Akceptowalna stabilność. Możesz próbować drobnych korekt dla poprawy.`,
+            priority: 2
+        });
+    }
+
+    // 7. Wskazówki dla początkujących
+    if (Kp === 0 && Ki === 0 && Kd === 0) {
+        recommendations.push({
+            type: 'info',
+            text: `ℹ️ Wszystkie parametry PID są zerowe. Zacznij od ustawienia Kp na ~50-100.`,
+            priority: 8
+        });
+    }
+
+    // Sortuj po priorytecie
+    recommendations.sort((a, b) => b.priority - a.priority);
+
+    // Ogranicz do 4 rekomendacji
+    PIDDiagnostics.recommendations = recommendations.slice(0, 4);
+}
+
+/**
+ * Aktualizuje UI diagnostyki
+ */
+function updateDiagnosticsUI() {
+    const analysis = PIDDiagnostics.analysis;
+    const recommendations = PIDDiagnostics.recommendations;
+
+    // Status
+    const diagStatus = document.getElementById('diagStatus');
+    if (diagStatus) {
+        if (!PIDDiagnostics.isBalancing) {
+            diagStatus.textContent = 'Nieaktywne';
+            diagStatus.className = '';
+        } else if (analysis.stability === 'collecting') {
+            diagStatus.textContent = 'Analizowanie...';
+            diagStatus.className = 'analyzing';
+        } else {
+            diagStatus.textContent = 'Aktywne';
+            diagStatus.className = 'active';
+        }
+    }
+
+    // Wskaźnik oscylacji
+    const diagOsc = document.getElementById('diagOscillation');
+    const diagOscValue = document.getElementById('diagOscValue');
+    if (diagOsc && diagOscValue) {
+        if (analysis.oscillationDetected) {
+            diagOscValue.textContent = `${analysis.oscillationAmplitude.toFixed(1)}°`;
+            diagOsc.className = 'diag-indicator ' +
+                (analysis.oscillationAmplitude > 3 ? 'diag-error pulsing' : 'diag-warning');
+        } else {
+            diagOscValue.textContent = 'Brak';
+            diagOsc.className = 'diag-indicator diag-ok';
+        }
+    }
+
+    // Błąd ustalony
+    const diagSteady = document.getElementById('diagSteadyError');
+    const diagSteadyValue = document.getElementById('diagSteadyValue');
+    if (diagSteady && diagSteadyValue) {
+        diagSteadyValue.textContent = `${analysis.steadyStateError.toFixed(2)}°`;
+        if (analysis.steadyStateError > 2) {
+            diagSteady.className = 'diag-indicator diag-warning';
+        } else if (analysis.steadyStateError > 0.5) {
+            diagSteady.className = 'diag-indicator diag-ok';
+        } else {
+            diagSteady.className = 'diag-indicator diag-ok';
+        }
+    }
+
+    // Reakcja (na podstawie overshoot)
+    const diagResponse = document.getElementById('diagResponse');
+    const diagResponseValue = document.getElementById('diagResponseValue');
+    if (diagResponse && diagResponseValue) {
+        if (analysis.overshoot > 5) {
+            diagResponseValue.textContent = 'Agresywna';
+            diagResponse.className = 'diag-indicator diag-warning';
+        } else if (analysis.overshoot > 2) {
+            diagResponseValue.textContent = 'Normalna';
+            diagResponse.className = 'diag-indicator diag-ok';
+        } else {
+            diagResponseValue.textContent = 'Łagodna';
+            diagResponse.className = 'diag-indicator diag-ok';
+        }
+    }
+
+    // Stabilność
+    const diagStability = document.getElementById('diagStability');
+    const diagStabilityValue = document.getElementById('diagStabilityValue');
+    if (diagStability && diagStabilityValue) {
+        const stabilityLabels = {
+            'unknown': '---',
+            'collecting': '...',
+            'unstable': 'Niestabilny',
+            'marginal': 'Marginalny',
+            'acceptable': 'Akceptowalny',
+            'good': 'Dobry'
+        };
+        const stabilityClasses = {
+            'unknown': '',
+            'collecting': '',
+            'unstable': 'diag-error pulsing',
+            'marginal': 'diag-warning',
+            'acceptable': 'diag-ok',
+            'good': 'diag-ok'
+        };
+        diagStabilityValue.textContent = stabilityLabels[analysis.stability] || '---';
+        diagStability.className = 'diag-indicator ' + (stabilityClasses[analysis.stability] || '');
+    }
+
+    // Rekomendacje
+    const recList = document.getElementById('pidRecommendationsList');
+    if (recList) {
+        if (recommendations.length === 0) {
+            recList.innerHTML = '<li class="rec-info">Rozpocznij balansowanie, aby zobaczyć analizę.</li>';
+        } else {
+            recList.innerHTML = recommendations.map(rec => {
+                const classMap = {
+                    'critical': 'rec-critical',
+                    'warning': 'rec-warning',
+                    'good': 'rec-good',
+                    'info': 'rec-info'
+                };
+                return `<li class="${classMap[rec.type] || 'rec-info'}">${rec.text}</li>`;
+            }).join('');
+        }
+    }
+}
+
+/**
+ * Pokazuje szczegółowe wyjaśnienie aktualnych problemów
+ */
+function showDiagnosticExplanation() {
+    const analysis = PIDDiagnostics.analysis;
+
+    let explanation = '📖 WYJAŚNIENIE AKTUALNEGO STANU:\n\n';
+
+    if (analysis.stability === 'unknown' || analysis.stability === 'collecting') {
+        explanation += 'Trwa zbieranie danych. Włącz balansowanie i poczekaj kilka sekund.\n';
+        alert(explanation);
+        return;
+    }
+
+    // Oscylacje
+    if (analysis.oscillationDetected) {
+        explanation += '〰️ OSCYLACJE:\n';
+        explanation += `Wykryto oscylacje o amplitudzie ${analysis.oscillationAmplitude.toFixed(2)}°.\n`;
+        explanation += 'Oscylacje oznaczają, że robot "huśta się" wokół punktu równowagi.\n\n';
+        explanation += 'PRZYCZYNY:\n';
+        explanation += '• Za duży Kp - robot reaguje zbyt mocno na odchylenia\n';
+        explanation += '• Za mały Kd - brak wystarczającego tłumienia\n\n';
+        explanation += 'ROZWIĄZANIE:\n';
+        explanation += '1. Zmniejsz Kp o 10-20%\n';
+        explanation += '2. Zwiększ Kd o 20-50%\n';
+        explanation += '3. Powtarzaj aż oscylacje znikną\n\n';
+    }
+
+    // Błąd ustalony
+    if (analysis.steadyStateError > 1) {
+        explanation += '📍 BŁĄD USTALONY:\n';
+        explanation += `Robot ma średnie odchylenie ${analysis.steadyStateError.toFixed(2)}° od pionu.\n\n`;
+        explanation += 'PRZYCZYNY:\n';
+        explanation += '• Za mały Ki - brak korekcji stałego offsetu\n';
+        explanation += '• Nieprawidłowy offset montażu IMU\n';
+        explanation += '• Niesymetryczny rozkład masy\n\n';
+        explanation += 'ROZWIĄZANIE:\n';
+        explanation += '1. Najpierw sprawdź mechaniczny balans robota\n';
+        explanation += '2. Użyj funkcji "Ustaw punkt 0" aby skorygować offset\n';
+        explanation += '3. Jeśli powyższe nie pomoże, zwiększ Ki\n\n';
+    }
+
+    // Dobra stabilność
+    if (analysis.stability === 'good') {
+        explanation += '✅ DOBRA STABILNOŚĆ:\n';
+        explanation += 'Robot jest dobrze wyregulowany!\n';
+        explanation += 'Możesz eksperymentować z małymi zmianami dla dalszej optymalizacji.\n\n';
+    }
+
+    alert(explanation);
+}
+
+// Inicjalizacja modułu diagnostyki PID przy załadowaniu DOM
+document.addEventListener('DOMContentLoaded', () => {
+    initPIDDiagnostics();
+});
+
 // Inicjalizacja modułu PID Education przy załadowaniu DOM
 document.addEventListener('DOMContentLoaded', () => {
     initPIDEducation();
 });
 
-// Hook do updateTelemetryUI - wywołaj aktualizację PID Education
+// Hook do updateTelemetryUI - wywołaj aktualizację PID Education i Diagnostyki
 (function () {
     const originalUpdateTelemetryUI = window.updateTelemetryUI || function () { };
     window.updateTelemetryUI = function (data) {
         originalUpdateTelemetryUI(data);
         updatePIDEducation(data);
+
+        // Aktualizuj diagnostykę jeśli mamy komponenty PID
+        if (PIDEducation.stepHistory.length > 0) {
+            const lastStep = PIDEducation.stepHistory[PIDEducation.stepHistory.length - 1];
+            updatePIDDiagnostics(lastStep);
+        }
     };
 })();
 
