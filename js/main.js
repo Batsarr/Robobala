@@ -2458,10 +2458,13 @@ function processCompleteMessage(data) {
             AppState.isApplyingConfig = false;
 
             // Po synchronizacji: wykryj aktualny tryb fuzji z checkboxa (zsynchronizowanego z firmware)
-            // i załaduj odpowiedni profil PID do UI
+            // UWAGA: NIE wywołujemy loadCurrentPIDToUI() tutaj, ponieważ applySingleParam() już
+            // zaktualizowało wszystkie wartości PID z firmware. Wywoływalibyśmy nadpisanie poprawnych
+            // wartości z firmware starymi wartościami z cache.
             if (typeof FusionPIDProfiles !== 'undefined') {
                 FusionPIDProfiles.syncFusionModeFromCheckbox();
-                FusionPIDProfiles.loadCurrentPIDToUI();
+                // Nie wywołujemy loadCurrentPIDToUI() - UI jest już zsynchronizowane!
+                // FusionPIDProfiles.loadCurrentPIDToUI(); // USUNIĘTE - powodowało nadpisywanie UI
             }
 
             // Zaktualizuj UI
@@ -5386,7 +5389,7 @@ const FusionPIDProfiles = {
     },
 
     // Aktywny tryb fuzji (wykrywany z checkbox)
-    currentFusionMode: 'mahony', // 'mahony' lub 'ndof'
+    currentFusionMode: 'ndof', // 'mahony' lub 'ndof' - domyślnie NDOF (zgodnie z firmware)
 
     // Flaga - czy właśnie trwa przełączanie (blokuje pętlę zdarzeń)
     isSwitching: false,
