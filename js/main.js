@@ -5698,7 +5698,7 @@ const SysIdState = {
     data: [],
     startTime: 0,
     duration: 5000,
-    sampleRate: 200,
+    sampleRate: 50,  // 50 Hz = częstotliwość telemetrii firmware (TELEMETRY_INTERVAL_MS=20)
     kp: 50,
     impulse: 200,  // PWM value instead of degrees
     impulseDuration: 100,  // Czas trwania fazy impulsu w ms
@@ -5896,7 +5896,7 @@ async function startSysIdRecording() {
 
     // Get common config
     SysIdState.duration = (parseFloat(document.getElementById('sysid-duration')?.value) || 5) * 1000;
-    SysIdState.sampleRate = parseInt(document.getElementById('sysid-sample-rate')?.value) || 200;
+    SysIdState.sampleRate = 50;  // Stałe 50 Hz = częstotliwość telemetrii firmware
     SysIdState.stepApplied = false;
     SysIdState.impulseApplied = false;
     SysIdState.impulseStartTime = 0;
@@ -6033,23 +6033,33 @@ async function startSysIdRecording() {
             };
 
             if (SysIdState.testType === 'balance') {
-                // Impuls joysticka - używamy opóźnienia BLE (~50ms) do korekty
-                // Impuls jest wysyłany przez UI, więc musimy szacować kiedy dotarł do firmware
-                const BLE_LATENCY_MS = 50;  // Typowe opóźnienie BLE
-                const phaseDuration = SysIdState.impulseDuration || 100;  // Czas trwania jednej fazy impulsu
-                let currentImpulse = 0;
-                if (SysIdState.impulseApplied && SysIdState.impulseStartTime > 0) {
-                    // Skoryguj o szacowane opóźnienie BLE
-                    const impulseElapsed = elapsed - SysIdState.impulseStartTime - BLE_LATENCY_MS;
-                    if (impulseElapsed >= 0 && impulseElapsed < phaseDuration) {
-                        currentImpulse = SysIdState.impulse * 100;
-                    } else if (impulseElapsed >= phaseDuration && impulseElapsed < phaseDuration * 2) {
-                        currentImpulse = -SysIdState.impulse * 100;
+                // Preferuj rzeczywisty joystick_angle z firmware (gdy dostępny)
+                // Firmware wysyła joystick_angle w deg - wartość wkładu joysticka do kąta docelowego
+                const firmwareJoystick = normData.joystick_angle ?? null;
+
+                if (firmwareJoystick !== null && firmwareJoystick !== undefined) {
+                    // Używamy rzeczywistej wartości z firmware
+                    record.input_signal = firmwareJoystick;
+                    record.impulse_pwm = firmwareJoystick;
+                    record.firmware_joystick = true;
+                } else {
+                    // Fallback: estymacja na podstawie czasu (stara metoda)
+                    const BLE_LATENCY_MS = 50;
+                    const phaseDuration = SysIdState.impulseDuration || 100;
+                    let currentImpulse = 0;
+                    if (SysIdState.impulseApplied && SysIdState.impulseStartTime > 0) {
+                        const impulseElapsed = elapsed - SysIdState.impulseStartTime - BLE_LATENCY_MS;
+                        if (impulseElapsed >= 0 && impulseElapsed < phaseDuration) {
+                            currentImpulse = SysIdState.impulse * 100;
+                        } else if (impulseElapsed >= phaseDuration && impulseElapsed < phaseDuration * 2) {
+                            currentImpulse = -SysIdState.impulse * 100;
+                        }
                     }
+                    record.input_signal = currentImpulse;
+                    record.impulse_pwm = currentImpulse;
+                    record.firmware_joystick = false;
                 }
-                record.input_signal = currentImpulse;
-                record.impulse_pwm = currentImpulse;  // Kompatybilność wsteczna
-                record.impulse_duration_ms = phaseDuration;  // Zapisz czas impulsu dla analizy
+                record.impulse_duration_ms = SysIdState.impulseDuration || 100;
 
             } else if (SysIdState.testType === 'speed') {
                 // Setpoint prędkości - preferuj dane z firmware jeśli dostępne

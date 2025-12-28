@@ -876,13 +876,12 @@
                         </div>
                     </div>
                     <div class="setting-container">
-                        <label for="sysid-sample-rate">Próbkowanie (Hz)<span class="help-icon">?</span></label>
-                        <select id="sysid-sample-rate" class="config-value" style="width: 100%; padding: 8px; background: #20232a; border: 1px solid #61dafb; border-radius: 4px; color: #fff;">
-                            <option value="100">100 Hz</option>
-                            <option value="200" selected>200 Hz</option>
-                            <option value="500">500 Hz (pełna telemetria)</option>
-                        </select>
-                        <div class="help-text">Częstotliwość próbkowania danych. Wyższa wartość = więcej danych, lepsza rozdzielczość czasowa, ale większy plik.</div>
+                        <label>Próbkowanie<span class="help-icon">?</span></label>
+                        <div style="padding: 8px; background: #20232a; border: 1px solid #4a4f58; border-radius: 4px; color: #aaa;">
+                            50 Hz (telemetria firmware)
+                        </div>
+                        <input type="hidden" id="sysid-sample-rate" value="50">
+                        <div class="help-text">Częstotliwość próbkowania = częstotliwość telemetrii firmware (50 Hz, co 20ms).</div>
                     </div>
                     
                     <div style="background: #20232a; border: 1px solid #4a4f58; border-radius: 6px; padding: 12px; margin: 15px 0;">
