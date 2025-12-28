@@ -5749,26 +5749,24 @@ function initSystemIdentification() {
 }
 
 // Obsługa zmiany typu testu - pokazuje/ukrywa odpowiednie kontrolki
+// PASYWNA IDENTYFIKACJA - nie ma już pola Kp (robot używa swoich aktualnych PID)
 function handleSysIdTestTypeChange() {
     const testType = document.getElementById('sysid-test-type')?.value || 'balance';
     SysIdState.testType = testType;
 
-    const kpContainer = document.getElementById('sysid-kp-container');
     const impulseContainer = document.getElementById('sysid-impulse-container');
     const impulseDurationContainer = document.getElementById('sysid-impulse-duration-container');
     const stepContainer = document.getElementById('sysid-step-container');
     const stepInput = document.getElementById('sysid-step-value');
 
     if (testType === 'balance') {
-        // Test balansu - pokaż Kp, impuls i czas impulsu
-        if (kpContainer) kpContainer.style.display = '';
+        // Test balansu - pokaż impuls i czas impulsu
         if (impulseContainer) impulseContainer.style.display = '';
         if (impulseDurationContainer) impulseDurationContainer.style.display = '';
         if (stepContainer) stepContainer.style.display = 'none';
     } else if (testType === 'speed') {
-        // Test prędkości - ukryj Kp i impuls, pokaż step value
-        if (kpContainer) kpContainer.style.display = 'none';
-        if (impulseContainer) impulseContainer.style.display = 'none';
+        // Test prędkości - pokaż impuls (siła joysticka) i step value
+        if (impulseContainer) impulseContainer.style.display = '';
         if (impulseDurationContainer) impulseDurationContainer.style.display = 'none';
         if (stepContainer) {
             stepContainer.style.display = '';
@@ -5783,9 +5781,8 @@ function handleSysIdTestTypeChange() {
             }
         }
     } else if (testType === 'position') {
-        // Test pozycji - ukryj Kp i impuls, pokaż step value
-        if (kpContainer) kpContainer.style.display = 'none';
-        if (impulseContainer) impulseContainer.style.display = 'none';
+        // Test pozycji - pokaż impuls i step value
+        if (impulseContainer) impulseContainer.style.display = '';
         if (impulseDurationContainer) impulseDurationContainer.style.display = 'none';
         if (stepContainer) {
             stepContainer.style.display = '';
@@ -5903,55 +5900,49 @@ async function startSysIdRecording() {
     SysIdState.impulsePhase = 0;
     SysIdState.currentSetpoint = 0;
 
-    // Konfiguracja specyficzna dla typu testu - UŻYWA KOMEND FIRMWARE dla izolacji pętli
+    // ========================================================================
+    // PASYWNA IDENTYFIKACJA - Robot NIE wie że jest testowany!
+    // Wszystkie testy używają standardowych komend joysticka.
+    // Telemetria jest zbierana pasywnie z normalnego strumienia danych.
+    // ========================================================================
+
     if (SysIdState.testType === 'balance') {
-        // Test balansu - firmware ustawia Kp-only mode (Ki=Kd=0)
-        SysIdState.kp = parseFloat(document.getElementById('sysid-kp')?.value) || 50;
+        // Test balansu - PASYWNY, używa tylko joysticka
+        // Zapisz aktualne PID tylko dla referencji w analizie (nie modyfikujemy ich!)
+        SysIdState.kp = parseFloat(document.getElementById('balanceKpInput')?.value) || 50;
         SysIdState.impulse = (parseFloat(document.getElementById('sysid-impulse')?.value) || 25) / 100;
         SysIdState.impulseDuration = parseInt(document.getElementById('sysid-impulse-duration')?.value) || 100;
 
-        // Zapisz aktualne PID dla referencji
+        // Zapisz aktualne PID dla referencji w analizie
         const currentKp = parseFloat(document.getElementById('balanceKpInput')?.value) || SysIdState.kp;
         const currentKi = parseFloat(document.getElementById('balanceKiInput')?.value) || 0;
         const currentKd = parseFloat(document.getElementById('balanceKdInput')?.value) || 0;
         SysIdState.savedPID = { kp: currentKp, ki: currentKi, kd: currentKd };
 
-        // WAŻNE: Wyślij komendę do firmware aby ustawić tryb SysID
-        sendBleMessage({
-            type: 'sysid_balance_test',
-            kp: SysIdState.kp,
-            duration: SysIdState.duration
-        });
+        // NIE wysyłamy żadnych specjalnych komend do firmware!
+        // Robot będzie sterowany standardowymi komendami joysticka
 
-        addLogMessage(`[SysID Balance] Nagrywanie: Kp=${SysIdState.kp}, impuls=${(SysIdState.impulse * 100).toFixed(0)}%, czas fazy=${SysIdState.impulseDuration}ms, czas całkowity=${SysIdState.duration / 1000}s`, 'info');
+        addLogMessage(`[SysID Balance] 📊 Pasywne nagrywanie: impuls=${(SysIdState.impulse * 100).toFixed(0)}%, czas fazy=${SysIdState.impulseDuration}ms, czas całkowity=${SysIdState.duration / 1000}s`, 'info');
+        addLogMessage(`[SysID Balance] ℹ️ Robot nie wie że jest testowany - używam standardowego joysticka`, 'info');
 
     } else if (SysIdState.testType === 'speed') {
-        // Test pętli prędkości - firmware izoluje od pętli pozycji
+        // Test pętli prędkości - PASYWNY, używa joysticka do jazdy do przodu
         SysIdState.stepValue = parseFloat(document.getElementById('sysid-step-value')?.value) || 100;
+        // Konwersja setpoint prędkości na % joysticka (przybliżenie)
+        // Zakładamy że 100% joysticka = ~500 imp/s (zależy od robota)
+        SysIdState.impulse = Math.min(1.0, Math.max(0.1, SysIdState.stepValue / 500));
 
-        // WAŻNE: Wyślij komendę do firmware aby ustawić tryb SysID speed
-        sendBleMessage({
-            type: 'sysid_speed_test',
-            setpoint: SysIdState.stepValue,
-            duration: SysIdState.duration,
-            step_time: 1000  // Skok po 1 sekundzie
-        });
-
-        addLogMessage(`[SysID Speed] Nagrywanie: setpoint=${SysIdState.stepValue} imp/s, czas=${SysIdState.duration / 1000}s (firmware izoluje pętlę)`, 'info');
+        addLogMessage(`[SysID Speed] 📊 Pasywne nagrywanie: setpoint≈${SysIdState.stepValue} imp/s (joystick ${(SysIdState.impulse * 100).toFixed(0)}%), czas=${SysIdState.duration / 1000}s`, 'info');
+        addLogMessage(`[SysID Speed] ℹ️ Robot nie wie że jest testowany - używam standardowego joysticka`, 'info');
 
     } else if (SysIdState.testType === 'position') {
-        // Test pętli pozycji - firmware używa pełnej kaskady
+        // Test pętli pozycji - PASYWNY, używa joysticka
         SysIdState.stepValue = parseFloat(document.getElementById('sysid-step-value')?.value) || 30;
+        // Dla testu pozycji używamy krótkiego impulsu joysticka
+        SysIdState.impulse = 0.3;  // 30% joysticka
 
-        // WAŻNE: Wyślij komendę do firmware aby ustawić tryb SysID position
-        sendBleMessage({
-            type: 'sysid_position_test',
-            setpoint: SysIdState.stepValue,  // w cm, firmware konwertuje na impulsy
-            duration: SysIdState.duration,
-            step_time: 1000  // Skok po 1 sekundzie
-        });
-
-        addLogMessage(`[SysID Position] Nagrywanie: setpoint=${SysIdState.stepValue} cm, czas=${SysIdState.duration / 1000}s (firmware zarządza kaskadą)`, 'info');
+        addLogMessage(`[SysID Position] 📊 Pasywne nagrywanie: setpoint≈${SysIdState.stepValue} cm, czas=${SysIdState.duration / 1000}s`, 'info');
+        addLogMessage(`[SysID Position] ℹ️ Robot nie wie że jest testowany - używam standardowego joysticka`, 'info');
     }
 
     // Clear data
@@ -5974,16 +5965,8 @@ async function startSysIdRecording() {
             // Normalize telemetry data
             const normData = (typeof normalizeTelemetryData === 'function') ? normalizeTelemetryData(data) : data;
 
-            // Walidacja: sprawdź czy firmware wysyła rozszerzone dane SysID
-            // sysid_mode powinno być != 0 gdy test jest aktywny w firmware
-            if (!SysIdState._sysidTelemetryWarningShown) {
-                const hasSysIdData = normData.sysid_mode !== undefined && normData.sysid_mode !== 0;
-                if (!hasSysIdData && elapsed > 1500) {
-                    // Po 1.5s (po wysłaniu komendy do firmware) sprawdź czy mamy dane SysID
-                    addLogMessage('[SysID] ⚠️ Brak rozszerzonych danych SysID z firmware - analiza może być niedokładna', 'warn');
-                    SysIdState._sysidTelemetryWarningShown = true;
-                }
-            }
+            // PASYWNA IDENTYFIKACJA - nie oczekujemy specjalnych pól sysid_* z firmware
+            // Wszystkie dane są zbierane z normalnej telemetrii
 
             // Oblicz pitch z kwaternionu jeśli nie ma w danych (Quaternion-First)
             let pitchValue = normData.pitch;
@@ -6004,8 +5987,7 @@ async function startSysIdRecording() {
             }
             if (pitchValue === undefined || Number.isNaN(pitchValue)) pitchValue = normData.angle ?? 0;
 
-            // Zbierz dane w zależności od typu testu
-            // Wykorzystaj nowe pola z rozszerzonej telemetrii firmware
+            // Zbierz dane z normalnej telemetrii - robot nie wie że jest testowany!
             const record = {
                 time: elapsedSec,
                 angle: pitchValue,
@@ -6014,69 +5996,46 @@ async function startSysIdRecording() {
                 encoder_right: normData.encoder_right ?? 0,
                 gyroY: normData.gyroY ?? normData.gyro_y ?? 0,
                 pwm_output: normData.output ?? normData.balance_output ?? 0,
-                // Nowe pola z rozszerzonej telemetrii SysID
-                target_angle: normData.sysid_target_angle ?? normData.target_angle ?? 0,
-                target_speed: normData.target_speed ?? normData.sysid_target_speed ?? 0,
-                balance_p_term: normData.balance_p_term ?? 0,
-                balance_i_term: normData.balance_i_term ?? 0,
-                balance_d_term: normData.balance_d_term ?? 0,
-                speed_p_term: normData.speed_p_term ?? 0,
-                speed_i_term: normData.speed_i_term ?? 0,
-                speed_d_term: normData.speed_d_term ?? 0,
-                sysid_mode: normData.sysid_mode ?? 0,
+                // Opcjonalne pola z telemetrii (jeśli dostępne)
+                target_angle: normData.target_angle ?? 0,
+                target_speed: normData.target_speed ?? 0,
                 // Timestamp z firmware (ms) - do lepszej synchronizacji
                 firmware_timestamp_ms: normData.timestamp_ms ?? normData.ts ?? null,
-                // Pola specyficzne dla typu testu
+                // Pola specyficzne dla typu testu - generowane przez interfejs
                 test_type: SysIdState.testType,
                 setpoint: SysIdState.currentSetpoint,
-                input_signal: 0  // Sygnał wejściowy (impuls/step)
+                input_signal: 0  // Sygnał wejściowy - obliczany poniżej na podstawie czasu
             };
 
             if (SysIdState.testType === 'balance') {
-                // Preferuj rzeczywisty joystick_angle z firmware (gdy dostępny)
-                // Firmware wysyła joystick_angle w deg - wartość wkładu joysticka do kąta docelowego
-                const firmwareJoystick = normData.joystick_angle ?? null;
-
-                if (firmwareJoystick !== null && firmwareJoystick !== undefined) {
-                    // Używamy rzeczywistej wartości z firmware
-                    record.input_signal = firmwareJoystick;
-                    record.impulse_pwm = firmwareJoystick;
-                    record.firmware_joystick = true;
-                } else {
-                    // Fallback: estymacja na podstawie czasu (stara metoda)
-                    const BLE_LATENCY_MS = 50;
-                    const phaseDuration = SysIdState.impulseDuration || 100;
-                    let currentImpulse = 0;
-                    if (SysIdState.impulseApplied && SysIdState.impulseStartTime > 0) {
-                        const impulseElapsed = elapsed - SysIdState.impulseStartTime - BLE_LATENCY_MS;
-                        if (impulseElapsed >= 0 && impulseElapsed < phaseDuration) {
-                            currentImpulse = SysIdState.impulse * 100;
-                        } else if (impulseElapsed >= phaseDuration && impulseElapsed < phaseDuration * 2) {
-                            currentImpulse = -SysIdState.impulse * 100;
-                        }
+                // PASYWNA IDENTYFIKACJA: estymacja sygnału wejściowego na podstawie czasu
+                // Interfejs wie kiedy wysłał impuls joysticka
+                const BLE_LATENCY_MS = 50;
+                const phaseDuration = SysIdState.impulseDuration || 100;
+                let currentImpulse = 0;
+                if (SysIdState.impulseApplied && SysIdState.impulseStartTime > 0) {
+                    const impulseElapsed = elapsed - SysIdState.impulseStartTime - BLE_LATENCY_MS;
+                    if (impulseElapsed >= 0 && impulseElapsed < phaseDuration) {
+                        currentImpulse = SysIdState.impulse * 100;
+                    } else if (impulseElapsed >= phaseDuration && impulseElapsed < phaseDuration * 2) {
+                        currentImpulse = -SysIdState.impulse * 100;
                     }
-                    record.input_signal = currentImpulse;
-                    record.impulse_pwm = currentImpulse;
-                    record.firmware_joystick = false;
                 }
+                record.input_signal = currentImpulse;
+                record.impulse_pwm = currentImpulse;
                 record.impulse_duration_ms = SysIdState.impulseDuration || 100;
 
             } else if (SysIdState.testType === 'speed') {
-                // Setpoint prędkości - preferuj dane z firmware jeśli dostępne
-                // sysid_target_speed zawiera aktualny setpoint ustawiony przez firmware
-                const firmwareSetpoint = normData.sysid_target_speed ?? normData.target_speed ?? null;
-                const effectiveSetpoint = (firmwareSetpoint !== null && firmwareSetpoint !== 0)
-                    ? firmwareSetpoint
-                    : SysIdState.currentSetpoint;
+                // PASYWNA IDENTYFIKACJA: setpoint prędkości z interfejsu
+                // Nie używamy sysid_target_speed - robot nie wie że jest testowany
+                const effectiveSetpoint = SysIdState.currentSetpoint;
 
                 record.input_signal = effectiveSetpoint;
                 record.setpoint_speed = effectiveSetpoint;
                 record.speed_error = effectiveSetpoint - record.speed;
-                // Dodaj flagę czy używamy danych z firmware
-                record.firmware_setpoint = firmwareSetpoint !== null && firmwareSetpoint !== 0;
 
             } else if (SysIdState.testType === 'position') {
-                // Setpoint pozycji - oblicz pozycję z enkoderów
+                // PASYWNA IDENTYFIKACJA: pozycja z enkoderów
                 const avgEncoder = (record.encoder_left + record.encoder_right) / 2;
                 // Konwersja enkodera na cm (wymaga parametrów mechanicznych)
                 const encoderPpr = parseFloat(document.getElementById('encoderPprInput')?.value) || 820;
@@ -6086,18 +6045,11 @@ async function startSysIdRecording() {
 
                 record.position_cm = positionCm;
 
-                // Dla testu pozycji: preferuj sysid_target_speed z firmware (setpoint pętli pozycji)
-                // Firmware wysyła target_speed jako wyjście pętli pozycji
-                const firmwareTargetSpeed = normData.sysid_target_speed ?? normData.target_speed ?? null;
-                const hasActiveFirmwareStep = firmwareTargetSpeed !== null && Math.abs(firmwareTargetSpeed) > 0.1;
-
-                // Setpoint pozycji z UI (cm) - fallback
+                // Setpoint pozycji z interfejsu - nie z firmware
                 const uiSetpoint = SysIdState.stepApplied ? SysIdState.stepValue : 0;
                 record.input_signal = uiSetpoint;
                 record.setpoint_position = uiSetpoint;
                 record.position_error = uiSetpoint - positionCm;
-                // Dodatkowa informacja: czy firmware potwierdza aktywny step
-                record.firmware_step_active = hasActiveFirmwareStep;
             }
 
             SysIdState.data.push(record);
@@ -6118,7 +6070,7 @@ async function startSysIdRecording() {
     };
     window.addEventListener('ble_message', SysIdState.telemetryHandler);
 
-    // Zastosuj skok/impuls po 1 sekundzie
+    // Zastosuj skok/impuls po 1 sekundzie - wszystko przez standardowy joystick!
     setTimeout(() => {
         if (!SysIdState.isRecording) return;
 
@@ -6129,7 +6081,7 @@ async function startSysIdRecording() {
             const impulsePercent = SysIdState.impulse;
             const phaseDuration = SysIdState.impulseDuration || 100;
 
-            addLogMessage(`[SysID] Impuls joystick ${impulsePercent * 100}%, faza ${phaseDuration}ms (przód→tył)`, 'info');
+            addLogMessage(`[SysID] 🎮 Impuls joystick ${(impulsePercent * 100).toFixed(0)}%, faza ${phaseDuration}ms (przód→tył)`, 'info');
 
             sendBleMessage({ type: 'joystick', x: 0, y: impulsePercent });
             setTimeout(() => {
@@ -6140,35 +6092,49 @@ async function startSysIdRecording() {
             setTimeout(() => {
                 if (SysIdState.isRecording) {
                     sendBleMessage({ type: 'joystick', x: 0, y: 0 });
-                    addLogMessage(`[SysID] Impuls zakończony (całkowity czas: ${phaseDuration * 2}ms)`, 'info');
+                    addLogMessage(`[SysID] ✅ Impuls zakończony (całkowity czas: ${phaseDuration * 2}ms)`, 'info');
                 }
             }, phaseDuration * 2);
 
         } else if (SysIdState.testType === 'speed') {
-            // FIRMWARE ZARZĄDZA SKOKIEM - tylko zapisz stan dla UI
+            // PASYWNA IDENTYFIKACJA: skok prędkości przez joystick
             SysIdState.stepApplied = true;
             SysIdState.currentSetpoint = SysIdState.stepValue;
-            addLogMessage(`[SysID] Firmware zastosował skok prędkości: ${SysIdState.stepValue} imp/s`, 'info');
+            const impulsePercent = SysIdState.impulse;
 
-            // Firmware sam zeruje setpoint w połowie testu - tylko aktualizuj stan UI
+            addLogMessage(`[SysID] 🎮 Joystick do przodu ${(impulsePercent * 100).toFixed(0)}% (setpoint≈${SysIdState.stepValue} imp/s)`, 'info');
+            sendBleMessage({ type: 'joystick', x: 0, y: impulsePercent });
+
+            // Zatrzymaj w połowie testu
             setTimeout(() => {
                 if (SysIdState.isRecording) {
                     SysIdState.currentSetpoint = 0;
-                    addLogMessage(`[SysID] Firmware zeruje prędkość`, 'info');
+                    sendBleMessage({ type: 'joystick', x: 0, y: 0 });
+                    addLogMessage(`[SysID] ⏹️ Joystick zeruje`, 'info');
                 }
             }, SysIdState.duration / 2 - 1000);
 
         } else if (SysIdState.testType === 'position') {
-            // FIRMWARE ZARZĄDZA SKOKIEM - tylko zapisz stan dla UI
+            // PASYWNA IDENTYFIKACJA: impuls pozycyjny przez joystick
             SysIdState.stepApplied = true;
             SysIdState.currentSetpoint = SysIdState.stepValue;
-            addLogMessage(`[SysID] Firmware zastosował skok pozycji: ${SysIdState.stepValue} cm`, 'info');
+            const impulsePercent = SysIdState.impulse;
 
-            // Firmware sam zeruje setpoint w połowie testu - tylko aktualizuj stan UI
+            addLogMessage(`[SysID] 🎮 Impuls joystick ${(impulsePercent * 100).toFixed(0)}% (setpoint≈${SysIdState.stepValue} cm)`, 'info');
+
+            // Krótki impuls do przodu (500ms)
+            sendBleMessage({ type: 'joystick', x: 0, y: impulsePercent });
+            setTimeout(() => {
+                if (SysIdState.isRecording) {
+                    sendBleMessage({ type: 'joystick', x: 0, y: 0 });
+                    addLogMessage(`[SysID] ✅ Impuls pozycji zakończony`, 'info');
+                }
+            }, 500);
+
+            // Zeruj setpoint po połowie testu
             setTimeout(() => {
                 if (SysIdState.isRecording) {
                     SysIdState.currentSetpoint = 0;
-                    addLogMessage(`[SysID] Firmware zeruje pozycję`, 'info');
                 }
             }, SysIdState.duration / 2 - 1000);
         }
@@ -6193,10 +6159,8 @@ function stopSysIdRecording() {
         SysIdState.telemetryHandler = null;
     }
 
-    // WAŻNE: Wyślij komendę sysid_stop do firmware aby przywrócić oryginalne PID
-    sendBleMessage({ type: 'sysid_stop' });
-
-    // Upewnij się że joystick jest w pozycji neutralnej
+    // PASYWNA IDENTYFIKACJA - NIE wysyłamy sysid_stop, robot nie wie że był testowany!
+    // Tylko upewnij się że joystick jest w pozycji neutralnej
     sendBleMessage({ type: 'joystick', x: 0, y: 0 });
 
     // Update UI
@@ -6206,7 +6170,7 @@ function stopSysIdRecording() {
     drawSysIdChart();
 
     const testNames = { balance: 'Balans', speed: 'Prędkość', position: 'Pozycja' };
-    addLogMessage(`[SysID ${testNames[SysIdState.testType]}] Zakończone. Zebrano ${SysIdState.data.length} próbek.`, 'success');
+    addLogMessage(`[SysID ${testNames[SysIdState.testType]}] ✅ Zakończone. Zebrano ${SysIdState.data.length} próbek (pasywnie).`, 'success');
 }
 
 function updateSysIdUI(state) {
@@ -6542,14 +6506,20 @@ function exportSysIdCSV() {
     // Dodatkowe metadane specyficzne dla typu testu
     if (testType === 'balance') {
         metadataLines.push(`# kp_used: ${SysIdState.kp}`);
+        metadataLines.push(`# passive_mode: true`);
+        metadataLines.push(`# note: Robot nie wie że był testowany - użyto standardowych komend joysticka`);
         metadataLines.push(`# impulse_joystick_percent: ${SysIdState.impulse * 100}`);
         metadataLines.push(`# impulse_type: double_pulse_fwd_bwd`);
         metadataLines.push(`# impulse_phase_duration_ms: ${SysIdState.impulseDuration || 100}`);
         metadataLines.push(`# impulse_total_duration_ms: ${(SysIdState.impulseDuration || 100) * 2}`);
     } else if (testType === 'speed') {
+        metadataLines.push(`# passive_mode: true`);
         metadataLines.push(`# step_value_speed: ${SysIdState.stepValue}`);
+        metadataLines.push(`# joystick_percent: ${SysIdState.impulse * 100}`);
     } else if (testType === 'position') {
+        metadataLines.push(`# passive_mode: true`);
         metadataLines.push(`# step_value_position: ${SysIdState.stepValue}`);
+        metadataLines.push(`# joystick_percent: ${SysIdState.impulse * 100}`);
     }
     metadataLines.push('');
 

@@ -72,7 +72,7 @@
 
     <!-- UWAGA: Nazwa "RoboBala" jest oficjalną nazwą projektu i NIE powinna być zmieniana.
          Zmieniaj tylko numer wersji (v23.2 → v23.3 itd.) przy aktualizacjach. -->
-    <h1>RoboBala v23.2</h1>
+    <h1>RoboBala v23.3</h1>
     <div class="main-grid">
         <div class="card" id="controls-card">
             <h2>Sterowanie</h2>
@@ -846,11 +846,15 @@
                         </div>
                     </div>
                     
-                    <div class="setting-container" id="sysid-kp-container">
-                        <label for="sysid-kp">Kp (tylko proporcjonalny)<span class="help-icon">?</span></label>
-                        <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="sysid-kp" min="1" max="200" step="1" value="50"><button>+</button></div>
-                        <div class="help-text">Wartość wzmocnienia proporcjonalnego używana podczas testu balansu. Ki i Kd będą ustawione na 0.</div>
+                    <!-- INFO: Pasywna identyfikacja - robot NIE wie że jest testowany! -->
+                    <div style="background: linear-gradient(135deg, #1a3a2a 0%, #1a1d24 100%); border: 1px solid #4caf50; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                        <h5 style="color: #4caf50; margin: 0 0 8px 0; font-size: 0.9em;">🔒 Tryb Pasywny</h5>
+                        <p style="color: #a2f279; font-size: 0.85em; margin: 0;">
+                            Robot <strong>nie wie że jest testowany</strong>! Używane są tylko standardowe komendy joysticka, 
+                            a telemetria jest zbierana pasywnie. Robot używa swoich aktualnych parametrów PID.
+                        </p>
                     </div>
+                    
                     <div class="setting-container">
                         <label for="sysid-duration">Czas nagrywania (s)<span class="help-icon">?</span></label>
                         <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="sysid-duration" min="2" max="30" step="1" value="5"><button>+</button></div>
@@ -859,7 +863,7 @@
                     <div class="setting-container" id="sysid-impulse-container">
                         <label for="sysid-impulse">Impuls joysticka (%)<span class="help-icon">?</span></label>
                         <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="sysid-impulse" min="5" max="100" step="5" value="25"><button>+</button></div>
-                        <button id="sysid-test-impulse-btn" style="width: 100%; margin-top: 6px; padding: 8px 12px; background: #f7b731; color: #000; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;" title="Jednorazowy test impulsu (podwójny przód→tył)">🔧 Testuj</button>
+                        <button id="sysid-test-impulse-btn" style="width: 100%; margin-top: 6px; padding: 8px 12px; background: #f7b731; color: #000; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;" title="Jednorazowy test impulsu (podwójny przód→tył)">🔧 Testuj impuls</button>
                         <div class="help-text">Siła impulsu jako % joysticka. Podwójny impuls: przód + tył. Typowy zakres: 15-40%.</div>
                     </div>
                     <div class="setting-container" id="sysid-impulse-duration-container">
