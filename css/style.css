@@ -1,3 +1,25 @@
+/* ============================================================================
+   ZMIENNE CSS — główna paleta kolorów i rozmiarów
+   (scalono z dawnego style_legacy_fixes.css)
+   ============================================================================ */
+:root {
+    --bg-primary: #282c34;
+    --bg-card: #3a3f47;
+    --bg-tertiary: #20232a;
+    --bg-hover: #5a6068;
+    --bg-accordion-inactive: #4a4f58;
+    --radius-sm: 5px;
+    --radius-md: 8px;
+    --border-color: #4a4f58;
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.2);
+    --color-accent: #61dafb;
+    --color-success: #a2f279;
+    --color-warning: #f7b731;
+    --color-danger: #ff6347;
+    --color-text: #fff;
+    --color-label: #a2f279;
+}
+
 body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 15px; background-color: #282c34; color: #fff; font-size: 14px; }
 h1 { color: #61dafb; font-size: 1.8em; }
 h2 { color: #61dafb; font-size: 1.4em; margin-top: 0; margin-bottom: 15px; }
@@ -817,5 +839,546 @@ body.ui-locked #connectBleBtn, body.ui-locked #emergencyStopBtn {
     .fusion-profiles-section button {
         font-size: 0.8em;
         padding: 6px;
+    }
+}
+
+/* ========================================================================
+ * UI MODES - Przełącznik trybów Student / Zaawansowany / Expert
+ * ======================================================================== */
+
+/* Ukrywanie sekcji — wyższy priorytet niż display z akordeonów */
+.mode-hidden {
+    display: none !important;
+}
+
+/* Przełącznik trybów w headerze */
+.ui-mode-switcher {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin: 8px auto 16px;
+    padding: 4px;
+    background: #20232a;
+    border: 1px solid #4a4f58;
+    border-radius: 10px;
+    max-width: 520px;
+}
+
+.ui-mode-btn {
+    flex: 1;
+    padding: 8px 12px;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: #888;
+    font-size: 0.85em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    white-space: nowrap;
+}
+
+.ui-mode-btn:hover {
+    color: #ccc;
+    background: #2a2d35;
+}
+
+.ui-mode-btn.active {
+    color: #fff;
+    background: #61dafb;
+    border-color: #61dafb;
+    box-shadow: 0 2px 8px rgba(97, 218, 251, 0.3);
+}
+
+/* Indykator trybu na body */
+body[data-ui-mode="student"] .ui-mode-btn.active { background: #2ecc71; border-color: #2ecc71; box-shadow: 0 2px 8px rgba(46,204,113,0.3); }
+body[data-ui-mode="advanced"] .ui-mode-btn.active { background: #f7b731; border-color: #f7b731; color: #000; box-shadow: 0 2px 8px rgba(247,183,49,0.3); }
+body[data-ui-mode="expert"] .ui-mode-btn.active { background: #e74c3c; border-color: #e74c3c; box-shadow: 0 2px 8px rgba(231,76,60,0.3); }
+
+@media (max-width: 500px) {
+    .ui-mode-switcher {
+        flex-direction: column;
+        max-width: 280px;
+    }
+    .ui-mode-btn {
+        font-size: 0.8em;
+        padding: 6px 8px;
+    }
+}
+
+/* ========================================================================
+ * FUZZY LOGIC EDITOR - Panel edytora reguł rozmytych
+ * ======================================================================== */
+
+/* Przełącznik PID / Fuzzy */
+.fuzzy-mode-switch {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.fuzzy-mode-label {
+    color: #aaa;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.fuzzy-mode-toggle {
+    display: flex;
+    gap: 4px;
+    background: #1a1d24;
+    border: 1px solid #4a4f58;
+    border-radius: 8px;
+    padding: 3px;
+}
+
+.fuzzy-mode-btn {
+    padding: 8px 20px;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: #888;
+    font-size: 0.9em;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.fuzzy-mode-btn:hover {
+    color: #ccc;
+    background: #2a2d35;
+}
+
+.fuzzy-mode-btn.active[data-control="pid"] {
+    background: #3498db;
+    color: #fff;
+    border-color: #3498db;
+    box-shadow: 0 2px 8px rgba(52,152,219,0.35);
+}
+
+.fuzzy-mode-btn.active[data-control="fuzzy"] {
+    background: #9b59b6;
+    color: #fff;
+    border-color: #9b59b6;
+    box-shadow: 0 2px 8px rgba(155,89,182,0.35);
+}
+
+/* Legenda zbiorów */
+.fuzzy-legend {
+    background: #1a1d24;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.fuzzy-legend-title {
+    font-weight: bold;
+    color: #ccc;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+}
+
+.fuzzy-legend-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.fuzzy-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: #20232a;
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: #ccc;
+}
+
+/* Info edukacyjne */
+.fuzzy-edu-info {
+    background: linear-gradient(135deg, #1a2a3a 0%, #1a1d24 100%);
+    border: 1px solid #9b59b6;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 15px;
+    font-size: 0.9em;
+}
+
+.fuzzy-edu-info p {
+    color: #aaa;
+    margin: 6px 0 0;
+    line-height: 1.5;
+}
+
+/* Tabela reguł */
+.fuzzy-table-wrapper {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.fuzzy-table-label-y {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    color: #888;
+    font-size: 0.8em;
+    font-weight: bold;
+    letter-spacing: 1px;
+    min-width: 20px;
+}
+
+.fuzzy-table-container {
+    flex: 1;
+    overflow-x: auto;
+}
+
+.fuzzy-table-label-x {
+    text-align: center;
+    color: #888;
+    font-size: 0.8em;
+    font-weight: bold;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+}
+
+.fuzzy-axis-label {
+    text-transform: uppercase;
+}
+
+.fuzzy-rules-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.fuzzy-rules-table th,
+.fuzzy-rules-table td {
+    text-align: center;
+    padding: 4px;
+    border: 1px solid #333;
+}
+
+.fuzzy-corner-cell {
+    background: #1a1d24;
+    color: #666;
+    font-size: 0.75em;
+    font-style: italic;
+}
+
+.fuzzy-col-header,
+.fuzzy-row-header {
+    background: #20232a;
+    color: #ccc;
+    font-weight: bold;
+    font-size: 0.85em;
+    padding: 6px 4px;
+}
+
+.fuzzy-cell {
+    padding: 3px;
+    background: #101014;
+}
+
+.fuzzy-cell-btn {
+    width: 100%;
+    padding: 10px 4px;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    color: #fff;
+    font-weight: 900;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    letter-spacing: 1px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+.fuzzy-cell-btn:hover {
+    filter: brightness(1.3);
+    transform: scale(1.05);
+    border-color: #fff;
+    box-shadow: 0 2px 8px rgba(255,255,255,0.15);
+}
+
+.fuzzy-cell-btn:active {
+    transform: scale(0.95);
+}
+
+/* Przyciski akcji */
+.fuzzy-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.fuzzy-action-btn {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #4a4f58;
+    border-radius: 6px;
+    background: #20232a;
+    color: #ccc;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.fuzzy-action-btn:hover {
+    background: #2a2d35;
+    border-color: #61dafb;
+    color: #fff;
+}
+
+.fuzzy-send-btn {
+    background: #9b59b6;
+    color: #fff;
+    border-color: #9b59b6;
+}
+
+.fuzzy-send-btn:hover {
+    background: #a66bbe;
+    border-color: #a66bbe;
+}
+
+/* Status */
+.fuzzy-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #20232a;
+    border: 1px solid #333;
+    border-radius: 6px;
+    font-size: 0.85em;
+    color: #888;
+}
+
+.fuzzy-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #555;
+    flex-shrink: 0;
+}
+
+.fuzzy-status-dot.fuzzy-status-active {
+    background: #9b59b6;
+    box-shadow: 0 0 6px rgba(155,89,182,0.6);
+}
+
+.fuzzy-status-dot.fuzzy-status-idle {
+    background: #555;
+}
+
+.fuzzy-status-dot.fuzzy-status-success {
+    background: #2ecc71;
+    box-shadow: 0 0 6px rgba(46,204,113,0.6);
+}
+
+.fuzzy-status-dot.fuzzy-status-error {
+    background: #e74c3c;
+    box-shadow: 0 0 6px rgba(231,76,60,0.6);
+}
+
+.fuzzy-status-dot.fuzzy-status-info {
+    background: #f7b731;
+    box-shadow: 0 0 6px rgba(247,183,49,0.6);
+}
+
+/* Responsywność tabeli fuzzy */
+@media (max-width: 500px) {
+    .fuzzy-cell-btn {
+        padding: 6px 2px;
+        font-size: 0.75em;
+    }
+    .fuzzy-col-header,
+    .fuzzy-row-header {
+        font-size: 0.75em;
+        padding: 4px 2px;
+    }
+    .fuzzy-mode-btn {
+        padding: 6px 10px;
+        font-size: 0.8em;
+    }
+    .fuzzy-legend-items {
+        gap: 4px;
+    }
+    .fuzzy-legend-item {
+        font-size: 0.75em;
+        padding: 2px 6px;
+    }
+}
+
+/* ============================================================
+   Wizualizacja zbiorów rozmytych — Canvas na żywo
+   ============================================================ */
+
+.fuzzy-canvas-section {
+    margin-bottom: 14px;
+    background: #181a22;
+    border: 1px solid #2a2d35;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.fuzzy-canvas-title {
+    font-size: 0.92em;
+    font-weight: bold;
+    color: #61dafb;
+    margin-bottom: 10px;
+}
+
+.fuzzy-canvas-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.fuzzy-canvas-box {
+    flex: 1 1 200px;
+    min-width: 200px;
+    max-width: 460px;
+    text-align: center;
+}
+
+.fuzzy-canvas-label {
+    font-size: 0.82em;
+    font-weight: bold;
+    color: #ccc;
+    margin-bottom: 4px;
+}
+
+.fuzzy-canvas-box canvas {
+    width: 100%;
+    height: auto;
+    border: 1px solid #333;
+    border-radius: 6px;
+    background: #12141a;
+}
+
+.fuzzy-canvas-hint {
+    font-size: 0.78em;
+    color: #888;
+    margin-top: 4px;
+    min-height: 1.4em;
+    transition: color 0.3s;
+}
+
+/* ============================================================
+   Suwaki parametrów zbiorów rozmytych
+   ============================================================ */
+
+.fuzzy-sliders-section {
+    margin-bottom: 12px;
+    background: #181a22;
+    border: 1px solid #2a2d35;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.fuzzy-sliders-title {
+    font-size: 0.92em;
+    font-weight: bold;
+    color: #ccc;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fuzzy-sliders-toggle-btn {
+    background: none;
+    border: 1px solid #4a4f58;
+    border-radius: 4px;
+    color: #aaa;
+    cursor: pointer;
+    font-size: 0.8em;
+    padding: 2px 7px;
+    transition: all 0.2s;
+}
+
+.fuzzy-sliders-toggle-btn:hover {
+    border-color: #61dafb;
+    color: #61dafb;
+}
+
+.fuzzy-sliders-body {
+    margin-top: 10px;
+}
+
+.fuzzy-sliders-group {
+    margin-bottom: 12px;
+    padding: 8px;
+    background: #1a1d24;
+    border-radius: 6px;
+    border: 1px solid #2a2d35;
+}
+
+.fuzzy-sliders-group-title {
+    font-size: 0.82em;
+    color: #aaa;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.fuzzy-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 5px;
+    flex-wrap: wrap;
+}
+
+.fuzzy-slider-label {
+    font-weight: 900;
+    font-size: 0.85em;
+    min-width: 28px;
+    text-align: center;
+}
+
+.fuzzy-slider-row label {
+    font-size: 0.8em;
+    color: #999;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.fuzzy-slider-input {
+    width: 72px;
+    padding: 3px 5px;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #20232a;
+    color: #ddd;
+    font-size: 0.88em;
+    text-align: center;
+}
+
+.fuzzy-slider-input:focus {
+    border-color: #61dafb;
+    outline: none;
+}
+
+@media (max-width: 600px) {
+    .fuzzy-canvas-row {
+        flex-direction: column;
+    }
+    .fuzzy-canvas-box {
+        max-width: 100%;
+    }
+    .fuzzy-slider-row {
+        gap: 6px;
+    }
+    .fuzzy-slider-input {
+        width: 60px;
     }
 }

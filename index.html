@@ -74,7 +74,7 @@
          Zmieniaj tylko numer wersji (v23.2 → v23.3 itd.) przy aktualizacjach. -->
     <h1>RoboBala v23.3</h1>
     <div class="main-grid">
-        <div class="card" id="controls-card">
+        <div class="card" id="controls-card" data-mode="student">
             <h2>Sterowanie</h2>
             <div id="joystickWrapper"><canvas id="joystickCanvas"></canvas></div>
             <div class="control-row">
@@ -93,7 +93,7 @@
                 <span class="control-label">Wylacz Magnetometr <span class="help-icon" title="Wyłącza magnetometr w algorytmie fuzji sensorów. Przydatne gdy magnetometr jest zakłócany przez silniki lub metalowe elementy.">?</span></span>
                 <label class="switch"><input type="checkbox" id="disableMagnetometerSwitch"><span class="slider round"></span></label>
             </div>
-            <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;">Mapowanie Przyciskow Gamepada</button>
+            <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;" data-mode="expert">Mapowanie Przyciskow Gamepada</button>
             <fieldset style="margin-top:10px; border: 1px solid #444; padding: 10px; border-radius: 6px;">
                 <legend style="color: #61dafb; font-weight: bold;">Korekta montażu (EEPROM)</legend>
                 <button id="resetZeroBtn" style="width:100%;">Ustaw punkt 0 (Pitch)</button>
@@ -134,7 +134,7 @@
             </fieldset>
             <button id="resetEncodersBtn" style="margin-top:10px; background-color:#f7b731; width: 100%;">Resetuj Enkodery</button>
             <button id="emergencyStopBtn">STOP AWARYJNY</button>
-            <button class="accordion-header" onclick="toggleAccordion(this)" style="margin-top: 15px;">Strojenie Joysticka</button>
+            <button class="accordion-header" onclick="toggleAccordion(this)" style="margin-top: 15px;" data-mode="advanced">Strojenie Joysticka</button>
             <div class="accordion-content">
                 <div class="setting-container"><label for="joystickSensitivityInput">Czulosc Globalna (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickSensitivityInput" min="10" max="100" step="5" value="100"><button>+</button></div><div class="help-text">Globalny mnożnik dla wszystkich wartości z joysticka. Ustawienie 100% oznacza pełną czułość - robot reaguje maksymalnie na ruchy joysticka. Zmniejsz do 50-70%, jeśli robot jest zbyt nerwowy lub reaguje zbyt gwałtownie. Przydatne podczas nauki sterowania lub w ciasnych przestrzeniach. Typowy zakres: 60-100%.</div></div>
                 <div class="setting-container"><label for="expoJoystickInput">Expo Joysticka (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="expoJoystickInput" min="0" max="90" step="1" value="0"><button>+</button></div><div class="help-text">Krzywa wykładnicza (expo) zmienia charakterystykę odpowiedzi joysticka. Przy 0% odpowiedź jest liniowa. Zwiększenie wartości sprawia, że przy małych wychyleniach robot reaguje łagodniej (większa precyzja), a przy dużych wychyleniach normalnie. Wartość 30-50% zapewnia dobrą równowagę między precyzją a responsywnością. Typowy zakres: 0-50%.</div></div>
@@ -145,7 +145,7 @@
                 <div class="setting-container"><label for="joystickDeadzoneInput">Strefa Martwa (%)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="joystickDeadzoneInput" min="0" max="50" step="1" value="0"><button>+</button></div><div class="help-text">Obszar wokół środka joysticka, w którym ruch jest ignorowany. Przydatne, jeśli joystick "dryfuje" sam z siebie lub chcesz uniknąć przypadkowych mikroruchów. Wartość 5-10% usuwa drobne drżenia bez utraty czułości. Typowy zakres: 0-15%.</div></div>
             </div>
         </div>
-        <div class="card">
+        <div class="card" id="dashboard-card" data-mode="student">
             <h2>Dashboard</h2>
             <div style="display: flex; gap: 8px; margin-bottom: 15px;">
                 <button id="connectBleBtn" style="flex: 1;">POLACZ Z ROBOTEM</button>
@@ -238,12 +238,12 @@
                 <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
                     <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Asystent Kalibracji IMU</button>
                     <button id="calibrateZeroPointBtn" style="width:100%; background-color:#f7b731;">Znajdz Pion Automatycznie</button>
-                    <button id="sensorMappingBtn" style="width:100%; background-color:#f7b731;">Mapowanie czujnika</button>
-                    <button id="modelMappingBtn" style="width:100%; background-color:#f7b731;">Mapowanie modelu 3D</button>
+                    <button id="sensorMappingBtn" style="width:100%; background-color:#f7b731;" data-mode="advanced">Mapowanie czujnika</button>
+                    <button id="modelMappingBtn" style="width:100%; background-color:#f7b731;" data-mode="advanced">Mapowanie modelu 3D</button>
                 </div>
             </fieldset>
         </div>
-        <div class="card">
+        <div class="card" id="viz3d-card" data-mode="student">
             <h2>Wizualizacja 3D Robota</h2>
             <div id="robot3d-container"></div>
             <div class="robot3d-controls">
@@ -267,7 +267,7 @@
                 </div>
             </fieldset>
         </div>
-        <div class="card">
+        <div class="card" id="analyzer-card" data-mode="advanced">
             <h2>Analizator Sygnalow</h2>
             <div class="chart-hints">
                 <strong>💡 Wskazówki:</strong> 
@@ -296,7 +296,7 @@
         </div>
         
         <!-- NOWA KARTA: Nauka PID - Wizualizacja edukacyjna -->
-        <div class="card" id="pid-education-card">
+        <div class="card" id="pid-education-card" data-mode="student">
             <h2>📚 Nauka PID <span class="help-icon" id="pidEducationHelp">?</span>
                 <span id="pidDataSourceBadge" style="font-size: 0.5em; padding: 2px 8px; border-radius: 10px; background: #555; color: #888; margin-left: 10px; vertical-align: middle;">Symulacja</span>
             </h2>
@@ -531,8 +531,22 @@
                 </div>
             </details>
         </div>
+
+        <!-- NOWA KARTA: Fuzzy Logic Controller - edytor reguł rozmytych -->
+        <div class="card" id="fuzzy-card" data-mode="student">
+            <h2>🧠 Fuzzy Logic Controller <span class="help-icon" id="fuzzyEditorHelp">?</span></h2>
+            <div id="fuzzyEditorHelpText" class="help-text" style="margin-bottom: 12px;">
+                <strong>Cel:</strong> Sterowanie robotem za pomocą reguł logicznych zamiast wzorów matematycznych.<br>
+                <strong>Jak to działa:</strong> Każda reguła mówi: „Jeśli kąt odchylenia jest <em>taki</em> i prędkość kątowa jest <em>taka</em>, to wyślij na silniki <em>taką</em> moc."<br>
+                <strong>Strojenie:</strong> Kliknij komórkę w tabeli, aby zmienić jej wartość. Zmiany wysyłane są automatycznie do robota.<br>
+                <strong style="color: #a2f279;">Różnica vs PID:</strong> Fuzzy Logic nie potrzebuje wzorów matematycznych — używa logiki językowej, takiej jak ludzkie myślenie.
+            </div>
+            <div id="fuzzy-editor-panel">
+                <!-- Zawartość generowana dynamicznie przez fuzzy-editor.js -->
+            </div>
+        </div>
         
-        <div class="card">
+        <div class="card" id="autonomous-card" data-mode="advanced">
              <button class="accordion-header" onclick="toggleAccordion(this)">Sterowanie Autonomiczne</button>
             <div class="accordion-content">
                <fieldset>
@@ -570,7 +584,7 @@
                </fieldset>
            </div>
         </div>
-        <div class="card">
+        <div class="card" id="config-card" data-mode="student">
             <h2>Konfiguracja</h2>
             <fieldset>
                 <legend>Profile Ustawien (Snapshots)</legend>
@@ -583,7 +597,7 @@
                 <!-- Przyciski przeniesione na dół, pod wszystkimi akordeonami -->
             </fieldset>
             <div id="allSettings">
-                <button class="accordion-header" onclick="toggleAccordion(this)">1. Filtr Mahony i Predykcja <span id="fusionModeIndicator" class="fusion-indicator fusion-mahony">⚡ Mahony (~500Hz)</span></button>
+                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="expert">1. Filtr Mahony i Predykcja <span id="fusionModeIndicator" class="fusion-indicator fusion-mahony">⚡ Mahony (~500Hz)</span></button>
                 <div class="accordion-content">
                     <!-- ===== SEKCJA EDUKACYJNA: Tryby fuzji IMU ===== -->
                     <div class="fusion-info-box" style="background: linear-gradient(135deg, #1a2a3a 0%, #1a1d24 100%); border: 1px solid #4fc3f7; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
@@ -620,14 +634,14 @@
                     <div class="setting-container"> <label for="predictionModeInput">Tryb predykcji<span class="help-icon">?</span></label> <select class="config-value" id="predictionModeInput"><option value="0">Wyłączony (aktualny kąt)</option><option value="1" selected>Prosta (θ + ω·Δt)</option><option value="2">Kwadratowa (θ + ω·Δt + ½α·Δt²)</option></select> <div class="help-text">Predykcja kompensuje opóźnienia systemowe poprzez przewidywanie przyszłego kąta. <strong>Wyłączony:</strong> reakcja na aktualny kąt - standardowe zachowanie. <strong>Prosta:</strong> uwzględnia prędkość kątową - zalecany tryb. <strong>Kwadratowa:</strong> uwzględnia też przyspieszenie kątowe - może być niestabilna.</div> </div>
                     <div class="setting-container"> <label for="predictionTimeMsInput">Horyzont predykcji (ms)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="predictionTimeMsInput" min="0" max="50" step="1" value="20"><button>+</button></div> <div class="help-text">Jak daleko w przyszłość przewidywać kąt (w milisekundach). Wyższa wartość = większa kompensacja opóźnień, ale ryzyko przeregulowania. Typowy zakres: 10-30 ms. 0 = wyłączone.</div> </div>
                 </div>
-                <button class="accordion-header" onclick="toggleAccordion(this)">2. Parametry Sprzetowe i Mechaniczne</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="advanced">2. Parametry Sprzetowe i Mechaniczne</button>
                 <div class="accordion-content">
                     <!-- Usunięto legacy mapowanie osi IMU – zastąpione nowym kreatorem 'Mapowanie czujnika' w Dashboard -->
                     <div class="setting-container"> <label for="wheelDiameterInput">Srednica kola (cm)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="wheelDiameterInput" min="1" max="30" step="0.1" value="8.2"><button>+</button></div> <div class="help-text">Średnica koła robota w centymetrach. Parametr kluczowy dla obliczania prędkości i pokonanego dystansu. Zmierz dokładnie średnicę od krawędzi do krawędzi przez środek koła. Większe koła = większa prędkość przy tych samych obrotach silnika. Typowy zakres: 6-12 cm.</div> </div>
                     <div class="setting-container"> <label for="trackWidthInput">Rozstaw kol (cm)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="trackWidthInput" min="5" max="50" step="0.1" value="12.5"><button>+</button></div> <div class="help-text">Odległość między środkami obu kół (szerokość toru). Wpływa na obliczenia obrotu - szerszy rozstaw wymaga większej różnicy prędkości kół do wykonania tego samego skrętu. Zmierz odległość między środkami osi kół. Typowy zakres: 10-20 cm.</div> </div>
                     <div class="setting-container"> <label for="encoderPprInput">Impulsy na obrot (PPR)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="encoderPprInput" min="100" max="5000" step="10" value="820"><button>+</button></div> <div class="help-text">Liczba impulsów enkodera na jeden pełny obrót koła. Zależy od rozdzielczości enkodera i przekładni (jeśli jest). Wartość ta wpływa na dokładność pomiaru prędkości i pozycji. Wyższa wartość = większa precyzja. Sprawdź specyfikację swojego enkodera i przekładni. Typowy zakres: 300-2000 PPR.</div> </div>
                 </div>
-                <button class="accordion-header" onclick="toggleAccordion(this)">3. Kalibracja PWM Silnikow</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="advanced">3. Kalibracja PWM Silnikow</button>
                 <div class="accordion-content">
                     <div class="pwm-info"> <strong>Info:</strong> Uzyj przycisku <strong>"Auto"</strong>, aby automatycznie znalezc prog startowy silnika, lub <strong>"Testuj"</strong>, aby sprawdzic recznie wpisana wartosc. <strong>Wazne:</strong> Przed testem podnies robota, aby kola mogly sie swobodnie krecic! </div>
                     <div class="setting-container"> <label for="pwmTuneStartInput">Rozpocznij auto-szukanie od PWM</label> <div class="numeric-input-wrapper"> <button id="pwmTuneStartMinus">-</button> <input type="number" id="pwmTuneStartInput" min="1" max="2047" step="1" value="1200"> <button id="pwmTuneStartPlus">+</button> </div> </div> <hr style="border-color: #4a4f58; margin: 15px 0;">
@@ -637,7 +651,7 @@
                     <div class="manual-tune-row" data-motor="right" data-direction="bwd"> <div class="pwm-input-row"> <label>Prawy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="2047" step="1" value="1200"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
                     <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKIE SILNIKI</button>
                 </div>
-                <button class="accordion-header" onclick="toggleAccordion(this)">4. PID Balansu (Podstawowy) <span class="sign-badge" id="balanceSignBadge">B:+</span> <span id="fusionModeIndicator4" class="fusion-indicator fusion-mahony" style="font-size: 0.65em;">⚡ Mahony</span></button>
+                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="student">4. PID Balansu (Podstawowy) <span class="sign-badge" id="balanceSignBadge">B:+</span> <span id="fusionModeIndicator4" class="fusion-indicator fusion-mahony" style="font-size: 0.65em;">⚡ Mahony</span></button>
                 <div class="accordion-content">
                     <div class="setting-container"> <label for="balanceKpInput">Kp - Sila<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKpInput" min="0" max="500" step="0.1" value="95"><button>+</button></div> <div class="help-text"><strong>Proporcjonalny (Kp):</strong> Określa, jak mocno robot reaguje na odchylenie od pionu. Wyższa wartość = sztywniejsze utrzymanie równowagi, szybsza reakcja na zakłócenia. Zbyt wysoka wartość powoduje szybkie oscylacje (robot "drży"). Zbyt niska = robot reaguje za wolno i może upaść. Zacznij od 80-120 i dostosuj stopniowo. Typowy zakres: 60-150.</div> </div>
                     <div class="setting-container"> <label for="balanceKiInput">Ki - Korekta<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKiInput" min="0" max="10" step="0.01" value="0.0"><button>+</button></div> <div class="help-text"><strong>Całkujący (Ki):</strong> Eliminuje długotrwały, stały błąd (np. gdy robot powoli dryfuje w jednym kierunku mimo pionowego stania). Często nie jest potrzebny dla balansu - zacznij od 0. Jeśli robot ma tendencję do dryfowania, zwiększaj bardzo ostrożnie (np. 0.05-0.2). Zbyt wysoka wartość powoduje niestabilność i oscylacje. Typowy zakres: 0-0.5.</div> </div>
@@ -646,7 +660,7 @@
                     <div class="setting-container"> <label for="balanceIntegralLimitInput">Limit Integratora<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceIntegralLimitInput" min="0" max="200" step="1" value="50"><button>+</button></div> <div class="help-text">Maksymalna wartość, jaką może osiągnąć suma całkująca (Ki). Zapobiega "rozregulowaniu" integratora przy dużych, długotrwałych błędach. Jeśli używasz Ki, ustaw limit na 30-100. Jeśli Ki=0, ten parametr nie ma wpływu. Typowy zakres: 30-100.</div> </div>
                     <div class="model-mapping-row" style="margin-top:6px;"><label>Znak sprzężenia (Balans)</label><div id="balanceSign" class="sign-toggle"><button data-sign="-1">-</button><button data-sign="1">+</button></div><div class="help-text" style="margin-top:8px;">Odwróć znak sprzężenia pętli balansu (zmiana możliwa tylko w trybie IDLE)</div></div>
                 </div>
-                <button class="accordion-header" onclick="toggleAccordion(this)">5. PID Kaskadowy (Predkosc/Pozycja) <span id="fusionModeIndicator5" class="fusion-indicator fusion-mahony" style="font-size: 0.65em;">⚡ Mahony</span></button>
+                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="advanced">5. PID Kaskadowy (Predkosc/Pozycja) <span id="fusionModeIndicator5" class="fusion-indicator fusion-mahony" style="font-size: 0.65em;">⚡ Mahony</span></button>
                 <div class="accordion-content">
                     <div class="parameter-group"><h5>PID Predkosci <span class="sign-badge" id="speedSignBadge">S:+</span></h5>
                         <div class="setting-container"> <label for="speedKpInput">Kp - Reakcja<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKpInput" min="0" max="10" step="0.01" value="0.0"><button>+</button></div> <div class="help-text">Kontroluje, jak mocno robot pochyla się, aby osiągnąć zadaną prędkość. Wyższa wartość = szybsze przyspieszanie/zwalnianie, ale może powodować oscylacje prędkości. Zacznij od małych wartości (0.1-0.5) i zwiększaj stopniowo. Typowy zakres: 0.1-2.0.</div> </div>
@@ -669,7 +683,7 @@
                         <div class="setting-container"> <label for="positionFilterAlphaInput">Filtr Pochodnej (%)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="positionFilterAlphaInput" min="1" max="100" step="1" value="90"><button>+</button></div> <div class="help-text">Wygładza sygnał różniczkujący (Kd). 100% = brak filtrowania. Zmniejsz do 70-90%, jeśli hamowanie jest "szarpane". Typowy zakres: 70-95%.</div> </div>
                     </div>
                 </div>
-                <button class="accordion-header" onclick="toggleAccordion(this)">6. PID Obrotu i Kursu</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="advanced">6. PID Obrotu i Kursu</button>
                 <div class="accordion-content">
                     <div class="parameter-group"><h5>PID Obrotu (Autonomiczny)</h5>
                         <div class="setting-container"> <label for="rotationKpInput">Kp - Sila obrotu<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="rotationKpInput" min="0" max="50" step="0.1" value="0.0"><button>+</button></div> <div class="help-text">Kontroluje moc obrotu podczas automatycznego skrętu o zadany kąt. Wyższa wartość = szybszy obrót, ale ryzyko przesterowania (robot obraca się za daleko). Zacznij od małych wartości (1-5) i zwiększaj stopniowo. Typowy zakres: 2-10.</div> </div>
@@ -683,7 +697,7 @@
                     </div>
                 </div>
                 
-                <button class="accordion-header" onclick="toggleAccordion(this)">7. Zaawansowana Optymalizacja PID</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="expert">7. Zaawansowana Optymalizacja PID</button>
                 <div class="accordion-content autotune-pane" id="autotuning-card-content">
                 <div id="autotuning-config-panel">
                     <!-- Główne zakładki panelu -->
@@ -810,7 +824,7 @@
             </div>
         </div>
         
-                <button class="accordion-header" onclick="toggleAccordion(this)">8. Identyfikacja Obiektu (System ID) <span id="sysidFusionIndicator" class="fusion-indicator fusion-mahony" style="font-size: 0.65em;">⚡ Mahony</span></button>
+                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="advanced">8. Identyfikacja Obiektu (System ID) <span id="sysidFusionIndicator" class="fusion-indicator fusion-mahony" style="font-size: 0.65em;">⚡ Mahony</span></button>
                 <div class="accordion-content" id="sysid-content">
                     <!-- Edukacyjne wprowadzenie do System ID -->
                     <div style="background: linear-gradient(135deg, #1a2a3a 0%, #1a1d24 100%); border: 1px solid #9b59b6; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
@@ -829,7 +843,7 @@
                     <p style="color: #aaa; font-size: 0.9em; margin-bottom: 15px;">
                         📊 Nagraj odpowiedź skokową dla wybranej pętli. 
                         Kliknij <strong style="color: #9b59b6;">🔬 Analizuj</strong> aby obliczyć optymalne PID bezpośrednio w przeglądarce,
-                        lub eksportuj dane do Python/MATLAB.
+                        lub eksportuj dane do CSV.
                     </p>
                     
                     <div class="setting-container">
@@ -916,9 +930,6 @@
                         </button>
                         <button id="sysid-import-csv-btn" style="flex: 1; min-width: 100px; padding: 10px; background: #61dafb; color: #000; border: none; border-radius: 6px; cursor: pointer;">
                             📂 Import CSV
-                        </button>
-                        <button id="sysid-export-mat-btn" style="flex: 1; min-width: 100px; padding: 10px; background: #f7b731; color: #000; border: none; border-radius: 6px; cursor: pointer;" disabled>
-                            📐 Eksport MAT
                         </button>
                         <button id="sysid-analyze-btn" style="flex: 1; min-width: 100px; padding: 10px; background: #9b59b6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;" disabled>
                             🔬 Analizuj
@@ -1216,13 +1227,13 @@
         </div>
     </div>
 
-    <!-- WARNING: Do NOT include both the production bundle and modular JS files in the same page.
-        For development, use 'index-dev.html' which loads the modular scripts in dependency order.
-        The bundler is available as a single file 'js/main.js' for production. -->
-    <!-- Production mode: używamy wyłącznie zbudowanego pakietu 'main.js'.
-        NIE ładujemy jednocześnie modularnych plików aby uniknąć
-        redeklaracji zmiennych (patrz komentarz w main.js). -->
-    <script src="js/main.js"></script>
+    <!-- ARCHITEKTURA MODUŁOWA ES6:
+         main.js ładowany jest jako skrypt klasyczny (defer) - dostarcza pełną funkcjonalność.
+         app.js jest modułem ES6, który importuje wyodrębnione moduły z js/modules/.
+         Moduły nadpisują kluczowe funkcje w window.* swoimi kanonicznymi wersjami.
+         Docelowo cały kod z main.js zostanie przeniesiony do modułów. -->
+    <script src="js/main.js" defer></script>
+    <script type="module" src="js/app.js"></script>
 
 </body>
 </html>
