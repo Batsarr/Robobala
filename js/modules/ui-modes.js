@@ -156,6 +156,9 @@ function applyMode(mode) {
     const currentLevel = MODES[mode]?.level ?? 0;
 
     document.querySelectorAll('[data-mode]').forEach(el => {
+        // Pomiń przyciski przełącznika trybów — one zawsze muszą być widoczne
+        if (el.closest('#ui-mode-switcher')) return;
+
         const elMode = el.dataset.mode;
         const elLevel = MODES[elMode]?.level ?? 0;
         const visible = currentLevel >= elLevel;
