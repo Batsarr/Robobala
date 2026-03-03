@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboBala - Test UI</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style_legacy_fixes.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 20px; padding: 20px; }
+        h1 { color: #61dafb; }
+        .test-section { margin: 30px 0; padding: 20px; background: #3a3f47; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test UI RoboBala</h1>
+    
+    <div class="test-section">
+        <h2>Test 1: Akordeony</h2>
+        <div class="card">
+            <div class="accordion">
+                <button class="accordion-btn">Test Akordeon 1</button>
+                <div class="accordion-content">
+                    <p>To jest treść pierwszego akordeonu. Kliknij nagłówek aby otworzyć/zamknąć.</p>
+                </div>
+            </div>
+            
+            <div class="accordion">
+                <button class="accordion-btn">Test Akordeon 2</button>
+                <div class="accordion-content">
+                    <p>To jest treść drugiego akordeonu. Kliknij nagłówek aby otworzyć/zamknąć.</p>
+                </div>
+            </div>
+            
+            <div class="accordion">
+                <button class="accordion-btn">Test Akordeon 3</button>
+                <div class="accordion-content">
+                    <p>To jest treść trzeciego akordeonu. Kliknij nagłówek aby otworzyć/zamknąć.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 2: Model 3D</h2>
+        <div class="card">
+            <div id="robot3d-container" class="robot-3d-container"></div>
+            <p>Model 3D powinien pojawić się powyżej (biały lub kolorowy robot).</p>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 3: Wykres telemetryczny</h2>
+        <div class="card">
+            <div id="chart-wrapper" class="chart-wrapper">
+                <canvas id="signalAnalyzerChart" class="signal-canvas"></canvas>
+            </div>
+            <p>Wykres powinien pojawić się powyżej (wysokość 420px).</p>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 4: Diagnostyka z konsoli</h2>
+        <button onclick="runDiagnostics()">Uruchom diagnostykę</button>
+        <pre id="diagnosticsOutput" style="background: #20232a; padding: 10px; margin-top: 10px; border-radius: 5px; color: #a2f279;"></pre>
+    </div>
+
+    <script src="js/helpers.js"></script>
+    <script src="js/state_manager.js"></script>
+    <script src="js/path_visualization.js"></script>
+    <script src="js/tuning_algorithms.js"></script>
+    <script src="js/ui_components.js"></script>
+    <script src="js/ui_core.js"></script>
+    <script src="js/main.js"></script>
+
+    <script>
+        function runDiagnostics() {
+            const output = document.getElementById('diagnosticsOutput');
+            let report = '=== DIAGNOSTYKA UI ===\n\n';
+
+            // Test 1: Akordeony
+            const accordions = document.querySelectorAll('.accordion-btn');
+            report += `1. Liczba akordeonów: ${accordions.length}\n`;
+            accordions.forEach((acc, i) => {
+                report += `   - Akordeon ${i+1}: "${acc.textContent.trim()}"\n`;
+                report += `     Klasy: ${acc.className}\n`;
+                report += `     Active: ${acc.classList.contains('active')}\n`;
+            });
+
+            // Test 2: Three.js
+            report += `\n2. Three.js załadowany: ${typeof THREE !== 'undefined' ? '✅' : '❌'}\n`;
+            if (typeof THREE !== 'undefined') {
+                report += `   Wersja: ${THREE.REVISION}\n`;
+            }
+
+            // Test 3: Chart.js
+            report += `\n3. Chart.js załadowany: ${typeof Chart !== 'undefined' ? '✅' : '❌'}\n`;
+            if (typeof Chart !== 'undefined') {
+                report += `   Wersja: ${Chart.version}\n`;
+            }
+
+            // Test 4: Elementy DOM
+            const container3d = document.getElementById('robot3d-container');
+            const chartCanvas = document.getElementById('signalAnalyzerChart');
+            const chartWrapper = document.getElementById('chart-wrapper');
+
+            report += `\n4. Elementy DOM:\n`;
+            report += `   - #robot3d-container: ${container3d ? '✅' : '❌'}\n`;
+            if (container3d) {
+                const style = window.getComputedStyle(container3d);
+                report += `     Width: ${container3d.offsetWidth}px\n`;
+                report += `     Height: ${container3d.offsetHeight}px\n`;
+                report += `     Display: ${style.display}\n`;
+                report += `     Visible: ${container3d.offsetParent !== null ? '✅' : '❌'}\n`;
+            }
+            
+            report += `   - #signalAnalyzerChart: ${chartCanvas ? '✅' : '❌'}\n`;
+            if (chartCanvas) {
+                report += `     Width: ${chartCanvas.offsetWidth}px\n`;
+                report += `     Height: ${chartCanvas.offsetHeight}px\n`;
+            }
+            
+            report += `   - #chart-wrapper: ${chartWrapper ? '✅' : '❌'}\n`;
+            if (chartWrapper) {
+                const style = window.getComputedStyle(chartWrapper);
+                report += `     Height: ${chartWrapper.offsetHeight}px (oczekiwane: 420px)\n`;
+                report += `     Display: ${style.display}\n`;
+            }
+
+            // Test 5: Funkcje globalne
+            report += `\n5. Funkcje globalne:\n`;
+            report += `   - window.init3DVisualization: ${typeof window.init3DVisualization === 'function' ? '✅' : '❌'}\n`;
+            report += `   - window.initSignalAnalyzerChart: ${typeof window.initSignalAnalyzerChart === 'function' ? '✅' : '❌'}\n`;
+            report += `   - window.toggleAccordion: ${typeof window.toggleAccordion === 'function' ? '✅' : '❌'}\n`;
+
+            // Test 6: Próba inicjalizacji
+            report += `\n6. Próba inicjalizacji:\n`;
+            
+            if (typeof window.init3DVisualization === 'function') {
+                try {
+                    window.init3DVisualization();
+                    report += `   - 3D: ✅ Zainicjalizowano\n`;
+                } catch (e) {
+                    report += `   - 3D: ❌ Błąd: ${e.message}\n`;
+                }
+            }
+            
+            if (typeof window.initSignalAnalyzerChart === 'function') {
+                try {
+                    window.initSignalAnalyzerChart();
+                    report += `   - Chart: ✅ Zainicjalizowano\n`;
+                } catch (e) {
+                    report += `   - Chart: ❌ Błąd: ${e.message}\n`;
+                }
+            }
+
+            report += `\n=== KONIEC DIAGNOSTYKI ===`;
+            output.textContent = report;
+        }
+
+        // Auto-run diagnostics after page load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                console.log('[TEST] Running auto-diagnostics...');
+                runDiagnostics();
+                
+                // Try to initialize 3D and chart
+                if (typeof window.init3DVisualization === 'function') {
+                    setTimeout(() => {
+                        try {
+                            window.init3DVisualization();
+                            console.log('[TEST] 3D initialized');
+                        } catch (e) {
+                            console.error('[TEST] 3D init error:', e);
+                        }
+                    }, 500);
+                }
+                
+                if (typeof window.initSignalAnalyzerChart === 'function') {
+                    setTimeout(() => {
+                        try {
+                            window.initSignalAnalyzerChart();
+                            console.log('[TEST] Chart initialized');
+                        } catch (e) {
+                            console.error('[TEST] Chart init error:', e);
+                        }
+                    }, 1000);
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
