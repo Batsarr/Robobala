@@ -9,9 +9,9 @@
 // Zbiory: NB, NS, ZE, PS, PB (5 × 5 = 25 reguł)
 //
 // Komunikacja BLE:
-//   {"cmd": "set_control_mode", "mode": "fuzzy"|"pid"}
-//   {"cmd": "set_fuzzy_rule", "rule_index": 0-24, "output_set": 0-4}
-//   {"cmd": "set_fuzzy_rules_bulk", "rules": [4,4,4,3,2,...]}
+//   {"type": "set_control_mode", "mode": "fuzzy"|"pid"}
+//   {"type": "set_fuzzy_rule", "rule_index": 0-24, "output_set": 0-4}
+//   {"type": "set_fuzzy_set", "set_type": "error"|"rate"|"output", "index": 0-4, "center": float, "width": float}
 // ========================================================================
 
 // Nazwy zbiorów rozmytych (Fuzzy Sets)
@@ -360,7 +360,7 @@ function attachSlidersEvents() {
  */
 function sendFuzzySetParam(type, index, center, width) {
     const msg = {
-        cmd: 'set_fuzzy_set',
+        type: 'set_fuzzy_set',
         set_type: type,    // "error" lub "rate"
         index: index,
         center: center,
@@ -710,7 +710,7 @@ function setControlMode(mode) {
     }
 
     // Wyślij komendę BLE
-    const msg = { cmd: 'set_control_mode', mode: mode };
+    const msg = { type: 'set_control_mode', mode: mode };
     if (typeof window.sendBleMessage === 'function') {
         window.sendBleMessage(msg);
         console.log(`[fuzzy-editor] Wysłano: ${JSON.stringify(msg)}`);
@@ -724,7 +724,7 @@ function setControlMode(mode) {
  */
 function sendFuzzyRule(ruleIndex, outputSet) {
     const msg = {
-        cmd: 'set_fuzzy_rule',
+        type: 'set_fuzzy_rule',
         rule_index: ruleIndex,
         output_set: outputSet
     };
@@ -739,19 +739,22 @@ function sendFuzzyRule(ruleIndex, outputSet) {
  * Wysyła wszystkie 25 reguł do firmware (bulk).
  */
 function sendAllFuzzyRules() {
-    const flat = currentRules.flat();
-    const msg = {
-        cmd: 'set_fuzzy_rules_bulk',
-        rules: flat
-    };
-
-    if (typeof window.sendBleMessage === 'function') {
-        window.sendBleMessage(msg);
-        updateStatus('Wysłano wszystkie 25 reguł do robota ✅', 'success');
-        console.log(`[fuzzy-editor] Wysłano bulk: ${JSON.stringify(flat)}`);
-    } else {
+    if (typeof window.sendBleMessage !== 'function') {
         updateStatus('Brak połączenia BLE — nie wysłano', 'error');
+        return;
     }
+
+    const flat = currentRules.flat();
+    // Firmware nie obsługuje bulk — wysyłamy 25 indywidualnych komend set_fuzzy_rule
+    for (let i = 0; i < flat.length; i++) {
+        window.sendBleMessage({
+            type: 'set_fuzzy_rule',
+            rule_index: i,
+            output_set: flat[i]
+        });
+    }
+    updateStatus('Wysłano wszystkie 25 reguł do robota ✅', 'success');
+    console.log(`[fuzzy-editor] Wysłano 25 reguł indywidualnie: ${JSON.stringify(flat)}`);
 }
 
 // ========================================================================
