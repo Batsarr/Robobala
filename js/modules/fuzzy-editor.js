@@ -46,21 +46,27 @@ let currentRules = DEFAULT_RULES.map(row => [...row]);
 let currentControlMode = 'pid';
 
 // === Definicje zbiorów wejściowych (centra i szerokości) ===
-// Odzwierciedlają domyślne wartości z firmware (fuzzy_controller.cpp)
+// Odzwierciedlają domyślne wartości z firmware v2 (fuzzy_controller.cpp)
+// POPRAWKA v2: Węższe zakresy dostosowane do rzeczywistej dynamiki balansu
 let errorSetsParams = [
-    { center: -15.0, width: 8.0 },  // NB
-    { center:  -7.0, width: 8.0 },  // NS
-    { center:   0.0, width: 8.0 },  // ZE
-    { center:   7.0, width: 8.0 },  // PS
-    { center:  15.0, width: 8.0 }   // PB
+    { center: -5.0, width: 3.0 },  // NB
+    { center: -2.5, width: 3.0 },  // NS
+    { center:  0.0, width: 3.0 },  // ZE
+    { center:  2.5, width: 3.0 },  // PS
+    { center:  5.0, width: 3.0 }   // PB
 ];
 let rateSetsParams = [
-    { center: -150.0, width: 80.0 }, // NB
-    { center:  -75.0, width: 80.0 }, // NS
-    { center:    0.0, width: 80.0 }, // ZE
-    { center:   75.0, width: 80.0 }, // PS
-    { center:  150.0, width: 80.0 }  // PB
+    { center: -60.0, width: 35.0 }, // NB
+    { center: -30.0, width: 35.0 }, // NS
+    { center:   0.0, width: 35.0 }, // ZE
+    { center:  30.0, width: 35.0 }, // PS
+    { center:  60.0, width: 35.0 }  // PB
 ];
+
+// === Parametry wzmocnienia i członu całkującego (nowe w v2) ===
+let fuzzyOutputGain = 1.0;
+let fuzzyIntegralKi = 20.0;
+let fuzzyIntegralLimit = 512.0;
 
 // Ostatnie wartości telemetryczne do podświetlania reguł
 let lastAngle = null;
@@ -182,6 +188,36 @@ function renderFuzzyPanel(container) {
             <button id="fuzzy-send-all-btn" class="fuzzy-action-btn fuzzy-send-btn" title="Wyślij wszystkie reguły do robota">📤 Wyślij do robota</button>
         </div>
 
+        <!-- ====== Parametry strojenia Fuzzy (Gain + Integral) ====== -->
+        <div class="fuzzy-tuning-section" id="fuzzy-tuning-section">
+            <div class="fuzzy-sliders-title">⚡ Strojenie Fuzzy
+                <button id="fuzzy-tuning-toggle" class="fuzzy-sliders-toggle-btn" title="Pokaż/ukryj parametry strojenia">▶</button>
+            </div>
+            <div class="fuzzy-tuning-body" id="fuzzy-tuning-body" style="display:none;">
+                <div class="fuzzy-edu-info" style="margin-bottom:8px;">
+                    <strong style="color: #61dafb;">💡 Strojenie</strong>
+                    <p><strong>Gain</strong> — mnożnik siły wyjścia (1.0 = domyślnie). Zwiększ jeśli robot reaguje za słabo.</p>
+                    <p><strong>Ki (integral)</strong> — eliminuje stały offset (np. nierówny środek ciężkości). 0 = wyłączony.</p>
+                    <p><strong>Limit integrala</strong> — ogranicza akumulację błędu (anti-windup).</p>
+                </div>
+                <div class="fuzzy-slider-row">
+                    <span class="fuzzy-slider-label" style="color:#61dafb">Gain</span>
+                    <input type="range" id="fuzzy-gain-slider" min="0.1" max="3.0" step="0.05" value="${fuzzyOutputGain}" style="flex:1">
+                    <input type="number" class="fuzzy-slider-input" id="fuzzy-gain-input" value="${fuzzyOutputGain}" step="0.05" min="0.1" max="5.0" style="width:60px">
+                </div>
+                <div class="fuzzy-slider-row">
+                    <span class="fuzzy-slider-label" style="color:#2ecc71">Ki</span>
+                    <input type="range" id="fuzzy-ki-slider" min="0" max="100" step="1" value="${fuzzyIntegralKi}" style="flex:1">
+                    <input type="number" class="fuzzy-slider-input" id="fuzzy-ki-input" value="${fuzzyIntegralKi}" step="1" min="0" max="200" style="width:60px">
+                </div>
+                <div class="fuzzy-slider-row">
+                    <span class="fuzzy-slider-label" style="color:#e67e22">I-Limit</span>
+                    <input type="range" id="fuzzy-ilimit-slider" min="0" max="2047" step="10" value="${fuzzyIntegralLimit}" style="flex:1">
+                    <input type="number" class="fuzzy-slider-input" id="fuzzy-ilimit-input" value="${fuzzyIntegralLimit}" step="10" min="0" max="2047" style="width:60px">
+                </div>
+            </div>
+        </div>
+
         <!-- ====== Suwaki parametrów zbiorów rozmytych ====== -->
         <div class="fuzzy-sliders-section" id="fuzzy-sliders-section">
             <div class="fuzzy-sliders-title">🎛️ Parametry zbiorów rozmytych
@@ -276,9 +312,13 @@ function attachFuzzyEvents() {
     // === Suwaki zbiorów rozmytych ===
     attachSlidersEvents();
 
+    // Toggle i eventy sekcji Strojenie Fuzzy (Gain + Integral)
+    attachTuningEvents();
+
     // Początkowe rysowanie Canvasów (bez markera)
-    drawFuzzySets('fuzzy-angle-canvas', null, -20, 20, errorSetsParams);
-    drawFuzzySets('fuzzy-rate-canvas', null, -200, 200, rateSetsParams);
+    // POPRAWKA v2: zakresy canvas dopasowane do nowych węższych zbiorów
+    drawFuzzySets('fuzzy-angle-canvas', null, -10, 10, errorSetsParams);
+    drawFuzzySets('fuzzy-rate-canvas', null, -100, 100, rateSetsParams);
 }
 
 // ========================================================================
@@ -312,9 +352,9 @@ function attachSlidersEvents() {
 
             // Przerysuj canvas
             if (type === 'error') {
-                drawFuzzySets('fuzzy-angle-canvas', lastAngle, -20, 20, errorSetsParams);
+                drawFuzzySets('fuzzy-angle-canvas', lastAngle, -10, 10, errorSetsParams);
             } else {
-                drawFuzzySets('fuzzy-rate-canvas', lastRate, -200, 200, rateSetsParams);
+                drawFuzzySets('fuzzy-rate-canvas', lastRate, -100, 100, rateSetsParams);
             }
 
             // Wyślij do firmware
@@ -325,18 +365,18 @@ function attachSlidersEvents() {
     // Reset suwaków do domyślnych
     document.getElementById('fuzzy-sliders-reset')?.addEventListener('click', () => {
         errorSetsParams = [
-            { center: -15.0, width: 8.0 },
-            { center:  -7.0, width: 8.0 },
-            { center:   0.0, width: 8.0 },
-            { center:   7.0, width: 8.0 },
-            { center:  15.0, width: 8.0 }
+            { center: -5.0, width: 3.0 },
+            { center: -2.5, width: 3.0 },
+            { center:  0.0, width: 3.0 },
+            { center:  2.5, width: 3.0 },
+            { center:  5.0, width: 3.0 }
         ];
         rateSetsParams = [
-            { center: -150.0, width: 80.0 },
-            { center:  -75.0, width: 80.0 },
-            { center:    0.0, width: 80.0 },
-            { center:   75.0, width: 80.0 },
-            { center:  150.0, width: 80.0 }
+            { center: -60.0, width: 35.0 },
+            { center: -30.0, width: 35.0 },
+            { center:   0.0, width: 35.0 },
+            { center:  30.0, width: 35.0 },
+            { center:  60.0, width: 35.0 }
         ];
         // Aktualizuj inputy
         FUZZY_SETS.forEach((_, i) => {
@@ -349,10 +389,85 @@ function attachSlidersEvents() {
             if (rc) rc.value = rateSetsParams[i].center;
             if (rw) rw.value = rateSetsParams[i].width;
         });
-        drawFuzzySets('fuzzy-angle-canvas', lastAngle, -20, 20, errorSetsParams);
-        drawFuzzySets('fuzzy-rate-canvas', lastRate, -200, 200, rateSetsParams);
+        drawFuzzySets('fuzzy-angle-canvas', lastAngle, -10, 10, errorSetsParams);
+        drawFuzzySets('fuzzy-rate-canvas', lastRate, -100, 100, rateSetsParams);
         updateStatus('Przywrócono domyślne parametry zbiorów', 'info');
     });
+}
+
+// ========================================================================
+// Sekcja strojenia Fuzzy (Gain + Integral) — nowa w v2
+// ========================================================================
+
+/**
+ * Podłącza eventy dla sekcji strojenia (gain, Ki, I-limit).
+ */
+function attachTuningEvents() {
+    // Toggle rozwinięcia sekcji
+    const toggleBtn = document.getElementById('fuzzy-tuning-toggle');
+    const body = document.getElementById('fuzzy-tuning-body');
+    if (toggleBtn && body) {
+        toggleBtn.addEventListener('click', () => {
+            const isHidden = body.style.display === 'none';
+            body.style.display = isHidden ? 'block' : 'none';
+            toggleBtn.textContent = isHidden ? '▼' : '▶';
+        });
+    }
+
+    // Helper: synchronizuj slider ↔ input i wyślij
+    function syncSliderInput(sliderId, inputId, callback) {
+        const slider = document.getElementById(sliderId);
+        const input = document.getElementById(inputId);
+        if (!slider || !input) return;
+        slider.addEventListener('input', () => {
+            input.value = slider.value;
+            callback(parseFloat(slider.value));
+        });
+        input.addEventListener('change', () => {
+            slider.value = input.value;
+            callback(parseFloat(input.value));
+        });
+    }
+
+    // Gain
+    syncSliderInput('fuzzy-gain-slider', 'fuzzy-gain-input', (val) => {
+        fuzzyOutputGain = val;
+        sendFuzzyGain(val);
+    });
+
+    // Ki
+    syncSliderInput('fuzzy-ki-slider', 'fuzzy-ki-input', (val) => {
+        fuzzyIntegralKi = val;
+        sendFuzzyIntegral(val, fuzzyIntegralLimit);
+    });
+
+    // I-Limit
+    syncSliderInput('fuzzy-ilimit-slider', 'fuzzy-ilimit-input', (val) => {
+        fuzzyIntegralLimit = val;
+        sendFuzzyIntegral(fuzzyIntegralKi, val);
+    });
+}
+
+/**
+ * Wysyła wzmocnienie wyjścia (gain) do firmware.
+ */
+function sendFuzzyGain(gain) {
+    const msg = { type: 'set_fuzzy_gain', gain: gain };
+    if (typeof window.sendBleMessage === 'function') {
+        window.sendBleMessage(msg);
+        console.log(`[fuzzy-editor] Gain → ${gain}`);
+    }
+}
+
+/**
+ * Wysyła parametry członu całkującego (Ki, limit) do firmware.
+ */
+function sendFuzzyIntegral(ki, limit) {
+    const msg = { type: 'set_fuzzy_integral', ki: ki, limit: limit };
+    if (typeof window.sendBleMessage === 'function') {
+        window.sendBleMessage(msg);
+        console.log(`[fuzzy-editor] Integral Ki=${ki}, limit=${limit}`);
+    }
 }
 
 /**
@@ -626,8 +741,8 @@ function updateFuzzyVisuals(angle, speed) {
     if (now - _fuzzyVisualLastTime < FUZZY_VISUAL_INTERVAL_MS) return;
     _fuzzyVisualLastTime = now;
 
-    drawFuzzySets('fuzzy-angle-canvas', angle, -20, 20, errorSetsParams);
-    drawFuzzySets('fuzzy-rate-canvas', speed, -200, 200, rateSetsParams);
+    drawFuzzySets('fuzzy-angle-canvas', angle, -10, 10, errorSetsParams);
+    drawFuzzySets('fuzzy-rate-canvas', speed, -100, 100, rateSetsParams);
     highlightActiveRules(angle, speed);
 
     // Aktualizuj hinty
@@ -721,22 +836,37 @@ function setControlMode(mode) {
 
 /**
  * Wysyła pojedynczą regułę do firmware.
+ * POPRAWKA v2: Transpozycja indeksu reguły.
+ * JS przechowuje [rate][error], C++ indeksuje [error][rate].
+ * Potrzebna konwersja: C++ idx = errorIdx * 5 + rateIdx
+ *
+ * @param {number} jsRuleIndex - indeks w JS konwencji (rate * 5 + error)
+ * @param {number} outputSet  - indeks zbioru wyjściowego (0..4)
  */
-function sendFuzzyRule(ruleIndex, outputSet) {
+function sendFuzzyRule(jsRuleIndex, outputSet) {
+    // Transpozycja: JS idx = rate*5+error → C++ idx = error*5+rate
+    const rateIdx = Math.floor(jsRuleIndex / 5);
+    const errorIdx = jsRuleIndex % 5;
+    const cppRuleIndex = errorIdx * 5 + rateIdx;
+
     const msg = {
         type: 'set_fuzzy_rule',
-        rule_index: ruleIndex,
+        rule_index: cppRuleIndex,
         output_set: outputSet
     };
 
     if (typeof window.sendBleMessage === 'function') {
         window.sendBleMessage(msg);
-        console.log(`[fuzzy-editor] Reguła ${ruleIndex} → ${FUZZY_SETS[outputSet].label}`);
+        console.log(`[fuzzy-editor] Reguła JS[${jsRuleIndex}] → C++[${cppRuleIndex}] → ${FUZZY_SETS[outputSet].label}`);
     }
 }
 
 /**
  * Wysyła wszystkie 25 reguł do firmware (bulk).
+ */
+/**
+ * Wysyła wszystkie 25 reguł do firmware (bulk).
+ * POPRAWKA v2: Transpozycja indeksów — JS[rate][error] → C++[error][rate].
  */
 function sendAllFuzzyRules() {
     if (typeof window.sendBleMessage !== 'function') {
@@ -744,17 +874,19 @@ function sendAllFuzzyRules() {
         return;
     }
 
-    const flat = currentRules.flat();
-    // Firmware nie obsługuje bulk — wysyłamy 25 indywidualnych komend set_fuzzy_rule
-    for (let i = 0; i < flat.length; i++) {
-        window.sendBleMessage({
-            type: 'set_fuzzy_rule',
-            rule_index: i,
-            output_set: flat[i]
-        });
+    // Wysyłamy 25 reguł z transpozycją indeksów
+    for (let ri = 0; ri < 5; ri++) {       // rate index (JS row)
+        for (let ei = 0; ei < 5; ei++) {   // error index (JS col)
+            const cppRuleIndex = ei * 5 + ri; // C++ idx = error*5 + rate
+            window.sendBleMessage({
+                type: 'set_fuzzy_rule',
+                rule_index: cppRuleIndex,
+                output_set: currentRules[ri][ei]
+            });
+        }
     }
     updateStatus('Wysłano wszystkie 25 reguł do robota ✅', 'success');
-    console.log(`[fuzzy-editor] Wysłano 25 reguł indywidualnie: ${JSON.stringify(flat)}`);
+    console.log(`[fuzzy-editor] Wysłano 25 reguł z transpozycją indeksów.`);
 }
 
 // ========================================================================

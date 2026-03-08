@@ -13,6 +13,60 @@ import { appStore, AppState } from './state.js';
 window.tuningHistory = window.tuningHistory || [];
 const tuningHistory = window.tuningHistory;
 
+// ─── Fuzzy param sync helper ──────────────────────────────────────────────────
+/**
+ * Applies fuzzy-specific parameters that are NOT in parameterMapping.
+ * Called during sync_complete and runtime set_param handling.
+ * Keys: control_mode, fuzzy_gain, fuzzy_ki, fuzzy_ilimit
+ */
+function applyFuzzyParamIfNeeded(key, value) {
+    const fe = window.FuzzyEditor;
+    if (!fe) return;
+
+    switch (key) {
+        case 'control_mode': {
+            // 0 = PID, 1 = Fuzzy
+            const mode = (value >= 1) ? 'fuzzy' : 'pid';
+            // setControlMode wysyła BLE — tutaj potrzebujemy tylko ustawić UI
+            // Dlatego aktualizujemy UI bezpośrednio, bez ponownego wysyłania do firmware
+            const pidBtn = document.getElementById('fuzzy-mode-pid');
+            const fuzzyBtn = document.getElementById('fuzzy-mode-fuzzy');
+            if (pidBtn && fuzzyBtn) {
+                pidBtn.classList.toggle('active', mode === 'pid');
+                fuzzyBtn.classList.toggle('active', mode === 'fuzzy');
+            }
+            const statusText = document.getElementById('fuzzy-status-text');
+            if (statusText) {
+                statusText.textContent = mode === 'fuzzy'
+                    ? 'Tryb: Fuzzy Logic — robot sterowany regułami rozmytymi'
+                    : 'Tryb: PID — klasyczny regulator';
+            }
+            break;
+        }
+        case 'fuzzy_gain': {
+            const slider = document.getElementById('fuzzy-gain-slider');
+            const input = document.getElementById('fuzzy-gain-input');
+            if (slider) slider.value = value;
+            if (input) input.value = value;
+            break;
+        }
+        case 'fuzzy_ki': {
+            const slider = document.getElementById('fuzzy-ki-slider');
+            const input = document.getElementById('fuzzy-ki-input');
+            if (slider) slider.value = value;
+            if (input) input.value = value;
+            break;
+        }
+        case 'fuzzy_ilimit': {
+            const slider = document.getElementById('fuzzy-ilimit-slider');
+            const input = document.getElementById('fuzzy-ilimit-input');
+            if (slider) slider.value = value;
+            if (input) input.value = value;
+            break;
+        }
+    }
+}
+
 // ─── processCompleteMessage ────────────────────────────────────────────────────
 /**
  * The main switch dispatcher for every incoming BLE JSON message.
@@ -117,6 +171,8 @@ function processCompleteMessage(data) {
                     }
                 }
             } else {
+                // Runtime: obsługa specjalnych parametrów Fuzzy
+                applyFuzzyParamIfNeeded(data.key, data.value);
                 applySingleParam(data.key, data.value);
             }
             break;
@@ -159,6 +215,7 @@ function processCompleteMessage(data) {
             // Zastosuj wszystkie zebrane parametry i stany
             AppState.isApplyingConfig = true;
             for (const [key, value] of Object.entries(AppState.tempParams)) {
+                applyFuzzyParamIfNeeded(key, value);
                 applySingleParam(key, value);
             }
             for (const [key, value] of Object.entries(AppState.tempTuningParams)) {
