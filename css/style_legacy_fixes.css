@@ -1,0 +1,590 @@
+/* ============================================================================
+   RoboBala - Legacy Sizing Fixes
+   Przywrócenie rozmiarów i kolorów ze starej wersji UI
+   Data: 1 grudnia 2025
+   
+   UWAGA: Ten plik powinien być załadowany OSTATNI w HTML (po style.css)
+   ============================================================================ */
+
+/* ============================================================================
+   ZMIENNE CSS - DOPASOWANIE DO STAREJ WERSJI
+   ============================================================================ */
+:root {
+    /* Kolory - jaśniejsze niż nowa wersja */
+    --bg-primary: #282c34;      /* było: #1a1d24 - teraz jaśniejsze */
+    --bg-card: #3a3f47;         /* było: #24272f - teraz jaśniejsze */
+    --bg-tertiary: #20232a;     /* było: #2d3139 - teraz ciemniejsze dla input/chart */
+    --bg-hover: #5a6068;        /* dodane dla hover accordion */
+    --bg-accordion-inactive: #4a4f58; /* dodane dla nieaktywnych akordeonów */
+    
+    /* Border radius - mniejsze niż nowa wersja */
+    --radius-sm: 5px;           /* było: 6px */
+    --radius-md: 8px;           /* było: 12px */
+    
+    /* Border color - jaśniejszy */
+    --border-color: #4a4f58;    /* było: #3a3d45 */
+    
+    /* Shadows - delikatniejsze */
+    --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.2);  /* było: 0 2px 8px rgba(0,0,0,0.3) */
+}
+
+/* ============================================================================
+   BODY & BASE - MNIEJSZA CZCIONKA
+   ============================================================================ */
+body {
+    font-size: 14px;            /* było: 16px poprzez dziedziczenie */
+    padding: 15px;              /* stała wartość jak w starej wersji */
+}
+
+h1 {
+    font-size: 1.8em;           /* przywrócona stara wielkość */
+}
+
+h2 {
+    font-size: 1.4em;           /* przywrócona stara wielkość */
+    margin-top: 0;
+    margin-bottom: 15px;
+}
+
+/* ============================================================================
+   KARTY - JAŚNIEJSZE I MNIEJSZY RADIUS
+   ============================================================================ */
+.card {
+    background-color: #3a3f47 !important;
+    border-radius: 8px !important;
+    padding: 15px !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2) !important;
+    border: 1px solid #4a4f58 !important;
+}
+
+/* ============================================================================
+   PRZYCISKI - MNIEJSZE I KOMPAKTOWE
+   ============================================================================ */
+button {
+    padding: 8px 12px !important;
+    border-radius: 5px !important;
+    font-size: 0.9em !important;
+    font-weight: bold;
+    transition: background-color 0.3s, opacity 0.3s, box-shadow 0.2s;
+}
+
+button:hover {
+    background-color: #a2f279 !important;
+}
+
+button:disabled {
+    background-color: #4a4f58 !important;
+    color: #888 !important;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Przyciski pomocnicze (małe) */
+.btn-small {
+    padding: 6px 8px !important;
+    font-size: 0.85em !important;
+}
+
+/* Przyciski +/- przy polach numerycznych */
+.numeric-input-wrapper button {
+    background-color: #4a4f58 !important;
+    color: #61dafb !important;
+    padding: 4px 8px !important;
+    font-size: 1em !important;
+    line-height: 1;
+    min-width: 30px !important;
+}
+
+.numeric-input-wrapper button:hover {
+    background-color: #5a6068 !important;
+}
+
+/* ============================================================================
+   AKORDEONY - JAŚNIEJSZY BACKGROUND DLA NIEAKTYWNYCH
+   ============================================================================ */
+.accordion-btn,
+.accordion-header {
+    padding: 12px 15px !important;
+    background-color: #4a4f58 !important;
+    color: #61dafb !important;
+    border: none;
+    border-radius: 8px !important;
+    font-size: 1.1em !important;
+    font-weight: bold;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    margin-top: 5px;
+    transition: background-color 0.3s;
+    position: relative;
+}
+
+.accordion-btn:hover,
+.accordion-header:hover {
+    background-color: #5a6068 !important;
+}
+
+.accordion-btn.active,
+.accordion-header.active {
+    background-color: #61dafb !important;
+    color: #282c34 !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+}
+
+.accordion-btn::after,
+.accordion-header::after {
+    content: '+';
+    position: absolute;
+    right: 15px;
+    font-size: 1.4em;
+    transition: transform 0.3s;
+}
+
+.accordion-btn.active::after,
+.accordion-header.active::after {
+    content: '−';
+}
+
+.accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease-out, padding 0.2s ease-out;
+    background-color: #3a3f47;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+    padding: 0 15px;
+}
+
+.accordion-content.active {
+    padding: 15px !important;
+}
+
+/* ============================================================================
+   POLA INPUT - WĘŻSZE I MNIEJSZY PADDING
+   ============================================================================ */
+.numeric-input-wrapper input[type="number"],
+input[type="number"] {
+    width: 90px !important;
+    text-align: center;
+    font-size: 1em !important;
+    background-color: #20232a !important;
+    color: #fff;
+    border: 1px solid #61dafb;
+    border-radius: 5px !important;
+    margin: 0 4px;
+    padding: 4px !important;
+    -moz-appearance: textfield;
+    appearance: none;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Wszystkie pozostałe pola input/select */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+select {
+    background-color: #20232a !important;
+    color: #fff;
+    border: 1px solid #61dafb;
+    border-radius: 5px !important;
+    padding: 4px 8px !important;
+}
+
+/* ============================================================================
+   WYKRES TELEMETRYCZNY - STAŁA WYSOKOŚĆ 420px
+   ============================================================================ */
+.chart-wrapper,
+#chart-wrapper,
+#telemetryChartWrapper {
+    position: relative;
+    height: 420px !important;
+    border-radius: 8px !important;
+    overflow: hidden;
+    background-color: #20232a !important;
+    margin-bottom: 15px;
+}
+
+/* Wykres IMU tuning - również 420px jak w starej wersji */
+.imu-tuning-chart-container {
+    height: 420px !important;
+}
+
+#imuTuningChart {
+    height: 420px !important;
+    max-height: 420px !important;
+}
+
+/* Wykres autotuning - mniejszy (250px jak w starej wersji) */
+.autotune-tuning-chart-wrapper {
+    position: relative;
+    height: 250px !important;
+    border-radius: 8px !important;
+    overflow: hidden;
+    background-color: #20232a !important;
+    margin-bottom: 15px;
+}
+
+/* ============================================================================
+   MODEL 3D - BORDER I WYSOKOŚĆ
+   ============================================================================ */
+.robot-3d-container,
+#robot3d-container,
+#robot3dContainer {
+    width: 100%;
+    height: 400px !important;
+    border-radius: 8px !important;
+    overflow: hidden;
+    position: relative;
+    border: 2px solid #61dafb !important; /* WAŻNE: przywrócony niebieski border */
+    background-color: #20232a !important;
+}
+
+/* ============================================================================
+   JOYSTICK - ZACHOWANIE STARYCH ROZMIARÓW
+   ============================================================================ */
+#joystickWrapper {
+    position: relative;
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background-color: #4a4f58;
+    border: 3px solid #61dafb;
+    margin: 15px auto;
+    touch-action: none;
+}
+
+#joystickCanvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* ============================================================================
+   LOGI - HISTORIA
+   ============================================================================ */
+#log-history {
+    text-align: left;
+    overflow-y: auto;
+    background-color: #20232a !important;
+    padding: 10px;
+    border-radius: 8px !important;
+    font-family: monospace;
+    white-space: pre-wrap;
+}
+
+#log-card.open #log-history {
+    display: block !important;
+    height: 28vh;
+    max-height: 28vh;
+}
+
+@media (min-width: 769px) {
+    #log-card.open #log-history {
+        height: 22vh;
+        max-height: 22vh;
+    }
+}
+
+/* ============================================================================
+   KONTROLKI - SPÓJNE ROZMIARY
+   ============================================================================ */
+.setting-container {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+    margin: 8px 0;
+}
+
+.setting-container label {
+    font-size: 1em !important;
+    font-weight: bold;
+    color: #a2f279;
+    text-align: left;
+}
+
+.control-label {
+    font-size: 1.1em !important;
+    font-weight: bold;
+}
+
+/* ============================================================================
+   GRID - STARE ODSTĘPY
+   ============================================================================ */
+.main-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 15px !important;
+    align-items: start;
+    max-width: 1920px;
+    margin: auto;
+}
+
+.info-grid,
+.status-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+    text-align: left;
+    font-size: 1em;
+    margin-top: 10px;
+    align-items: center;
+}
+
+/* ============================================================================
+   CHART CONTROLS - KOMPAKTOWE
+   ============================================================================ */
+.chart-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 10px;
+    font-size: 0.9em !important;
+}
+
+.chart-controls label {
+    color: #fff;
+}
+
+.chart-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+.chart-toolbar button {
+    padding: 6px 10px !important;
+    font-size: 0.85em !important;
+}
+
+/* ============================================================================
+   FIELDSET & LEGEND
+   ============================================================================ */
+fieldset {
+    border: none;
+    border-top: 1px solid #4a4f58;
+    border-radius: 0;
+    margin-top: 15px;
+    padding: 10px 0;
+    background-color: transparent;
+}
+
+legend {
+    color: #61dafb;
+    font-weight: bold;
+    padding: 0;
+    font-size: 1.0em !important;
+}
+
+/* ============================================================================
+   PARAMETER GROUP
+   ============================================================================ */
+.parameter-group {
+    background-color: transparent;
+    padding: 8px 0;
+    border-radius: 0;
+    margin-bottom: 8px;
+    border-left: 2px solid #61dafb;
+    padding-left: 10px;
+}
+
+.parameter-group h5 {
+    color: #61dafb;
+    margin: 0 0 8px 0;
+    font-size: 1.0em !important;
+}
+
+/* ============================================================================
+   PWM/MANUAL TUNE - KOMPAKTOWE
+   ============================================================================ */
+.manual-tune-row {
+    background-color: #2a2f35;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+
+.pwm-input-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.pwm-input-row label {
+    font-weight: bold;
+    color: #a2f279;
+}
+
+.pwm-button-row {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.pwm-button-row button {
+    flex-grow: 1;
+    max-width: 100px;
+}
+
+/* ============================================================================
+   DASHBOARD
+   ============================================================================ */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    text-align: left;
+}
+
+.dashboard-item {
+    background-color: #2a2f35;
+    padding: 10px;
+    border-radius: 6px;
+    border-left: 4px solid #4a4f58;
+    transition: border-color 0.3s;
+}
+
+.dashboard-item .label {
+    display: block;
+    font-size: 0.85em;
+    color: #a2f279;
+    margin-bottom: 4px;
+}
+
+.dashboard-item .value {
+    display: block;
+    font-size: 1.3em;
+    font-weight: bold;
+    color: #61dafb;
+}
+
+/* ============================================================================
+   MODALS
+   ============================================================================ */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 2000;
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: #3a3f47 !important;
+    padding: 20px;
+    border-radius: 8px !important;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================================================
+   HELP TEXT
+   ============================================================================ */
+.help-icon {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background-color: #61dafb;
+    color: #282c34;
+    font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+    line-height: 16px;
+    margin-left: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.help-text {
+    background-color: #20232a !important;
+    color: #fff;
+    border-radius: 6px;
+    padding: 10px;
+    border: 1px solid #61dafb;
+    margin-top: 8px;
+    text-align: left;
+    font-size: 0.9em !important;
+    line-height: 1.4;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ============================================================================
+   RESPONSIVE - ZACHOWANIE STARYCH BREAKPOINTÓW
+   ============================================================================ */
+@media (max-width: 760px) {
+    .main-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    #imuTuningChart {
+        max-height: 300px !important; /* mniejsze na mobile */
+    }
+    
+    .chart-wrapper,
+    #chart-wrapper {
+        height: 300px !important; /* mniejsze na mobile */
+    }
+}
+
+/* ============================================================================
+   TELEMETRY GRID - DOSTOSOWANIE
+   ============================================================================ */
+.telemetry-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+    text-align: left;
+    font-size: 1em;
+    margin-top: 10px;
+}
+
+.telemetry-item {
+    display: contents;
+}
+
+.telemetry-label {
+    font-weight: bold;
+    color: #a2f279;
+}
+
+.telemetry-value {
+    color: #61dafb;
+}
+
+/* ============================================================================
+   FIXES FOR NEW LAYOUT COMPATIBILITY
+   ============================================================================ */
+
+/* Jeśli nowy layout używa flexbox zamiast grid dla kart */
+.content-section {
+    max-width: 1920px;
+    margin: 0 auto;
+    padding: 15px;
+}
+
+/* Zachowanie minimalnej szerokości kart */
+.card {
+    min-width: 300px;
+}
+
+/* ============================================================================
+   KONIEC PLIKU
+   ============================================================================ */

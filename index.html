@@ -238,7 +238,6 @@
                 <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
                     <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Asystent Kalibracji IMU</button>
                     <button id="calibrateZeroPointBtn" style="width:100%; background-color:#f7b731;">Znajdz Pion Automatycznie</button>
-                    <button id="sensorMappingBtn" style="width:100%; background-color:#f7b731;" data-mode="advanced">Mapowanie czujnika</button>
                     <button id="modelMappingBtn" style="width:100%; background-color:#f7b731;" data-mode="advanced">Mapowanie modelu 3D</button>
                 </div>
             </fieldset>
@@ -1006,8 +1005,6 @@
             <div id="log-history" style="max-height: 40vh; overflow-y: auto; display: none;"></div>
         </div>
     </div>
-    <!-- Nowy modal: Mapowanie czujnika – sekwencyjny kreator z auto-wykryciem obrotu > 90° -->
-    
     <!-- Modal: Historia prób strojenia -->
     <div id="tuning-history-modal" class="modal-backdrop" style="display:none;">
         <div class="modal-content" style="max-width:1000px;">
@@ -1024,148 +1021,6 @@
                     </thead>
                     <tbody id="results-table-body"></tbody>
                 </table>
-            </div>
-        </div>
-    </div>
-    <div id="sensor-mapping-modal" class="modal-backdrop" style="display:none;">
-        <div class="modal-content">
-            <h2>Mapowanie Czujnika (Orientacja) <span class="help-icon" id="sensorMappingHelp" title="Pokaż/ukryj szczegółową pomoc">?</span></h2>
-            <div id="sensorMappingHelpText" class="help-text" style="margin-bottom:10px;" aria-hidden="true">
-                <strong>Cel:</strong> Dopasowanie fizycznego montażu IMU do oczekiwanych osi sterowania robota.<br>
-                <strong>Kroki:</strong> (1) Pozycja pionowa referencyjna. (2) Obrót poziomy ≥ 90°. (3) Zapis korekcji.<br>
-                <strong>Wpływ:</strong> Działa na wewnętrzne wektory (akcelerometr/żyroskop) używane przez PID. Nie zmienia wizualizacji 3D (oddzielne mapowanie modelu).<br>
-                <strong>Wymagane:</strong> Kalibracja IMU (System=3) dla najlepszej dokładności.<br>
-                <em>Po zapisie sterowanie będzie korzystać z poprawionych osi automatycznie.</em>
-            </div>
-            <div id="sensorWizardStepInfo" style="margin:6px 0; font-size:12px; color:#aaa;">Krok <span id="sensorWizardStepNo">1</span>/3</div>
-            <div id="sensorWizardText" style="text-align:left; font-size:0.95em; line-height:1.5; background:#101014; border:1px solid #2a2a35; padding:12px; border-radius:8px;">
-                <!-- dynamiczna instrukcja -->
-            </div>
-            <div id="sensorWizardHint" style="margin-top:8px; font-size:0.85em; color:#bbb;">
-                <!-- dynamiczne podpowiedzi -->
-            </div>
-            <div id="sensorWizardProgress" style="margin-top:12px; font-family:monospace; background:#111; border:1px solid #333; border-radius:6px; padding:8px; text-align:left;">
-                [ ] Pion | [ ] Rotacja ≥ 90° | [ ] Zapis
-            </div>
-            <div class="sensor-mapping-wrapper" style="display:flex; gap:10px; margin-top:12px; align-items:flex-start;">
-                <div id="sensor-mapping-preview" class="sensor-mapping-preview" style="flex:1; min-width:250px; height:200px; background:#000; border-radius:6px; overflow:hidden;"></div>
-                    <div class="sensor-mapping-controls" style="width:320px; display:flex; flex-direction:column; gap:8px;">
-                    <div style="display:flex; justify-content:space-between; gap:6px;">
-                        <div>
-                            <div>Pitch (Cube): <span id="modal-pitch-display">0.0°</span></div>
-                            <div style="font-size:0.8em; color:#9fa;">Telemetry: <span id="modal-pitch-telemetry">0.0°</span></div>
-                        </div>
-                        <div>
-                            <div>Roll (Cube): <span id="modal-roll-display">0.0°</span></div>
-                            <div style="font-size:0.8em; color:#9fa;">Telemetry: <span id="modal-roll-telemetry">0.0°</span></div>
-                        </div>
-                        <div>
-                            <div>Yaw (Cube): <span id="modal-yaw-display">0.0°</span></div>
-                            <div style="font-size:0.8em; color:#9fa;">Telemetry: <span id="modal-yaw-telemetry">0.0°</span></div>
-                        </div>
-                    </div>
-                    <div style="display:flex; gap:8px;">
-                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Pitch</div><button id="pitchMinus90Btn">-90°</button><button id="pitchPlus90Btn">+90°</button></div>
-                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Roll</div><button id="rollMinus90Btn">-90°</button><button id="rollPlus90Btn">+90°</button></div>
-                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Yaw</div><button id="yawMinus90Btn">-90°</button><button id="yawPlus90Btn">+90°</button></div>
-                    </div>
-                    <div class="mount-rotate-90" style="display:flex; gap:8px; margin-top:6px;">
-                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Montaż X</div><button id="mountXMinus90Btn">-90°</button><button id="mountXPlus90Btn">+90°</button></div>
-                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Montaż Y</div><button id="mountYMinus90Btn">-90°</button><button id="mountYPlus90Btn">+90°</button></div>
-                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Montaż Z</div><button id="mountZMinus90Btn">-90°</button><button id="mountZPlus90Btn">+90°</button></div>
-                    </div>
-                    <!-- DODANE: Kontrolki remapu IMU (wpływają na wewnętrzne wektory - PID) -->
-                    <hr style="border-color:#2a2a35;">
-                    <div style="margin-top:6px;">
-                        <strong>Mapowanie osi IMU (wpływ na PID)</strong>
-                        <div style="display:flex; gap:6px; margin-top:6px;">
-                            <div style="flex:1;">
-                                <div>Pitch (Źródło)</div>
-                                <select id="imuPitchSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
-                                <div class="sign-toggle" id="imuPitchSign" style="margin-top:6px;"><button data-sign="1" class="active" title="Dodatni">+1</button><button data-sign="-1" title="Ujemny">-1</button></div>
-                            </div>
-                            <div style="flex:1;">
-                                <div>Yaw (Źródło)</div>
-                                <select id="imuYawSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
-                                <div class="sign-toggle" id="imuYawSign" style="margin-top:6px;"><button data-sign="1" class="active">+1</button><button data-sign="-1">-1</button></div>
-                            </div>
-                        </div>
-                        <div style="display:flex; gap:6px; margin-top:6px; align-items:center;">
-                            <div style="flex:1;">
-                                <div>Roll (Źródło)</div>
-                                <select id="imuRollSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
-                                <div class="sign-toggle" id="imuRollSign" style="margin-top:6px;"><button data-sign="1" class="active">+1</button><button data-sign="-1">-1</button></div>
-                            </div>
-                            <div style="display:flex; flex-direction:column; gap:6px; min-width:120px;">
-                                <button id="imuMappingLoadBtn" style="background:#61dafb;">Wczytaj</button>
-                                <button id="imuMappingSaveBtn" style="background:#a2f279;">Zapisz</button>
-                            </div>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:6px; margin-top:8px;"><input id="markFrontFaceChk" type="checkbox"><label for="markFrontFaceChk">Oznacz front (góra/dół) w podglądzie</label></div>
-                    </div>
-                    <div style="display:flex; gap:8px;">
-                        <button id="setModalPitchZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Pitch)</button>
-                        <button id="setModalRollZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Roll)</button>
-                    </div>
-                    <!-- Małe korekty trimów -->
-                    <hr style="border-color:#2a2a35;">
-                    <div style="margin-top:6px;">
-                        <strong>Małe korekty trimów</strong>
-                        <div style="display:flex; gap:6px; margin-top:6px;">
-                            <div style="flex:1;">
-                                <div>Pitch</div>
-                                <div style="display:flex; gap:2px; margin-top:4px;">
-                                    <button id="pitchTrimPlus01Btn" style="flex:1; font-size:0.8em;">+0.1°</button>
-                                    <button id="pitchTrimMinus01Btn" style="flex:1; font-size:0.8em;">-0.1°</button>
-                                    <button id="pitchTrimPlus001Btn" style="flex:1; font-size:0.8em;">+0.01°</button>
-                                    <button id="pitchTrimMinus001Btn" style="flex:1; font-size:0.8em;">-0.01°</button>
-                                </div>
-                            </div>
-                            <div style="flex:1;">
-                                <div>Roll</div>
-                                <div style="display:flex; gap:2px; margin-top:4px;">
-                                    <button id="rollTrimPlus01Btn" style="flex:1; font-size:0.8em;">+0.1°</button>
-                                    <button id="rollTrimMinus01Btn" style="flex:1; font-size:0.8em;">-0.1°</button>
-                                    <button id="rollTrimPlus001Btn" style="flex:1; font-size:0.8em;">+0.01°</button>
-                                    <button id="rollTrimMinus001Btn" style="flex:1; font-size:0.8em;">-0.01°</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-                    <!-- Modal: Konfiguracja Fitness -->
-                    <div id="fitness-modal" class="modal-backdrop" style="display:none;">
-                        <div class="modal-content" style="max-width:480px;">
-                            <h2>Konfiguracja Fitness (Rozdziel 100 punktów)</h2>
-                            <div style="display:flex; gap:10px; flex-direction:column;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <label for="weight-itae">ITAE</label>
-                                    <input type="number" id="weight-itae" min="0" max="100" value="50" style="width:110px;">
-                                </div>
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <label for="weight-overshoot">Przeregulowanie</label>
-                                    <input type="number" id="weight-overshoot" min="0" max="100" value="30" style="width:110px;">
-                                </div>
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <label for="weight-sse">SSE / Kontrola</label>
-                                    <input type="number" id="weight-sse" min="0" max="100" value="20" style="width:110px;">
-                                </div>
-                                <div style="display:flex; justify-content:space-between; align-items:center; font-weight:bold; color:#61dafb;">
-                                    <div>Pozostało:</div>
-                                    <div id="weight-remaining">0</div>
-                                </div>
-                                <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:8px;">
-                                    <button id="close-fitness-modal" style="background:#ff6347;">Zamknij</button>
-                                    <button id="apply-fitness-btn" style="background:#a2f279;" disabled>Zastosuj Wagi</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
-                <button id="sensorWizardCancelBtn" style="background:#ff6347;">Anuluj</button>
-                <button id="sensorWizardBackBtn" disabled>Wstecz</button>
-                <button id="sensorWizardNextBtn" style="background:#61dafb;">Dalej</button>
             </div>
         </div>
     </div>
