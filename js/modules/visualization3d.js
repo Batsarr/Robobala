@@ -259,11 +259,14 @@ export function update3DAnimation() {
                     }
                 }
 
+                // raw Euler angles are returned as {pitch, yaw, roll} in ZYX order
+                // (yaw around Z, pitch around Y, roll around X), so construct the
+                // quaternion accordingly: x=roll, y=pitch, z=yaw with order 'ZYX'.
                 const qMappedEuler = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+                    THREE.MathUtils.degToRad(mapped.roll),
                     THREE.MathUtils.degToRad(mapped.pitch),
                     THREE.MathUtils.degToRad(mapped.yaw),
-                    THREE.MathUtils.degToRad(mapped.roll),
-                    'YXZ'
+                    'ZYX'
                 ));
                 const qResult = new THREE.Quaternion().multiplyQuaternions(qCorr, qMappedEuler).normalize();
                 robotPivot.quaternion.slerp(qResult, 0.35);
