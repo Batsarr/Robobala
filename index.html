@@ -596,37 +596,10 @@
                 <!-- Przyciski przeniesione na dół, pod wszystkimi akordeonami -->
             </fieldset>
             <div id="allSettings">
-                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="expert">1. Filtr Mahony i Predykcja <span id="fusionModeIndicator" class="fusion-indicator fusion-mahony">⚡ Mahony (~500Hz)</span></button>
+                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="expert">1. Filtr Mahony i Predykcja</button>
                 <div class="accordion-content">
-                    <!-- ===== SEKCJA EDUKACYJNA: Tryby fuzji IMU ===== -->
-                    <div class="fusion-info-box" style="background: linear-gradient(135deg, #1a2a3a 0%, #1a1d24 100%); border: 1px solid #4fc3f7; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
-                        <h5 style="color: #4fc3f7; margin: 0 0 8px 0; font-size: 0.95em;">📚 Wybór trybu fuzji IMU (WAŻNE!)</h5>
-                        <p style="color: #aaa; font-size: 0.85em; margin: 0 0 8px 0;">
-                            <strong>Mahony (~500Hz):</strong> Własna fuzja - szybsza reakcja, mniejsze opóźnienie.<br>
-                            <strong>NDOF (~100Hz):</strong> Wbudowana w BNO055 - stabilniejsza, automatyczna kalibracja.
-                        </p>
-                        <p style="color: #f7b731; font-size: 0.85em; margin: 0;">
-                            ⚠️ <strong>Każdy tryb wymaga INNYCH wartości PID!</strong> System automatycznie przełącza profile.
-                        </p>
-                    </div>
-                    
                     <div class="setting-container"> <label for="mahonyKpInput">Kp (Proporcjonalny)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="mahonyKpInput" min="0" max="10" step="0.1" value="1.0"><button>+</button></div> <div class="help-text">Proporcjonalne wzmocnienie filtru Mahony - szybkość korekty orientacji z akcelerometru. Wyższa wartość = szybsza konwergencja do prawidłowej orientacji, ale większa wrażliwość na przyspieszenia. Typowy zakres: 0.5-2.0.</div> </div>
                     <div class="setting-container"> <label for="mahonyKiInput">Ki (Całkujący)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="mahonyKiInput" min="0" max="1" step="0.01" value="0.05"><button>+</button></div> <div class="help-text">Całkujące wzmocnienie - kompensuje dryf żyroskopu. Wyższa wartość = lepsza korekta dryfu, ale wolniejsza odpowiedź. Kluczowy parametr dla stabilności długoterminowej robota balansującego. Typowy zakres: 0.01-0.1.</div> </div>
-                    <div class="setting-container"> <label for="useMahonyFilterInput">Użyj własnej fuzji IMU<span class="help-icon">?</span></label> <input type="checkbox" class="config-value" id="useMahonyFilterInput"> <div class="help-text">Włącz własną fuzję danych IMU z filtrem Mahony zamiast wbudowanej w BNO055. Filtr Mahony jest optymalny dla robotów balansujących dzięki wbudowanej kompensacji dryfu żyroskopu i niższemu opóźnieniu.</div> </div>
-                    
-                    <!-- ===== AUTOMATYCZNE PRZEŁĄCZANIE PROFILI PID ===== -->
-                    <hr style="border-color: #4a4f58; margin: 15px 0;">
-                    <div class="fusion-profiles-section" style="background: #20232a; border-radius: 6px; padding: 12px; margin-bottom: 15px;">
-                        <h5 style="color: #61dafb; margin: 0 0 10px 0; font-size: 0.9em;">🔄 Profile PID dla trybów fuzji</h5>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <input type="checkbox" id="fusionAutoSwitchToggle" checked style="width: 18px; height: 18px;">
-                            <label for="fusionAutoSwitchToggle" style="color: #aaa; font-size: 0.85em;">Automatycznie przełączaj PID przy zmianie fuzji</label>
-                        </div>
-                        <p style="color: #666; font-size: 0.8em; margin: 8px 0 0 0;">
-                            � Po zmianie trybu fuzji, wartości PID dla wszystkich pętli zostaną automatycznie wczytane z zapisanego profilu.
-                            Profile zapisują się razem z przyciskiem "Zapisz na Robocie".
-                        </p>
-                    </div>
                     
                     <hr style="border-color: #4a4f58; margin: 15px 0;">
                     <h4 style="color: #4fc3f7; margin-bottom: 10px;">Predykcja kąta (Stabilność)</h4>
@@ -650,7 +623,7 @@
                     <div class="manual-tune-row" data-motor="right" data-direction="bwd"> <div class="pwm-input-row"> <label>Prawy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="2047" step="1" value="1200"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
                     <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKIE SILNIKI</button>
                 </div>
-                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="student">4. PID Balansu (Podstawowy) <span class="sign-badge" id="balanceSignBadge">B:+</span> <span id="fusionModeIndicator4" class="fusion-indicator fusion-mahony" style="font-size: 0.65em;">⚡ Mahony</span></button>
+                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="student">4. PID Balansu (Podstawowy) <span class="sign-badge" id="balanceSignBadge">B:+</span></button>
                 <div class="accordion-content">
                     <div class="setting-container"> <label for="balanceKpInput">Kp - Sila<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKpInput" min="0" max="500" step="0.1" value="95"><button>+</button></div> <div class="help-text"><strong>Proporcjonalny (Kp):</strong> Określa, jak mocno robot reaguje na odchylenie od pionu. Wyższa wartość = sztywniejsze utrzymanie równowagi, szybsza reakcja na zakłócenia. Zbyt wysoka wartość powoduje szybkie oscylacje (robot "drży"). Zbyt niska = robot reaguje za wolno i może upaść. Zacznij od 80-120 i dostosuj stopniowo. Typowy zakres: 60-150.</div> </div>
                     <div class="setting-container"> <label for="balanceKiInput">Ki - Korekta<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKiInput" min="0" max="10" step="0.01" value="0.0"><button>+</button></div> <div class="help-text"><strong>Całkujący (Ki):</strong> Eliminuje długotrwały, stały błąd (np. gdy robot powoli dryfuje w jednym kierunku mimo pionowego stania). Często nie jest potrzebny dla balansu - zacznij od 0. Jeśli robot ma tendencję do dryfowania, zwiększaj bardzo ostrożnie (np. 0.05-0.2). Zbyt wysoka wartość powoduje niestabilność i oscylacje. Typowy zakres: 0-0.5.</div> </div>
@@ -659,7 +632,7 @@
                     <div class="setting-container"> <label for="balanceIntegralLimitInput">Limit Integratora<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceIntegralLimitInput" min="0" max="200" step="1" value="50"><button>+</button></div> <div class="help-text">Maksymalna wartość, jaką może osiągnąć suma całkująca (Ki). Zapobiega "rozregulowaniu" integratora przy dużych, długotrwałych błędach. Jeśli używasz Ki, ustaw limit na 30-100. Jeśli Ki=0, ten parametr nie ma wpływu. Typowy zakres: 30-100.</div> </div>
                     <div class="model-mapping-row" style="margin-top:6px;"><label>Znak sprzężenia (Balans)</label><div id="balanceSign" class="sign-toggle"><button data-sign="-1">-</button><button data-sign="1">+</button></div><div class="help-text" style="margin-top:8px;">Odwróć znak sprzężenia pętli balansu (zmiana możliwa tylko w trybie IDLE)</div></div>
                 </div>
-                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="advanced">5. PID Kaskadowy (Predkosc/Pozycja) <span id="fusionModeIndicator5" class="fusion-indicator fusion-mahony" style="font-size: 0.65em;">⚡ Mahony</span></button>
+                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="advanced">5. PID Kaskadowy (Predkosc/Pozycja)</button>
                 <div class="accordion-content">
                     <div class="parameter-group"><h5>PID Predkosci <span class="sign-badge" id="speedSignBadge">S:+</span></h5>
                         <div class="setting-container"> <label for="speedKpInput">Kp - Reakcja<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKpInput" min="0" max="10" step="0.01" value="0.0"><button>+</button></div> <div class="help-text">Kontroluje, jak mocno robot pochyla się, aby osiągnąć zadaną prędkość. Wyższa wartość = szybsze przyspieszanie/zwalnianie, ale może powodować oscylacje prędkości. Zacznij od małych wartości (0.1-0.5) i zwiększaj stopniowo. Typowy zakres: 0.1-2.0.</div> </div>
@@ -823,7 +796,7 @@
             </div>
         </div>
         
-                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="advanced">8. Identyfikacja Obiektu (System ID) <span id="sysidFusionIndicator" class="fusion-indicator fusion-mahony" style="font-size: 0.65em;">⚡ Mahony</span></button>
+                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="advanced">8. Identyfikacja Obiektu (System ID)</button>
                 <div class="accordion-content" id="sysid-content">
                     <!-- Edukacyjne wprowadzenie do System ID -->
                     <div style="background: linear-gradient(135deg, #1a2a3a 0%, #1a1d24 100%); border: 1px solid #9b59b6; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
@@ -832,10 +805,6 @@
                             System ID to technika inżynieryjna polegająca na <strong>pomiarze rzeczywistej odpowiedzi systemu</strong> 
                             na znane pobudzenie (impuls, skok). Na podstawie przebiegu odpowiedzi można wyznaczyć 
                             optymalne parametry PID metodami matematycznymi.
-                        </p>
-                        <p style="color: #f7b731; font-size: 0.85em; margin: 0;">
-                            ⚠️ <strong>Ważne:</strong> Wyniki są specyficzne dla aktualnego trybu fuzji IMU! 
-                            Zmiana Mahony↔NDOF wymaga nowej identyfikacji.
                         </p>
                     </div>
                     
