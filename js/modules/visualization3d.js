@@ -3,6 +3,7 @@
 // ========================================================================
 
 import { currentEncoderLeft, currentEncoderRight } from './telemetry.js';
+import { buildRobotEulerFromTelemetryAngles } from './orientation-utils.mjs';
 
 // --- 3D Scene variables ---
 let scene3D, camera3D, renderer3D, controls3D;
@@ -235,12 +236,12 @@ export function update3DAnimation() {
         const td = window.telemetryData;
         if (td && typeof td.pitch === 'number' && typeof td.yaw === 'number' && typeof td.roll === 'number') {
             try {
-                // Budujemy kwaternion z gotowych kątów: x=roll, y=pitch, z=yaw, kolejność 'ZYX'
+                const euler = buildRobotEulerFromTelemetryAngles(td);
                 const qEuler = new THREE.Quaternion().setFromEuler(new THREE.Euler(
-                    THREE.MathUtils.degToRad(td.roll),
-                    THREE.MathUtils.degToRad(td.pitch),
-                    THREE.MathUtils.degToRad(td.yaw),
-                    'ZYX'
+                    euler.x,
+                    euler.y,
+                    euler.z,
+                    euler.order
                 ));
                 robotPivot.quaternion.slerp(qEuler, 0.35);
             } catch (err) {
