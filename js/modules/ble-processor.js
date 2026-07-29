@@ -37,27 +37,33 @@ function processCompleteMessage(data) {
     // The algorithms will detect the failed test, enter pause state, and restore baseline PID.
     switch (data.type) {
         case 'telemetry':
-            // Jeśli dostępny jest kwaternion, policz kąty bez dodatkowego mapowania (Quaternion-First)
-            if (typeof data.qw === 'number' && typeof data.qx === 'number' && typeof data.qy === 'number' && typeof data.qz === 'number') {
+            // Robot jest jedynym źródłem prawdy dla kątów Eulera.
+            // Jeśli firmware przysłał gotowe kąty (klucze p/y/r), używamy ich bezpośrednio.
+            if (typeof data.p === 'number' && typeof data.y === 'number' && typeof data.r === 'number') {
+                data.pitch = data.p;
+                data.yaw = data.y;
+                data.roll = data.r;
+                // Oblicz raw_* dla kompatybilności (np. setPitchZero/setRollZero)
+                data.raw_pitch = data.p;
+                data.raw_yaw = data.y;
+                data.raw_roll = data.r;
+                // Wizualizacja 3D - mapowanie przez modelMapping
+                const mapped = applyModelMappingToEuler({ pitch: data.p, yaw: data.y, roll: data.r });
+                data.viz_pitch = mapped.pitch;
+                data.viz_yaw = mapped.yaw;
+                data.viz_roll = mapped.roll;
+            } else if (typeof data.qw === 'number' && typeof data.qx === 'number' && typeof data.qy === 'number' && typeof data.qz === 'number') {
+                // Fallback: starsze firmware bez p/y/r - przeliczamy z kwaternionu
                 const eul = computeEulerFromQuaternion(data.qw, data.qx, data.qy, data.qz);
                 if (eul) {
-                    // Zachowaj SUROWE kąty z kwaternionu (dla logiki, wykresów, ścieżki)
                     data.raw_pitch = eul.pitch;
                     data.raw_yaw = eul.yaw;
                     data.raw_roll = eul.roll;
-                    // Oblicz tylko dla wizualizacji (model 3D) – nie wpływa na logikę
                     const mapped = applyModelMappingToEuler(eul);
                     data.viz_pitch = mapped.pitch;
                     data.viz_yaw = mapped.yaw;
                     data.viz_roll = mapped.roll;
-                    // Kąty z kwaternionu po stronie firmware są już skorygowane o trymy.
-                    // UWAGA: firmware stosuje korekcję montażu (obrót o -90° wokół Y),
-                    // co powoduje że osie yaw i roll są zamienione względem surowego kwaternionu.
-                    // Funkcja quaternionToRobotAnglesDeg() w firmware mapuje:
-                    //   yaw_robota  = euler.z() (roll z kwaternionu)
-                    //   roll_robota = euler.x() (yaw z kwaternionu)
-                    //   pitch_robota = euler.y() (bez zmian)
-                    // Stosujemy to samo mapowanie po stronie UI.
+                    // Mapowanie yaw↔roll dla korekcji montażu (tak samo jak w quaternionToRobotAnglesDeg)
                     data.pitch = data.raw_pitch;
                     data.yaw = data.raw_roll;
                     data.roll = data.raw_yaw;

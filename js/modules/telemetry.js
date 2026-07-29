@@ -39,6 +39,10 @@ export function normalizeTelemetryData(d) {
     if (d.rt !== undefined && d.roll_trim === undefined) d.roll_trim = d.rt;
     if (d.po !== undefined && d.pitch_offset === undefined) d.pitch_offset = d.po;
     if (d.ro !== undefined && d.roll_offset === undefined) d.roll_offset = d.ro;
+    // Kąty Eulera z firmware (robot jest jedynym źródłem prawdy)
+    if (d.p !== undefined && d.pitch === undefined) d.pitch = d.p;
+    if (d.y !== undefined && d.yaw === undefined) d.yaw = d.y;
+    if (d.r !== undefined && d.roll === undefined) d.roll = d.r;
     if (d.trim_angle === undefined) d.trim_angle = 0.0;
     if (d.roll_trim === undefined) d.roll_trim = 0.0;
     if (d.pitch_offset === undefined) d.pitch_offset = 0.0;
