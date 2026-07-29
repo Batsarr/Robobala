@@ -1090,10 +1090,16 @@ function processCompleteMessage(data) {
                     data.viz_yaw = mapped.yaw;
                     data.viz_roll = mapped.roll;
                     // Kąty z kwaternionu po stronie firmware są już skorygowane o trymy.
-                    // Dlatego ustawiamy bez dalszych korekt.
+                    // UWAGA: firmware stosuje korekcję montażu (obrót o -90° wokół Y),
+                    // co powoduje że osie yaw i roll są zamienione względem surowego kwaternionu.
+                    // Funkcja quaternionToRobotAnglesDeg() w firmware mapuje:
+                    //   yaw_robota  = euler.z() (roll z kwaternionu)
+                    //   roll_robota = euler.x() (yaw z kwaternionu)
+                    //   pitch_robota = euler.y() (bez zmian)
+                    // Stosujemy to samo mapowanie po stronie UI.
                     data.pitch = data.raw_pitch;
-                    data.yaw = data.raw_yaw;
-                    data.roll = data.raw_roll;
+                    data.yaw = data.raw_roll;
+                    data.roll = data.raw_yaw;
                 }
             }
             updateTelemetryUI(data);
