@@ -230,48 +230,29 @@ export function init3DVisualization() {
 
 export function update3DAnimation() {
     if (isAnimation3DEnabled && robotPivot) {
-        // Use quaternion from telemetry + mapping
-        if (typeof window.telemetryData?.qw === 'number') {
+        // Używamy gotowych kątów Eulera z firmware (robot jest jedynym źródłem prawdy).
+        // Kąty są już skorygowane o montaż (obrót -90° wokół Y) i trymy.
+        const td = window.telemetryData;
+        if (td && typeof td.pitch === 'number' && typeof td.yaw === 'number' && typeof td.roll === 'number') {
             try {
-                const qRaw = new THREE.Quaternion(
-                    window.telemetryData.qx,
-                    window.telemetryData.qy,
-                    window.telemetryData.qz,
-                    window.telemetryData.qw
-                ).normalize();
-
-                const modelMapping = window.modelMapping || { pitch: { sign: 1 }, yaw: { sign: 1 }, roll: { sign: 1 } };
-                const signs = [modelMapping.pitch.sign, modelMapping.yaw.sign, modelMapping.roll.sign];
-                const negCount = signs.filter(s => s === -1).length;
-                let qCorr = new THREE.Quaternion();
-
-                const computeEulerFromQuaternion = window.computeEulerFromQuaternion || (() => null);
-                const applyModelMappingToEuler = window.applyModelMappingToEuler || ((e) => e);
-
-                const eulRaw = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
-                let mapped = eulRaw ? applyModelMappingToEuler(eulRaw) : { pitch: 0, yaw: 0, roll: 0 };
-
-                if (negCount % 2 === 0) {
-                    if (negCount === 2) {
-                        const idx = signs.findIndex(s => s === 1);
-                        const axisVec = idx === 0 ? new THREE.Vector3(1, 0, 0) : (idx === 1 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1));
-                        qCorr.setFromAxisAngle(axisVec, Math.PI);
-                    }
-                }
-
-                // raw Euler angles are returned as {pitch, yaw, roll} in ZYX order
-                // (yaw around Z, pitch around Y, roll around X), so construct the
-                // quaternion accordingly: x=roll, y=pitch, z=yaw with order 'ZYX'.
-                const qMappedEuler = new THREE.Quaternion().setFromEuler(new THREE.Euler(
-                    THREE.MathUtils.degToRad(mapped.roll),
-                    THREE.MathUtils.degToRad(mapped.pitch),
-                    THREE.MathUtils.degToRad(mapped.yaw),
+                // Budujemy kwaternion z gotowych kątów: x=roll, y=pitch, z=yaw, kolejność 'ZYX'
+                const qEuler = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+                    THREE.MathUtils.degToRad(td.roll),
+                    THREE.MathUtils.degToRad(td.pitch),
+                    THREE.MathUtils.degToRad(td.yaw),
                     'ZYX'
                 ));
-                const qResult = new THREE.Quaternion().multiplyQuaternions(qCorr, qMappedEuler).normalize();
-                robotPivot.quaternion.slerp(qResult, 0.35);
+                robotPivot.quaternion.slerp(qEuler, 0.35);
             } catch (err) {
-                console.error('Quaternion mapping error:', err);
+                console.error('3D Euler error:', err);
+            }
+        } else if (typeof td?.qw === 'number') {
+            // Fallback: starsze firmware bez p/y/r - używamy surowego kwaternionu
+            try {
+                const qRaw = new THREE.Quaternion(td.qx, td.qy, td.qz, td.qw).normalize();
+                robotPivot.quaternion.slerp(qRaw, 0.35);
+            } catch (err) {
+                console.error('3D quaternion fallback error:', err);
             }
         }
 
