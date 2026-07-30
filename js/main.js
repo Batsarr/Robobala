@@ -379,6 +379,8 @@ function applyModelMappingToEuler(e) { // e={pitch,yaw,roll}; zwraca przemapowan
 document.getElementById('modelMappingBtn')?.addEventListener('click', () => { openModelMappingModal(); sendBleMessage({ type: 'get_model_mapping' }); });
 document.getElementById('modelMappingCloseBtn')?.addEventListener('click', () => closeModelMappingModal());
 document.getElementById('modelMappingLoadBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'get_model_mapping' }); });
+document.getElementById('resetModelMappingBtn')?.addEventListener('click', () => { resetModelMapping(); addLogMessage('[UI] Przywrócono domyślne mapowanie modelu (identity).', 'info'); });
+
 document.getElementById('modelMappingSaveBtn')?.addEventListener('click', () => {
     if (!AppState.isConnected) { addLogMessage('[UI] Musisz być połączony z robotem aby zapisać mapowanie modelu 3D.', 'warn'); return; }
     if (!confirm('Zapisz mapowanie modelu 3D do pamięci EEPROM robota?')) return;
