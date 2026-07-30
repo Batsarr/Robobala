@@ -4,7 +4,6 @@
 
 import { currentEncoderLeft, currentEncoderRight } from './telemetry.js';
 import { buildRobotEulerFromTelemetryAngles } from './orientation-utils.mjs';
-import { resetModelMapping } from './sensor-mapping.js';
 
 // --- 3D Scene variables ---
 let scene3D, camera3D, renderer3D, controls3D;
@@ -172,10 +171,6 @@ export function setupControls3D() {
     document.getElementById('toggle3dMovementBtn').addEventListener('click', () => {
         isMovement3DEnabled = !isMovement3DEnabled;
         lastEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
-    });
-    document.getElementById('reset3dMappingBtn')?.addEventListener('click', () => {
-        resetModelMapping();
-        window.addLogMessage?.('[UI] Przywrócono domyślne mapowanie osi modelu 3D (identity).', 'info');
     });
 }
 

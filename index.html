@@ -238,7 +238,6 @@
                 <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
                     <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Asystent Kalibracji IMU</button>
                     <button id="calibrateZeroPointBtn" style="width:100%; background-color:#f7b731;">Znajdz Pion Automatycznie</button>
-                    <button id="modelMappingBtn" style="width:100%; background-color:#f7b731;" data-mode="advanced">Mapowanie modelu 3D</button>
                 </div>
             </fieldset>
         </div>
@@ -249,7 +248,6 @@
                 <button id="reset3dViewBtn">Resetuj Widok</button>
                 <button id="toggle3dAnimationBtn">Wl./Wyl. Animacje</button>
                 <button id="toggle3dMovementBtn">Start/Stop Ruchu</button>
-                <button id="reset3dMappingBtn" title="Przywróć domyślne mapowanie osi modelu 3D (identity)">Reset Mapowania Osi</button>
             </div>
             <div class="robot3d-info">
                 <div class="robot3d-metrics">
@@ -994,67 +992,10 @@
             </div>
         </div>
     </div>
-    <!-- Modal mapowania modelu 3D -->
-    <div id="model-mapping-modal" class="modal-backdrop" style="display:none;">
-        <div class="modal-content">
-            <h2>Mapowanie Modelu 3D (Wizualizacja) <span class="help-icon" id="modelMappingHelp" title="Pokaż/ukryj szczegółową pomoc">?</span></h2>
-            <div id="modelMappingHelpText" class="help-text" style="margin-bottom:10px;" aria-hidden="true">
-                <strong>Co to robi?</strong> Przekształca kąty Euler'a (pochodne z kwaternionu) na osie sceny 3D.<br>
-                <strong>Kiedy użyć?</strong> Jeśli model 3D reaguje w niewłaściwych osiach albo odwrotnie niż oczekujesz.<br>
-                <strong>Źródła:</strong> Pitch/Yaw/Roll liczone z kwaternionu (standard ZYX).<br>
-                <strong>Znak:</strong> Użyj -1 aby odwrócić kierunek osi bez zmiany logiki sterowania.<br>
-                <em>Zmiany nie wpływają na kontrolę robota – tylko na wizualizację.</em>
-            </div>
-            <p style="text-align:left; font-size:0.85em; line-height:1.4;" title="Tylko wizualizacja, nie sterowanie">Określ, które składowe kątów Euler'a mają zasilać osie modelu 3D oraz ich znak.</p>
-            <div class="model-mapping-row" title="Źródło oraz znak dla osi Pitch modelu">
-                <strong>Pitch:</strong>
-                <select id="modelPitchSource" title="Wybierz z której osi Euler będzie pochodzić Pitch modelu">
-                    <option value="0">Pitch</option>
-                    <option value="1">Yaw</option>
-                    <option value="2">Roll</option>
-                </select>
-                <div class="sign-toggle" id="modelPitchSign" title="Znak osi Pitch">
-                    <button data-sign="1" class="active" title="Dodatni kierunek">+1</button>
-                    <button data-sign="-1" title="Odwróć kierunek">-1</button>
-                </div>
-            </div>
-            <div class="model-mapping-row" title="Źródło oraz znak dla osi Yaw modelu">
-                <strong>Yaw:</strong>
-                <select id="modelYawSource" title="Wybierz z której osi Euler będzie pochodzić Yaw modelu">
-                    <option value="0">Pitch</option>
-                    <option value="1">Yaw</option>
-                    <option value="2">Roll</option>
-                </select>
-                <div class="sign-toggle" id="modelYawSign" title="Znak osi Yaw">
-                    <button data-sign="1" class="active" title="Dodatni kierunek">+1</button>
-                    <button data-sign="-1" title="Odwróć kierunek">-1</button>
-                </div>
-            </div>
-            <div class="model-mapping-row" title="Źródło oraz znak dla osi Roll modelu">
-                <strong>Roll:</strong>
-                <select id="modelRollSource" title="Wybierz z której osi Euler będzie pochodzić Roll modelu">
-                    <option value="0">Pitch</option>
-                    <option value="1">Yaw</option>
-                    <option value="2">Roll</option>
-                </select>
-                <div class="sign-toggle" id="modelRollSign" title="Znak osi Roll">
-                    <button data-sign="1" class="active" title="Dodatni kierunek">+1</button>
-                    <button data-sign="-1" title="Odwróć kierunek">-1</button>
-                </div>
-            </div>
-            <div id="model-mapping-current" title="Aktualna konfiguracja mapowania">Brak danych mapowania.</div>
-            <div style="display:flex; gap:10px; margin-top:12px;">
-                <button id="modelMappingLoadBtn" style="flex:1; background:#61dafb;" title="Pobierz aktualne wartości z EEPROM">Wczytaj</button>
-                <button id="modelMappingSaveBtn" style="flex:1; background:#a2f279;" title="Zapisz bieżące ustawienia do EEPROM">Zapisz</button>
-                <button id="modelMappingResetBtn" style="flex:1; background:#f7b731;" title="Przywróć wartości domyślne (identity)">Domyślne</button>
-            </div>
-            <button id="modelMappingCloseBtn" style="width:100%; margin-top:14px; background:#ff6347;" title="Zamknij okno">Zamknij</button>
-        </div>
-    </div>
 
     <!-- ARCHITEKTURA MODUŁOWA ES6 (Etap 2):
          app.js (module) importuje 19 modułów ES6 z js/modules/ — cała logika aplikacji.
-         main.js (defer) zawiera unikalne sekcje: sensor/model mapping, trymy, logi.
+         main.js (defer) zawiera unikalne sekcje: sensor mapping, trymy, logi.
          path_visualization.js (defer) — wizualizacja ścieżki (RB.path namespace). -->
     <script src="js/path_visualization.js" defer></script>
     <script src="js/main.js" defer></script>

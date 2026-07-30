@@ -112,9 +112,8 @@ export function updateTelemetryUI(data) {
         const correctedPitch = (data.pitch !== undefined) ? data.pitch : (typeof data.raw_pitch === 'number' ? data.raw_pitch : 0);
         const angleVal = document.getElementById('angleVal');
         if (angleVal) angleVal.textContent = correctedPitch.toFixed(1) + ' \u00B0';
-        const vizPitchVal = (data.viz_pitch !== undefined) ? data.viz_pitch : correctedPitch || 0;
         const pitchEl = document.getElementById('robot3d-pitch');
-        if (pitchEl) pitchEl.textContent = vizPitchVal.toFixed(1) + '°';
+        if (pitchEl) pitchEl.textContent = correctedPitch.toFixed(1) + '°';
         pitchHistory.push(correctedPitch);
         if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
     }
@@ -122,9 +121,8 @@ export function updateTelemetryUI(data) {
     // Roll
     if (typeof data.raw_roll === 'number' || typeof data.roll === 'number') {
         const correctedRoll = (data.roll !== undefined) ? data.roll : (typeof data.raw_roll === 'number' ? data.raw_roll : 0);
-        const vizRollVal = (data.viz_roll !== undefined) ? data.viz_roll : correctedRoll || 0;
         const rollEl = document.getElementById('robot3d-roll');
-        if (rollEl) rollEl.textContent = vizRollVal.toFixed(1) + '°';
+        if (rollEl) rollEl.textContent = correctedRoll.toFixed(1) + '°';
         const rollVal = document.getElementById('rollVal');
         if (rollVal) rollVal.textContent = correctedRoll.toFixed(1) + ' \u00B0';
     }

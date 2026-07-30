@@ -16,7 +16,7 @@ const tuningHistory = window.tuningHistory;
 // ─── processCompleteMessage ────────────────────────────────────────────────────
 /**
  * The main switch dispatcher for every incoming BLE JSON message.
- * Dispatches by data.type: telemetry, status_update, imu_mapping, model_mapping,
+ * Dispatches by data.type: telemetry, status_update, imu_mapping,
  * sync_begin, set_param, set_tuning_config_param, ack, sync_complete, log,
  * tuner_live_status, tuner_live_chart_data, tuning_result, tuning_iteration_result,
  * min_pwm_autotune_result, test_result / metrics_result, tuner_session_end.
@@ -47,11 +47,6 @@ function processCompleteMessage(data) {
                 data.raw_pitch = data.p;
                 data.raw_yaw = data.y;
                 data.raw_roll = data.r;
-                // Wizualizacja 3D - mapowanie przez modelMapping
-                const mapped = applyModelMappingToEuler({ pitch: data.p, yaw: data.y, roll: data.r });
-                data.viz_pitch = mapped.pitch;
-                data.viz_yaw = mapped.yaw;
-                data.viz_roll = mapped.roll;
             } else if (typeof data.qw === 'number' && typeof data.qx === 'number' && typeof data.qy === 'number' && typeof data.qz === 'number') {
                 // Fallback: starsze firmware bez p/y/r - przeliczamy z kwaternionu
                 const eul = computeEulerFromQuaternion(data.qw, data.qx, data.qy, data.qz);
@@ -59,10 +54,6 @@ function processCompleteMessage(data) {
                     data.raw_pitch = eul.pitch;
                     data.raw_yaw = eul.yaw;
                     data.raw_roll = eul.roll;
-                    const mapped = applyModelMappingToEuler(eul);
-                    data.viz_pitch = mapped.pitch;
-                    data.viz_yaw = mapped.yaw;
-                    data.viz_roll = mapped.roll;
                     // Mapowanie yaw↔roll dla korekcji montażu (tak samo jak w quaternionToRobotAnglesDeg)
                     data.pitch = data.raw_pitch;
                     data.yaw = data.raw_roll;
@@ -100,16 +91,6 @@ function processCompleteMessage(data) {
             // Aktualizuj kontrolki w modalu mapowania czujnika (jeśli otwarte)
             try { updateIMUMappingUIFromData(data); } catch (e) { /* no-op */ }
             addLogMessage('[UI] Otrzymano mapowanie czujnika (imu_mapping).', 'info');
-            break;
-        case 'model_mapping':
-            // Aktualizacja struktury modelMapping z EEPROM
-            if (data.pitch && data.yaw && data.roll) {
-                modelMapping.pitch.source = parseInt(data.pitch.source); modelMapping.pitch.sign = parseInt(data.pitch.sign);
-                modelMapping.yaw.source = parseInt(data.yaw.source); modelMapping.yaw.sign = parseInt(data.yaw.sign);
-                modelMapping.roll.source = parseInt(data.roll.source); modelMapping.roll.sign = parseInt(data.roll.sign);
-                updateModelMappingUI();
-            }
-            addLogMessage('[UI] Otrzymano mapowanie modelu 3D (model_mapping).', 'info');
             break;
         case 'sync_begin':
             clearTimeout(AppState.syncTimeout);
@@ -407,7 +388,7 @@ function initBleProcessor() {
 // These functions are expected to exist on window from other modules / main.js:
 //   window.normalizeTelemetryData, window.updateTelemetryUI
 //   window.applySingleParam, window.applySingleAutotuneParam, window.applyFullConfig
-//   window.updateIMUMappingUIFromData, window.updateModelMappingUI
+//   window.updateIMUMappingUIFromData
 //   window.addLogMessage, window.setTuningUiLock
 //   window.handleCancel
 //   window.updateCalibrationProgress
@@ -415,9 +396,9 @@ function initBleProcessor() {
 //   window.handleDynamicTestResult
 //
 // Local helpers used inside processCompleteMessage that live in global scope:
-//   computeEulerFromQuaternion, applyModelMappingToEuler, updateChart,
+//   computeEulerFromQuaternion, updateChart,
 //   updateActualPath, checkAndExecuteNextSequenceStep, sensorWizard,
-//   setWizardProgress, updateSensorWizardUI, modelMapping,
+//   setWizardProgress, updateSensorWizardUI,
 //   FusionPIDProfiles, updateSearchSpaceInputs, updateTunerStatus,
 //   updateBestDisplay, applyParameters, addTestToResultsTable, showNotification,
 //   updateSignSummary
@@ -427,7 +408,6 @@ function initBleProcessor() {
 function addLogMessage(...args)              { return window.addLogMessage(...args); }
 function updateTelemetryUI(...args)          { return window.updateTelemetryUI(...args); }
 function updateIMUMappingUIFromData(...args)  { return window.updateIMUMappingUIFromData(...args); }
-function updateModelMappingUI(...args)        { return window.updateModelMappingUI(...args); }
 function applySingleParam(...args)            { return window.applySingleParam(...args); }
 function applySingleAutotuneParam(...args)    { return window.applySingleAutotuneParam(...args); }
 function handleCancel(...args)                { return window.handleCancel(...args); }
