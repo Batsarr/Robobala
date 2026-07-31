@@ -6,6 +6,7 @@
 // ========================================================================
 
 import { appStore, AppState, parameterMapping } from './state.js';
+import { computeEulerFromQuaternion } from './orientation-utils.mjs';
 
 // ========================================================================
 // STATE
@@ -147,7 +148,6 @@ async function startSysIdRecording() {
     const sendBleMessage = window.sendBleMessage;
     const addLogMessage = window.addLogMessage;
     const normalizeTelemetryData = window.normalizeTelemetryData;
-    const computeEulerFromQuaternion = window.computeEulerFromQuaternion;
 
     if (!AppState.isConnected) {
         addLogMessage('[SysID] Błąd: Połącz się z robotem.', 'error');

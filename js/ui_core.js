@@ -80,12 +80,12 @@
                     const eulRaw = window.computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
                     const mapped = eulRaw ? window.applyModelMappingToEuler(eulRaw) : { pitch: 0, yaw: 0, roll: 0 };
                     // Używamy tylko pitch jako przechył dla prostoty; pełne odwzorowanie kwaternionu można dodać później
-                    // Tworzymy kwaternion z mapped (kolejność YXZ jak w oryginale)
+                    // Tworzymy kwaternion z mapped: x=roll, y=pitch, z=yaw, kolejność 'ZYX'.
                     const qMappedEuler = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+                        THREE.MathUtils.degToRad(mapped.roll),
                         THREE.MathUtils.degToRad(mapped.pitch),
                         THREE.MathUtils.degToRad(mapped.yaw),
-                        THREE.MathUtils.degToRad(mapped.roll),
-                        'YXZ'
+                        'ZYX'
                     ));
                     window.robotPivot.quaternion.slerp(qMappedEuler, 0.35);
                 } catch (err) { /* no-op */ }

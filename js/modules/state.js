@@ -229,7 +229,7 @@ export const parameterMapping = {
     'pso-inertia': 'pso_inertia', 'pso-adaptive-inertia': 'pso_adaptive_inertia',
     'pso-velocity-clamp': 'pso_velocity_clamp', 'pso-neighborhood': 'pso_neighborhood',
     // Mahony filter parameters
-    'useMahonyFilterInput': 'use_mahony_filter', 'mahonyKpInput': 'mahony_kp',
+    'mahonyKpInput': 'mahony_kp',
     'mahonyKiInput': 'mahony_ki',
     // Angle prediction parameters
     'predictionModeInput': 'prediction_mode', 'predictionTimeMsInput': 'prediction_time_ms'
