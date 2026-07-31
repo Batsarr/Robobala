@@ -33,8 +33,8 @@ const availableActions = {
     'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' },
     'toggle_speed_mode': { label: 'Wlacz/Wylacz Tryb Predkosci', elementId: 'speedModeSwitch' },
     'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyStopBtn' },
-    'reset_pitch': { label: 'Zeruj offset (Pitch)', elementId: 'resetPitchOffsetBtn' },
-    'reset_roll': { label: 'Zeruj offset (Roll)', elementId: 'resetRollOffsetBtn' }
+    'reset_pitch': { label: 'Ustaw punkt 0 (Pitch)', elementId: 'resetZeroBtn' },
+    'reset_roll': { label: 'Ustaw punkt 0 (Roll)', elementId: 'resetRollZeroBtn' }
 };
 
 // ─── Sequence control variables ────────────────────────────────────────────────

@@ -253,8 +253,28 @@ function updateModalTelemetryDisplay() {
 }
 
 // ---------------------------------------------------------------------------
-// Sign toggle helpers (used by feedback sign toggles: balance/speed/position)
+// Model Mapping (wizualizacja 3D)
 // ---------------------------------------------------------------------------
+let modelMapping = { pitch: { source: 0, sign: 1 }, yaw: { source: 1, sign: 1 }, roll: { source: 2, sign: 1 } }; // domyślne: identity
+
+function openModelMappingModal() { const m = document.getElementById('model-mapping-modal'); if (!m) return; m.style.display = 'flex'; updateModelMappingUI(); }
+function closeModelMappingModal() { const m = document.getElementById('model-mapping-modal'); if (!m) return; m.style.display = 'none'; }
+
+function updateModelMappingUI() {
+    // Ustaw dropdowny
+    const sPitch = document.getElementById('modelPitchSource'); const sYaw = document.getElementById('modelYawSource'); const sRoll = document.getElementById('modelRollSource');
+    if (sPitch) sPitch.value = String(modelMapping.pitch.source);
+    if (sYaw) sYaw.value = String(modelMapping.yaw.source);
+    if (sRoll) sRoll.value = String(modelMapping.roll.source);
+    // Ustaw przyciski sign
+    setSignButtons('modelPitchSign', modelMapping.pitch.sign);
+    setSignButtons('modelYawSign', modelMapping.yaw.sign);
+    setSignButtons('modelRollSign', modelMapping.roll.sign);
+    // Podgląd
+    const cur = document.getElementById('model-mapping-current');
+    if (cur) { cur.textContent = `pitch: src=${modelMapping.pitch.source} sign=${modelMapping.pitch.sign} | yaw: src=${modelMapping.yaw.source} sign=${modelMapping.yaw.sign} | roll: src=${modelMapping.roll.source} sign=${modelMapping.roll.sign}`; }
+}
+
 function setSignButtons(containerId, sign) { const c = document.getElementById(containerId); if (!c) return; c.querySelectorAll('button').forEach(btn => { const s = parseInt(btn.dataset.sign); if (s === sign) { btn.classList.add('active'); } else { btn.classList.remove('active'); } }); }
 
 function updateSignBadge(badgeId, sign) {
@@ -276,7 +296,20 @@ function updateSignSummary() {
     el.textContent = `B:${b === -1 ? '-' : '+'} S:${s === -1 ? '-' : '+'} P:${p === -1 ? '-' : '+'}`;
 }
 
+function gatherModelMappingFromUI() { modelMapping.pitch.source = parseInt(document.getElementById('modelPitchSource').value); modelMapping.yaw.source = parseInt(document.getElementById('modelYawSource').value); modelMapping.roll.source = parseInt(document.getElementById('modelRollSource').value); modelMapping.pitch.sign = getActiveSign('modelPitchSign'); modelMapping.yaw.sign = getActiveSign('modelYawSign'); modelMapping.roll.sign = getActiveSign('modelRollSign'); }
+
 function getActiveSign(containerId) { const c = document.getElementById(containerId); if (!c) return 1; const active = c.querySelector('button.active'); return active ? parseInt(active.dataset.sign) : 1; }
+
+function resetModelMapping() { modelMapping = { pitch: { source: 0, sign: 1 }, yaw: { source: 1, sign: 1 }, roll: { source: 2, sign: 1 } }; updateModelMappingUI(); }
+
+function applyModelMappingToEuler(e) { // e={pitch,yaw,roll}; zwraca przemapowane
+    const arr = [e.pitch, e.yaw, e.roll];
+    return {
+        pitch: (arr[modelMapping.pitch.source] || 0) * modelMapping.pitch.sign,
+        yaw: (arr[modelMapping.yaw.source] || 0) * modelMapping.yaw.sign,
+        roll: (arr[modelMapping.roll.source] || 0) * modelMapping.roll.sign
+    };
+}
 
 // ---------------------------------------------------------------------------
 // Euler from quaternion
@@ -410,6 +443,18 @@ const updateChart      = (...a) => window.updateChart(...a);
 // initSensorMapping — wires all event listeners that were inline in main.js
 // ---------------------------------------------------------------------------
 function initSensorMapping() {
+    // --- Model Mapping modal events ---
+    document.getElementById('modelMappingBtn')?.addEventListener('click', () => { openModelMappingModal(); sendBleMessage({ type: 'get_model_mapping' }); });
+    document.getElementById('modelMappingCloseBtn')?.addEventListener('click', () => closeModelMappingModal());
+    document.getElementById('modelMappingLoadBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'get_model_mapping' }); });
+    document.getElementById('modelMappingSaveBtn')?.addEventListener('click', () => {
+        if (!AppState.isConnected) { addLogMessage('[UI] Musisz być połączony z robotem aby zapisać mapowanie modelu 3D.', 'warn'); return; }
+        if (!confirm('Zapisz mapowanie modelu 3D do pamięci EEPROM robota?')) return;
+        gatherModelMappingFromUI();
+        sendBleMessage({ type: 'set_model_mapping', mapping: modelMapping });
+        addLogMessage('[UI] Wyslano mapowanie modelu 3D do robota.', 'info');
+    });
+
     // Feedback sign toggles wiring - init once here (not in the test result handler)
     const signButtonMap = {
         'balanceSign': 'balance_feedback_sign',
@@ -451,6 +496,21 @@ function initSensorMapping() {
 
     // Initial summary update
     updateSignSummary();
+
+    document.getElementById('modelMappingResetBtn')?.addEventListener('click', () => { resetModelMapping(); addLogMessage('[UI] Przywrócono domyślne mapowanie modelu (identity).', 'info'); });
+
+    // Toggle pomocy w modalum model mapping
+    const mmHelp = document.getElementById('modelMappingHelp');
+    const mmHelpBox = document.getElementById('modelMappingHelpText');
+    if (mmHelp && mmHelpBox) {
+        mmHelp.addEventListener('click', () => {
+            mmHelpBox.classList.toggle('visible');
+            mmHelpBox.setAttribute('aria-hidden', mmHelpBox.classList.contains('visible') ? 'false' : 'true');
+        });
+    }
+
+    // Listenery znaków
+    ['modelPitchSign', 'modelYawSign', 'modelRollSign'].forEach(id => { const c = document.getElementById(id); if (!c) return; c.querySelectorAll('button').forEach(btn => { btn.addEventListener('click', () => { c.querySelectorAll('button').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }); }); });
 }
 
 // ---------------------------------------------------------------------------
@@ -469,10 +529,17 @@ export {
     applyRotationToIMUMapping,
     updateSensorMappingDisplays,
     updateModalTelemetryDisplay,
+    modelMapping,
+    openModelMappingModal,
+    closeModelMappingModal,
+    updateModelMappingUI,
     setSignButtons,
     updateSignBadge,
     updateSignSummary,
+    gatherModelMappingFromUI,
     getActiveSign,
+    resetModelMapping,
+    applyModelMappingToEuler,
     computeEulerFromQuaternion,
     getRawEuler,
     setPitchZero,
@@ -496,10 +563,17 @@ window.getRotationMatrix          = getRotationMatrix;
 window.applyRotationToIMUMapping  = applyRotationToIMUMapping;
 window.updateSensorMappingDisplays = updateSensorMappingDisplays;
 window.updateModalTelemetryDisplay = updateModalTelemetryDisplay;
+window.modelMapping               = modelMapping;
+window.openModelMappingModal      = openModelMappingModal;
+window.closeModelMappingModal     = closeModelMappingModal;
+window.updateModelMappingUI       = updateModelMappingUI;
 window.setSignButtons             = setSignButtons;
 window.updateSignBadge            = updateSignBadge;
 window.updateSignSummary          = updateSignSummary;
+window.gatherModelMappingFromUI   = gatherModelMappingFromUI;
 window.getActiveSign              = getActiveSign;
+window.resetModelMapping          = resetModelMapping;
+window.applyModelMappingToEuler   = applyModelMappingToEuler;
 window.computeEulerFromQuaternion = computeEulerFromQuaternion;
 window.getRawEuler                = getRawEuler;
 window.setPitchZero               = setPitchZero;

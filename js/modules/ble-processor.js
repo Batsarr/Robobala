@@ -7,7 +7,6 @@
  */
 
 import { appStore, AppState } from './state.js';
-import { computeEulerFromQuaternion } from './orientation-utils.mjs';
 
 // ─── Tuning History ────────────────────────────────────────────────────────────
 // Export as window property so that modular scripts can safely push into the same array
@@ -17,7 +16,7 @@ const tuningHistory = window.tuningHistory;
 // ─── processCompleteMessage ────────────────────────────────────────────────────
 /**
  * The main switch dispatcher for every incoming BLE JSON message.
- * Dispatches by data.type: telemetry, status_update,
+ * Dispatches by data.type: telemetry, status_update, imu_mapping, model_mapping,
  * sync_begin, set_param, set_tuning_config_param, ack, sync_complete, log,
  * tuner_live_status, tuner_live_chart_data, tuning_result, tuning_iteration_result,
  * min_pwm_autotune_result, test_result / metrics_result, tuner_session_end.
@@ -38,24 +37,21 @@ function processCompleteMessage(data) {
     // The algorithms will detect the failed test, enter pause state, and restore baseline PID.
     switch (data.type) {
         case 'telemetry':
-            // Robot jest jedynym źródłem prawdy dla kątów Eulera.
-            // Jeśli firmware przysłał gotowe kąty (klucze p/y/r), używamy ich bezpośrednio.
-            if (typeof data.p === 'number' && typeof data.y === 'number' && typeof data.r === 'number') {
-                data.pitch = data.p;
-                data.yaw = data.y;
-                data.roll = data.r;
-                // Oblicz raw_* dla kompatybilności pomocniczych widoków.
-                data.raw_pitch = data.p;
-                data.raw_yaw = data.y;
-                data.raw_roll = data.r;
-            } else if (typeof data.qw === 'number' && typeof data.qx === 'number' && typeof data.qy === 'number' && typeof data.qz === 'number') {
-                // Fallback: starsze firmware bez p/y/r - przeliczamy z kwaternionu
+            // Jeśli dostępny jest kwaternion, policz kąty bez dodatkowego mapowania (Quaternion-First)
+            if (typeof data.qw === 'number' && typeof data.qx === 'number' && typeof data.qy === 'number' && typeof data.qz === 'number') {
                 const eul = computeEulerFromQuaternion(data.qw, data.qx, data.qy, data.qz);
                 if (eul) {
+                    // Zachowaj SUROWE kąty z kwaternionu (dla logiki, wykresów, ścieżki)
                     data.raw_pitch = eul.pitch;
                     data.raw_yaw = eul.yaw;
                     data.raw_roll = eul.roll;
-                    // Fallback musi pozostać zgodny z dashboardem: bez dodatkowego mapowania osi.
+                    // Oblicz tylko dla wizualizacji (model 3D) – nie wpływa na logikę
+                    const mapped = applyModelMappingToEuler(eul);
+                    data.viz_pitch = mapped.pitch;
+                    data.viz_yaw = mapped.yaw;
+                    data.viz_roll = mapped.roll;
+                    // Kąty z kwaternionu po stronie firmware są już skorygowane o trymy.
+                    // Dlatego ustawiamy bez dalszych korekt.
                     data.pitch = data.raw_pitch;
                     data.yaw = data.raw_yaw;
                     data.roll = data.raw_roll;
@@ -70,12 +66,38 @@ function processCompleteMessage(data) {
             }
             break;
         case 'status_update':
-            if (data.message === 'autonomous_move_complete') {
+            // Specjalna obsługa mount_corr_set (echo po sensor_map_commit)
+            if (data.message === 'mount_corr_set' && typeof data.qw === 'number') {
+                window.lastMountCorr = { qw: data.qw, qx: data.qx, qy: data.qy, qz: data.qz };
+                addLogMessage(`[UI] Korekcja montażu zastosowana: w=${data.qw.toFixed(3)} x=${data.qx.toFixed(3)} y=${data.qy.toFixed(3)} z=${data.qz.toFixed(3)}`, 'success');
+                // Jeśli modal nadal otwarty a zapis jeszcze nie zaznaczony, odśwież postęp
+                if (document.getElementById('sensor-mapping-modal')?.style.display === 'flex') {
+                    sensorWizard.progress.saved = true; setWizardProgress(); updateSensorWizardUI();
+                }
+            }
+            else if (data.message === 'autonomous_move_complete') {
                 addLogMessage(`[ROBOT] Ruch autonomiczny zakonczony. target=${data.targetPosition} current=${data.currentPosition}`, 'success');
             }
             else if (data.message === 'autonomous_rotate_complete') {
                 addLogMessage(`[ROBOT] Rotacja autonomiczna zakonczona. targetYaw=${data.targetYawDeg} currentYaw=${data.currentYawDeg}`, 'success');
             }
+            break;
+        case 'imu_mapping':
+            // Zachowaj w pamięci (może w przyszłości do obliczeń sterowania UI)
+            window.imuMapping = data;
+            // Aktualizuj kontrolki w modalu mapowania czujnika (jeśli otwarte)
+            try { updateIMUMappingUIFromData(data); } catch (e) { /* no-op */ }
+            addLogMessage('[UI] Otrzymano mapowanie czujnika (imu_mapping).', 'info');
+            break;
+        case 'model_mapping':
+            // Aktualizacja struktury modelMapping z EEPROM
+            if (data.pitch && data.yaw && data.roll) {
+                modelMapping.pitch.source = parseInt(data.pitch.source); modelMapping.pitch.sign = parseInt(data.pitch.sign);
+                modelMapping.yaw.source = parseInt(data.yaw.source); modelMapping.yaw.sign = parseInt(data.yaw.sign);
+                modelMapping.roll.source = parseInt(data.roll.source); modelMapping.roll.sign = parseInt(data.roll.sign);
+                updateModelMappingUI();
+            }
+            addLogMessage('[UI] Otrzymano mapowanie modelu 3D (model_mapping).', 'info');
             break;
         case 'sync_begin':
             clearTimeout(AppState.syncTimeout);
@@ -121,6 +143,9 @@ function processCompleteMessage(data) {
             } else if (data.command === 'calibrate_mpu') {
                 const level = data.success ? 'success' : 'error';
                 addLogMessage(`[ROBOT] Kalibracja IMU: ${data.message || (data.success ? 'Zapisane do EEPROM' : 'Blad')}`, level);
+            } else if (data.command === 'set_imu_mapping') {
+                const level = data.success ? 'success' : 'error';
+                addLogMessage(`[ROBOT] Mapowanie IMU: ${data.message || (data.success ? 'Zapisane' : 'BLAD')}`, level);
             } else {
                 // Ogólna obsługa dla innych poleceń
                 const level = data.success ? 'info' : 'warn';
@@ -370,6 +395,7 @@ function initBleProcessor() {
 // These functions are expected to exist on window from other modules / main.js:
 //   window.normalizeTelemetryData, window.updateTelemetryUI
 //   window.applySingleParam, window.applySingleAutotuneParam, window.applyFullConfig
+//   window.updateIMUMappingUIFromData, window.updateModelMappingUI
 //   window.addLogMessage, window.setTuningUiLock
 //   window.handleCancel
 //   window.updateCalibrationProgress
@@ -377,9 +403,9 @@ function initBleProcessor() {
 //   window.handleDynamicTestResult
 //
 // Local helpers used inside processCompleteMessage that live in global scope:
-//   updateChart,
+//   computeEulerFromQuaternion, applyModelMappingToEuler, updateChart,
 //   updateActualPath, checkAndExecuteNextSequenceStep, sensorWizard,
-//   setWizardProgress, updateSensorWizardUI,
+//   setWizardProgress, updateSensorWizardUI, modelMapping,
 //   FusionPIDProfiles, updateSearchSpaceInputs, updateTunerStatus,
 //   updateBestDisplay, applyParameters, addTestToResultsTable, showNotification,
 //   updateSignSummary
@@ -388,6 +414,8 @@ function initBleProcessor() {
 // Fall back to window.* when called; keeps backward compat with non-module code.
 function addLogMessage(...args)              { return window.addLogMessage(...args); }
 function updateTelemetryUI(...args)          { return window.updateTelemetryUI(...args); }
+function updateIMUMappingUIFromData(...args)  { return window.updateIMUMappingUIFromData(...args); }
+function updateModelMappingUI(...args)        { return window.updateModelMappingUI(...args); }
 function applySingleParam(...args)            { return window.applySingleParam(...args); }
 function applySingleAutotuneParam(...args)    { return window.applySingleAutotuneParam(...args); }
 function handleCancel(...args)                { return window.handleCancel(...args); }

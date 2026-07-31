@@ -226,6 +226,23 @@ export function setupParameterListeners() {
         });
     });
 
+    // Trim (pitch)
+    function updateAndSendTrim(delta) {
+        const span = document.getElementById('trimValueDisplay');
+        if (!span) return;
+        const preview = (parseFloat(span.textContent) || 0) + delta;
+        span.textContent = preview.toFixed(2);
+        sendBleMessage({ type: 'adjust_zero', value: delta });
+        addLogMessage(`[UI] Montaż: Pitch Y+=${delta.toFixed(2)}° (persist)`, 'info');
+    }
+    document.getElementById('trimMinus01Btn')?.addEventListener('click', () => updateAndSendTrim(-0.1));
+    document.getElementById('trimMinus001Btn')?.addEventListener('click', () => updateAndSendTrim(-0.01));
+    document.getElementById('trimPlus001Btn')?.addEventListener('click', () => updateAndSendTrim(0.01));
+    document.getElementById('trimPlus01Btn')?.addEventListener('click', () => updateAndSendTrim(0.1));
+
+    // Roll trim
+    document.getElementById('resetRollZeroBtn')?.addEventListener('click', () => { if (typeof window.setRollZero === 'function') window.setRollZero(); });
+    document.getElementById('resetZeroBtn')?.addEventListener('click', () => { if (typeof window.setPitchZero === 'function') window.setPitchZero(); });
     document.getElementById('resetEncodersBtn')?.addEventListener('click', () => {
         if (!AppState.isConnected) { addLogMessage('[UI] Nie połączono z robotem.', 'warn'); return; }
         if (confirm('Czy na pewno chcesz zresetować enkodery (ustawić 0)?')) {
@@ -233,6 +250,19 @@ export function setupParameterListeners() {
             sendBleMessage({ type: 'reset_encoders' });
         }
     });
+
+    function updateAndSendRollTrim(delta) {
+        const span = document.getElementById('rollTrimValueDisplay');
+        if (!span) return;
+        const preview = (parseFloat(span.textContent) || 0) + delta;
+        span.textContent = preview.toFixed(2);
+        sendBleMessage({ type: 'adjust_roll_trim', value: delta });
+        addLogMessage(`[UI] Montaż: Roll X+=${delta.toFixed(2)}° (persist)`, 'info');
+    }
+    document.getElementById('rollTrimMinus01Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.1));
+    document.getElementById('rollTrimMinus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(-0.01));
+    document.getElementById('rollTrimPlus001Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.01));
+    document.getElementById('rollTrimPlus01Btn')?.addEventListener('click', () => updateAndSendRollTrim(0.1));
 
     // Pitch offset
     function updateAndSendPitchOffset(delta) {

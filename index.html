@@ -94,8 +94,27 @@
                 <label class="switch"><input type="checkbox" id="disableMagnetometerSwitch"><span class="slider round"></span></label>
             </div>
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;" data-mode="expert">Mapowanie Przyciskow Gamepada</button>
+            <fieldset style="margin-top:10px; border: 1px solid #444; padding: 10px; border-radius: 6px;">
+                <legend style="color: #61dafb; font-weight: bold;">Korekta montażu (EEPROM)</legend>
+                <button id="resetZeroBtn" style="width:100%;">Ustaw punkt 0 (Pitch)</button>
+                <div class="trim-controls">
+                    <button id="pitchTrimMinus01Btn">-0.1</button>
+                    <button id="pitchTrimMinus001Btn">-0.01</button>
+                    <span>Pitch: <span id="trimValueDisplay">0.00</span>°</span>
+                    <button id="pitchTrimPlus001Btn">+0.01</button>
+                    <button id="pitchTrimPlus01Btn">+0.1</button>
+                </div>
+                <button id="resetRollZeroBtn" style="margin-top:10px; width:100%;">Ustaw punkt 0 (Roll)</button>
+                <div class="trim-controls">
+                    <button id="rollTrimMinus01Btn">-0.1</button>
+                    <button id="rollTrimMinus001Btn">-0.01</button>
+                    <span>Roll: <span id="rollTrimValueDisplay">0.00</span>°</span>
+                    <button id="rollTrimPlus001Btn">+0.01</button>
+                    <button id="rollTrimPlus01Btn">+0.1</button>
+                </div>
+            </fieldset>
             <fieldset style="margin-top:10px; border: 1px solid #a2f279; padding: 10px; border-radius: 6px;">
-                <legend style="color: #a2f279; font-weight: bold;">Korekta balansu (offset, EEPROM)</legend>
+                <legend style="color: #a2f279; font-weight: bold;">Offset pionu (EEPROM)</legend>
                 <button id="resetPitchOffsetBtn" style="width:100%;">Zeruj offset (Pitch)</button>
                 <div class="trim-controls">
                     <button id="pitchOffsetMinus01Btn">-0.1</button>
@@ -171,6 +190,15 @@
                         <div style="font-size:0.8em;color:#cfd8dc;margin-top:6px;">Pokazuje rzeczywistą prędkość odświeżania danych IMU (średnia z ostatniej sekundy).</div>
                     </div>
                 <div class="dashboard-item">
+                    <span class="label">Korekta montażu (Pitch)</span>
+                    <span class="value" id="angleOffsetVal">0.0 °</span>
+                    <div class="historical-metric">Delta vs initial: <span id="offsetDeltaVal">0.0 °</span></div>
+                </div>
+                <div class="dashboard-item">
+                    <span class="label">Korekta montażu (Roll)</span>
+                    <span class="value" id="rollMountOffsetVal">0.0 °</span>
+                </div>
+                <div class="dashboard-item">
                     <span class="label">Offset pionu (Pitch)</span>
                     <span class="value" id="pitchUIOffsetVal" style="color: #a2f279;">0.0 °</span>
                 </div>
@@ -210,6 +238,8 @@
                 <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
                     <button id="calibrateMpuBtn" style="width:100%; background-color:#f7b731;">Asystent Kalibracji IMU</button>
                     <button id="calibrateZeroPointBtn" style="width:100%; background-color:#f7b731;">Znajdz Pion Automatycznie</button>
+                    <button id="sensorMappingBtn" style="width:100%; background-color:#f7b731;" data-mode="advanced">Mapowanie czujnika</button>
+                    <button id="modelMappingBtn" style="width:100%; background-color:#f7b731;" data-mode="advanced">Mapowanie modelu 3D</button>
                 </div>
             </fieldset>
         </div>
@@ -567,10 +597,37 @@
                 <!-- Przyciski przeniesione na dół, pod wszystkimi akordeonami -->
             </fieldset>
             <div id="allSettings">
-                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="expert">1. Filtr Mahony i Predykcja</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="expert">1. Filtr Mahony i Predykcja <span id="fusionModeIndicator" class="fusion-indicator fusion-mahony">⚡ Mahony (~500Hz)</span></button>
                 <div class="accordion-content">
+                    <!-- ===== SEKCJA EDUKACYJNA: Tryby fuzji IMU ===== -->
+                    <div class="fusion-info-box" style="background: linear-gradient(135deg, #1a2a3a 0%, #1a1d24 100%); border: 1px solid #4fc3f7; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                        <h5 style="color: #4fc3f7; margin: 0 0 8px 0; font-size: 0.95em;">📚 Wybór trybu fuzji IMU (WAŻNE!)</h5>
+                        <p style="color: #aaa; font-size: 0.85em; margin: 0 0 8px 0;">
+                            <strong>Mahony (~500Hz):</strong> Własna fuzja - szybsza reakcja, mniejsze opóźnienie.<br>
+                            <strong>NDOF (~100Hz):</strong> Wbudowana w BNO055 - stabilniejsza, automatyczna kalibracja.
+                        </p>
+                        <p style="color: #f7b731; font-size: 0.85em; margin: 0;">
+                            ⚠️ <strong>Każdy tryb wymaga INNYCH wartości PID!</strong> System automatycznie przełącza profile.
+                        </p>
+                    </div>
+                    
                     <div class="setting-container"> <label for="mahonyKpInput">Kp (Proporcjonalny)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="mahonyKpInput" min="0" max="10" step="0.1" value="1.0"><button>+</button></div> <div class="help-text">Proporcjonalne wzmocnienie filtru Mahony - szybkość korekty orientacji z akcelerometru. Wyższa wartość = szybsza konwergencja do prawidłowej orientacji, ale większa wrażliwość na przyspieszenia. Typowy zakres: 0.5-2.0.</div> </div>
                     <div class="setting-container"> <label for="mahonyKiInput">Ki (Całkujący)<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="mahonyKiInput" min="0" max="1" step="0.01" value="0.05"><button>+</button></div> <div class="help-text">Całkujące wzmocnienie - kompensuje dryf żyroskopu. Wyższa wartość = lepsza korekta dryfu, ale wolniejsza odpowiedź. Kluczowy parametr dla stabilności długoterminowej robota balansującego. Typowy zakres: 0.01-0.1.</div> </div>
+                    <div class="setting-container"> <label for="useMahonyFilterInput">Użyj własnej fuzji IMU<span class="help-icon">?</span></label> <input type="checkbox" class="config-value" id="useMahonyFilterInput"> <div class="help-text">Włącz własną fuzję danych IMU z filtrem Mahony zamiast wbudowanej w BNO055. Filtr Mahony jest optymalny dla robotów balansujących dzięki wbudowanej kompensacji dryfu żyroskopu i niższemu opóźnieniu.</div> </div>
+                    
+                    <!-- ===== AUTOMATYCZNE PRZEŁĄCZANIE PROFILI PID ===== -->
+                    <hr style="border-color: #4a4f58; margin: 15px 0;">
+                    <div class="fusion-profiles-section" style="background: #20232a; border-radius: 6px; padding: 12px; margin-bottom: 15px;">
+                        <h5 style="color: #61dafb; margin: 0 0 10px 0; font-size: 0.9em;">🔄 Profile PID dla trybów fuzji</h5>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="checkbox" id="fusionAutoSwitchToggle" checked style="width: 18px; height: 18px;">
+                            <label for="fusionAutoSwitchToggle" style="color: #aaa; font-size: 0.85em;">Automatycznie przełączaj PID przy zmianie fuzji</label>
+                        </div>
+                        <p style="color: #666; font-size: 0.8em; margin: 8px 0 0 0;">
+                            � Po zmianie trybu fuzji, wartości PID dla wszystkich pętli zostaną automatycznie wczytane z zapisanego profilu.
+                            Profile zapisują się razem z przyciskiem "Zapisz na Robocie".
+                        </p>
+                    </div>
                     
                     <hr style="border-color: #4a4f58; margin: 15px 0;">
                     <h4 style="color: #4fc3f7; margin-bottom: 10px;">Predykcja kąta (Stabilność)</h4>
@@ -594,7 +651,7 @@
                     <div class="manual-tune-row" data-motor="right" data-direction="bwd"> <div class="pwm-input-row"> <label>Prawy (Tyl)</label> <div class="numeric-input-wrapper"><button class="tune-minus">-</button><input type="number" class="config-value tune-input" id="minPwmRightBwdInput" min="0" max="2047" step="1" value="1200"><button>+</button></div> </div> <div class="pwm-button-row"> <button class="test-btn">Testuj</button><button class="stop-btn">Stop</button><button class="auto-btn">Auto</button></div> </div>
                     <button id="manualTuneStopAll" style="width:100%; margin-top:15px; background-color:#ff6347;">ZATRZYMAJ WSZYSTKIE SILNIKI</button>
                 </div>
-                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="student">4. PID Balansu (Podstawowy) <span class="sign-badge" id="balanceSignBadge">B:+</span></button>
+                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="student">4. PID Balansu (Podstawowy) <span class="sign-badge" id="balanceSignBadge">B:+</span> <span id="fusionModeIndicator4" class="fusion-indicator fusion-mahony" style="font-size: 0.65em;">⚡ Mahony</span></button>
                 <div class="accordion-content">
                     <div class="setting-container"> <label for="balanceKpInput">Kp - Sila<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKpInput" min="0" max="500" step="0.1" value="95"><button>+</button></div> <div class="help-text"><strong>Proporcjonalny (Kp):</strong> Określa, jak mocno robot reaguje na odchylenie od pionu. Wyższa wartość = sztywniejsze utrzymanie równowagi, szybsza reakcja na zakłócenia. Zbyt wysoka wartość powoduje szybkie oscylacje (robot "drży"). Zbyt niska = robot reaguje za wolno i może upaść. Zacznij od 80-120 i dostosuj stopniowo. Typowy zakres: 60-150.</div> </div>
                     <div class="setting-container"> <label for="balanceKiInput">Ki - Korekta<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceKiInput" min="0" max="10" step="0.01" value="0.0"><button>+</button></div> <div class="help-text"><strong>Całkujący (Ki):</strong> Eliminuje długotrwały, stały błąd (np. gdy robot powoli dryfuje w jednym kierunku mimo pionowego stania). Często nie jest potrzebny dla balansu - zacznij od 0. Jeśli robot ma tendencję do dryfowania, zwiększaj bardzo ostrożnie (np. 0.05-0.2). Zbyt wysoka wartość powoduje niestabilność i oscylacje. Typowy zakres: 0-0.5.</div> </div>
@@ -603,7 +660,7 @@
                     <div class="setting-container"> <label for="balanceIntegralLimitInput">Limit Integratora<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="balanceIntegralLimitInput" min="0" max="200" step="1" value="50"><button>+</button></div> <div class="help-text">Maksymalna wartość, jaką może osiągnąć suma całkująca (Ki). Zapobiega "rozregulowaniu" integratora przy dużych, długotrwałych błędach. Jeśli używasz Ki, ustaw limit na 30-100. Jeśli Ki=0, ten parametr nie ma wpływu. Typowy zakres: 30-100.</div> </div>
                     <div class="model-mapping-row" style="margin-top:6px;"><label>Znak sprzężenia (Balans)</label><div id="balanceSign" class="sign-toggle"><button data-sign="-1">-</button><button data-sign="1">+</button></div><div class="help-text" style="margin-top:8px;">Odwróć znak sprzężenia pętli balansu (zmiana możliwa tylko w trybie IDLE)</div></div>
                 </div>
-                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="advanced">5. PID Kaskadowy (Predkosc/Pozycja)</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="advanced">5. PID Kaskadowy (Predkosc/Pozycja) <span id="fusionModeIndicator5" class="fusion-indicator fusion-mahony" style="font-size: 0.65em;">⚡ Mahony</span></button>
                 <div class="accordion-content">
                     <div class="parameter-group"><h5>PID Predkosci <span class="sign-badge" id="speedSignBadge">S:+</span></h5>
                         <div class="setting-container"> <label for="speedKpInput">Kp - Reakcja<span class="help-icon">?</span></label> <div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="speedKpInput" min="0" max="10" step="0.01" value="0.0"><button>+</button></div> <div class="help-text">Kontroluje, jak mocno robot pochyla się, aby osiągnąć zadaną prędkość. Wyższa wartość = szybsze przyspieszanie/zwalnianie, ale może powodować oscylacje prędkości. Zacznij od małych wartości (0.1-0.5) i zwiększaj stopniowo. Typowy zakres: 0.1-2.0.</div> </div>
@@ -767,7 +824,7 @@
             </div>
         </div>
         
-                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="advanced">8. Identyfikacja Obiektu (System ID)</button>
+                <button class="accordion-header" onclick="toggleAccordion(this)" data-mode="advanced">8. Identyfikacja Obiektu (System ID) <span id="sysidFusionIndicator" class="fusion-indicator fusion-mahony" style="font-size: 0.65em;">⚡ Mahony</span></button>
                 <div class="accordion-content" id="sysid-content">
                     <!-- Edukacyjne wprowadzenie do System ID -->
                     <div style="background: linear-gradient(135deg, #1a2a3a 0%, #1a1d24 100%); border: 1px solid #9b59b6; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
@@ -776,6 +833,10 @@
                             System ID to technika inżynieryjna polegająca na <strong>pomiarze rzeczywistej odpowiedzi systemu</strong> 
                             na znane pobudzenie (impuls, skok). Na podstawie przebiegu odpowiedzi można wyznaczyć 
                             optymalne parametry PID metodami matematycznymi.
+                        </p>
+                        <p style="color: #f7b731; font-size: 0.85em; margin: 0;">
+                            ⚠️ <strong>Ważne:</strong> Wyniki są specyficzne dla aktualnego trybu fuzji IMU! 
+                            Zmiana Mahony↔NDOF wymaga nowej identyfikacji.
                         </p>
                     </div>
                     
@@ -945,6 +1006,8 @@
             <div id="log-history" style="max-height: 40vh; overflow-y: auto; display: none;"></div>
         </div>
     </div>
+    <!-- Nowy modal: Mapowanie czujnika – sekwencyjny kreator z auto-wykryciem obrotu > 90° -->
+    
     <!-- Modal: Historia prób strojenia -->
     <div id="tuning-history-modal" class="modal-backdrop" style="display:none;">
         <div class="modal-content" style="max-width:1000px;">
@@ -964,10 +1027,209 @@
             </div>
         </div>
     </div>
+    <div id="sensor-mapping-modal" class="modal-backdrop" style="display:none;">
+        <div class="modal-content">
+            <h2>Mapowanie Czujnika (Orientacja) <span class="help-icon" id="sensorMappingHelp" title="Pokaż/ukryj szczegółową pomoc">?</span></h2>
+            <div id="sensorMappingHelpText" class="help-text" style="margin-bottom:10px;" aria-hidden="true">
+                <strong>Cel:</strong> Dopasowanie fizycznego montażu IMU do oczekiwanych osi sterowania robota.<br>
+                <strong>Kroki:</strong> (1) Pozycja pionowa referencyjna. (2) Obrót poziomy ≥ 90°. (3) Zapis korekcji.<br>
+                <strong>Wpływ:</strong> Działa na wewnętrzne wektory (akcelerometr/żyroskop) używane przez PID. Nie zmienia wizualizacji 3D (oddzielne mapowanie modelu).<br>
+                <strong>Wymagane:</strong> Kalibracja IMU (System=3) dla najlepszej dokładności.<br>
+                <em>Po zapisie sterowanie będzie korzystać z poprawionych osi automatycznie.</em>
+            </div>
+            <div id="sensorWizardStepInfo" style="margin:6px 0; font-size:12px; color:#aaa;">Krok <span id="sensorWizardStepNo">1</span>/3</div>
+            <div id="sensorWizardText" style="text-align:left; font-size:0.95em; line-height:1.5; background:#101014; border:1px solid #2a2a35; padding:12px; border-radius:8px;">
+                <!-- dynamiczna instrukcja -->
+            </div>
+            <div id="sensorWizardHint" style="margin-top:8px; font-size:0.85em; color:#bbb;">
+                <!-- dynamiczne podpowiedzi -->
+            </div>
+            <div id="sensorWizardProgress" style="margin-top:12px; font-family:monospace; background:#111; border:1px solid #333; border-radius:6px; padding:8px; text-align:left;">
+                [ ] Pion | [ ] Rotacja ≥ 90° | [ ] Zapis
+            </div>
+            <div class="sensor-mapping-wrapper" style="display:flex; gap:10px; margin-top:12px; align-items:flex-start;">
+                <div id="sensor-mapping-preview" class="sensor-mapping-preview" style="flex:1; min-width:250px; height:200px; background:#000; border-radius:6px; overflow:hidden;"></div>
+                    <div class="sensor-mapping-controls" style="width:320px; display:flex; flex-direction:column; gap:8px;">
+                    <div style="display:flex; justify-content:space-between; gap:6px;">
+                        <div>
+                            <div>Pitch (Cube): <span id="modal-pitch-display">0.0°</span></div>
+                            <div style="font-size:0.8em; color:#9fa;">Telemetry: <span id="modal-pitch-telemetry">0.0°</span></div>
+                        </div>
+                        <div>
+                            <div>Roll (Cube): <span id="modal-roll-display">0.0°</span></div>
+                            <div style="font-size:0.8em; color:#9fa;">Telemetry: <span id="modal-roll-telemetry">0.0°</span></div>
+                        </div>
+                        <div>
+                            <div>Yaw (Cube): <span id="modal-yaw-display">0.0°</span></div>
+                            <div style="font-size:0.8em; color:#9fa;">Telemetry: <span id="modal-yaw-telemetry">0.0°</span></div>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Pitch</div><button id="pitchMinus90Btn">-90°</button><button id="pitchPlus90Btn">+90°</button></div>
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Roll</div><button id="rollMinus90Btn">-90°</button><button id="rollPlus90Btn">+90°</button></div>
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Yaw</div><button id="yawMinus90Btn">-90°</button><button id="yawPlus90Btn">+90°</button></div>
+                    </div>
+                    <div class="mount-rotate-90" style="display:flex; gap:8px; margin-top:6px;">
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Montaż X</div><button id="mountXMinus90Btn">-90°</button><button id="mountXPlus90Btn">+90°</button></div>
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Montaż Y</div><button id="mountYMinus90Btn">-90°</button><button id="mountYPlus90Btn">+90°</button></div>
+                        <div style="flex:1;"><div style="font-size:0.9em; margin-bottom:4px;">Montaż Z</div><button id="mountZMinus90Btn">-90°</button><button id="mountZPlus90Btn">+90°</button></div>
+                    </div>
+                    <!-- DODANE: Kontrolki remapu IMU (wpływają na wewnętrzne wektory - PID) -->
+                    <hr style="border-color:#2a2a35;">
+                    <div style="margin-top:6px;">
+                        <strong>Mapowanie osi IMU (wpływ na PID)</strong>
+                        <div style="display:flex; gap:6px; margin-top:6px;">
+                            <div style="flex:1;">
+                                <div>Pitch (Źródło)</div>
+                                <select id="imuPitchSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
+                                <div class="sign-toggle" id="imuPitchSign" style="margin-top:6px;"><button data-sign="1" class="active" title="Dodatni">+1</button><button data-sign="-1" title="Ujemny">-1</button></div>
+                            </div>
+                            <div style="flex:1;">
+                                <div>Yaw (Źródło)</div>
+                                <select id="imuYawSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
+                                <div class="sign-toggle" id="imuYawSign" style="margin-top:6px;"><button data-sign="1" class="active">+1</button><button data-sign="-1">-1</button></div>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:6px; margin-top:6px; align-items:center;">
+                            <div style="flex:1;">
+                                <div>Roll (Źródło)</div>
+                                <select id="imuRollSource"><option value="0">Pitch</option><option value="1">Yaw</option><option value="2">Roll</option></select>
+                                <div class="sign-toggle" id="imuRollSign" style="margin-top:6px;"><button data-sign="1" class="active">+1</button><button data-sign="-1">-1</button></div>
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:6px; min-width:120px;">
+                                <button id="imuMappingLoadBtn" style="background:#61dafb;">Wczytaj</button>
+                                <button id="imuMappingSaveBtn" style="background:#a2f279;">Zapisz</button>
+                            </div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px; margin-top:8px;"><input id="markFrontFaceChk" type="checkbox"><label for="markFrontFaceChk">Oznacz front (góra/dół) w podglądzie</label></div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button id="setModalPitchZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Pitch)</button>
+                        <button id="setModalRollZeroBtn" style="flex:1; background:#61dafb;">Ustaw punkt 0 (Roll)</button>
+                    </div>
+                    <!-- Małe korekty trimów -->
+                    <hr style="border-color:#2a2a35;">
+                    <div style="margin-top:6px;">
+                        <strong>Małe korekty trimów</strong>
+                        <div style="display:flex; gap:6px; margin-top:6px;">
+                            <div style="flex:1;">
+                                <div>Pitch</div>
+                                <div style="display:flex; gap:2px; margin-top:4px;">
+                                    <button id="pitchTrimPlus01Btn" style="flex:1; font-size:0.8em;">+0.1°</button>
+                                    <button id="pitchTrimMinus01Btn" style="flex:1; font-size:0.8em;">-0.1°</button>
+                                    <button id="pitchTrimPlus001Btn" style="flex:1; font-size:0.8em;">+0.01°</button>
+                                    <button id="pitchTrimMinus001Btn" style="flex:1; font-size:0.8em;">-0.01°</button>
+                                </div>
+                            </div>
+                            <div style="flex:1;">
+                                <div>Roll</div>
+                                <div style="display:flex; gap:2px; margin-top:4px;">
+                                    <button id="rollTrimPlus01Btn" style="flex:1; font-size:0.8em;">+0.1°</button>
+                                    <button id="rollTrimMinus01Btn" style="flex:1; font-size:0.8em;">-0.1°</button>
+                                    <button id="rollTrimPlus001Btn" style="flex:1; font-size:0.8em;">+0.01°</button>
+                                    <button id="rollTrimMinus001Btn" style="flex:1; font-size:0.8em;">-0.01°</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+                    <!-- Modal: Konfiguracja Fitness -->
+                    <div id="fitness-modal" class="modal-backdrop" style="display:none;">
+                        <div class="modal-content" style="max-width:480px;">
+                            <h2>Konfiguracja Fitness (Rozdziel 100 punktów)</h2>
+                            <div style="display:flex; gap:10px; flex-direction:column;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <label for="weight-itae">ITAE</label>
+                                    <input type="number" id="weight-itae" min="0" max="100" value="50" style="width:110px;">
+                                </div>
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <label for="weight-overshoot">Przeregulowanie</label>
+                                    <input type="number" id="weight-overshoot" min="0" max="100" value="30" style="width:110px;">
+                                </div>
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <label for="weight-sse">SSE / Kontrola</label>
+                                    <input type="number" id="weight-sse" min="0" max="100" value="20" style="width:110px;">
+                                </div>
+                                <div style="display:flex; justify-content:space-between; align-items:center; font-weight:bold; color:#61dafb;">
+                                    <div>Pozostało:</div>
+                                    <div id="weight-remaining">0</div>
+                                </div>
+                                <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:8px;">
+                                    <button id="close-fitness-modal" style="background:#ff6347;">Zamknij</button>
+                                    <button id="apply-fitness-btn" style="background:#a2f279;" disabled>Zastosuj Wagi</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px;">
+                <button id="sensorWizardCancelBtn" style="background:#ff6347;">Anuluj</button>
+                <button id="sensorWizardBackBtn" disabled>Wstecz</button>
+                <button id="sensorWizardNextBtn" style="background:#61dafb;">Dalej</button>
+            </div>
+        </div>
+    </div>
+    <!-- Modal mapowania modelu 3D -->
+    <div id="model-mapping-modal" class="modal-backdrop" style="display:none;">
+        <div class="modal-content">
+            <h2>Mapowanie Modelu 3D (Wizualizacja) <span class="help-icon" id="modelMappingHelp" title="Pokaż/ukryj szczegółową pomoc">?</span></h2>
+            <div id="modelMappingHelpText" class="help-text" style="margin-bottom:10px;" aria-hidden="true">
+                <strong>Co to robi?</strong> Przekształca kąty Euler'a (pochodne z kwaternionu) na osie sceny 3D.<br>
+                <strong>Kiedy użyć?</strong> Jeśli model 3D reaguje w niewłaściwych osiach albo odwrotnie niż oczekujesz.<br>
+                <strong>Źródła:</strong> Pitch/Yaw/Roll liczone z kwaternionu (standard ZYX).<br>
+                <strong>Znak:</strong> Użyj -1 aby odwrócić kierunek osi bez zmiany logiki sterowania.<br>
+                <em>Zmiany nie wpływają na kontrolę robota – tylko na wizualizację.</em>
+            </div>
+            <p style="text-align:left; font-size:0.85em; line-height:1.4;" title="Tylko wizualizacja, nie sterowanie">Określ, które składowe kątów Euler'a mają zasilać osie modelu 3D oraz ich znak.</p>
+            <div class="model-mapping-row" title="Źródło oraz znak dla osi Pitch modelu">
+                <strong>Pitch:</strong>
+                <select id="modelPitchSource" title="Wybierz z której osi Euler będzie pochodzić Pitch modelu">
+                    <option value="0">Pitch</option>
+                    <option value="1">Yaw</option>
+                    <option value="2">Roll</option>
+                </select>
+                <div class="sign-toggle" id="modelPitchSign" title="Znak osi Pitch">
+                    <button data-sign="1" class="active" title="Dodatni kierunek">+1</button>
+                    <button data-sign="-1" title="Odwróć kierunek">-1</button>
+                </div>
+            </div>
+            <div class="model-mapping-row" title="Źródło oraz znak dla osi Yaw modelu">
+                <strong>Yaw:</strong>
+                <select id="modelYawSource" title="Wybierz z której osi Euler będzie pochodzić Yaw modelu">
+                    <option value="0">Pitch</option>
+                    <option value="1">Yaw</option>
+                    <option value="2">Roll</option>
+                </select>
+                <div class="sign-toggle" id="modelYawSign" title="Znak osi Yaw">
+                    <button data-sign="1" class="active" title="Dodatni kierunek">+1</button>
+                    <button data-sign="-1" title="Odwróć kierunek">-1</button>
+                </div>
+            </div>
+            <div class="model-mapping-row" title="Źródło oraz znak dla osi Roll modelu">
+                <strong>Roll:</strong>
+                <select id="modelRollSource" title="Wybierz z której osi Euler będzie pochodzić Roll modelu">
+                    <option value="0">Pitch</option>
+                    <option value="1">Yaw</option>
+                    <option value="2">Roll</option>
+                </select>
+                <div class="sign-toggle" id="modelRollSign" title="Znak osi Roll">
+                    <button data-sign="1" class="active" title="Dodatni kierunek">+1</button>
+                    <button data-sign="-1" title="Odwróć kierunek">-1</button>
+                </div>
+            </div>
+            <div id="model-mapping-current" title="Aktualna konfiguracja mapowania">Brak danych mapowania.</div>
+            <div style="display:flex; gap:10px; margin-top:12px;">
+                <button id="modelMappingLoadBtn" style="flex:1; background:#61dafb;" title="Pobierz aktualne wartości z EEPROM">Wczytaj</button>
+                <button id="modelMappingSaveBtn" style="flex:1; background:#a2f279;" title="Zapisz bieżące ustawienia do EEPROM">Zapisz</button>
+                <button id="modelMappingResetBtn" style="flex:1; background:#f7b731;" title="Przywróć wartości domyślne (identity)">Domyślne</button>
+            </div>
+            <button id="modelMappingCloseBtn" style="width:100%; margin-top:14px; background:#ff6347;" title="Zamknij okno">Zamknij</button>
+        </div>
+    </div>
 
     <!-- ARCHITEKTURA MODUŁOWA ES6 (Etap 2):
-         app.js (module) importuje moduły ES6 z js/modules/ — główna logika aplikacji.
-         main.js (defer) zawiera kompatybilność legacy oraz sekcje pomocnicze UI.
+         app.js (module) importuje 19 modułów ES6 z js/modules/ — cała logika aplikacji.
+         main.js (defer) zawiera unikalne sekcje: sensor/model mapping, trymy, logi.
          path_visualization.js (defer) — wizualizacja ścieżki (RB.path namespace). -->
     <script src="js/path_visualization.js" defer></script>
     <script src="js/main.js" defer></script>

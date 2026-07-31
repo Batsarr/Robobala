@@ -9,8 +9,9 @@
 //   Moduły przypisywały eksporty do window.*, nadpisując wersje z main.js.
 //
 // Etap 2 (obecny): Kod przeniesiony z main.js do modułów ES6.
-//   main.js zawiera już tylko warstwy kompatybilności i część pomocniczych handlerów UI.
-//   Moduły ES6 dostarczają główną logikę aplikacji.
+//   main.js zawiera tylko: module bridge, unikalne sekcje (sensor/model mapping,
+//   trymy, kalibracja, logi), DOMContentLoaded orchestrator, window exports.
+//   19 modułów ES6 dostarcza całą logikę aplikacji.
 //
 // Etap 3 (docelowy): main.js jest pusty lub usunięty.
 //   Cała logika pochodzi z modułów ES6, ładowanych przez app.js.
@@ -117,22 +118,25 @@ import './modules/input-controls.js';
 // 13. QR Code - parowanie urządzeń
 import './modules/qr-code.js';
 
-// 14. UI Helpers
+// 14. Sensor Mapping - mapowanie czujnika IMU
+import './modules/sensor-mapping.js';
+
+// 15. UI Helpers
 import './modules/ui-helpers.js';
 
-// 15. System Identification (SysID)
+// 16. System Identification (SysID)
 import {
     initSystemIdentification,
     SysIdState
 } from './modules/sysid.js';
 
-// 16. Fusion PID Profiles - Mahony vs NDOF
+// 17. Fusion PID Profiles - Mahony vs NDOF
 import {
     initFusionPIDProfiles,
     FusionPIDProfiles
 } from './modules/fusion-pid-profiles.js';
 
-// 17. Parameter Controls
+// 18. Parameter Controls
 import {
     setupNumericInputs,
     setupParameterListeners,
@@ -140,7 +144,7 @@ import {
     sendFullConfigToRobot
 } from './modules/parameter-controls.js';
 
-// 18. Calibration
+// 19. Calibration
 import {
     setupCalibrationModal,
     showCalibrationModal,
