@@ -47,16 +47,14 @@ let isMappingButton = false, actionToMap = null, lastGamepadSendTime = 0;
 const GAMEPAD_SEND_INTERVAL = 2;
 
 const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v4_';
-// Pitch trim: UI pokazuje wartości w stopniach. Firmware stosuje TRIM w kwaternionie (Quaternion-First),
-// więc ustawienie trim = -raw_pitch zeruje wskazanie pitch i wpływa na balans zgodnie z oczekiwaniem.
 // Podstawowe przełączniki
 const availableActions = {
     'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' },
     'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' },
     'toggle_speed_mode': { label: 'Wlacz/Wylacz Tryb Predkosci', elementId: 'speedModeSwitch' },
     'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyStopBtn' },
-    'reset_pitch': { label: 'Ustaw punkt 0 (Pitch)', elementId: 'resetZeroBtn' },
-    'reset_roll': { label: 'Ustaw punkt 0 (Roll)', elementId: 'resetRollZeroBtn' }
+    'reset_pitch': { label: 'Zeruj offset (Pitch)', elementId: 'resetPitchOffsetBtn' },
+    'reset_roll': { label: 'Zeruj offset (Roll)', elementId: 'resetRollOffsetBtn' }
 };
 const availableTelemetry = { 'pitch': { label: 'Pitch (Kat)', color: '#61dafb' }, 'roll': { label: 'Roll (Przechyl)', color: '#a2f279' }, 'speed': { label: 'Predkosc', color: '#f7b731' }, 'target_speed': { label: 'Predkosc Zadana', color: '#ff9f43' }, 'output': { label: 'Wyjscie PID', color: '#ff6347' }, 'encoder_left': { label: 'Enkoder L', color: '#9966ff' }, 'encoder_right': { label: 'Enkoder P', color: '#cc66ff' } };
 const builtInPresetsData = { '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 95.0, balanceKiInput: 0.0, balanceKdInput: 3.23 } }, '2': { name: "2. PID Mieciutki (Plynny)", params: { balanceKpInput: 80.0, balanceKiInput: 0.0, balanceKdInput: 2.8 } }, '3': { name: "3. PID Agresywny (Sztywny)", params: { balanceKpInput: 110.0, balanceKiInput: 0.0, balanceKdInput: 4.0 } } };
@@ -66,13 +64,6 @@ let currentEncoderLeft = 0, currentEncoderRight = 0;
 let isAnimation3DEnabled = true, isMovement3DEnabled = false, lastEncoderAvg = 0;
 window.telemetryData = {};
 let isCalibrationModalShown = false;
-// UI base for 'Set Zero' feature — apparent trim is actualTrim - uiTrimZeroBase
-// Prosty model trymów:
-//  - firmware trzyma jedną wartość trim_angle / roll_trim (w stopniach) - korekta montażu czujnika
-//  - firmware trzyma osobno pitch_offset / roll_offset (w stopniach) - offset pionu dla balansu
-//  - UI pokazuje dokładnie te wartości
-let originalFirmwareTrimPitch = null; // tylko do celów informacyjnych/logów
-let originalFirmwareTrimRoll = null;
 
 let pitchHistory = [], speedHistory = [];
 const HISTORY_LENGTH = 600;
@@ -101,22 +92,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof initPathVisualization === 'function') initPathVisualization();
     loadGamepadMappings();
     renderMappingModal();
-    // Toggle pomocy dla mapowania czujnika
-    const smHelp = document.getElementById('sensorMappingHelp');
-    const smHelpBox = document.getElementById('sensorMappingHelpText');
-    if (smHelp && smHelpBox) {
-        smHelp.addEventListener('click', () => {
-            smHelpBox.classList.toggle('visible');
-            smHelpBox.setAttribute('aria-hidden', smHelpBox.classList.contains('visible') ? 'false' : 'true');
-        });
-    }
     pollGamepad();
     window.addEventListener('resize', initJoystick);
     init3DVisualization();
     animate3D();
     setTuningUiLock(false, '');
-    // Initialize sensor mapping preview (Three.js cube) and controls
-    initSensorMappingPreview();
     // Ensure current telemetry canvas has correct resolution and resizes with window
     (function () {
         const canvas = document.getElementById('current-telemetry-chart');
@@ -205,107 +185,6 @@ function pushLog(message, level = 'info') {
         const shouldScroll = (autoEl && autoEl.checked) === true;
         renderAllLogs(shouldScroll);
     }
-}
-
-// --- Sensor mapping 3D preview (disabled; fixed IMU configuration) ---
-let sensorPreview = { scene: null, camera: null, renderer: null, cube: null, axes: null, animId: null };
-function initSensorMappingPreview() {
-    const container = document.getElementById('sensor-mapping-preview');
-    if (!container) return;
-    // The old sensor-mapping preview is no longer exposed in the UI.
-    if (container) {
-        while (container.firstChild) container.removeChild(container.firstChild);
-    }
-    // Clean up existing renderer
-    if (sensorPreview.renderer && sensorPreview.renderer.domElement) {
-        while (container.firstChild) container.removeChild(container.firstChild);
-        sensorPreview.renderer.dispose();
-        sensorPreview.renderer = null;
-    }
-    // The old interactive preview is intentionally left inert.
-    container.textContent = 'Mapowanie czujnika jest wyłączone.';
-    sensorPreview.scene = null; sensorPreview.camera = null; sensorPreview.renderer = null; sensorPreview.cube = null; sensorPreview.axes = null;
-}
-
-// Gather IMU mapping from sensor mapping modal
-function gatherIMUMappingFromUI() {
-    return {
-        pitch: { source: 0, sign: 1 },
-        yaw: { source: 1, sign: 1 },
-        roll: { source: 2, sign: 1 }
-    };
-}
-
-function updateIMUMappingUIFromData(data) {
-    if (!data || !data.pitch) return;
-    // Mapping controls are intentionally not exposed in the active UI.
-}
-
-function rotateSensorCube(axis, deg) {
-    // No-op: the legacy sensor mapping controls are disabled in the UI.
-}
-
-function mappingObjToMatrix(mapping) {
-    // mapping: { pitch:{source,sign}, yaw:{...}, roll:{...} }
-    const M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-    const setRow = (rowIdx, m) => { const col = parseInt(m.source); const sign = parseInt(m.sign) || 1; M[rowIdx][col] = sign; };
-    setRow(0, mapping.pitch);
-    setRow(1, mapping.yaw);
-    setRow(2, mapping.roll);
-    return M;
-}
-
-function matrixToMappingObj(M) {
-    const findInRow = (row) => {
-        for (let c = 0; c < 3; c++) {
-            const v = M[row][c]; if (v === 0) continue; return { source: c, sign: v };
-        }
-        // default fallback
-        return { source: 0, sign: 1 };
-    };
-    return { pitch: findInRow(0), yaw: findInRow(1), roll: findInRow(2) };
-}
-
-function multiplyMatrix(A, B) {
-    const R = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { let s = 0; for (let k = 0; k < 3; k++) s += A[i][k] * B[k][j]; R[i][j] = s; }
-    return R;
-}
-
-function getRotationMatrix(axis, deg) {
-    const d = ((deg % 360) + 360) % 360; // normalize
-    // Build RA for +90 degree rotation - adapt sign for negative angle
-    const q = (d === 270) ? -90 : d; // for -90 deg normalized to 270; make it -90 to handle below
-    let RA = null;
-    if (axis === 'x') {
-        if (q === 90) RA = [[1, 0, 0], [0, 0, -1], [0, 1, 0]];
-        else if (q === -90) RA = [[1, 0, 0], [0, 0, 1], [0, -1, 0]];
-        else if (q === 180) RA = [[1, 0, 0], [0, -1, 0], [0, 0, -1]];
-        else RA = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-    } else if (axis === 'y') {
-        if (q === 90) RA = [[0, 0, 1], [0, 1, 0], [-1, 0, 0]];
-        else if (q === -90) RA = [[0, 0, -1], [0, 1, 0], [1, 0, 0]];
-        else if (q === 180) RA = [[-1, 0, 0], [0, 1, 0], [0, 0, -1]];
-        else RA = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-    } else { // z
-        if (q === 90) RA = [[0, -1, 0], [1, 0, 0], [0, 0, 1]];
-        else if (q === -90) RA = [[0, 1, 0], [-1, 0, 0], [0, 0, 1]];
-        else if (q === 180) RA = [[-1, 0, 0], [0, -1, 0], [0, 0, 1]];
-        else RA = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-    }
-    return RA;
-}
-
-function applyRotationToIMUMapping(axis, deg) {
-    // No-op: the legacy sensor mapping controls are disabled in the UI.
-}
-
-function updateSensorMappingDisplays() {
-    // No-op: the legacy sensor mapping preview is disabled in the UI.
-}
-
-function updateModalTelemetryDisplay() {
-    // No-op: the legacy sensor mapping preview is disabled in the UI.
 }
 
 // Main reset buttons are mapped below; please use the assigned handlers via toolButtons mapping.
@@ -422,80 +301,6 @@ function getRawEuler() {
     return eul || { pitch: 0, yaw: 0, roll: 0 };
 }
 
-// GLOBALNE: ustawianie punktu 0 dla Pitch i Roll.
-// Firmware: adjust_zero dodaje deltę do baseTargetAngleTrim.
-// Telemetria pitch to już kąt po trymach, więc delta = -pitch spowoduje że następny odczyt będzie 0.
-// Uwzględniamy też offset UI, który jest tymczasową korektą wyświetlania.
-function setPitchZero() {
-    if (!window.telemetryData) {
-        addLogMessage('[UI] Brak danych telemetrii (pitch).', 'warn');
-        return;
-    }
-    // Odczytaj aktualny pitch z telemetrii (już po trymach i offsetach)
-    let currentPitch = Number(window.telemetryData.pitch);
-    if (typeof currentPitch !== 'number' || isNaN(currentPitch)) {
-        if (typeof window.telemetryData.qw === 'number') {
-            const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
-            currentPitch = eul ? eul.pitch : 0;
-        } else {
-            addLogMessage('[UI] Nieprawidłowy odczyt pitch.', 'error');
-            return;
-        }
-    }
-    // Zaokrąglij lekko, by uniknąć flipa znaku przy ±0.00x
-    currentPitch = Math.round(currentPitch * 100) / 100;
-    if (isNaN(currentPitch)) {
-        addLogMessage('[UI] Nieprawidlowy odczyt pitch.', 'error');
-        return;
-    }
-    // Delta = -currentPitch -> po dodaniu do trim montażu, następny odczyt pitch = 0
-    const delta = -currentPitch;
-    sendBleMessage({ type: 'adjust_zero', value: delta });
-    const val = document.getElementById('angleVal');
-    if (val) val.textContent = '0.0 °';
-    pitchHistory.push(0);
-    if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
-    updateChart({ pitch: 0 });
-    addLogMessage(`[UI] Punkt 0 (Pitch) ustawiony. Delta trim=${delta.toFixed(2)}°.`, 'success');
-}
-
-function setRollZero() {
-    if (!window.telemetryData) {
-        addLogMessage('[UI] Brak danych telemetrii (roll).', 'warn');
-        return;
-    }
-    // Odczytaj aktualny roll z telemetrii (już po trymach i offsetach)
-    let currentRoll = Number(window.telemetryData.roll);
-    if (typeof currentRoll !== 'number' || isNaN(currentRoll)) {
-        if (typeof window.telemetryData.qw === 'number') {
-            const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
-            currentRoll = eul ? eul.roll : 0;
-        } else {
-            addLogMessage('[UI] Nieprawidłowy odczyt roll.', 'error');
-            return;
-        }
-    }
-    currentRoll = Math.round(currentRoll * 100) / 100;
-    if (isNaN(currentRoll)) {
-        addLogMessage('[UI] Nieprawidlowy odczyt roll.', 'error');
-        return;
-    }
-    // Delta = -currentRoll -> po dodaniu do trim montażu, następny odczyt roll = 0
-    const delta = -currentRoll;
-    sendBleMessage({ type: 'adjust_roll', value: delta });
-    const val = document.getElementById('rollVal');
-    if (val) val.textContent = '0.0 °';
-    updateChart({ roll: 0 });
-    addLogMessage(`[UI] Punkt 0 (Roll) ustawiony. Delta trim=${delta.toFixed(2)}°.`, 'success');
-}
-
-function adjustTrim(axis, delta) {
-    // axis: 'pitch' or 'roll'
-    // delta: number like 0.1 or -0.01
-    sendBleMessage({ type: axis === 'pitch' ? 'adjust_zero' : 'adjust_roll', value: delta });
-    addLogMessage(`[UI] Korekta ${axis} o ${delta.toFixed(2)}°`, 'success');
-}
-
 const debounce = (func, delay) => { let timeout; return function (...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
 // delay helper is provided by RB.helpers.delay (see js/helpers.js)
 function addLogMessage(message, level = 'info') { pushLog(message, level); const logCard = document.getElementById('log-card'); const autoEl = document.getElementById('logsAutoscroll'); if (logCard && logCard.classList.contains('open')) { renderAllLogs((autoEl && autoEl.checked) === true); } }
@@ -589,8 +394,6 @@ if (typeof updateSignBadge === 'function') window.updateSignBadge = updateSignBa
 if (typeof computeEulerFromQuaternion === 'function') window.computeEulerFromQuaternion = computeEulerFromQuaternion;
 if (typeof toggleAccordion === 'function') window.toggleAccordion = toggleAccordion;
 if (typeof updateAccordionHeight === 'function') window.updateAccordionHeight = updateAccordionHeight;
-if (typeof setPitchZero === 'function') window.setPitchZero = setPitchZero;
-if (typeof setRollZero === 'function') window.setRollZero = setRollZero;
 if (typeof clearLogs === 'function') window.clearLogs = clearLogs;
 if (typeof getRawEuler === 'function') window.getRawEuler = getRawEuler;
 if (typeof updateIMUMappingUIFromData === 'function') window.updateIMUMappingUIFromData = updateIMUMappingUIFromData;

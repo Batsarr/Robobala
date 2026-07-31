@@ -15,10 +15,6 @@ const TELEMETRY_UPDATE_INTERVAL = 1000;
 export let currentEncoderLeft = 0;
 export let currentEncoderRight = 0;
 
-// Firmware trim tracking
-let originalFirmwareTrimPitch = null;
-let originalFirmwareTrimRoll = null;
-
 /**
  * Normalize short telemetry keys to full names
  */
@@ -35,16 +31,12 @@ export function normalizeTelemetryData(d) {
     if (d.ca !== undefined && d.calib_accel === undefined) d.calib_accel = d.ca;
     if (d.cm !== undefined && d.calib_mag === undefined) d.calib_mag = d.cm;
     if (d.lt !== undefined && d.loop_time === undefined) d.loop_time = d.lt;
-    if (d.ta !== undefined && d.trim_angle === undefined) d.trim_angle = d.ta;
-    if (d.rt !== undefined && d.roll_trim === undefined) d.roll_trim = d.rt;
     if (d.po !== undefined && d.pitch_offset === undefined) d.pitch_offset = d.po;
     if (d.ro !== undefined && d.roll_offset === undefined) d.roll_offset = d.ro;
     // Kąty Eulera z firmware (robot jest jedynym źródłem prawdy)
     if (d.p !== undefined && d.pitch === undefined) d.pitch = d.p;
     if (d.y !== undefined && d.yaw === undefined) d.yaw = d.y;
     if (d.r !== undefined && d.roll === undefined) d.roll = d.r;
-    if (d.trim_angle === undefined) d.trim_angle = 0.0;
-    if (d.roll_trim === undefined) d.roll_trim = 0.0;
     if (d.pitch_offset === undefined) d.pitch_offset = 0.0;
     if (d.roll_offset === undefined) d.roll_offset = 0.0;
     if (d.states && typeof d.states === 'object') {
@@ -217,20 +209,9 @@ export function updateTelemetryUI(data) {
     const calibMag = (data.calib_mag !== undefined) ? data.calib_mag : data.cm;
     if (calibMag !== undefined) { const el = document.getElementById('calibMagVal'); if (el) el.textContent = calibMag; if (typeof window.updateCalibrationProgress === 'function') window.updateCalibrationProgress('mag', calibMag); }
 
-    // Trim and offset displays
-    const trimPitch = Number(data.trim_angle) || 0;
-    const trimRoll = Number(data.roll_trim) || 0;
+    // Offset displays
     const pitchOffset = Number(data.pitch_offset) || 0;
     const rollOffset = Number(data.roll_offset) || 0;
-
-    const angleOffsetValEl = document.getElementById('angleOffsetVal');
-    if (angleOffsetValEl) angleOffsetValEl.textContent = trimPitch.toFixed(1) + ' °';
-    const rollMountOffsetValEl = document.getElementById('rollMountOffsetVal');
-    if (rollMountOffsetValEl) rollMountOffsetValEl.textContent = trimRoll.toFixed(1) + ' °';
-    const trimValueDisplay = document.getElementById('trimValueDisplay');
-    if (trimValueDisplay) trimValueDisplay.textContent = trimPitch.toFixed(2);
-    const rollTrimValueDisplay = document.getElementById('rollTrimValueDisplay');
-    if (rollTrimValueDisplay) rollTrimValueDisplay.textContent = trimRoll.toFixed(2);
     const pitchUIOffsetValEl = document.getElementById('pitchUIOffsetVal');
     if (pitchUIOffsetValEl) pitchUIOffsetValEl.textContent = pitchOffset.toFixed(1) + ' °';
     const rollUIOffsetValEl = document.getElementById('rollUIOffsetVal');
@@ -239,11 +220,6 @@ export function updateTelemetryUI(data) {
     if (pitchOffsetDisplay) pitchOffsetDisplay.textContent = pitchOffset.toFixed(2);
     const rollOffsetDisplay = document.getElementById('rollOffsetDisplay');
     if (rollOffsetDisplay) rollOffsetDisplay.textContent = rollOffset.toFixed(2);
-
-    if (originalFirmwareTrimPitch === null && trimPitch !== 0) originalFirmwareTrimPitch = trimPitch;
-    const offsetDelta = originalFirmwareTrimPitch !== null ? (trimPitch - originalFirmwareTrimPitch) : 0;
-    const offsetDeltaValEl = document.getElementById('offsetDeltaVal');
-    if (offsetDeltaValEl) offsetDeltaValEl.textContent = offsetDelta.toFixed(1) + ' °';
 
     // States update
     if (data.states && !AppState.isApplyingConfig) {
