@@ -64,10 +64,6 @@ function processCompleteMessage(data) {
             updateTelemetryUI(data);
             updateChart(data);
             updateActualPath(data);
-            // Legacy guard: mappingWizard removed; keep defensive check
-            if (typeof mappingWizard !== 'undefined' && mappingWizard && mappingWizard.isActive && typeof processWizardTelemetry === 'function') {
-                processWizardTelemetry(data);
-            }
             break;
         case 'status_update':
             if (data.message === 'autonomous_move_complete') {

@@ -212,7 +212,7 @@ function computeTestTimeout() {
     const trialInput = document.getElementById('tuningTrialDurationInput');
     let trialMs = 2000;
     if (trialInput) {
-        const v = parseInt(trialInput.value, 10);
+        const v = parseFloat(trialInput.value) * 1000; // pole w sekundach
         if (!isNaN(v)) trialMs = v;
     }
     let t = trialMs + 1500;
@@ -239,7 +239,7 @@ async function runTelemetryBasedTest(kp, ki, kd) {
         const trialInput = document.getElementById('tuningTrialDurationInput');
         let testDurationMs = 2000;
         if (trialInput) {
-            const v = parseInt(trialInput.value, 10);
+            const v = parseFloat(trialInput.value) * 1000; // pole w sekundach
             if (!isNaN(v) && v > 0) testDurationMs = v;
         }
 
