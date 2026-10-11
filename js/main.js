@@ -302,7 +302,7 @@ function getRawEuler() {
 }
 
 const debounce = (func, delay) => { let timeout; return function (...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
-// delay helper is provided by RB.helpers.delay (modules/state.js)
+// delay helper is provided by RB.helpers.delay (see js/helpers.js)
 function addLogMessage(message, level = 'info') { pushLog(message, level); const logCard = document.getElementById('log-card'); const autoEl = document.getElementById('logsAutoscroll'); if (logCard && logCard.classList.contains('open')) { renderAllLogs((autoEl && autoEl.checked) === true); } }
 function clearLogs() { if (typeof allLogsBuffer !== 'undefined') { allLogsBuffer.length = 0; } const box = document.getElementById('log-history'); if (box) box.innerHTML = ''; }
 function toggleAccordion(header) {
@@ -396,3 +396,4 @@ if (typeof toggleAccordion === 'function') window.toggleAccordion = toggleAccord
 if (typeof updateAccordionHeight === 'function') window.updateAccordionHeight = updateAccordionHeight;
 if (typeof clearLogs === 'function') window.clearLogs = clearLogs;
 if (typeof getRawEuler === 'function') window.getRawEuler = getRawEuler;
+if (typeof updateIMUMappingUIFromData === 'function') window.updateIMUMappingUIFromData = updateIMUMappingUIFromData;

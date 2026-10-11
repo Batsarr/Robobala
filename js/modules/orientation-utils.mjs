@@ -30,25 +30,6 @@ export function computeEulerFromQuaternion(qw, qx, qy, qz) {
     };
 }
 
-/**
- * Jedyne miejsce zamiany osi: robot (Z-up) -> scena Three.js (Y-up).
- *
- * Robot (firmware, imu_math.h quaternionToRobotAnglesDeg), uklad prawoskretny:
- *   X = przod, Y = lewo, Z = gora; yaw wokol Z, pitch wokol Y, roll wokol X,
- *   kolejnosc Tait-Bryan ZYX:  R_robot = Rz(yaw) * Ry(pitch) * Rx(roll).
- *   pitch > 0 = robot pochyla sie DO PRZODU (gora porusza sie w strone +X).
- * Three.js (model): X = prawo, Y = gora, Z = do kamery; przod robota = -Z
- *   (kamera "z tylu" w widoku z perspektywy robota stoi na +Z), kola na +/-X.
- *
- * Macierz zmiany bazy M (robot -> three): x_t = -y_r, y_t = z_r, z_t = -x_r (det = +1).
- * Obrot o kat t wokol osi a robota to obrot o t wokol osi M*a w scenie:
- *   yaw   wokol Z  -> wokol +Y  o  +yaw
- *   pitch wokol Y  -> wokol -X  o  +pitch  == wokol +X o -pitch
- *   roll  wokol X  -> wokol -Z  o  +roll   == wokol +Z o -roll
- * Zlozenie: R_three = M R_robot M^T = Ry(yaw) * Rx(-pitch) * Rz(-roll),
- * czyli Euler Three.js w kolejnosci 'YXZ' z (x=-pitch, y=yaw, z=-roll).
- * Wartosci pitch/roll/yaw sa DOKLADNIE tymi z dashboardu (window.telemetryData).
- */
 export function buildRobotOrientationAngles(values = {}) {
     const pitchValue = Number(values.pitch ?? 0);
     const rollValue = Number(values.roll ?? 0);
@@ -59,10 +40,11 @@ export function buildRobotOrientationAngles(values = {}) {
     const yaw = Number.isFinite(yawValue) ? yawValue : 0;
 
     return {
-        x: -pitch * DEG_TO_RAD,
-        y: yaw * DEG_TO_RAD,
-        z: -roll * DEG_TO_RAD,
-        order: 'YXZ'
+        x: roll * DEG_TO_RAD,
+        y: pitch * DEG_TO_RAD,
+        z: yaw * DEG_TO_RAD,
+        // Firmware sends yaw/pitch/roll in ZYX convention.
+        order: 'ZYX'
     };
 }
 

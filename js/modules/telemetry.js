@@ -253,7 +253,6 @@ export function applySingleParam(snakeKey, value) {
             if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha'].includes(snakeKey)) {
                 displayValue = (value * 100);
             }
-            if (snakeKey === 'tuning_trial_duration_ms') displayValue = (value / 1000.0);
             if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
                 if (el.type === 'checkbox') {
                     el.checked = !!displayValue;
