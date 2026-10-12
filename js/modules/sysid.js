@@ -282,10 +282,11 @@ async function startSysIdRecording() {
                 record.speed_error = effectiveSetpoint - record.speed;
             } else if (SysIdState.testType === 'position') {
                 const avgEncoder = (record.encoder_left + record.encoder_right) / 2;
-                const encoderPpr = parseFloat(document.getElementById('encoderPprInput')?.value) || 820;
+                // PPR pochodzi z sync robota (encoder_ppr); bez niego nie liczymy pozycji (nie zgadujemy liczby)
+                const encoderPpr = parseFloat(document.getElementById('encoderPprInput')?.value);
                 const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput')?.value) || 8.2;
                 const wheelCircum = Math.PI * wheelDiameter;
-                const positionCm = (avgEncoder / encoderPpr) * wheelCircum;
+                const positionCm = (encoderPpr > 0) ? (avgEncoder / encoderPpr) * wheelCircum : NaN;
                 record.position_cm = positionCm;
                 const uiSetpoint = SysIdState.stepApplied ? SysIdState.stepValue : 0;
                 record.input_signal = uiSetpoint;
@@ -600,7 +601,7 @@ function exportSysIdCSV() {
     const addLogMessage = window.addLogMessage;
     if (SysIdState.data.length === 0) { addLogMessage('[SysID] Brak danych do eksportu.', 'warn'); return; }
 
-    const encoderPpr = document.getElementById('encoderPprInput')?.value || 820;
+    const encoderPpr = document.getElementById('encoderPprInput')?.value || '';
     const wheelDiameter = document.getElementById('wheelDiameterInput')?.value || 8.2;
     const trackWidth = document.getElementById('trackWidthInput')?.value || 15;
     const testType = SysIdState.testType || 'balance';

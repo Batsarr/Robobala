@@ -231,8 +231,8 @@ export function init3DVisualization() {
 
 export function update3DAnimation() {
     if (isAnimation3DEnabled && robotPivot) {
-        // Używamy gotowych kątów Eulera z firmware (robot jest jedynym źródłem prawdy).
-        // Kąty są już skorygowane o montaż (obrót -90° wokół Y) i trymy.
+        // Te same pitch/roll/yaw co dashboard (window.telemetryData, ustawiane w ble-processor.js).
+        // Zamiana osi robot Z-up -> Three.js Y-up jest TYLKO w orientation-utils.mjs.
         const td = window.telemetryData;
         if (td && typeof td.pitch === 'number' && typeof td.yaw === 'number' && typeof td.roll === 'number') {
             try {
@@ -246,14 +246,6 @@ export function update3DAnimation() {
                 robotPivot.quaternion.slerp(qEuler, 0.35);
             } catch (err) {
                 console.error('3D Euler error:', err);
-            }
-        } else if (typeof td?.qw === 'number') {
-            // Fallback: starsze firmware bez p/y/r - używamy surowego kwaternionu
-            try {
-                const qRaw = new THREE.Quaternion(td.qx, td.qy, td.qz, td.qw).normalize();
-                robotPivot.quaternion.slerp(qRaw, 0.35);
-            } catch (err) {
-                console.error('3D quaternion fallback error:', err);
             }
         }
 
@@ -271,13 +263,17 @@ export function update3DAnimation() {
             camera3D.lookAt(lookAtPosition);
         }
 
-        const ppr = parseFloat(document.getElementById('encoderPprInput')?.value) || 820;
-        const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
-        const wheelRotationR = (currentEncoderRight / ppr) * 2 * Math.PI;
-        if (leftWheel) leftWheel.rotation.z = -wheelRotationL;
-        if (rightWheel) rightWheel.rotation.z = -wheelRotationR;
+        // PPR z sync robota (encoder_ppr); bez niego nie obracamy kół ani nie liczymy dystansu
+        const ppr = parseFloat(document.getElementById('encoderPprInput')?.value);
+        const pprOk = ppr > 0;
+        if (pprOk) {
+            const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
+            const wheelRotationR = (currentEncoderRight / ppr) * 2 * Math.PI;
+            if (leftWheel) leftWheel.rotation.z = -wheelRotationL;
+            if (rightWheel) rightWheel.rotation.z = -wheelRotationR;
+        }
 
-        if (isMovement3DEnabled) {
+        if (isMovement3DEnabled && pprOk) {
             const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput')?.value) || 8.2;
             const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
             const dist_cm = -((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * wheelDiameter;

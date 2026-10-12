@@ -94,9 +94,19 @@ export function setupNumericInputs() {
 // ========================================================================
 // SEND FULL CONFIG
 // ========================================================================
+// Bramka: nic z pol parametrow nie idzie do robota, dopoki nie ma polaczenia i sync_complete
+// (pola sa puste/zerowe przed synchronizacja - puste wartosci nie moga nadpisac EEPROM).
+function canSendParams() {
+    return !!(AppState.isConnected && AppState.isSynced) && !AppState.isApplyingConfig;
+}
+
 export function sendFullConfigToRobot() {
     const sendBleMessage = window.sendBleMessage;
     const addLogMessage = window.addLogMessage;
+    if (!canSendParams()) {
+        if (addLogMessage) addLogMessage('[UI] Pelna konfiguracja zablokowana: poczekaj na synchronizacje z robotem.', 'warn');
+        return;
+    }
     const params = {};
     for (const [inputId, snakeKey] of Object.entries(parameterMapping)) {
         const input = document.getElementById(inputId);
@@ -104,6 +114,7 @@ export function sendFullConfigToRobot() {
         let value;
         if (input.type === 'checkbox') value = input.checked;
         else value = parseFloat(input.value);
+        if (typeof value === 'number' && isNaN(value)) continue; // puste pole nie jest wysylane
 
         if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha', 'weights_itae', 'weights_overshoot', 'weights_control_effort'].includes(snakeKey)) {
             value /= 100.0;
@@ -139,7 +150,8 @@ export function setupParameterListeners() {
         'kp_p', 'ki_p', 'kd_p', 'position_pid_filter_alpha', 'position_pid_integral_limit'];
 
     const sendSingleParam = (inputId, value) => {
-        if (AppState.isApplyingConfig) return;
+        if (!canSendParams()) return;
+        if (typeof value === 'number' && isNaN(value)) return;
         let snakeKey = parameterMapping[inputId];
         if (snakeKey) {
             if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha', 'weights_itae', 'weights_overshoot', 'weights_control_effort'].includes(snakeKey)) {
@@ -155,6 +167,7 @@ export function setupParameterListeners() {
 
     document.querySelectorAll('.config-value').forEach(input => {
         input.addEventListener('change', (e) => {
+            if (!canSendParams()) return;
             if (e.target.type === 'checkbox') {
                 const snakeKey = parameterMapping[e.target.id];
                 if (snakeKey) sendBleMessage({ type: 'set_param', key: snakeKey, value: e.target.checked ? 1.0 : 0.0 });
@@ -166,7 +179,7 @@ export function setupParameterListeners() {
 
     // AUTOTUNING parameter listeners
     const sendTuningParam = (snakeKey, rawValue) => {
-        if (AppState.isApplyingConfig) return;
+        if (!canSendParams()) return;
         let value = rawValue;
         if (typeof value === 'number' && isNaN(value)) return;
         if (snakeKey && snakeKey.startsWith('weights_')) value = (parseFloat(value) / 100.0);
@@ -190,7 +203,7 @@ export function setupParameterListeners() {
         );
         if (!isTuningKey) continue;
         if (input.type === 'checkbox') {
-            input.addEventListener('change', (e) => { sendBleMessage({ type: 'set_tuning_config_param', key: snakeKey, value: e.target.checked }); });
+            input.addEventListener('change', (e) => { if (!canSendParams()) return; sendBleMessage({ type: 'set_tuning_config_param', key: snakeKey, value: e.target.checked }); });
         } else {
             input.addEventListener('change', (e) => { debouncedSendTuningParam(inputId, parseFloat(e.target.value)); });
         }

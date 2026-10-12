@@ -133,10 +133,10 @@ export function updateTelemetryUI(data) {
         const speed = parseFloat(speedActual);
         const speedVal = document.getElementById('speedVal');
         if (speedVal) speedVal.textContent = speed.toFixed(0) + ' imp/s';
-        const ppr = parseFloat(document.getElementById('encoderPprInput')?.value) || 820;
-        const wheelRpm = (speed / ppr) * 60;
+        // PPR z sync robota (encoder_ppr); bez niego nie liczymy obr/min
+        const ppr = parseFloat(document.getElementById('encoderPprInput')?.value);
         const wheelSpeedEl = document.getElementById('robot3d-wheel-speed');
-        if (wheelSpeedEl) wheelSpeedEl.textContent = wheelRpm.toFixed(0) + ' obr/min';
+        if (wheelSpeedEl) wheelSpeedEl.textContent = (ppr > 0) ? ((speed / ppr) * 60).toFixed(0) + ' obr/min' : '-- obr/min';
         speedHistory.push(speed);
         if (speedHistory.length > HISTORY_LENGTH) speedHistory.shift();
     }
@@ -153,6 +153,8 @@ export function updateTelemetryUI(data) {
             }
         }
     }
+    // LQR — test znaku kąta i kierunku kół na żywo
+    window.LqrPanel?.onTelemetry?.(data);
 
     // Encoders
     const encLeft = (data.encoder_left !== undefined) ? data.encoder_left : data.el;
@@ -253,6 +255,7 @@ export function applySingleParam(snakeKey, value) {
             if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha'].includes(snakeKey)) {
                 displayValue = (value * 100);
             }
+            if (snakeKey === 'tuning_trial_duration_ms') displayValue = (value / 1000.0);
             if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
                 if (el.type === 'checkbox') {
                     el.checked = !!displayValue;
@@ -280,6 +283,10 @@ export function applySingleParam(snakeKey, value) {
         if (typeof window.setSignButtons === 'function') window.setSignButtons('positionSign', v);
         if (typeof window.updateSignBadge === 'function') window.updateSignBadge('positionSignBadge', v);
     }
+
+    // Tryb sterowania i Fuzzy v4 / LQR — moduły z własnym widokiem (przyciski, wykresy, K)
+    if (snakeKey === 'control_mode' || snakeKey.startsWith('fuzzy_')) window.FuzzyEditor?.onParam?.(snakeKey, value);
+    if (snakeKey.startsWith('lqr_')) window.LqrPanel?.onParam?.(snakeKey, value);
 }
 
 /**

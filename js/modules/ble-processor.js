@@ -64,10 +64,6 @@ function processCompleteMessage(data) {
             updateTelemetryUI(data);
             updateChart(data);
             updateActualPath(data);
-            // Legacy guard: mappingWizard removed; keep defensive check
-            if (typeof mappingWizard !== 'undefined' && mappingWizard && mappingWizard.isActive && typeof processWizardTelemetry === 'function') {
-                processWizardTelemetry(data);
-            }
             break;
         case 'status_update':
             if (data.message === 'autonomous_move_complete') {
@@ -132,26 +128,21 @@ function processCompleteMessage(data) {
             break;
         case 'sync_complete':
             // Zastosuj wszystkie zebrane parametry i stany
+            // Błąd jednego klucza nie może przerwać synchronizacji: bez isSynced=true panel
+            // blokuje wysyłanie WSZYSTKICH parametrów (canSendParams w parameter-controls.js).
             AppState.isApplyingConfig = true;
-            for (const [key, value] of Object.entries(AppState.tempParams)) {
-                applySingleParam(key, value);
-            }
-            for (const [key, value] of Object.entries(AppState.tempTuningParams)) {
-                applySingleAutotuneParam(key, value);
-            }
-            if (AppState.tempStates.balancing !== undefined) document.getElementById('balanceSwitch').checked = AppState.tempStates.balancing;
-            if (AppState.tempStates.holding_pos !== undefined) document.getElementById('holdPositionSwitch').checked = AppState.tempStates.holding_pos;
-            if (AppState.tempStates.speed_mode !== undefined) document.getElementById('speedModeSwitch').checked = AppState.tempStates.speed_mode;
-            AppState.isApplyingConfig = false;
-
-            // Po synchronizacji: wykryj aktualny tryb fuzji z checkboxa (zsynchronizowanego z firmware)
-            // UWAGA: NIE wywołujemy loadCurrentPIDToUI() tutaj, ponieważ applySingleParam() już
-            // zaktualizowało wszystkie wartości PID z firmware. Wywoływalibyśmy nadpisanie poprawnych
-            // wartości z firmware starymi wartościami z cache.
-            if (typeof FusionPIDProfiles !== 'undefined') {
-                FusionPIDProfiles.syncFusionModeFromCheckbox();
-                // Nie wywołujemy loadCurrentPIDToUI() - UI jest już zsynchronizowane!
-                // FusionPIDProfiles.loadCurrentPIDToUI(); // USUNIĘTE - powodowało nadpisywanie UI
+            try {
+                for (const [key, value] of Object.entries(AppState.tempParams)) {
+                    try { applySingleParam(key, value); } catch (e) { console.error(`[SYNC] ${key}:`, e); }
+                }
+                for (const [key, value] of Object.entries(AppState.tempTuningParams)) {
+                    try { applySingleAutotuneParam(key, value); } catch (e) { console.error(`[SYNC] ${key}:`, e); }
+                }
+                if (AppState.tempStates.balancing !== undefined) document.getElementById('balanceSwitch').checked = AppState.tempStates.balancing;
+                if (AppState.tempStates.holding_pos !== undefined) document.getElementById('holdPositionSwitch').checked = AppState.tempStates.holding_pos;
+                if (AppState.tempStates.speed_mode !== undefined) document.getElementById('speedModeSwitch').checked = AppState.tempStates.speed_mode;
+            } finally {
+                AppState.isApplyingConfig = false;
             }
 
             // Zaktualizuj UI

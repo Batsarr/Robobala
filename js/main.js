@@ -254,15 +254,20 @@ Object.keys(signButtonMap).forEach(containerId => {
     });
 });
 // Disable sign toggles outside of IDLE for safety
-appStore.subscribe('robot.state', (newVal) => {
-    const isIdle = (newVal === 'IDLE');
-    Object.keys(signButtonMap).forEach(containerId => {
-        const el = document.getElementById(containerId);
-        if (!el) return;
-        el.querySelectorAll('button').forEach(btn => {
-            btn.disabled = !isIdle;
+// appStore ustawia moduł app.js, który wykonuje się PO main.js — subskrypcja dopiero na DOMContentLoaded
+// (wcześniej TypeError przerywał resztę main.js, m.in. obserwator wysokości akordeonów).
+document.addEventListener('DOMContentLoaded', () => {
+    if (!window.appStore) return;
+    window.appStore.subscribe('robot.state', (newVal) => {
+        const isIdle = (newVal === 'IDLE');
+        Object.keys(signButtonMap).forEach(containerId => {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            el.querySelectorAll('button').forEach(btn => {
+                btn.disabled = !isIdle;
+            });
+            el.classList.toggle('disabled', !isIdle);
         });
-        el.classList.toggle('disabled', !isIdle);
     });
 });
 // Initial summary update
@@ -302,7 +307,7 @@ function getRawEuler() {
 }
 
 const debounce = (func, delay) => { let timeout; return function (...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
-// delay helper is provided by RB.helpers.delay (see js/helpers.js)
+// delay helper is provided by RB.helpers.delay (modules/state.js)
 function addLogMessage(message, level = 'info') { pushLog(message, level); const logCard = document.getElementById('log-card'); const autoEl = document.getElementById('logsAutoscroll'); if (logCard && logCard.classList.contains('open')) { renderAllLogs((autoEl && autoEl.checked) === true); } }
 function clearLogs() { if (typeof allLogsBuffer !== 'undefined') { allLogsBuffer.length = 0; } const box = document.getElementById('log-history'); if (box) box.innerHTML = ''; }
 function toggleAccordion(header) {
@@ -396,4 +401,3 @@ if (typeof toggleAccordion === 'function') window.toggleAccordion = toggleAccord
 if (typeof updateAccordionHeight === 'function') window.updateAccordionHeight = updateAccordionHeight;
 if (typeof clearLogs === 'function') window.clearLogs = clearLogs;
 if (typeof getRawEuler === 'function') window.getRawEuler = getRawEuler;
-if (typeof updateIMUMappingUIFromData === 'function') window.updateIMUMappingUIFromData = updateIMUMappingUIFromData;
