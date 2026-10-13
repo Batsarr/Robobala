@@ -3,7 +3,6 @@
 // ========================================================================
 
 import { currentEncoderLeft, currentEncoderRight } from './telemetry.js';
-import { buildRobotEulerFromTelemetryAngles } from './orientation-utils.mjs';
 
 // --- 3D Scene variables ---
 let scene3D, camera3D, renderer3D, controls3D;
@@ -231,21 +230,48 @@ export function init3DVisualization() {
 
 export function update3DAnimation() {
     if (isAnimation3DEnabled && robotPivot) {
-        // Te same pitch/roll/yaw co dashboard (window.telemetryData, ustawiane w ble-processor.js).
-        // Zamiana osi robot Z-up -> Three.js Y-up jest TYLKO w orientation-utils.mjs.
-        const td = window.telemetryData;
-        if (td && typeof td.pitch === 'number' && typeof td.yaw === 'number' && typeof td.roll === 'number') {
+        // Use quaternion from telemetry + mapping
+        if (typeof window.telemetryData?.qw === 'number') {
             try {
-                const euler = buildRobotEulerFromTelemetryAngles(td);
-                const qEuler = new THREE.Quaternion().setFromEuler(new THREE.Euler(
-                    euler.x,
-                    euler.y,
-                    euler.z,
-                    euler.order
+                const qRaw = new THREE.Quaternion(
+                    window.telemetryData.qx,
+                    window.telemetryData.qy,
+                    window.telemetryData.qz,
+                    window.telemetryData.qw
+                ).normalize();
+
+                const modelMapping = window.modelMapping || { pitch: { sign: 1 }, yaw: { sign: 1 }, roll: { sign: 1 } };
+                const signs = [modelMapping.pitch.sign, modelMapping.yaw.sign, modelMapping.roll.sign];
+                const negCount = signs.filter(s => s === -1).length;
+                let qCorr = new THREE.Quaternion();
+
+                const computeEulerFromQuaternion = window.computeEulerFromQuaternion || (() => null);
+                const applyModelMappingToEuler = window.applyModelMappingToEuler || ((e) => e);
+
+                const eulRaw = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
+                let mapped = eulRaw ? applyModelMappingToEuler(eulRaw) : { pitch: 0, yaw: 0, roll: 0 };
+
+                if (negCount % 2 === 0) {
+                    if (negCount === 2) {
+                        const idx = signs.findIndex(s => s === 1);
+                        const axisVec = idx === 0 ? new THREE.Vector3(1, 0, 0) : (idx === 1 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1));
+                        qCorr.setFromAxisAngle(axisVec, Math.PI);
+                    }
+                }
+
+                // raw Euler angles are returned as {pitch, yaw, roll} in ZYX order
+                // (yaw around Z, pitch around Y, roll around X), so construct the
+                // quaternion accordingly: x=roll, y=pitch, z=yaw with order 'ZYX'.
+                const qMappedEuler = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+                    THREE.MathUtils.degToRad(mapped.roll),
+                    THREE.MathUtils.degToRad(mapped.pitch),
+                    THREE.MathUtils.degToRad(mapped.yaw),
+                    'ZYX'
                 ));
-                robotPivot.quaternion.slerp(qEuler, 0.35);
+                const qResult = new THREE.Quaternion().multiplyQuaternions(qCorr, qMappedEuler).normalize();
+                robotPivot.quaternion.slerp(qResult, 0.35);
             } catch (err) {
-                console.error('3D Euler error:', err);
+                console.error('Quaternion mapping error:', err);
             }
         }
 
@@ -263,17 +289,13 @@ export function update3DAnimation() {
             camera3D.lookAt(lookAtPosition);
         }
 
-        // PPR z sync robota (encoder_ppr); bez niego nie obracamy kół ani nie liczymy dystansu
-        const ppr = parseFloat(document.getElementById('encoderPprInput')?.value);
-        const pprOk = ppr > 0;
-        if (pprOk) {
-            const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
-            const wheelRotationR = (currentEncoderRight / ppr) * 2 * Math.PI;
-            if (leftWheel) leftWheel.rotation.z = -wheelRotationL;
-            if (rightWheel) rightWheel.rotation.z = -wheelRotationR;
-        }
+        const ppr = parseFloat(document.getElementById('encoderPprInput')?.value) || 820;
+        const wheelRotationL = (currentEncoderLeft / ppr) * 2 * Math.PI;
+        const wheelRotationR = (currentEncoderRight / ppr) * 2 * Math.PI;
+        if (leftWheel) leftWheel.rotation.z = -wheelRotationL;
+        if (rightWheel) rightWheel.rotation.z = -wheelRotationR;
 
-        if (isMovement3DEnabled && pprOk) {
+        if (isMovement3DEnabled) {
             const wheelDiameter = parseFloat(document.getElementById('wheelDiameterInput')?.value) || 8.2;
             const currentEncoderAvg = (currentEncoderLeft + currentEncoderRight) / 2;
             const dist_cm = -((currentEncoderAvg - lastEncoderAvg) / ppr) * Math.PI * wheelDiameter;

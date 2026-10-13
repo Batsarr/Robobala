@@ -8,6 +8,22 @@
 <body>
   <h2>Test: Refactored Interface Logic</h2>
   
+  <h3>1. Sensor Mounting Presets</h3>
+  <div style="margin: 10px 0;">
+    <label>Test preset configurations:</label>
+    <select id="testMountingSelect">
+      <option value="standard">Standard mounting</option>
+      <option value="rotated_90_cw">Rotated 90° CW</option>
+      <option value="rotated_90_ccw">Rotated 90° CCW</option>
+      <option value="rotated_180">Rotated 180°</option>
+      <option value="inverted">Inverted</option>
+    </select>
+    <button id="testApplyPreset">Apply Preset</button>
+  </div>
+  <div id="presetResult" style="margin: 10px 0; padding: 10px; border: 1px solid #ccc;">
+    Result: <span id="presetResultText">Not tested</span>
+  </div>
+  
   <h3>2. Manual Trim Correction Logic</h3>
   <div style="margin: 10px 0;">
     <p>Current manual correction: <span id="trimValueDisplay">0.00</span>°</p>
@@ -50,6 +66,33 @@
       log.scrollTop = log.scrollHeight;
     }
     
+    // Define sensor mounting presets (from main.js)
+    const sensorMountingPresets = {
+      'standard': { pitch: { source: 0, sign: 1 }, yaw: { source: 1, sign: 1 }, roll: { source: 2, sign: 1 } },
+      'rotated_90_cw': { pitch: { source: 2, sign: -1 }, yaw: { source: 1, sign: 1 }, roll: { source: 0, sign: 1 } },
+      'rotated_90_ccw': { pitch: { source: 2, sign: 1 }, yaw: { source: 1, sign: 1 }, roll: { source: 0, sign: -1 } },
+      'rotated_180': { pitch: { source: 0, sign: -1 }, yaw: { source: 1, sign: 1 }, roll: { source: 2, sign: -1 } },
+      'inverted': { pitch: { source: 0, sign: -1 }, yaw: { source: 1, sign: -1 }, roll: { source: 2, sign: -1 } }
+    };
+    
+    // Test 1: Sensor mounting presets
+    document.getElementById('testApplyPreset').addEventListener('click', () => {
+      const selectedPreset = document.getElementById('testMountingSelect').value;
+      window.sentMessages = [];
+      
+      if (sensorMountingPresets[selectedPreset]) {
+        const mapping = sensorMountingPresets[selectedPreset];
+        window.sendBleMessage({ type: 'set_imu_mapping', mapping });
+        
+        document.getElementById('presetResultText').textContent = 
+          'PASS - Message sent: ' + JSON.stringify(mapping);
+        document.getElementById('presetResult').style.backgroundColor = '#d4edda';
+      } else {
+        document.getElementById('presetResultText').textContent = 'FAIL - Preset not found';
+        document.getElementById('presetResult').style.backgroundColor = '#f8d7da';
+      }
+    });
+    
     // Test 2: Manual trim correction
     let manualPitchCorrection = 0;
     let pitchTrimBase = null;
@@ -76,6 +119,7 @@
       manualPitchCorrection = 0;
       
       window.sendBleMessage({ type: 'set_param', key: 'trim_angle', value: newTrim });
+      window.sendBleMessage({ type: 'set_pitch_zero' });
       
       const span = document.getElementById('trimValueDisplay');
       if (span) span.textContent = '0.00';

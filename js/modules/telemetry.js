@@ -15,6 +15,10 @@ const TELEMETRY_UPDATE_INTERVAL = 1000;
 export let currentEncoderLeft = 0;
 export let currentEncoderRight = 0;
 
+// Firmware trim tracking
+let originalFirmwareTrimPitch = null;
+let originalFirmwareTrimRoll = null;
+
 /**
  * Normalize short telemetry keys to full names
  */
@@ -31,12 +35,12 @@ export function normalizeTelemetryData(d) {
     if (d.ca !== undefined && d.calib_accel === undefined) d.calib_accel = d.ca;
     if (d.cm !== undefined && d.calib_mag === undefined) d.calib_mag = d.cm;
     if (d.lt !== undefined && d.loop_time === undefined) d.loop_time = d.lt;
+    if (d.ta !== undefined && d.trim_angle === undefined) d.trim_angle = d.ta;
+    if (d.rt !== undefined && d.roll_trim === undefined) d.roll_trim = d.rt;
     if (d.po !== undefined && d.pitch_offset === undefined) d.pitch_offset = d.po;
     if (d.ro !== undefined && d.roll_offset === undefined) d.roll_offset = d.ro;
-    // Kąty Eulera z firmware (robot jest jedynym źródłem prawdy)
-    if (d.p !== undefined && d.pitch === undefined) d.pitch = d.p;
-    if (d.y !== undefined && d.yaw === undefined) d.yaw = d.y;
-    if (d.r !== undefined && d.roll === undefined) d.roll = d.r;
+    if (d.trim_angle === undefined) d.trim_angle = 0.0;
+    if (d.roll_trim === undefined) d.roll_trim = 0.0;
     if (d.pitch_offset === undefined) d.pitch_offset = 0.0;
     if (d.roll_offset === undefined) d.roll_offset = 0.0;
     if (d.states && typeof d.states === 'object') {
@@ -104,8 +108,9 @@ export function updateTelemetryUI(data) {
         const correctedPitch = (data.pitch !== undefined) ? data.pitch : (typeof data.raw_pitch === 'number' ? data.raw_pitch : 0);
         const angleVal = document.getElementById('angleVal');
         if (angleVal) angleVal.textContent = correctedPitch.toFixed(1) + ' \u00B0';
+        const vizPitchVal = (data.viz_pitch !== undefined) ? data.viz_pitch : correctedPitch || 0;
         const pitchEl = document.getElementById('robot3d-pitch');
-        if (pitchEl) pitchEl.textContent = correctedPitch.toFixed(1) + '°';
+        if (pitchEl) pitchEl.textContent = vizPitchVal.toFixed(1) + '°';
         pitchHistory.push(correctedPitch);
         if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
     }
@@ -113,8 +118,9 @@ export function updateTelemetryUI(data) {
     // Roll
     if (typeof data.raw_roll === 'number' || typeof data.roll === 'number') {
         const correctedRoll = (data.roll !== undefined) ? data.roll : (typeof data.raw_roll === 'number' ? data.raw_roll : 0);
+        const vizRollVal = (data.viz_roll !== undefined) ? data.viz_roll : correctedRoll || 0;
         const rollEl = document.getElementById('robot3d-roll');
-        if (rollEl) rollEl.textContent = correctedRoll.toFixed(1) + '°';
+        if (rollEl) rollEl.textContent = vizRollVal.toFixed(1) + '°';
         const rollVal = document.getElementById('rollVal');
         if (rollVal) rollVal.textContent = correctedRoll.toFixed(1) + ' \u00B0';
     }
@@ -133,10 +139,10 @@ export function updateTelemetryUI(data) {
         const speed = parseFloat(speedActual);
         const speedVal = document.getElementById('speedVal');
         if (speedVal) speedVal.textContent = speed.toFixed(0) + ' imp/s';
-        // PPR z sync robota (encoder_ppr); bez niego nie liczymy obr/min
-        const ppr = parseFloat(document.getElementById('encoderPprInput')?.value);
+        const ppr = parseFloat(document.getElementById('encoderPprInput')?.value) || 820;
+        const wheelRpm = (speed / ppr) * 60;
         const wheelSpeedEl = document.getElementById('robot3d-wheel-speed');
-        if (wheelSpeedEl) wheelSpeedEl.textContent = (ppr > 0) ? ((speed / ppr) * 60).toFixed(0) + ' obr/min' : '-- obr/min';
+        if (wheelSpeedEl) wheelSpeedEl.textContent = wheelRpm.toFixed(0) + ' obr/min';
         speedHistory.push(speed);
         if (speedHistory.length > HISTORY_LENGTH) speedHistory.shift();
     }
@@ -153,8 +159,6 @@ export function updateTelemetryUI(data) {
             }
         }
     }
-    // LQR — test znaku kąta i kierunku kół na żywo
-    window.LqrPanel?.onTelemetry?.(data);
 
     // Encoders
     const encLeft = (data.encoder_left !== undefined) ? data.encoder_left : data.el;
@@ -211,9 +215,20 @@ export function updateTelemetryUI(data) {
     const calibMag = (data.calib_mag !== undefined) ? data.calib_mag : data.cm;
     if (calibMag !== undefined) { const el = document.getElementById('calibMagVal'); if (el) el.textContent = calibMag; if (typeof window.updateCalibrationProgress === 'function') window.updateCalibrationProgress('mag', calibMag); }
 
-    // Offset displays
+    // Trim and offset displays
+    const trimPitch = Number(data.trim_angle) || 0;
+    const trimRoll = Number(data.roll_trim) || 0;
     const pitchOffset = Number(data.pitch_offset) || 0;
     const rollOffset = Number(data.roll_offset) || 0;
+
+    const angleOffsetValEl = document.getElementById('angleOffsetVal');
+    if (angleOffsetValEl) angleOffsetValEl.textContent = trimPitch.toFixed(1) + ' °';
+    const rollMountOffsetValEl = document.getElementById('rollMountOffsetVal');
+    if (rollMountOffsetValEl) rollMountOffsetValEl.textContent = trimRoll.toFixed(1) + ' °';
+    const trimValueDisplay = document.getElementById('trimValueDisplay');
+    if (trimValueDisplay) trimValueDisplay.textContent = trimPitch.toFixed(2);
+    const rollTrimValueDisplay = document.getElementById('rollTrimValueDisplay');
+    if (rollTrimValueDisplay) rollTrimValueDisplay.textContent = trimRoll.toFixed(2);
     const pitchUIOffsetValEl = document.getElementById('pitchUIOffsetVal');
     if (pitchUIOffsetValEl) pitchUIOffsetValEl.textContent = pitchOffset.toFixed(1) + ' °';
     const rollUIOffsetValEl = document.getElementById('rollUIOffsetVal');
@@ -222,6 +237,11 @@ export function updateTelemetryUI(data) {
     if (pitchOffsetDisplay) pitchOffsetDisplay.textContent = pitchOffset.toFixed(2);
     const rollOffsetDisplay = document.getElementById('rollOffsetDisplay');
     if (rollOffsetDisplay) rollOffsetDisplay.textContent = rollOffset.toFixed(2);
+
+    if (originalFirmwareTrimPitch === null && trimPitch !== 0) originalFirmwareTrimPitch = trimPitch;
+    const offsetDelta = originalFirmwareTrimPitch !== null ? (trimPitch - originalFirmwareTrimPitch) : 0;
+    const offsetDeltaValEl = document.getElementById('offsetDeltaVal');
+    if (offsetDeltaValEl) offsetDeltaValEl.textContent = offsetDelta.toFixed(1) + ' °';
 
     // States update
     if (data.states && !AppState.isApplyingConfig) {
@@ -255,7 +275,6 @@ export function applySingleParam(snakeKey, value) {
             if (['turn_factor', 'expo_joystick', 'joystick_sensitivity', 'joystick_deadzone', 'balance_pid_derivative_filter_alpha', 'speed_pid_filter_alpha', 'position_pid_filter_alpha'].includes(snakeKey)) {
                 displayValue = (value * 100);
             }
-            if (snakeKey === 'tuning_trial_duration_ms') displayValue = (value / 1000.0);
             if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
                 if (el.type === 'checkbox') {
                     el.checked = !!displayValue;
@@ -283,10 +302,6 @@ export function applySingleParam(snakeKey, value) {
         if (typeof window.setSignButtons === 'function') window.setSignButtons('positionSign', v);
         if (typeof window.updateSignBadge === 'function') window.updateSignBadge('positionSignBadge', v);
     }
-
-    // Tryb sterowania i Fuzzy v4 / LQR — moduły z własnym widokiem (przyciski, wykresy, K)
-    if (snakeKey === 'control_mode' || snakeKey.startsWith('fuzzy_')) window.FuzzyEditor?.onParam?.(snakeKey, value);
-    if (snakeKey.startsWith('lqr_')) window.LqrPanel?.onParam?.(snakeKey, value);
 }
 
 /**
