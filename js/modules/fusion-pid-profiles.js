@@ -11,10 +11,11 @@ import { AppState } from './state.js';
  * NDOF został usunięty - nie ma już przełączania profili
  */
 export const FusionPIDProfiles = {
+    // Cache pusty (zera) do czasu sync_complete - zadnych domyslnych liczb po stronie UI.
     mahonyPID: {
-        balance: { Kp: 100, Ki: 0, Kd: 1.3, filterAlpha: 1.0, integralLimit: 50 },
-        speed: { Kp: 0.1, Ki: 0, Kd: 0.05, filterAlpha: 0.8, integralLimit: 20 },
-        position: { Kp: 0.05, Ki: 0, Kd: 0.02, filterAlpha: 0.9, integralLimit: 100 }
+        balance: { Kp: 0, Ki: 0, Kd: 0, filterAlpha: 0, integralLimit: 0 },
+        speed: { Kp: 0, Ki: 0, Kd: 0, filterAlpha: 0, integralLimit: 0 },
+        position: { Kp: 0, Ki: 0, Kd: 0, filterAlpha: 0, integralLimit: 0 }
     },
 
     init() {
@@ -45,28 +46,6 @@ export const FusionPIDProfiles = {
 
     getCurrentPID() {
         return this.mahonyPID;
-    },
-
-    loadCurrentPIDToUI() {
-        const pid = this.mahonyPID;
-
-        this.setInputValue('balanceKpInput', pid.balance.Kp);
-        this.setInputValue('balanceKiInput', pid.balance.Ki);
-        this.setInputValue('balanceKdInput', pid.balance.Kd);
-        this.setInputValue('balanceFilterAlphaInput', pid.balance.filterAlpha * 100);
-        this.setInputValue('balanceIntegralLimitInput', pid.balance.integralLimit);
-
-        this.setInputValue('speedKpInput', pid.speed.Kp);
-        this.setInputValue('speedKiInput', pid.speed.Ki);
-        this.setInputValue('speedKdInput', pid.speed.Kd);
-        this.setInputValue('speedFilterAlphaInput', pid.speed.filterAlpha * 100);
-        this.setInputValue('speedIntegralLimitInput', pid.speed.integralLimit);
-
-        this.setInputValue('positionKpInput', pid.position.Kp);
-        this.setInputValue('positionKiInput', pid.position.Ki);
-        this.setInputValue('positionKdInput', pid.position.Kd);
-        this.setInputValue('positionFilterAlphaInput', pid.position.filterAlpha * 100);
-        this.setInputValue('positionIntegralLimitInput', pid.position.integralLimit);
     },
 
     setInputValue(inputId, value) {

@@ -395,28 +395,13 @@ body.ui-locked #connectBleBtn, body.ui-locked #emergencyStopBtn {
         display: block;
     }
 }
-/* Modal responsiveness for mapowanie czujnika and other large modals */
-#sensor-mapping-modal .modal-content, #sensor-mapping-modal .modal-content * { box-sizing: border-box; }
-.sensor-mapping-wrapper { display: flex; gap: 10px; align-items: flex-start; }
-.sensor-mapping-preview { width: 100%; height: 200px; min-height: 160px; border-radius: 6px; overflow: hidden; }
-.sensor-mapping-controls { width: 320px; max-width: 48%; }
+/* Responsywnosc duzych modali */
 /* Make modal content scrollable and fit on small screens */
 .modal-backdrop { padding: 10px; }
 .modal-content { max-height: calc(100vh - 40px); overflow-y: auto; }
 @media (max-width: 760px) {
-    .sensor-mapping-wrapper { flex-direction: column; }
-    .sensor-mapping-controls { width: 100%; max-width: none; }
-    .sensor-mapping-preview { height: 180px; }
     .modal-content { width: calc(100% - 20px); max-width: none; padding: 10px; }
     .modal-backdrop { align-items: flex-start; }
-}
-.axis-mapping-row {
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    gap: 10px;
-    align-items: center;
-    margin-bottom: 8px;
-    text-align: left;
 }
 .chart-hints { 
     background-color: #20232a; 
@@ -431,9 +416,8 @@ body.ui-locked #connectBleBtn, body.ui-locked #emergencyStopBtn {
 .method-theory h4 { color:#a2f279; margin:0 0 8px 0; }
 .method-theory ul { margin:6px 0 0 18px; padding:0; }
 .method-theory li { margin:4px 0; }
-/* Modal mapowania modelu 3D */
+/* Wiersz znaku sprzezenia PID (nie dotyczy osi czujnika) */
 .model-mapping-row { display:grid; grid-template-columns: 100px 1fr 1fr; gap:8px; align-items:center; margin-bottom:8px; }
-.model-mapping-row select { width:100%; background:#20232a; color:#fff; border:1px solid #61dafb; border-radius:4px; padding:4px; }
 .model-mapping-row .sign-toggle { display:flex; gap:6px; }
 .sign-toggle button { flex:1; background:#4a4f58; color:#61dafb; }
 .sign-toggle button.active { background:#a2f279; color:#282c34; }
@@ -452,7 +436,6 @@ body.ui-locked #connectBleBtn, body.ui-locked #emergencyStopBtn {
 .sign-summary {
     display:inline-block; padding: 3px 8px; margin-left:10px; border-radius:10px; background:#282c34; color:#61dafb; font-size:0.9em; border:1px solid #4a4f58;
 }
-#model-mapping-current { font-family:monospace; background:#111; border:1px solid #333; padding:8px; border-radius:6px; text-align:left; font-size:0.85em; }
 
 /* ========================================
    SEKCJA NAUKA PID - Style edukacyjne
@@ -1382,3 +1365,32 @@ body[data-ui-mode="expert"] .ui-mode-btn.active { background: #e74c3c; border-co
         width: 60px;
     }
 }
+
+/* === Karty zwijane (Nauka PID, Fuzzy, LQR) — ten sam akordeon co w Konfiguracji, start zwinięty === */
+.card-accordion-header { font-size: 1.25em; margin-top: 0; padding-right: 40px; }
+.card-collapsible > .accordion-content { padding: 0 6px; }
+.card-collapsible > .accordion-content.active,
+.card-collapsible > .accordion-header.active + .accordion-content { padding: 12px 6px; }
+.card-help-row { display: flex; align-items: center; justify-content: flex-start; gap: 8px; color: #aaa; font-size: 0.9em; margin-bottom: 6px; }
+.card-collapsible canvas { max-width: 100%; }
+@media (max-width: 500px) {
+    .card-accordion-header { font-size: 1.05em; padding: 12px 36px 12px 12px; }
+}
+
+/* === Wybór systemu sterowania (karta Sterowanie) === */
+.control-mode-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.control-mode-row button { flex: 1 1 0; min-width: 72px; padding: 10px 6px; background: #4a4f58; color: #fff; border: 2px solid transparent; border-radius: 6px; font-weight: bold; }
+.control-mode-row button.active { background: #61dafb; color: #282c34; border-color: #a2f279; }
+
+/* === Fuzzy v4 i LQR: grupy pól === */
+.fuzzy-v4-fieldset, .lqr-fieldset { border: 1px solid #61dafb55; border-radius: 6px; padding: 8px 10px; margin: 10px 0; min-width: 0; }
+.fuzzy-v4-fieldset legend, .lqr-fieldset legend { color: #61dafb; font-weight: bold; padding: 0 4px; }
+.fuzzy-v4-hint { color: #aaa; font-size: 0.85em; margin: 4px 0 8px; line-height: 1.4; }
+.lqr-live { display: flex; flex-wrap: wrap; gap: 14px; font-size: 1.05em; margin: 4px 0 6px; }
+.lqr-live strong { color: #a2f279; font-variant-numeric: tabular-nums; }
+.lqr-result { background: #20232a; border-radius: 6px; padding: 8px 10px; margin: 8px 0; font-size: 0.9em; line-height: 1.5; overflow-wrap: anywhere; }
+.lqr-result.lqr-ok { border-left: 4px solid #2ecc71; }
+.lqr-result.lqr-warn { border-left: 4px solid #f1c40f; }
+.lqr-result.lqr-bad { border-left: 4px solid #e74c3c; }
+#lqr-card select { width: 100%; padding: 8px; background: #20232a; color: #fff; border: 1px solid #4a4f58; border-radius: 6px; }
+#fuzzyCopyPidBtn, #lqrComputeBtn, #lqrSendKBtn { width: 100%; margin-top: 8px; }

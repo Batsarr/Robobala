@@ -215,15 +215,16 @@ export const parameterMapping = {
     // Auto-tuning parameters
     'safetyMaxAngle': 'safety_max_angle', 'safetyMaxSpeed': 'safety_max_speed',
     'safetyMaxPwm': 'safety_max_pwm',
-    'ga-kp-min': 'space_kp_min', 'ga-kp-max': 'space_kp_max',
-    'ga-ki-min': 'space_ki_min', 'ga-ki-max': 'space_ki_max',
-    'ga-kd-min': 'space_kd_min', 'ga-kd-max': 'space_kd_max',
+    'search-kp-min': 'space_kp_min', 'search-kp-max': 'space_kp_max',
+    'search-ki-min': 'space_ki_min', 'search-ki-max': 'space_ki_max',
+    'search-kd-min': 'space_kd_min', 'search-kd-max': 'space_kd_max',
     'include-ki-checkbox': 'search_ki',
+    'tuningTrialDurationInput': 'tuning_trial_duration_ms',
     'disableMagnetometerSwitch': 'disable_magnetometer',
     'ga-weight-itae': 'weights_itae', 'ga-weight-overshoot': 'weights_overshoot',
     'ga-weight-control-effort': 'weights_control_effort',
     'ga-generations': 'ga_generations', 'ga-population': 'ga_population',
-    'ga-mutation-rate': 'ga_mutation_rate', 'ga-elitism': 'ga_elitism',
+    'ga-mutation': 'ga_mutation_rate', 'ga-elitism': 'ga_elitism',
     'ga-adaptive': 'ga_adaptive', 'ga-convergence-check': 'ga_convergence_check',
     'pso-iterations': 'pso_iterations', 'pso-particles': 'pso_particles',
     'pso-inertia': 'pso_inertia', 'pso-adaptive-inertia': 'pso_adaptive_inertia',
@@ -232,7 +233,17 @@ export const parameterMapping = {
     'mahonyKpInput': 'mahony_kp',
     'mahonyKiInput': 'mahony_ki',
     // Angle prediction parameters
-    'predictionModeInput': 'prediction_mode', 'predictionTimeMsInput': 'prediction_time_ms'
+    'predictionModeInput': 'prediction_mode', 'predictionTimeMsInput': 'prediction_time_ms',
+    // Fuzzy v4 (jednostki PID)
+    'fuzzyKpInput': 'fuzzy_kp', 'fuzzyKdInput': 'fuzzy_kd', 'fuzzyEmaxInput': 'fuzzy_emax', 'fuzzyProgInput': 'fuzzy_prog',
+    // LQR/LQI: model, wagi, wzmocnienia
+    'lqrThSignInput': 'lqr_th_sign',
+    'lqrMBodyInput': 'lqr_m_body', 'lqrMWheelsInput': 'lqr_m_wheels', 'lqrLComInput': 'lqr_l_com',
+    'lqrIBodyInput': 'lqr_i_body', 'lqrTauStallInput': 'lqr_tau_stall', 'lqrRpmNlInput': 'lqr_rpm_nl',
+    'lqrQxInput': 'lqr_q_x', 'lqrQvInput': 'lqr_q_v', 'lqrQthInput': 'lqr_q_th', 'lqrQwInput': 'lqr_q_w',
+    'lqrQiInput': 'lqr_q_i', 'lqrRInput': 'lqr_r',
+    'lqrUseIInput': 'lqr_use_i', 'lqrILimitInput': 'lqr_ilimit',
+    'lqrKxInput': 'lqr_k_x', 'lqrKvInput': 'lqr_k_v', 'lqrKthInput': 'lqr_k_th', 'lqrKwInput': 'lqr_k_w', 'lqrKiInput': 'lqr_k_i'
 };
 
 // Backward compatibility - expose on window

@@ -9,9 +9,8 @@
 //   Moduły przypisywały eksporty do window.*, nadpisując wersje z main.js.
 //
 // Etap 2 (obecny): Kod przeniesiony z main.js do modułów ES6.
-//   main.js zawiera tylko: module bridge, unikalne sekcje (sensor/model mapping,
-//   trymy, kalibracja, logi), DOMContentLoaded orchestrator, window exports.
-//   19 modułów ES6 dostarcza całą logikę aplikacji.
+//   main.js zawiera już tylko warstwy kompatybilności i część pomocniczych handlerów UI.
+//   Moduły ES6 dostarczają główną logikę aplikacji.
 //
 // Etap 3 (docelowy): main.js jest pusty lub usunięty.
 //   Cała logika pochodzi z modułów ES6, ładowanych przez app.js.
@@ -90,6 +89,9 @@ import {
     DEFAULT_RULES
 } from './modules/fuzzy-editor.js';
 
+// 7b. LQR / LQI - karta regulatora stanu (obliczenie K w lqr-math.mjs)
+import { initLqrPanel } from './modules/lqr-panel.js';
+
 // 8. Autotune - algorytmy strojenia (GA, PSO, Bayesian) + sesja
 import {
     initAutotune,
@@ -118,25 +120,22 @@ import './modules/input-controls.js';
 // 13. QR Code - parowanie urządzeń
 import './modules/qr-code.js';
 
-// 14. Sensor Mapping - mapowanie czujnika IMU
-import './modules/sensor-mapping.js';
-
-// 15. UI Helpers
+// 14. UI Helpers
 import './modules/ui-helpers.js';
 
-// 16. System Identification (SysID)
+// 15. System Identification (SysID)
 import {
     initSystemIdentification,
     SysIdState
 } from './modules/sysid.js';
 
-// 17. Fusion PID Profiles - Mahony vs NDOF
+// 16. Fusion PID Profiles - Mahony vs NDOF
 import {
     initFusionPIDProfiles,
     FusionPIDProfiles
 } from './modules/fusion-pid-profiles.js';
 
-// 18. Parameter Controls
+// 17. Parameter Controls
 import {
     setupNumericInputs,
     setupParameterListeners,
@@ -144,7 +143,7 @@ import {
     sendFullConfigToRobot
 } from './modules/parameter-controls.js';
 
-// 19. Calibration
+// 18. Calibration
 import {
     setupCalibrationModal,
     showCalibrationModal,
@@ -170,6 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Fuzzy Logic Editor (wyłącznie w module — brak odpowiednika w main.js)
     initFuzzyEditor();
+    initLqrPanel();
 
     // UI Modes - MUSI być ostatni (ukrywa elementy po ich załadowaniu)
     initUIModes();

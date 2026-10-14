@@ -47,16 +47,14 @@ let isMappingButton = false, actionToMap = null, lastGamepadSendTime = 0;
 const GAMEPAD_SEND_INTERVAL = 2;
 
 const CUSTOM_PRESET_PREFIX = 'pid_custom_preset_v4_';
-// Pitch trim: UI pokazuje wartości w stopniach. Firmware stosuje TRIM w kwaternionie (Quaternion-First),
-// więc ustawienie trim = -raw_pitch zeruje wskazanie pitch i wpływa na balans zgodnie z oczekiwaniem.
 // Podstawowe przełączniki
 const availableActions = {
     'toggle_balance': { label: 'Wlacz/Wylacz Balansowanie', elementId: 'balanceSwitch' },
     'toggle_hold_position': { label: 'Wlacz/Wylacz Trzymanie Pozycji', elementId: 'holdPositionSwitch' },
     'toggle_speed_mode': { label: 'Wlacz/Wylacz Tryb Predkosci', elementId: 'speedModeSwitch' },
     'emergency_stop': { label: 'STOP AWARYJNY', elementId: 'emergencyStopBtn' },
-    'reset_pitch': { label: 'Ustaw punkt 0 (Pitch)', elementId: 'resetZeroBtn' },
-    'reset_roll': { label: 'Ustaw punkt 0 (Roll)', elementId: 'resetRollZeroBtn' }
+    'reset_pitch': { label: 'Zeruj offset (Pitch)', elementId: 'resetPitchOffsetBtn' },
+    'reset_roll': { label: 'Zeruj offset (Roll)', elementId: 'resetRollOffsetBtn' }
 };
 const availableTelemetry = { 'pitch': { label: 'Pitch (Kat)', color: '#61dafb' }, 'roll': { label: 'Roll (Przechyl)', color: '#a2f279' }, 'speed': { label: 'Predkosc', color: '#f7b731' }, 'target_speed': { label: 'Predkosc Zadana', color: '#ff9f43' }, 'output': { label: 'Wyjscie PID', color: '#ff6347' }, 'encoder_left': { label: 'Enkoder L', color: '#9966ff' }, 'encoder_right': { label: 'Enkoder P', color: '#cc66ff' } };
 const builtInPresetsData = { '1': { name: "1. PID Zbalansowany (Startowy)", params: { balanceKpInput: 95.0, balanceKiInput: 0.0, balanceKdInput: 3.23 } }, '2': { name: "2. PID Mieciutki (Plynny)", params: { balanceKpInput: 80.0, balanceKiInput: 0.0, balanceKdInput: 2.8 } }, '3': { name: "3. PID Agresywny (Sztywny)", params: { balanceKpInput: 110.0, balanceKiInput: 0.0, balanceKdInput: 4.0 } } };
@@ -66,13 +64,6 @@ let currentEncoderLeft = 0, currentEncoderRight = 0;
 let isAnimation3DEnabled = true, isMovement3DEnabled = false, lastEncoderAvg = 0;
 window.telemetryData = {};
 let isCalibrationModalShown = false;
-// UI base for 'Set Zero' feature — apparent trim is actualTrim - uiTrimZeroBase
-// Prosty model trymów:
-//  - firmware trzyma jedną wartość trim_angle / roll_trim (w stopniach) - korekta montażu czujnika
-//  - firmware trzyma osobno pitch_offset / roll_offset (w stopniach) - offset pionu dla balansu
-//  - UI pokazuje dokładnie te wartości
-let originalFirmwareTrimPitch = null; // tylko do celów informacyjnych/logów
-let originalFirmwareTrimRoll = null;
 
 let pitchHistory = [], speedHistory = [];
 const HISTORY_LENGTH = 600;
@@ -101,22 +92,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof initPathVisualization === 'function') initPathVisualization();
     loadGamepadMappings();
     renderMappingModal();
-    // Toggle pomocy dla mapowania czujnika
-    const smHelp = document.getElementById('sensorMappingHelp');
-    const smHelpBox = document.getElementById('sensorMappingHelpText');
-    if (smHelp && smHelpBox) {
-        smHelp.addEventListener('click', () => {
-            smHelpBox.classList.toggle('visible');
-            smHelpBox.setAttribute('aria-hidden', smHelpBox.classList.contains('visible') ? 'false' : 'true');
-        });
-    }
     pollGamepad();
     window.addEventListener('resize', initJoystick);
     init3DVisualization();
     animate3D();
     setTuningUiLock(false, '');
-    // Initialize sensor mapping preview (Three.js cube) and controls
-    initSensorMappingPreview();
     // Ensure current telemetry canvas has correct resolution and resizes with window
     (function () {
         const canvas = document.getElementById('current-telemetry-chart');
@@ -207,107 +187,6 @@ function pushLog(message, level = 'info') {
     }
 }
 
-// --- Sensor mapping 3D preview (disabled; fixed IMU configuration) ---
-let sensorPreview = { scene: null, camera: null, renderer: null, cube: null, axes: null, animId: null };
-function initSensorMappingPreview() {
-    const container = document.getElementById('sensor-mapping-preview');
-    if (!container) return;
-    // The old sensor-mapping preview is no longer exposed in the UI.
-    if (container) {
-        while (container.firstChild) container.removeChild(container.firstChild);
-    }
-    // Clean up existing renderer
-    if (sensorPreview.renderer && sensorPreview.renderer.domElement) {
-        while (container.firstChild) container.removeChild(container.firstChild);
-        sensorPreview.renderer.dispose();
-        sensorPreview.renderer = null;
-    }
-    // The old interactive preview is intentionally left inert.
-    container.textContent = 'Mapowanie czujnika jest wyłączone.';
-    sensorPreview.scene = null; sensorPreview.camera = null; sensorPreview.renderer = null; sensorPreview.cube = null; sensorPreview.axes = null;
-}
-
-// Gather IMU mapping from sensor mapping modal
-function gatherIMUMappingFromUI() {
-    return {
-        pitch: { source: 0, sign: 1 },
-        yaw: { source: 1, sign: 1 },
-        roll: { source: 2, sign: 1 }
-    };
-}
-
-function updateIMUMappingUIFromData(data) {
-    if (!data || !data.pitch) return;
-    // Mapping controls are intentionally not exposed in the active UI.
-}
-
-function rotateSensorCube(axis, deg) {
-    // No-op: the legacy sensor mapping controls are disabled in the UI.
-}
-
-function mappingObjToMatrix(mapping) {
-    // mapping: { pitch:{source,sign}, yaw:{...}, roll:{...} }
-    const M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-    const setRow = (rowIdx, m) => { const col = parseInt(m.source); const sign = parseInt(m.sign) || 1; M[rowIdx][col] = sign; };
-    setRow(0, mapping.pitch);
-    setRow(1, mapping.yaw);
-    setRow(2, mapping.roll);
-    return M;
-}
-
-function matrixToMappingObj(M) {
-    const findInRow = (row) => {
-        for (let c = 0; c < 3; c++) {
-            const v = M[row][c]; if (v === 0) continue; return { source: c, sign: v };
-        }
-        // default fallback
-        return { source: 0, sign: 1 };
-    };
-    return { pitch: findInRow(0), yaw: findInRow(1), roll: findInRow(2) };
-}
-
-function multiplyMatrix(A, B) {
-    const R = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { let s = 0; for (let k = 0; k < 3; k++) s += A[i][k] * B[k][j]; R[i][j] = s; }
-    return R;
-}
-
-function getRotationMatrix(axis, deg) {
-    const d = ((deg % 360) + 360) % 360; // normalize
-    // Build RA for +90 degree rotation - adapt sign for negative angle
-    const q = (d === 270) ? -90 : d; // for -90 deg normalized to 270; make it -90 to handle below
-    let RA = null;
-    if (axis === 'x') {
-        if (q === 90) RA = [[1, 0, 0], [0, 0, -1], [0, 1, 0]];
-        else if (q === -90) RA = [[1, 0, 0], [0, 0, 1], [0, -1, 0]];
-        else if (q === 180) RA = [[1, 0, 0], [0, -1, 0], [0, 0, -1]];
-        else RA = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-    } else if (axis === 'y') {
-        if (q === 90) RA = [[0, 0, 1], [0, 1, 0], [-1, 0, 0]];
-        else if (q === -90) RA = [[0, 0, -1], [0, 1, 0], [1, 0, 0]];
-        else if (q === 180) RA = [[-1, 0, 0], [0, 1, 0], [0, 0, -1]];
-        else RA = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-    } else { // z
-        if (q === 90) RA = [[0, -1, 0], [1, 0, 0], [0, 0, 1]];
-        else if (q === -90) RA = [[0, 1, 0], [-1, 0, 0], [0, 0, 1]];
-        else if (q === 180) RA = [[-1, 0, 0], [0, -1, 0], [0, 0, 1]];
-        else RA = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-    }
-    return RA;
-}
-
-function applyRotationToIMUMapping(axis, deg) {
-    // No-op: the legacy sensor mapping controls are disabled in the UI.
-}
-
-function updateSensorMappingDisplays() {
-    // No-op: the legacy sensor mapping preview is disabled in the UI.
-}
-
-function updateModalTelemetryDisplay() {
-    // No-op: the legacy sensor mapping preview is disabled in the UI.
-}
-
 // Main reset buttons are mapped below; please use the assigned handlers via toolButtons mapping.
 function renderAllLogs(keepScrollBottom = false) {
     const box = document.getElementById('log-history'); if (!box) return;
@@ -326,24 +205,7 @@ function renderAllLogs(keepScrollBottom = false) {
     if (keepScrollBottom || wasBottom) { box.scrollTop = box.scrollHeight; }
 }
 
-// --- Model Mapping (wizualizacja 3D) ---
-let modelMapping = { pitch: { source: 0, sign: 1 }, yaw: { source: 1, sign: 1 }, roll: { source: 2, sign: 1 } }; // domyślne: identity
-function openModelMappingModal() { const m = document.getElementById('model-mapping-modal'); if (!m) return; m.style.display = 'flex'; updateModelMappingUI(); }
-function closeModelMappingModal() { const m = document.getElementById('model-mapping-modal'); if (!m) return; m.style.display = 'none'; }
-function updateModelMappingUI() {
-    // Ustaw dropdowny
-    const sPitch = document.getElementById('modelPitchSource'); const sYaw = document.getElementById('modelYawSource'); const sRoll = document.getElementById('modelRollSource');
-    if (sPitch) sPitch.value = String(modelMapping.pitch.source);
-    if (sYaw) sYaw.value = String(modelMapping.yaw.source);
-    if (sRoll) sRoll.value = String(modelMapping.roll.source);
-    // Ustaw przyciski sign
-    setSignButtons('modelPitchSign', modelMapping.pitch.sign);
-    setSignButtons('modelYawSign', modelMapping.yaw.sign);
-    setSignButtons('modelRollSign', modelMapping.roll.sign);
-    // Podgląd
-    const cur = document.getElementById('model-mapping-current');
-    if (cur) { cur.textContent = `pitch: src=${modelMapping.pitch.source} sign=${modelMapping.pitch.sign} | yaw: src=${modelMapping.yaw.source} sign=${modelMapping.yaw.sign} | roll: src=${modelMapping.roll.source} sign=${modelMapping.roll.sign}`; }
-}
+// --- Sign toggle helpers (used by feedback sign toggles: balance/speed/position) ---
 function setSignButtons(containerId, sign) { const c = document.getElementById(containerId); if (!c) return; c.querySelectorAll('button').forEach(btn => { const s = parseInt(btn.dataset.sign); if (s === sign) { btn.classList.add('active'); } else { btn.classList.remove('active'); } }); }
 
 function updateSignBadge(badgeId, sign) {
@@ -364,33 +226,15 @@ function updateSignSummary() {
     if (!el) return;
     el.textContent = `B:${b === -1 ? '-' : '+'} S:${s === -1 ? '-' : '+'} P:${p === -1 ? '-' : '+'}`;
 }
-function gatherModelMappingFromUI() { modelMapping.pitch.source = parseInt(document.getElementById('modelPitchSource').value); modelMapping.yaw.source = parseInt(document.getElementById('modelYawSource').value); modelMapping.roll.source = parseInt(document.getElementById('modelRollSource').value); modelMapping.pitch.sign = getActiveSign('modelPitchSign'); modelMapping.yaw.sign = getActiveSign('modelYawSign'); modelMapping.roll.sign = getActiveSign('modelRollSign'); }
 function getActiveSign(containerId) { const c = document.getElementById(containerId); if (!c) return 1; const active = c.querySelector('button.active'); return active ? parseInt(active.dataset.sign) : 1; }
-function resetModelMapping() { modelMapping = { pitch: { source: 0, sign: 1 }, yaw: { source: 1, sign: 1 }, roll: { source: 2, sign: 1 } }; updateModelMappingUI(); }
-function applyModelMappingToEuler(e) { // e={pitch,yaw,roll}; zwraca przemapowane
-    const arr = [e.pitch, e.yaw, e.roll];
-    return {
-        pitch: (arr[modelMapping.pitch.source] || 0) * modelMapping.pitch.sign,
-        yaw: (arr[modelMapping.yaw.source] || 0) * modelMapping.yaw.sign,
-        roll: (arr[modelMapping.roll.source] || 0) * modelMapping.roll.sign
-    };
-}
-// Podłączenie eventów modalu
-document.getElementById('modelMappingBtn')?.addEventListener('click', () => { openModelMappingModal(); sendBleMessage({ type: 'get_model_mapping' }); });
-document.getElementById('modelMappingCloseBtn')?.addEventListener('click', () => closeModelMappingModal());
-document.getElementById('modelMappingLoadBtn')?.addEventListener('click', () => { sendBleMessage({ type: 'get_model_mapping' }); });
-document.getElementById('modelMappingSaveBtn')?.addEventListener('click', () => {
-    if (!AppState.isConnected) { addLogMessage('[UI] Musisz być połączony z robotem aby zapisać mapowanie modelu 3D.', 'warn'); return; }
-    if (!confirm('Zapisz mapowanie modelu 3D do pamięci EEPROM robota?')) return;
-    gatherModelMappingFromUI();
-    sendBleMessage({ type: 'set_model_mapping', mapping: modelMapping });
-    addLogMessage('[UI] Wyslano mapowanie modelu 3D do robota.', 'info');
-});
+// Podłączenie eventow feedback sign toggles
 // Feedback sign toggles wiring - init once here (not in the test result handler)
+// 2026-10-14: klucze zgodne z firmware (control_loop.cpp: *_pid_reverse, 0 = znak +, 1 = znak −).
+// Wcześniej panel wysyłał *_feedback_sign, którego firmware nie znał — przycisk zmieniał tylko wygląd.
 const signButtonMap = {
-    'balanceSign': 'balance_feedback_sign',
-    'speedSign': 'speed_feedback_sign',
-    'positionSign': 'position_feedback_sign'
+    'balanceSign': 'balance_pid_reverse',
+    'speedSign': 'speed_pid_reverse',
+    'positionSign': 'position_pid_reverse'
 };
 Object.keys(signButtonMap).forEach(containerId => {
     const el = document.getElementById(containerId);
@@ -405,38 +249,31 @@ Object.keys(signButtonMap).forEach(containerId => {
                 return;
             }
             const key = signButtonMap[containerId];
-            sendBleMessage({ type: 'set_param', key: key, value: sign });
+            sendBleMessage({ type: 'set_param', key: key, value: sign === -1 ? 1 : 0 });
             setSignButtons(containerId, sign);
             updateSignBadge(containerId + 'Badge', sign);
         });
     });
 });
 // Disable sign toggles outside of IDLE for safety
-appStore.subscribe('robot.state', (newVal) => {
-    const isIdle = (newVal === 'IDLE');
-    Object.keys(signButtonMap).forEach(containerId => {
-        const el = document.getElementById(containerId);
-        if (!el) return;
-        el.querySelectorAll('button').forEach(btn => {
-            btn.disabled = !isIdle;
+// appStore ustawia moduł app.js, który wykonuje się PO main.js — subskrypcja dopiero na DOMContentLoaded
+// (wcześniej TypeError przerywał resztę main.js, m.in. obserwator wysokości akordeonów).
+document.addEventListener('DOMContentLoaded', () => {
+    if (!window.appStore) return;
+    window.appStore.subscribe('robot.state', (newVal) => {
+        const isIdle = (newVal === 'IDLE');
+        Object.keys(signButtonMap).forEach(containerId => {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            el.querySelectorAll('button').forEach(btn => {
+                btn.disabled = !isIdle;
+            });
+            el.classList.toggle('disabled', !isIdle);
         });
-        el.classList.toggle('disabled', !isIdle);
     });
 });
 // Initial summary update
 updateSignSummary();
-document.getElementById('modelMappingResetBtn')?.addEventListener('click', () => { resetModelMapping(); addLogMessage('[UI] Przywrócono domyślne mapowanie modelu (identity).', 'info'); });
-// Toggle pomocy w modalum model mapping
-const mmHelp = document.getElementById('modelMappingHelp');
-const mmHelpBox = document.getElementById('modelMappingHelpText');
-if (mmHelp && mmHelpBox) {
-    mmHelp.addEventListener('click', () => {
-        mmHelpBox.classList.toggle('visible');
-        mmHelpBox.setAttribute('aria-hidden', mmHelpBox.classList.contains('visible') ? 'false' : 'true');
-    });
-}
-// Listenery znaków
-['modelPitchSign', 'modelYawSign', 'modelRollSign'].forEach(id => { const c = document.getElementById(id); if (!c) return; c.querySelectorAll('button').forEach(btn => { btn.addEventListener('click', () => { c.querySelectorAll('button').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }); }); });
 
 // --- Przeliczanie kątów Euler’a z kwaternionu (telemetria: qw,qx,qy,qz) ---
 function computeEulerFromQuaternion(qw, qx, qy, qz) {
@@ -471,82 +308,8 @@ function getRawEuler() {
     return eul || { pitch: 0, yaw: 0, roll: 0 };
 }
 
-// GLOBALNE: ustawianie punktu 0 dla Pitch i Roll.
-// Firmware: adjust_zero dodaje deltę do baseTargetAngleTrim.
-// Telemetria pitch to już kąt po trymach, więc delta = -pitch spowoduje że następny odczyt będzie 0.
-// Uwzględniamy też offset UI, który jest tymczasową korektą wyświetlania.
-function setPitchZero() {
-    if (!window.telemetryData) {
-        addLogMessage('[UI] Brak danych telemetrii (pitch).', 'warn');
-        return;
-    }
-    // Odczytaj aktualny pitch z telemetrii (już po trymach i offsetach)
-    let currentPitch = Number(window.telemetryData.pitch);
-    if (typeof currentPitch !== 'number' || isNaN(currentPitch)) {
-        if (typeof window.telemetryData.qw === 'number') {
-            const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
-            currentPitch = eul ? eul.pitch : 0;
-        } else {
-            addLogMessage('[UI] Nieprawidłowy odczyt pitch.', 'error');
-            return;
-        }
-    }
-    // Zaokrąglij lekko, by uniknąć flipa znaku przy ±0.00x
-    currentPitch = Math.round(currentPitch * 100) / 100;
-    if (isNaN(currentPitch)) {
-        addLogMessage('[UI] Nieprawidlowy odczyt pitch.', 'error');
-        return;
-    }
-    // Delta = -currentPitch -> po dodaniu do trim montażu, następny odczyt pitch = 0
-    const delta = -currentPitch;
-    sendBleMessage({ type: 'adjust_zero', value: delta });
-    const val = document.getElementById('angleVal');
-    if (val) val.textContent = '0.0 °';
-    pitchHistory.push(0);
-    if (pitchHistory.length > HISTORY_LENGTH) pitchHistory.shift();
-    updateChart({ pitch: 0 });
-    addLogMessage(`[UI] Punkt 0 (Pitch) ustawiony. Delta trim=${delta.toFixed(2)}°.`, 'success');
-}
-
-function setRollZero() {
-    if (!window.telemetryData) {
-        addLogMessage('[UI] Brak danych telemetrii (roll).', 'warn');
-        return;
-    }
-    // Odczytaj aktualny roll z telemetrii (już po trymach i offsetach)
-    let currentRoll = Number(window.telemetryData.roll);
-    if (typeof currentRoll !== 'number' || isNaN(currentRoll)) {
-        if (typeof window.telemetryData.qw === 'number') {
-            const eul = computeEulerFromQuaternion(window.telemetryData.qw, window.telemetryData.qx, window.telemetryData.qy, window.telemetryData.qz);
-            currentRoll = eul ? eul.roll : 0;
-        } else {
-            addLogMessage('[UI] Nieprawidłowy odczyt roll.', 'error');
-            return;
-        }
-    }
-    currentRoll = Math.round(currentRoll * 100) / 100;
-    if (isNaN(currentRoll)) {
-        addLogMessage('[UI] Nieprawidlowy odczyt roll.', 'error');
-        return;
-    }
-    // Delta = -currentRoll -> po dodaniu do trim montażu, następny odczyt roll = 0
-    const delta = -currentRoll;
-    sendBleMessage({ type: 'adjust_roll', value: delta });
-    const val = document.getElementById('rollVal');
-    if (val) val.textContent = '0.0 °';
-    updateChart({ roll: 0 });
-    addLogMessage(`[UI] Punkt 0 (Roll) ustawiony. Delta trim=${delta.toFixed(2)}°.`, 'success');
-}
-
-function adjustTrim(axis, delta) {
-    // axis: 'pitch' or 'roll'
-    // delta: number like 0.1 or -0.01
-    sendBleMessage({ type: axis === 'pitch' ? 'adjust_zero' : 'adjust_roll', value: delta });
-    addLogMessage(`[UI] Korekta ${axis} o ${delta.toFixed(2)}°`, 'success');
-}
-
 const debounce = (func, delay) => { let timeout; return function (...args) { const context = this; clearTimeout(timeout); timeout = setTimeout(() => func.apply(context, args), delay); }; };
-// delay helper is provided by RB.helpers.delay (see js/helpers.js)
+// delay helper is provided by RB.helpers.delay (modules/state.js)
 function addLogMessage(message, level = 'info') { pushLog(message, level); const logCard = document.getElementById('log-card'); const autoEl = document.getElementById('logsAutoscroll'); if (logCard && logCard.classList.contains('open')) { renderAllLogs((autoEl && autoEl.checked) === true); } }
 function clearLogs() { if (typeof allLogsBuffer !== 'undefined') { allLogsBuffer.length = 0; } const box = document.getElementById('log-history'); if (box) box.innerHTML = ''; }
 function toggleAccordion(header) {
@@ -636,12 +399,7 @@ if (typeof addLogMessage === 'function') window.addLogMessage = addLogMessage;
 if (typeof setSignButtons === 'function') window.setSignButtons = setSignButtons;
 if (typeof updateSignBadge === 'function') window.updateSignBadge = updateSignBadge;
 if (typeof computeEulerFromQuaternion === 'function') window.computeEulerFromQuaternion = computeEulerFromQuaternion;
-if (typeof applyModelMappingToEuler === 'function') window.applyModelMappingToEuler = applyModelMappingToEuler;
 if (typeof toggleAccordion === 'function') window.toggleAccordion = toggleAccordion;
 if (typeof updateAccordionHeight === 'function') window.updateAccordionHeight = updateAccordionHeight;
-if (typeof modelMapping !== 'undefined') window.modelMapping = modelMapping;
-if (typeof setPitchZero === 'function') window.setPitchZero = setPitchZero;
-if (typeof setRollZero === 'function') window.setRollZero = setRollZero;
 if (typeof clearLogs === 'function') window.clearLogs = clearLogs;
 if (typeof getRawEuler === 'function') window.getRawEuler = getRawEuler;
-if (typeof updateIMUMappingUIFromData === 'function') window.updateIMUMappingUIFromData = updateIMUMappingUIFromData;

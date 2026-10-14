@@ -8,8 +8,11 @@
 // Wyjście (1): motor_pwm
 // Zbiory: NB, NS, ZE, PS, PB (5 × 5 = 25 reguł)
 //
+// v4 (2026-10-12): zbiory i tabela liczone z Kp/Kd/E/progresji (jak firmware configurePD);
+// przy progresji 1 Fuzzy = PD z tymi samymi Kp/Kd. Wybór trybu PID/Fuzzy/LQR jest w karcie Sterowanie.
+//
 // Komunikacja BLE:
-//   {"type": "set_control_mode", "mode": "fuzzy"|"pid"}
+//   {"type": "set_control_mode", "mode": "pid"|"fuzzy"|"lqr"}
 //   {"type": "set_fuzzy_rule", "rule_index": 0-24, "output_set": 0-4}
 //   {"type": "set_fuzzy_set", "set_type": "error"|"rate"|"output", "index": 0-4, "center": float, "width": float}
 //   {"type": "set_fuzzy_gain", "gain": float}
@@ -33,40 +36,45 @@ const RATE_LABELS  = ['NB', 'NS', 'ZE', 'PS', 'PB'];
 // Wiersze: error_rate (NB..PB), Kolumny: error (NB..PB)
 // Wartość = indeks zbioru wyjściowego
 //
-// POPRAWKA v3: Bardziej agresywna macierz, zgodna z firmware:
-// - Gdy error i rate w tym samym znaku → MAX korekcja (PB lub NB)
-// - Gdy error i rate przeciwne → słabsza korekcja (ZE lub NS/PS)
-const DEFAULT_RULES = [
-    // error:  NB  NS  ZE  PS  PB
-    /* rate NB */ [0, 0, 0, 0, 2],
-    /* rate NS */ [0, 1, 1, 2, 3],
-    /* rate ZE */ [0, 1, 2, 3, 4],
-    /* rate PS */ [1, 2, 3, 3, 4],
-    /* rate PB */ [2, 4, 4, 4, 4]
-];
+// v4: tabela przekątna (wyjście = kąt + prędkość), zgodna z firmware configurePD().
+// Z gładkim wnioskowaniem (iloczyn + Sugeno) daje dokładnie PD przy progresji 1.
+const DEFAULT_RULES = [0, 1, 2, 3, 4].map(ri => [0, 1, 2, 3, 4].map(ei => Math.min(4, Math.max(0, ri + ei - 2))));
 
 // Aktualny stan reguł (kopia robocza)
 let currentRules = DEFAULT_RULES.map(row => [...row]);
 
-// Aktualny tryb sterowania
-let currentControlMode = 'pid';
+// Aktualny tryb sterowania (null do sync_complete — panel nie ma własnych wartości)
+let currentControlMode = null;
 
 // === Definicje zbiorów wejściowych (centra i szerokości) ===
-// Odzwierciedlają domyślne wartości z firmware (fuzzy_controller.cpp v3)
-let errorSetsParams = [
-    { center: -12.0, width: 6.0 },  // NB
-    { center:  -6.0, width: 6.0 },  // NS
-    { center:   0.0, width: 6.0 },  // ZE
-    { center:   6.0, width: 6.0 },  // PS
-    { center:  12.0, width: 6.0 }   // PB
-];
-let rateSetsParams = [
-    { center: -200.0, width: 100.0 }, // NB
-    { center: -100.0, width: 100.0 }, // NS
-    { center:    0.0, width: 100.0 }, // ZE
-    { center:  100.0, width: 100.0 }, // PS
-    { center:  200.0, width: 100.0 }  // PB
-];
+// v4: liczone z parametrów PD (fuzzy_kp/kd/emax/prog z sync) — ta sama formuła co firmware.
+let pdParams = { kp: 100, kd: 1.3, emax: 10, prog: 1 };
+let errorSetsParams = [];
+let rateSetsParams = [];
+let outputCenters = [];
+
+/** Lustro FuzzyController::configurePD() z firmware. */
+function computePdSets({ kp, kd, emax, prog }) {
+    const he = Math.max(emax, 1) / 2;
+    const uS = Math.max(kp, 0) * he;
+    const uB = uS * (1 + Math.max(prog, 1));
+    const r = (kd > 1e-4 && uS > 0) ? (2 * uS / kd) : 1e6;
+    const hr = r / 2;
+    return {
+        error: [0, 1, 2, 3, 4].map(i => ({ center: (i - 2) * he, width: he })),
+        rate: [0, 1, 2, 3, 4].map(i => ({ center: (i - 2) * hr, width: hr })),
+        out: [-uB, -uS, 0, uS, uB],
+    };
+}
+function applyPdSets() {
+    const sets = computePdSets(pdParams);
+    errorSetsParams = sets.error;
+    rateSetsParams = sets.rate;
+    outputCenters = sets.out;
+}
+applyPdSets();
+// Zakresy osi wykresów: 1.5 × skrajny środek zbioru
+const axisRange = (sets) => Math.max(1, Math.abs(sets[4]?.center || 1) * 1.5);
 
 // === Parametry strojenia Fuzzy (gain, integral) ===
 let fuzzyGain = 1.0;        // output_gain (0.1 - 5.0)
@@ -104,15 +112,6 @@ function initFuzzyEditor() {
 
 function renderFuzzyPanel(container) {
     container.innerHTML = `
-        <!-- Przełącznik trybu sterowania -->
-        <div class="fuzzy-mode-switch">
-            <span class="fuzzy-mode-label">Tryb sterowania:</span>
-            <div class="fuzzy-mode-toggle">
-                <button id="fuzzy-mode-pid" class="fuzzy-mode-btn active" data-control="pid">PID</button>
-                <button id="fuzzy-mode-fuzzy" class="fuzzy-mode-btn" data-control="fuzzy">Fuzzy Logic</button>
-            </div>
-        </div>
-
         <!-- Legenda zbiorów -->
         <div class="fuzzy-legend">
             <div class="fuzzy-legend-title">📖 Znaczenie symboli (wyjście PWM):</div>
@@ -172,7 +171,7 @@ function renderFuzzyPanel(container) {
                             <tr>
                                 <th class="fuzzy-row-header">${rateLabel}</th>
                                 ${ERROR_LABELS.map((_, ei) => {
-                                    const ruleIdx = ri * 5 + ei;
+                                    const ruleIdx = ei * 5 + ri; // firmware: indeks = error*5 + rate
                                     const val = currentRules[ri][ei];
                                     return `<td class="fuzzy-cell" data-rule="${ruleIdx}" data-row="${ri}" data-col="${ei}">
                                         <button class="fuzzy-cell-btn" style="background: ${FUZZY_SETS[val].color};" title="${FUZZY_SETS[val].fullLabel}">
@@ -203,17 +202,17 @@ function renderFuzzyPanel(container) {
                     <div class="fuzzy-sliders-group-title">Wzmocnienia i limity</div>
                     <div class="fuzzy-slider-row">
                         <span class="fuzzy-slider-label" style="color:#f1c40f;">Wzmocnienie wyjścia (Gain)</span>
-                        <label>wartość: <input type="number" class="fuzzy-slider-input" id="fuzzy-gain-input" value="${fuzzyGain}" step="0.1" min="0.1" max="5.0" data-param="gain"></label>
+                        <label>wartość: <input type="number" class="fuzzy-slider-input" id="fuzzy-gain-input" value="" step="0.1" min="0.1" max="5.0" data-param="gain"></label>
                         <div class="help-text" style="font-size:0.8em;color:#888;margin-top:4px;">Mnożnik całego wyjścia fuzzy. 0.5 = słabsza reakcja, 2.0 = silniejsza. Domyślnie: 1.0</div>
                     </div>
                     <div class="fuzzy-slider-row">
                         <span class="fuzzy-slider-label" style="color:#27ae60;">Wzmocnienie całkujące (Ki)</span>
-                        <label>wartość: <input type="number" class="fuzzy-slider-input" id="fuzzy-ki-input" value="${fuzzyKi}" step="0.5" min="0" max="50" data-param="ki"></label>
-                        <div class="help-text" style="font-size:0.8em;color:#888;margin-top:4px;">Eliminuje stały błąd (dryf). 0 = wyłączone, 2-5 = umiarkowane, >10 = agresywne. Domyślnie: 2.0</div>
+                        <label>wartość: <input type="number" class="fuzzy-slider-input" id="fuzzy-ki-input" value="" step="0.5" min="0" max="50" data-param="ki"></label>
+                        <div class="help-text" style="font-size:0.8em;color:#888;margin-top:4px;">[PWM/(°·s)] Eliminuje stały błąd (dryf). 0 = wyłączone (zalecane na start), potem jak Ki w PID balansu.</div>
                     </div>
                     <div class="fuzzy-slider-row">
                         <span class="fuzzy-slider-label" style="color:#3498db;">Limit integratora</span>
-                        <label>wartość: <input type="number" class="fuzzy-slider-input" id="fuzzy-ilimit-input" value="${fuzzyIntegralLimit}" step="50" min="0" max="2047" data-param="ilimit"></label>
+                        <label>wartość: <input type="number" class="fuzzy-slider-input" id="fuzzy-ilimit-input" value="" step="50" min="0" max="2047" data-param="ilimit"></label>
                         <div class="help-text" style="font-size:0.8em;color:#888;margin-top:4px;">Maksymalna wartość integratora (anti-windup). Domyślnie: 512 (25% PWM)</div>
                     </div>
                 </div>
@@ -254,7 +253,7 @@ function renderFuzzyPanel(container) {
         <!-- Status -->
         <div class="fuzzy-status" id="fuzzy-status">
             <span class="fuzzy-status-dot"></span>
-            <span id="fuzzy-status-text">Tryb: PID (kliknij "Fuzzy Logic" aby przełączyć)</span>
+            <span id="fuzzy-status-text">Tryb sterowania wybierasz w karcie „Sterowanie” (PID / Fuzzy / LQR)</span>
         </div>
     `;
 }
@@ -264,12 +263,29 @@ function renderFuzzyPanel(container) {
 // ========================================================================
 
 function attachFuzzyEvents() {
-    // Przełącznik PID / Fuzzy
-    document.getElementById('fuzzy-mode-pid')?.addEventListener('click', () => {
-        setControlMode('pid');
+    // Przełącznik PID / Fuzzy / LQR (karta Sterowanie)
+    document.querySelectorAll('#controlModeRow button[data-control]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (!window.AppState?.isConnected || !window.AppState?.isSynced) {
+                window.addLogMessage?.('[UI] Wybór systemu sterowania po połączeniu i synchronizacji z robotem.', 'warn');
+                return;
+            }
+            setControlMode(btn.dataset.control);
+        });
     });
-    document.getElementById('fuzzy-mode-fuzzy')?.addEventListener('click', () => {
-        setControlMode('fuzzy');
+
+    // Fuzzy v4: Kp/Kd z PID balansu
+    document.getElementById('fuzzyCopyPidBtn')?.addEventListener('click', () => {
+        const pairs = [['balanceKpInput', 'fuzzyKpInput'], ['balanceKdInput', 'fuzzyKdInput']];
+        pairs.forEach(([from, to]) => {
+            const src = document.getElementById(from);
+            const dst = document.getElementById(to);
+            if (src && dst && src.value !== '') {
+                dst.value = src.value;
+                dst.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+        updateStatus('Skopiowano Kp/Kd z PID balansu', 'info');
     });
 
     // Kliknięcia w komórki tabeli — cykliczne przełączanie wartości
@@ -319,8 +335,7 @@ function attachFuzzyEvents() {
     attachTuningEvents();
 
     // Początkowe rysowanie Canvasów (bez markera)
-    drawFuzzySets('fuzzy-angle-canvas', null, -20, 20, errorSetsParams);
-    drawFuzzySets('fuzzy-rate-canvas', null, -200, 200, rateSetsParams);
+    redrawSets();
 }
 
 // ========================================================================
@@ -442,11 +457,7 @@ function attachSlidersEvents() {
             arr[index][param] = value;
 
             // Przerysuj canvas
-            if (type === 'error') {
-                drawFuzzySets('fuzzy-angle-canvas', lastAngle, -20, 20, errorSetsParams);
-            } else {
-                drawFuzzySets('fuzzy-rate-canvas', lastRate, -200, 200, rateSetsParams);
-            }
+            redrawSets();
 
             // Wyślij do firmware
             sendFuzzySetParam(type, index, arr[index].center, arr[index].width);
@@ -455,34 +466,13 @@ function attachSlidersEvents() {
 
     // Reset suwaków do domyślnych
     document.getElementById('fuzzy-sliders-reset')?.addEventListener('click', () => {
-        errorSetsParams = [
-            { center: -12.0, width: 6.0 },
-            { center:  -6.0, width: 6.0 },
-            { center:   0.0, width: 6.0 },
-            { center:   6.0, width: 6.0 },
-            { center:  12.0, width: 6.0 }
-        ];
-        rateSetsParams = [
-            { center: -200.0, width: 100.0 },
-            { center: -100.0, width: 100.0 },
-            { center:    0.0, width: 100.0 },
-            { center:  100.0, width: 100.0 },
-            { center:  200.0, width: 100.0 }
-        ];
-        // Aktualizuj inputy
-        FUZZY_SETS.forEach((_, i) => {
-            const ec = document.getElementById(`err-center-${i}`);
-            const ew = document.getElementById(`err-width-${i}`);
-            const rc = document.getElementById(`rate-center-${i}`);
-            const rw = document.getElementById(`rate-width-${i}`);
-            if (ec) ec.value = errorSetsParams[i].center;
-            if (ew) ew.value = errorSetsParams[i].width;
-            if (rc) rc.value = rateSetsParams[i].center;
-            if (rw) rw.value = rateSetsParams[i].width;
-        });
-        drawFuzzySets('fuzzy-angle-canvas', lastAngle, -20, 20, errorSetsParams);
-        drawFuzzySets('fuzzy-rate-canvas', lastRate, -200, 200, rateSetsParams);
-        updateStatus('Przywrócono domyślne parametry zbiorów', 'info');
+        // Zbiory z bieżących Kp/Kd/E/progresji (jak firmware) + wysłanie do robota
+        applyPdSets();
+        syncSetInputs();
+        redrawSets();
+        errorSetsParams.forEach((p, i) => sendFuzzySetParam('error', i, p.center, p.width));
+        rateSetsParams.forEach((p, i) => sendFuzzySetParam('rate', i, p.center, p.width));
+        updateStatus('Zbiory przeliczone z Kp/Kd/E/progresji', 'info');
     });
 }
 
@@ -722,7 +712,7 @@ function highlightActiveRules(angle, rate) {
     table.querySelectorAll('.fuzzy-cell').forEach(cell => {
         const ri = parseInt(cell.dataset.row); // rate index
         const ei = parseInt(cell.dataset.col); // error index
-        const strength = Math.min(muErr[ei], muRate[ri]);
+        const strength = muErr[ei] * muRate[ri]; // v4: iloczyn jak w firmware
         const btn = cell.querySelector('.fuzzy-cell-btn');
         if (btn) {
             if (strength > 0.01) {
@@ -757,8 +747,7 @@ function updateFuzzyVisuals(angle, speed) {
     if (now - _fuzzyVisualLastTime < FUZZY_VISUAL_INTERVAL_MS) return;
     _fuzzyVisualLastTime = now;
 
-    drawFuzzySets('fuzzy-angle-canvas', angle, -20, 20, errorSetsParams);
-    drawFuzzySets('fuzzy-rate-canvas', speed, -200, 200, rateSetsParams);
+    redrawSets();
     highlightActiveRules(angle, speed);
 
     // Aktualizuj hinty
@@ -826,19 +815,23 @@ function refreshTable() {
 /**
  * Przełącza tryb sterowania PID ↔ Fuzzy Logic.
  */
-function setControlMode(mode) {
+function setControlMode(mode, { send = true } = {}) {
     currentControlMode = mode;
 
-    // Aktualizuj przycisiki
-    document.getElementById('fuzzy-mode-pid')?.classList.toggle('active', mode === 'pid');
-    document.getElementById('fuzzy-mode-fuzzy')?.classList.toggle('active', mode === 'fuzzy');
+    // Aktualizuj przyciski (karta Sterowanie)
+    document.querySelectorAll('#controlModeRow button[data-control]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.control === mode);
+    });
 
     // Aktualizuj status
     if (mode === 'fuzzy') {
         updateStatus('Tryb: Fuzzy Logic — robot sterowany regułami rozmytymi', 'active');
+    } else if (mode === 'lqr') {
+        updateStatus('Tryb: LQR — regulator stanu (zakładka LQR)', 'idle');
     } else {
         updateStatus('Tryb: PID — klasyczny regulator', 'idle');
     }
+    if (!send) return;
 
     // Wyślij komendę BLE
     const msg = { type: 'set_control_mode', mode: mode };
@@ -903,6 +896,53 @@ function updateStatus(text, type = 'idle') {
 }
 
 // ========================================================================
+// Sync z robotem (wywoływane z applySingleParam)
+// ========================================================================
+
+function syncSetInputs() {
+    FUZZY_SETS.forEach((_, i) => {
+        const vals = [[`err-center-${i}`, errorSetsParams[i].center], [`err-width-${i}`, errorSetsParams[i].width],
+                      [`rate-center-${i}`, rateSetsParams[i].center], [`rate-width-${i}`, rateSetsParams[i].width]];
+        vals.forEach(([id, v]) => { const el = document.getElementById(id); if (el) el.value = +v.toFixed(2); });
+    });
+}
+
+function redrawSets() {
+    const re = axisRange(errorSetsParams);
+    const rr = axisRange(rateSetsParams);
+    drawFuzzySets('fuzzy-angle-canvas', lastAngle, -re, re, errorSetsParams);
+    drawFuzzySets('fuzzy-rate-canvas', lastRate, -rr, rr, rateSetsParams);
+}
+
+/** Parametr z robota (sync / zmiana): control_mode, fuzzy_gain/ki/ilimit, fuzzy_kp/kd/emax/prog. */
+function onParam(key, value) {
+    const v = parseFloat(value);
+    if (Number.isNaN(v)) return;
+    if (key === 'control_mode') {
+        setControlMode(['pid', 'fuzzy', 'lqr'][Math.round(v)] || 'pid', { send: false });
+        return;
+    }
+    const inputs = { fuzzy_gain: 'fuzzy-gain-input', fuzzy_ki: 'fuzzy-ki-input', fuzzy_ilimit: 'fuzzy-ilimit-input' };
+    if (inputs[key]) {
+        if (key === 'fuzzy_gain') fuzzyGain = v;
+        if (key === 'fuzzy_ki') fuzzyKi = v;
+        if (key === 'fuzzy_ilimit') fuzzyIntegralLimit = v;
+        const el = document.getElementById(inputs[key]);
+        if (el) el.value = v;
+        return;
+    }
+    const pd = { fuzzy_kp: 'kp', fuzzy_kd: 'kd', fuzzy_emax: 'emax', fuzzy_prog: 'prog' };
+    if (pd[key]) {
+        pdParams[pd[key]] = v;
+        applyPdSets();
+        currentRules = DEFAULT_RULES.map(row => [...row]); // firmware też odtwarza tabelę przekątną
+        refreshTable();
+        syncSetInputs();
+        redrawSets();
+    }
+}
+
+// ========================================================================
 // API publiczne
 // ========================================================================
 
@@ -932,7 +972,9 @@ window.FuzzyEditor = {
     getControlMode,
     setControlMode,
     sendAllFuzzyRules,
-    updateFuzzyVisuals
+    updateFuzzyVisuals,
+    onParam,
+    computePdSets
 };
 
 export {
