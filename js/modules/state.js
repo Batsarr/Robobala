@@ -220,7 +220,6 @@ export const parameterMapping = {
     'search-kd-min': 'space_kd_min', 'search-kd-max': 'space_kd_max',
     'include-ki-checkbox': 'search_ki',
     'tuningTrialDurationInput': 'tuning_trial_duration_ms',
-    'disableMagnetometerSwitch': 'disable_magnetometer',
     'ga-weight-itae': 'weights_itae', 'ga-weight-overshoot': 'weights_overshoot',
     'ga-weight-control-effort': 'weights_control_effort',
     'ga-generations': 'ga_generations', 'ga-population': 'ga_population',

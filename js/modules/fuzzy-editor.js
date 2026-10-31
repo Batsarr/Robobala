@@ -828,6 +828,8 @@ function setControlMode(mode, { send = true } = {}) {
         updateStatus('Tryb: Fuzzy Logic — robot sterowany regułami rozmytymi', 'active');
     } else if (mode === 'lqr') {
         updateStatus('Tryb: LQR — regulator stanu (zakładka LQR)', 'idle');
+    } else if (mode === 'nn') {
+        updateStatus('Tryb: Sieci neuronowe — sterowanie wyszkoloną siecią (.bin)', 'idle');
     } else {
         updateStatus('Tryb: PID — klasyczny regulator', 'idle');
     }

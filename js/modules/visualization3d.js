@@ -13,6 +13,8 @@ let robotPerspectiveZoom = 40;
 let isAnimation3DEnabled = true;
 let isMovement3DEnabled = false;
 let lastEncoderAvg = 0;
+let lastWheelDiameterUsed = null;
+let lastWheelCheckMs = 0;
 
 // Expose some vars for external access
 export { scene3D, camera3D, renderer3D, robotPivot, isAnimation3DEnabled };
@@ -122,12 +124,12 @@ export function createCustomWheel(totalRadius, tireThickness, width) {
     return wheelGroup;
 }
 
-export function createRobotModel3D() {
+export function createRobotModel3D(wheelDiameterCm = 8.2) {
     const BODY_WIDTH = 9.0, BODY_HEIGHT = 6.0, BODY_DEPTH = 3.5, WHEEL_GAP = 1.0;
     const MAST_HEIGHT = 14.5, MAST_THICKNESS = 1.5;
     const BATTERY_WIDTH = 6.0, BATTERY_HEIGHT = 1.0, BATTERY_DEPTH = 3.0;
     const TIRE_THICKNESS = 1.0, WHEEL_WIDTH = 2.0;
-    const WHEEL_RADIUS_3D = 4.1;
+    const WHEEL_RADIUS_3D = (wheelDiameterCm && wheelDiameterCm > 0) ? (wheelDiameterCm / 2) : 4.1;
 
     const pivot = new THREE.Object3D();
     const model = new THREE.Group();
@@ -229,7 +231,31 @@ export function init3DVisualization() {
     }
 }
 
+function rebuildRobotModelIfNeeded() {
+    const d = parseFloat(document.getElementById('wheelDiameterInput')?.value);
+    if (!d || d <= 0) return;
+    if (lastWheelDiameterUsed !== null && Math.abs(lastWheelDiameterUsed - d) < 0.05) return;
+    if (!scene3D) return;
+    const old = robotPivot;
+    const oldPos = old ? old.position.clone() : null;
+    const oldQuat = old ? old.quaternion.clone() : null;
+    const newPivot = createRobotModel3D(d);
+    if (oldPos) newPivot.position.copy(oldPos);
+    if (oldQuat) newPivot.quaternion.copy(oldQuat);
+    newPivot.position.y = (newPivot.position.y || 0);
+    if (old && old.parent) old.parent.remove(old);
+    scene3D.add(newPivot);
+    robotPivot = newPivot;
+    lastWheelDiameterUsed = d;
+}
+
+
 export function update3DAnimation() {
+    const now = Date.now();
+    if (now - lastWheelCheckMs > 1000) {
+        lastWheelCheckMs = now;
+        try { rebuildRobotModelIfNeeded(); } catch (e) { /* no-op */ }
+    }
     if (isAnimation3DEnabled && robotPivot) {
         // Te same pitch/roll/yaw co dashboard (window.telemetryData, ustawiane w ble-processor.js).
         // Zamiana osi robot Z-up -> Three.js Y-up jest TYLKO w orientation-utils.mjs.

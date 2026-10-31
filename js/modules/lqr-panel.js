@@ -100,7 +100,13 @@ function onSendK() {
         window.sendBleMessage?.({ type: 'set_param', key: keys[id], value: v });
         sent++;
     }
-    window.addLogMessage?.(`[LQR] Wysłano ${sent} wzmocnień K. Zapisz w EEPROM, jeśli robot balansuje dobrze.`, 'success');
+    if (sent > 0) {
+        showResult(`\u{1F4E4} Wysłano ${sent} wzmocnień K do robota. Zapisz w EEPROM, jeśli robot balansuje dobrze.`, 'ok');
+        window.addLogMessage?.(`[LQR] Wysłano ${sent} wzmocnień K. Zapisz w EEPROM, jeśli robot balansuje dobrze.`, 'success');
+    } else {
+        showResult('\u{1F534} Nie wysłano żadnych wzmocnień K — sprawdź wartości pól.', 'bad');
+        window.addLogMessage?.('[LQR] Nie wysłano wzmocnień K — puste/niepoprawne pola.', 'warn');
+    }
 }
 
 /** Parametr z robota (sync). Pola obsługuje applySingleParam; tu tylko stan lokalny. */

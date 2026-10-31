@@ -117,6 +117,17 @@ function processCompleteMessage(data) {
             } else if (data.command === 'calibrate_mpu') {
                 const level = data.success ? 'success' : 'error';
                 addLogMessage(`[ROBOT] Kalibracja IMU: ${data.message || (data.success ? 'Zapisane do EEPROM' : 'Blad')}`, level);
+            } else if (data.command === 'nn_model_status' || data.command === 'nn_upload_end' || data.command === 'nn_delete_model') {
+                const el = document.getElementById('nnStatusText');
+                if (el) {
+                    if (data.command === 'nn_delete_model') el.textContent = 'brak modelu';
+                    else if (data.command === 'nn_model_status') el.textContent = data.success ? (data.message || 'model') : 'brak modelu';
+                    else if (data.command === 'nn_upload_end') el.textContent = data.success ? 'model wgrany' : 'blad wgrania';
+                }
+                const logEl = document.getElementById('nnLog');
+                if (logEl) logEl.textContent = data.message || (data.success ? 'OK' : 'FAILED');
+                const bar = document.getElementById('nnProgressBar');
+                if (bar && data.command === 'nn_upload_end' && data.success) bar.style.width = '100%';
             } else {
                 // Ogólna obsługa dla innych poleceń
                 const level = data.success ? 'info' : 'warn';

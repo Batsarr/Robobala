@@ -228,14 +228,13 @@ export function setupParameterListeners() {
     if (typeof window.initQRCodeUI === 'function') window.initQRCodeUI();
 
     // Toggle switches
-    ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch', 'disableMagnetometerSwitch'].forEach(id => {
+    ['balanceSwitch', 'holdPositionSwitch', 'speedModeSwitch'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
         el.addEventListener('change', (e) => {
             if (AppState.isApplyingConfig) return;
-            const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle', 'disableMagnetometerSwitch': 'set_param' };
-            if (typeMap[id] === 'set_param') sendBleMessage({ type: 'set_param', key: 'disable_magnetometer', value: e.target.checked ? 1.0 : 0.0 });
-            else sendBleMessage({ type: typeMap[id], enabled: e.target.checked });
+            const typeMap = { 'balanceSwitch': 'balance_toggle', 'holdPositionSwitch': 'hold_position_toggle', 'speedModeSwitch': 'speed_mode_toggle' };
+            sendBleMessage({ type: typeMap[id], enabled: e.target.checked });
         });
     });
 

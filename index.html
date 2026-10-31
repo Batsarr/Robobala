@@ -90,10 +90,6 @@
                 <label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label>
             </div>
             <div class="control-row">
-                <span class="control-label">Wylacz Magnetometr <span class="help-icon" title="Wyłącza magnetometr w algorytmie fuzji sensorów. Przydatne gdy magnetometr jest zakłócany przez silniki lub metalowe elementy.">?</span></span>
-                <label class="switch"><input type="checkbox" id="disableMagnetometerSwitch"><span class="slider round"></span></label>
-            </div>
-            <div class="control-row">
                 <span class="control-label">System sterowania <span class="help-icon" title="PID = kaskada (balans + prędkość + pozycja). Fuzzy = logika rozmyta v4 zamiast PID balansu (kaskada prędkości/pozycji zostaje). LQR = regulator stanu: kąt, prędkość kątowa, pozycja i prędkość kół naraz (K z zakładki LQR). Aktywny przycisk pokazuje tryb odczytany z robota.">?</span></span>
             </div>
             <div class="control-mode-row" id="controlModeRow">
@@ -569,7 +565,7 @@
                     <div class="setting-container"><label for="lqrMWheelsInput">Masa obu kół (kg)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="lqrMWheelsInput" step="0.005" min="0" max="5"><button>+</button></div><div class="help-text">Dwa koła z oponami (bez silników — silniki liczą się do korpusu).</div></div>
                     <div class="setting-container"><label for="lqrLComInput">Środek masy nad osią l (cm)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="lqrLComInput" step="0.1" min="0.5" max="50"><button>+</button></div><div class="help-text">Połóż robota poziomo na krawędzi linijki i znajdź punkt równowagi; zmierz odległość od osi kół.</div></div>
                     <div class="setting-container"><label for="lqrIBodyInput">Moment bezwładności korpusu (kg·m²)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="lqrIBodyInput" step="0.0001" min="0" max="2"><button>+</button></div><div class="help-text">0 = szacunek M·l²/3 (wystarczy na start).</div></div>
-                    <div class="setting-container"><label for="lqrTauStallInput">Moment utyku silnika (N·m, na wale koła)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="lqrTauStallInput" step="0.01" min="0.001" max="20"><button>+</button></div><div class="help-text">Z karty katalogowej motoreduktora (kg·cm × 0.098 = N·m), dla napięcia zasilania silników (6 V).</div></div>
+                    <div class="setting-container"><label for="lqrTauStallInput">Moment utyku silnika na wale koła (N·m) — podaj dla JEDNEGO silnika/motoru (nie suma obu; LQR przelicza parę symetrycznie)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="lqrTauStallInput" step="0.01" min="0.001" max="20"><button>+</button></div><div class="help-text">Z karty katalogowej motoreduktora (kg·cm × 0.098 = N·m), dla napięcia zasilania silników (6 V). UWAGA: wartość dla jednego silnika (nie obu razem), bo robot ma dwa niezależne napędy i kontroler używa tej samej wartości dla obu kół.</div></div>
                     <div class="setting-container"><label for="lqrRpmNlInput">Obroty bez obciążenia (obr/min, koło)<span class="help-icon">?</span></label><div class="numeric-input-wrapper"><button>-</button><input type="number" class="config-value" id="lqrRpmNlInput" step="1" min="1" max="5000"><button>+</button></div><div class="help-text">Z karty katalogowej albo pomiar: PWM 100% bez obciążenia, odczyt obr/min z Wizualizacji 3D.</div></div>
                 </fieldset>
 
@@ -598,6 +594,27 @@
                     <button type="button" id="lqrSendKBtn" class="fuzzy-action-btn fuzzy-send-btn">📤 Wyślij K do robota</button>
                     <div class="fuzzy-v4-hint">Po teście zapisz w EEPROM (przycisk zapisu konfiguracji) — K, model i wagi zostają w robocie.</div>
                 </fieldset>
+            </div>
+        </div>
+
+        <div class="card" id="neural-network-card" data-mode="advanced">
+            <button class="accordion-header" onclick="toggleAccordion(this)">Sieci neuronowe</button>
+            <div class="accordion-content">
+               <p>Opcjonalne sterowanie wyszkoloną siecią 4&rarr;32&rarr;32&rarr;1. Model wgraj jako plik <code>.bin</code> (nagłówek TWIP, 1249 liczb float, little-endian).</p>
+               <div class="setting-container">
+                  <label>Status modelu</label>
+                  <span id="nnStatusText">brak modelu</span>
+               </div>
+               <div class="setting-container">
+                  <label for="nnFileInput">Plik modelu (.bin)</label>
+                  <input type="file" id="nnFileInput" accept=".bin">
+               </div>
+               <button type="button" id="nnUploadBtn">Waliduj i wyślij model</button>
+               <div class="progress" style="width:100%;background:#444;height:12px;border-radius:6px;margin-top:8px;">
+                  <div id="nnProgressBar" style="width:0%;height:100%;background:#61dafb;border-radius:6px;"></div>
+               </div>
+               <button type="button" id="nnDeleteBtn">Usuń model z robota</button>
+               <div id="nnLog" style="font-size:0.85em;color:#aaa;margin-top:8px;"></div>
             </div>
         </div>
 

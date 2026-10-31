@@ -91,6 +91,7 @@ import {
 
 // 7b. LQR / LQI - karta regulatora stanu (obliczenie K w lqr-math.mjs)
 import { initLqrPanel } from './modules/lqr-panel.js';
+import { initNeuralNetworkPanel } from './modules/neural-network.js';
 
 // 8. Autotune - algorytmy strojenia (GA, PSO, Bayesian) + sesja
 import {
@@ -170,6 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fuzzy Logic Editor (wyłącznie w module — brak odpowiednika w main.js)
     initFuzzyEditor();
     initLqrPanel();
+    initNeuralNetworkPanel();
 
     // UI Modes - MUSI być ostatni (ukrywa elementy po ich załadowaniu)
     initUIModes();
