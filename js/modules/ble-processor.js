@@ -104,6 +104,16 @@ function processCompleteMessage(data) {
             }
             break;
 
+        case 'control_mode': {
+            const mm = (typeof data.mode === 'number')
+                ? (['pid','fuzzy','lqr','nn'][data.mode] || 'pid')
+                : (data.mode || data.controlMode || 'pid');
+            if (typeof window.setControlMode === 'function') {
+                window.setControlMode(mm, { send: false });
+            }
+            break;
+        }
+
         case 'ack':
             if (data.command === 'request_full_config') { // NOWE: Obsługa ACK dla request_full_config
                 if (data.success) {

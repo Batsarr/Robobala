@@ -72,7 +72,7 @@
 
     <!-- UWAGA: Nazwa "RoboBala" jest oficjalną nazwą projektu i NIE powinna być zmieniana.
          Zmieniaj tylko numer wersji (v23.2 → v23.3 itd.) przy aktualizacjach. -->
-    <h1>RoboBala v23.3</h1>
+    <h1>RoboBala v24.0</h1>
     <div class="main-grid">
         <div class="card" id="controls-card" data-mode="student">
             <h2>Sterowanie</h2>
@@ -90,12 +90,13 @@
                 <label class="switch"><input type="checkbox" id="speedModeSwitch"><span class="slider round"></span></label>
             </div>
             <div class="control-row">
-                <span class="control-label">System sterowania <span class="help-icon" title="PID = kaskada (balans + prędkość + pozycja). Fuzzy = logika rozmyta v4 zamiast PID balansu (kaskada prędkości/pozycji zostaje). LQR = regulator stanu: kąt, prędkość kątowa, pozycja i prędkość kół naraz (K z zakładki LQR). Aktywny przycisk pokazuje tryb odczytany z robota.">?</span></span>
+                <span class="control-label">System sterowania <span class="help-icon" title="PID = kaskada (balans + prędkość + pozycja). Fuzzy = logika rozmyta v4 zamiast PID balansu (kaskada prędkości/pozycji zostaje). LQR = regulator stanu: kąt, prędkość kątowa, pozycja i prędkość kół naraz (K z zakładki LQR). Aktywny przycisk pokazuje tryb odczytany z robota (PID/Fuzzy/LQR/NN).">?</span></span>
             </div>
             <div class="control-mode-row" id="controlModeRow">
                 <button type="button" data-control="pid">PID</button>
                 <button type="button" data-control="fuzzy">Fuzzy</button>
                 <button type="button" data-control="lqr">LQR</button>
+                <button type="button" data-control="nn">NN</button>
             </div>
             <button id="open-gamepad-modal-btn" style="width: 100%; background-color:#f7b731; margin-top: 15px;" data-mode="expert">Mapowanie Przyciskow Gamepada</button>
             <fieldset style="margin-top:10px; border: 1px solid #a2f279; padding: 10px; border-radius: 6px;">
