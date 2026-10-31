@@ -100,6 +100,14 @@ export function initNeuralNetworkPanel() {
         if (statusEl) statusEl.textContent = 'brak modelu';
     });
 
+    const reverseSignBtn = document.getElementById('nnReverseSignBtn');
+    let nnOutputSign = 1;
+    reverseSignBtn?.addEventListener("click", () => {
+        nnOutputSign = -nnOutputSign;
+        window.sendBleMessage?.("nn_reverse_output", { sign: nnOutputSign });
+        log('Znak wyjscia NN: ' + (nnOutputSign < 0 ? '-' : '+'));
+    });
+
     function refreshStatus() { window.sendBleMessage?.({ type: 'nn_model_status' }); }
     refreshStatus();
 }
