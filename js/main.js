@@ -211,7 +211,7 @@ function setSignButtons(containerId, sign) { const c = document.getElementById(c
 function updateSignBadge(badgeId, sign) {
     const el = document.getElementById(badgeId);
     if (!el) return;
-    const prefixMap = { 'balanceSignBadge': 'B', 'speedSignBadge': 'S', 'positionSignBadge': 'P' };
+    const prefixMap = { 'balanceSignBadge': 'B', 'speedSignBadge': 'S', 'positionSignBadge': 'P', 'nnSignBadge': 'N' };
     const prefix = prefixMap[badgeId] || '';
     el.textContent = `${prefix}:${sign === -1 ? '-' : '+'}`;
     el.classList.toggle('negative', sign === -1);
@@ -234,7 +234,8 @@ function getActiveSign(containerId) { const c = document.getElementById(containe
 const signButtonMap = {
     'balanceSign': 'balance_pid_reverse',
     'speedSign': 'speed_pid_reverse',
-    'positionSign': 'position_pid_reverse'
+    'positionSign': 'position_pid_reverse',
+    'nnSign': 'nn_reverse_output'
 };
 Object.keys(signButtonMap).forEach(containerId => {
     const el = document.getElementById(containerId);

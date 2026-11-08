@@ -13,8 +13,8 @@ const commandHandler = czytaj('src/Communication/command_handler.cpp');
 const blokMapy = mainJs.match(/const signButtonMap = \{([\s\S]*?)\};/);
 const kluczePanelu = [...blokMapy[1].matchAll(/'(\w+)':\s*'(\w+)'/g)].map(m => ({ kontener: m[1], klucz: m[2] }));
 
-test('panel ma 3 przełączniki znaku (balans, prędkość, pozycja)', () => {
-    assert.deepEqual(kluczePanelu.map(k => k.kontener), ['balanceSign', 'speedSign', 'positionSign']);
+test('panel ma 4 przełączniki znaku (balans, prędkość, pozycja, NN)', () => {
+    assert.deepEqual(kluczePanelu.map(k => k.kontener), ['balanceSign', 'speedSign', 'positionSign', 'nnSign']);
 });
 
 test('każdy klucz znaku wysyłany przez panel jest obsłużony w set_param firmware', () => {

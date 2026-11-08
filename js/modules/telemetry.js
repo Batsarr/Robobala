@@ -272,11 +272,13 @@ export function applySingleParam(snakeKey, value) {
     // Znak sprzężenia: firmware wysyła *_pid_reverse (0/1), stare wersje *_feedback_sign (±1)
     const signKeys = {
         balance_pid_reverse: 'balanceSign', speed_pid_reverse: 'speedSign', position_pid_reverse: 'positionSign',
-        balance_feedback_sign: 'balanceSign', speed_feedback_sign: 'speedSign', position_feedback_sign: 'positionSign'
+        balance_feedback_sign: 'balanceSign', speed_feedback_sign: 'speedSign', position_feedback_sign: 'positionSign',
+        nn_reverse_output: 'nnSign', nn_output_sign: 'nnSign', nn_pid_reverse: 'nnSign', nn_output_reverse: 'nnSign'
     };
     if (signKeys[snakeKey]) {
         const num = parseFloat(value);
-        const v = snakeKey.endsWith('_pid_reverse') ? (num >= 0.5 ? -1 : 1) : (num < 0 ? -1 : 1);
+        const isReverseFlag = snakeKey.endsWith('_pid_reverse') || snakeKey === 'nn_reverse_output' || snakeKey === 'nn_output_sign' || snakeKey === 'nn_pid_reverse' || snakeKey === 'nn_output_reverse';
+        const v = isReverseFlag ? (num >= 0.5 ? -1 : 1) : (num < 0 ? -1 : 1);
         const containerId = signKeys[snakeKey];
         if (typeof window.setSignButtons === 'function') window.setSignButtons(containerId, v);
         if (typeof window.updateSignBadge === 'function') window.updateSignBadge(containerId + 'Badge', v);
